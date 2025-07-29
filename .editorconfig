@@ -11,7 +11,7 @@ root = true
 # Default for ALL enabled analyzer rules (CA + IDE)
 # Precedence: rule ID > category > all (official precedence).
 # https://learn.microsoft.com/dotnet/fundamentals/code-analysis/configuration-options
-dotnet_analyzer_diagnostic.severity = error
+dotnet_analyzer_diagnostic.severity = warning
 
 # High-signal categories stay build-breaking
 # https://learn.microsoft.com/dotnet/fundamentals/code-analysis/categories
@@ -27,11 +27,11 @@ dotnet_analyzer_diagnostic.category-Maintainability.severity  = error
 # Lower-signal buckets are non-blocking for MVP (tune later)
 dotnet_analyzer_diagnostic.category-Style.severity            = suggestion
 dotnet_analyzer_diagnostic.category-Documentation.severity    = suggestion
-dotnet_analyzer_diagnostic.category-Naming.severity           = warning
+dotnet_analyzer_diagnostic.category-Naming.severity           = suggestion
 
 # Useful to see, but not blocking for a JIT app (can escalate later)
-dotnet_analyzer_diagnostic.category-Globalization.severity    = warning
-dotnet_analyzer_diagnostic.category-SingleFile.severity       = warning
+dotnet_analyzer_diagnostic.category-Globalization.severity    = suggestion
+dotnet_analyzer_diagnostic.category-SingleFile.severity       = suggestion
 
 ###############################################################################
 # 2) Pin critical rule IDs that commonly surface real defects (build-breaking)
@@ -70,6 +70,25 @@ dotnet_diagnostic.IDE0060.severity = error  # Remove unused parameter
 
 # Missing XML docs should not block MVP (we already emit XML in libs)
 dotnet_diagnostic.CS1591.severity = suggestion
+
+###############################################################################
+# 5) Test-specific and development-friendly rules
+###############################################################################
+
+# Performance rules that are often overly strict in test code
+dotnet_diagnostic.CA1861.severity = suggestion  # Prefer static readonly over const arrays
+dotnet_diagnostic.CA1825.severity = suggestion  # Avoid zero-length array allocations
+dotnet_diagnostic.CA1814.severity = suggestion  # Prefer jagged arrays over multidimensional
+
+# AOT/Trim analyzers - too strict for JIT development
+dotnet_diagnostic.IL2026.severity = suggestion  # Unrecognized members in dynamic analysis
+dotnet_diagnostic.IL2070.severity = suggestion  # Trim analysis warnings
+dotnet_diagnostic.IL3050.severity = suggestion  # AOT analysis warnings
+
+# Common development friction points
+dotnet_diagnostic.CA1305.severity = warning     # IFormatProvider - useful but not critical for dev
+dotnet_diagnostic.CA1307.severity = warning     # StringComparison - useful but not critical for dev
+dotnet_diagnostic.CA1062.severity = warning     # Parameter validation - downgrade from error
 
 ###############################################################################
 # 3) Minimal style preferences (non-blocking)

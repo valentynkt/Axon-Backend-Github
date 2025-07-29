@@ -15,4 +15,28 @@
   <Folder Name="/src/Shared/Common/">
     <Project Path="src/Shared/Common/Axon.Shared.Common.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Chat/" />
+  <Folder Name="/src/Modules/Chat/Domain/">
+    <Project Path="src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Chat/Application/">
+    <Project Path="src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Chat/Infrastructure/">
+    <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Api.Tests/">
+    <Project Path="tests/Api.Tests/Axon.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules.Chat.Application.Tests/">
+    <Project Path="tests/Modules.Chat.Application.Tests/Axon.Modules.Chat.Application.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules.Chat.Domain.Tests/">
+    <Project Path="tests/Modules.Chat.Domain.Tests/Axon.Modules.Chat.Domain.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules.Chat.Infrastructure.Tests/">
+    <Project Path="tests/Modules.Chat.Infrastructure.Tests/Axon.Modules.Chat.Infrastructure.Tests.csproj" />
+  </Folder>
 </Solution>

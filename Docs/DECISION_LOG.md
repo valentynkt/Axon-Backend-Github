@@ -1,1 +1,2 @@
 # Decision Log (append-only)
+2025-07-29 | Chat/Direct_MCP | AXON-20250729-Chat-Direct_MCP-PR_BODY | ADR: n/a | Contracts: changed | New Chat module with MCP integration - vertical slice, Clean Architecture + CQRS patterns

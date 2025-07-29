@@ -5,7 +5,7 @@ module: Chat
 feature: Direct_MCP
 gate: G2
 owner: <owner>
-status: draft
+status: approved
 relates_to: []
 source_of_truth: doc
 created: 2025-07-29

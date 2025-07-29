@@ -10,8 +10,16 @@
   </PropertyGroup>
   
   <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Shared\Common\Axon.Shared.Common.csproj" />
     <ProjectReference Include="..\Shared\Common.Abstractions\Axon.Shared.Common.Abstractions.csproj" />
+    <ProjectReference Include="..\Modules\Chat\Application\Axon.Modules.Chat.Application.csproj" />
+    <ProjectReference Include="..\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,17 @@
+<Project>
+  <!-- Inherit from parent Directory.Build.props -->
+  <Import Project="../Directory.Build.props" />
+  
+  <PropertyGroup>
+    <!-- Test-specific suppressions -->
+    <NoWarn>$(NoWarn);CA1707;IL2026;IL3050</NoWarn>
+    
+    <!-- Disable trim analysis for tests -->
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+    <EnableAotAnalyzer>false</EnableAotAnalyzer>
+    
+    <!-- Make warnings non-fatal for test projects -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

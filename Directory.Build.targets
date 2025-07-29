@@ -33,6 +33,6 @@
     </PropertyGroup>
 
     <WriteLinesToFile File="$(IndexPath)" Lines="$(IndexContent)" Overwrite="true" />
-    <Message Text="Updated Docs/INDEX.md with $(DecisionFiles.Count()) root, $(AdrFiles.Count()) ADR, $(ContractFiles.Count()) contract, and $(FeatureFiles.Count()) feature files" Importance="normal" />
+    <Message Text="Updated Docs/INDEX.md with @(DecisionFiles->Count()) root, @(AdrFiles->Count()) ADR, @(ContractFiles->Count()) contract, and @(FeatureFiles->Count()) feature files" Importance="normal" />
   </Target>
 </Project>

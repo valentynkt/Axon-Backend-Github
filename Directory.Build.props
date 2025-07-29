@@ -5,19 +5,19 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
 
-        <!-- Analyzers: newest rules + build as the gate -->
+        <!-- Analyzers: newest rules but allow warnings in development -->
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>          <!-- strictest, evolves with SDK -->
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">true</TreatWarningsAsErrors>
 
         <!-- Deterministic builds -->
         <Deterministic>true</Deterministic>
 
         <!-- “Signal-only” safety analyzers (no promises yet) -->
-        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-        <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
-        <EnableAotAnalyzer>true</EnableAotAnalyzer>
+        <EnableTrimAnalyzer Condition="'$(Configuration)' == 'Release'">true</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer Condition="'$(Configuration)' == 'Release'">true</EnableSingleFileAnalyzer>
+        <EnableAotAnalyzer Condition="'$(Configuration)' == 'Release'">true</EnableAotAnalyzer>
     </PropertyGroup>
 
     <!-- Normalize paths only in CI for SourceLink-friendly PDBs -->

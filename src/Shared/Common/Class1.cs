@@ -1,6 +1,1 @@
-﻿namespace Axon.Shared.Common;
-
-public class Class1
-{
-
-}
+﻿// This file is intentionally removed - replaced with actual implementation files
