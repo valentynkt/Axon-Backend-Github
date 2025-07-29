@@ -1,0 +1,43 @@
+# Build outputs
+bin/
+obj/
+output/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+.env.local
+
+# Tools and caches
+.serena/
+.cache/
+
+# Git hooks (local)
+.githooks/
+
+# Editor configs (if local)
+# .editorconfig - keeping this tracked
+
+# Local development scripts
+scripts/local/

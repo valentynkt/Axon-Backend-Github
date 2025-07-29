@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="11.11.0" />
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
+    <ProjectReference Include="../../../Shared/Common/Axon.Shared.Common.csproj" />
+    <ProjectReference Include="../../../Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

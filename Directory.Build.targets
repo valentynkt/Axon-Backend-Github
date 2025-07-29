@@ -1,0 +1,38 @@
+<Project>
+  <!-- Auto-update Docs/INDEX.md during build -->
+  <Target Name="UpdateDocsIndex" BeforeTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+    <PropertyGroup>
+      <DocsPath>$(MSBuildThisFileDirectory)Docs</DocsPath>
+      <IndexPath>$(DocsPath)\INDEX.md</IndexPath>
+    </PropertyGroup>
+    
+    <ItemGroup>
+      <!-- Find all .md files in docs structure -->
+      <DecisionFiles Include="$(DocsPath)\*.md" Exclude="$(IndexPath)" />
+      <AdrFiles Include="$(DocsPath)\adr\*.md" />
+      <ContractFiles Include="$(DocsPath)\contracts\**\*.md" />
+      <FeatureFiles Include="$(DocsPath)\features\**\*.md" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <IndexContent>
+# Docs Index
+
+## Root Documentation
+@(DecisionFiles->'- [%(Filename)%(Extension)](%(Filename)%(Extension))', '%0a')
+
+## ADR Templates  
+@(AdrFiles->'- [adr/%(Filename)%(Extension)](adr/%(Filename)%(Extension))', '%0a')
+
+## API Contracts
+@(ContractFiles->'- [contracts/$([System.String]::Copy('%(RecursiveDir)').TrimEnd('\'))%(Filename)%(Extension)](contracts/$([System.String]::Copy('%(RecursiveDir)').TrimEnd('\'))%(Filename)%(Extension))', '%0a')
+
+## Feature Documentation
+@(FeatureFiles->'- [features/$([System.String]::Copy('%(RecursiveDir)').TrimEnd('\'))%(Filename)%(Extension)](features/$([System.String]::Copy('%(RecursiveDir)').TrimEnd('\'))%(Filename)%(Extension))', '%0a')
+      </IndexContent>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(IndexPath)" Lines="$(IndexContent)" Overwrite="true" />
+    <Message Text="Updated Docs/INDEX.md with @(DecisionFiles->Count()) root, @(AdrFiles->Count()) ADR, @(ContractFiles->Count()) contract, and @(FeatureFiles->Count()) feature files" Importance="normal" />
+  </Target>
+</Project>
