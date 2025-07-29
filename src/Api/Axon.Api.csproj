@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishAot>false</PublishAot>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>false</EnableAotAnalyzer>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Shared\Common\Axon.Shared.Common.csproj" />
+    <ProjectReference Include="..\Shared\Common.Abstractions\Axon.Shared.Common.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

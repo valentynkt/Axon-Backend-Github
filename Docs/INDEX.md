@@ -1,0 +1,20 @@
+# Docs Index
+
+## Root Documentation
+
+
+## ADR Templates  
+- [adr/20250729-template.md](adr/20250729-template.md)
+
+## API Contracts
+- [contracts/20250729-template.md](contracts/20250729-template.md)
+
+## Feature Documentation
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)
+- [features/20250729-template.md](features/20250729-template.md)

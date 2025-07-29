@@ -1,0 +1,18 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Api/">
+    <Project Path="src/Api/Axon.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/" />
+  <Folder Name="/src/Shared/Common.Abstractions/">
+    <Project Path="src/Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/Common/">
+    <Project Path="src/Shared/Common/Axon.Shared.Common.csproj" />
+  </Folder>
+</Solution>

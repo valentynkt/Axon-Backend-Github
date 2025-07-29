@@ -1,0 +1,88 @@
+# Top-most EditorConfig for Axon Backend
+root = true
+
+# Apply to C# (and VB if added later)
+[*.{cs,vb}]
+
+###############################################################################
+# 1) Fail-fast baseline: make analyzers error by default, then de-noise cosmetics
+###############################################################################
+
+# Default for ALL enabled analyzer rules (CA + IDE)
+# Precedence: rule ID > category > all (official precedence).
+# https://learn.microsoft.com/dotnet/fundamentals/code-analysis/configuration-options
+dotnet_analyzer_diagnostic.severity = error
+
+# High-signal categories stay build-breaking
+# https://learn.microsoft.com/dotnet/fundamentals/code-analysis/categories
+dotnet_analyzer_diagnostic.category-Security.severity        = error
+dotnet_analyzer_diagnostic.category-Reliability.severity      = error
+dotnet_analyzer_diagnostic.category-Performance.severity      = error
+dotnet_analyzer_diagnostic.category-Usage.severity            = error
+dotnet_analyzer_diagnostic.category-Design.severity           = error
+dotnet_analyzer_diagnostic.category-CodeQuality.severity      = error
+dotnet_analyzer_diagnostic.category-Interoperability.severity = error
+dotnet_analyzer_diagnostic.category-Maintainability.severity  = error
+
+# Lower-signal buckets are non-blocking for MVP (tune later)
+dotnet_analyzer_diagnostic.category-Style.severity            = suggestion
+dotnet_analyzer_diagnostic.category-Documentation.severity    = suggestion
+dotnet_analyzer_diagnostic.category-Naming.severity           = warning
+
+# Useful to see, but not blocking for a JIT app (can escalate later)
+dotnet_analyzer_diagnostic.category-Globalization.severity    = warning
+dotnet_analyzer_diagnostic.category-SingleFile.severity       = warning
+
+###############################################################################
+# 2) Pin critical rule IDs that commonly surface real defects (build-breaking)
+###############################################################################
+# Dispose / lifetime
+# https://learn.microsoft.com/visualstudio/code-quality/ca2000
+dotnet_diagnostic.CA2000.severity = error   # Dispose objects before losing scope
+
+# Async correctness
+# https://learn.microsoft.com/visualstudio/code-quality/ca2012
+dotnet_diagnostic.CA2012.severity = error   # Use ValueTask correctly
+
+# Exceptions hygiene
+# https://learn.microsoft.com/visualstudio/code-quality/ca1031
+dotnet_diagnostic.CA1031.severity = error   # Don't catch general Exception types
+
+# Public surface validation
+# https://learn.microsoft.com/visualstudio/code-quality/ca1062
+dotnet_diagnostic.CA1062.severity = error   # Validate public method parameters
+
+# Culture & comparison correctness
+# https://learn.microsoft.com/visualstudio/code-quality/ca1305
+# https://learn.microsoft.com/visualstudio/code-quality/ca1307
+dotnet_diagnostic.CA1305.severity = error   # Specify IFormatProvider
+dotnet_diagnostic.CA1307.severity = error   # Specify StringComparison
+
+# Nullable compiler diagnostics (belt-and-suspenders)
+dotnet_diagnostic.CS8602.severity = error   # Dereference of possibly null reference
+dotnet_diagnostic.CS8604.severity = error   # Possible null reference argument
+dotnet_diagnostic.CS8618.severity = error   # Non-nullable member not initialized
+
+# High-value IDE bug-finders (keep pure style as suggestions)
+# https://github.com/dotnet/roslyn-analyzers
+dotnet_diagnostic.IDE0059.severity = error  # Unnecessary value assignment
+dotnet_diagnostic.IDE0060.severity = error  # Remove unused parameter
+
+# Missing XML docs should not block MVP (we already emit XML in libs)
+dotnet_diagnostic.CS1591.severity = suggestion
+
+###############################################################################
+# 3) Minimal style preferences (non-blocking)
+###############################################################################
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere             = false:suggestion
+
+###############################################################################
+# 4) Treat generated code as generated (skip analyzer noise)
+###############################################################################
+# Official guidance: mark generated code to avoid noise from analyzers.
+# https://learn.microsoft.com/visualstudio/code-quality/use-roslyn-analyzers
+[*.{g.cs,g.i.cs,Designer.cs,designer.cs,generated.cs,Migration.cs}]
+generated_code = true
