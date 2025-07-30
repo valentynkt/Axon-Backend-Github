@@ -1416,10 +1416,11 @@
           "Axon.Api": "1.0.0",
           "Axon.Modules.Chat.Application": "1.0.0",
           "Axon.Shared.Common": "1.0.0",
+          "Axon.Tests.Shared": "1.0.0",
           "Microsoft.AspNetCore.Mvc.Testing": "9.0.0",
           "Microsoft.NET.Test.Sdk": "17.12.0",
           "Moq": "4.20.72",
-          "NUnit": "4.2.2",
+          "NUnit": "4.3.2",
           "Shouldly": "4.2.1"
         },
         "compile": {

@@ -1,10 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "qdXRFoizRQk=",
+  "dgSpecHash": "6NL9z2NIcQo=",
   "success": true,
   "projectFilePath": "/Users/valentynkit/Repos/Axon-Backend/tests/Shared/Axon.Tests.Shared.csproj",
   "expectedPackageFiles": [
     "/Users/valentynkit/.nuget/packages/castle.core/5.1.1/castle.core.5.1.1.nupkg.sha512",
+    "/Users/valentynkit/.nuget/packages/coverlet.collector/6.0.2/coverlet.collector.6.0.2.nupkg.sha512",
     "/Users/valentynkit/.nuget/packages/diffengine/11.3.0/diffengine.11.3.0.nupkg.sha512",
     "/Users/valentynkit/.nuget/packages/emptyfiles/4.4.0/emptyfiles.4.4.0.nupkg.sha512",
     "/Users/valentynkit/.nuget/packages/fluentvalidation/11.11.0/fluentvalidation.11.11.0.nupkg.sha512",
