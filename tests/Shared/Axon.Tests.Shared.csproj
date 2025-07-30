@@ -15,21 +15,18 @@
     </PackageReference>
     <PackageReference Include="NUnit" Version="4.3.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.3.0" />
     <PackageReference Include="Shouldly" Version="4.2.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
-    <PackageReference Include="RichardSzalay.MockHttp" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
-    <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
-    <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
-    <ProjectReference Include="../Shared/Axon.Tests.Shared.csproj" />
+    <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
+    <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,10 +34,6 @@
     <Using Include="Shouldly" />
     <Using Include="Moq" />
     <Using Include="Axon.Shared.Common" />
-    <Using Include="Axon.Tests.Shared.TestBase" />
-    <Using Include="Axon.Tests.Shared.Extensions" />  
-    <Using Include="Axon.Tests.Shared.Builders" />
-    <Using Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
 </Project>

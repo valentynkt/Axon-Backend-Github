@@ -1,7 +1,9 @@
 # Build outputs
-bin/
-obj/
+**/bin/
+**/obj/
 output/
+dist/
+publish/
 
 # User-specific files
 *.rsuser
@@ -15,11 +17,35 @@ output/
 .idea/
 *.swp
 *.swo
+*.DotSettings.user
 
 # macOS
-.DS_Store
+**/.DS_Store
 .AppleDouble
 .LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NUnit
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
 
 # Logs
 logs/
@@ -28,10 +54,20 @@ logs/
 # Environment files
 .env
 .env.local
+.env.development
+.env.production
 
 # Tools and caches
 .serena/
 .cache/
+.vscode/
+*.tmp
+*.temp
+
+# Coverage reports
+coverage/
+*.coverage
+*.coveragexml
 
 # Git hooks (local)
 .githooks/
@@ -41,3 +77,13 @@ logs/
 
 # Local development scripts
 scripts/local/
+
+# JetBrains Rider
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+
+# ASP.NET Scaffolding
+ScaffoldingReadme.txt

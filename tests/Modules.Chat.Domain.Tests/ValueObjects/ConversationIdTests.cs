@@ -1,41 +1,44 @@
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Shared.Common;
-using FluentAssertions;
-using Xunit;
 
 namespace Axon.Modules.Chat.Domain.Tests.ValueObjects;
 
-public sealed class ConversationIdTests
+[TestFixture]
+[Category("Unit")]
+[Category("Domain")]
+public sealed class ConversationIdTests : DomainTestBase
 {
-    [Fact]
-    public void New_ShouldCreateUniqueConversationId_GivenNoParameters()
+    [Test]
+    public void New_GivenNoParameters_ShouldCreateUniqueConversationIds()
+
     {
         // Arrange & Act
         var conversationId1 = ConversationId.New();
         var conversationId2 = ConversationId.New();
 
         // Assert
-        conversationId1.Value.Should().NotBe(Guid.Empty);
-        conversationId2.Value.Should().NotBe(Guid.Empty);
-        conversationId1.Value.Should().NotBe(conversationId2.Value);
+        conversationId1.Value.ShouldNotBe(Guid.Empty);
+        conversationId2.Value.ShouldNotBe(Guid.Empty);
+        conversationId1.Value.ShouldNotBe(conversationId2.Value);
     }
 
-    [Fact]
-    public void Create_ShouldReturnSuccessResult_GivenValidGuid()
+    [Test]
+    public void Create_GivenValidGuid_ShouldReturnSuccessWithCorrectValue()
     {
         // Arrange
-        var validGuid = Guid.NewGuid();
+        var validGuid = ValidGuid();
+
 
         // Act
         var result = ConversationId.Create(validGuid);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.Should().Be(validGuid);
+        result.ShouldBeSuccessAnd(conversationId => 
+            conversationId.Value.ShouldBe(validGuid));
     }
 
-    [Fact]
-    public void Create_ShouldReturnValidationError_GivenEmptyGuid()
+    [Test]
+    public void Create_GivenEmptyGuid_ShouldReturnValidationError()
+
     {
         // Arrange
         var emptyGuid = Guid.Empty;
@@ -44,127 +47,151 @@ public sealed class ConversationIdTests
         var result = ConversationId.Create(emptyGuid);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("ConversationId cannot be empty");
+        result.ShouldBeValidationFailure("ConversationId cannot be empty");
     }
 
-    [Fact]
-    public void Create_ShouldReturnSuccessResult_GivenValidGuidString()
+    [Test]
+    public void Create_GivenValidGuidString_ShouldReturnSuccessWithCorrectValue()
     {
         // Arrange
-        var validGuid = Guid.NewGuid();
+        var validGuid = ValidGuid();
+
         var validGuidString = validGuid.ToString();
 
         // Act
         var result = ConversationId.Create(validGuidString);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.Should().Be(validGuid);
+        result.ShouldBeSuccessAnd(conversationId => 
+            conversationId.Value.ShouldBe(validGuid));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Create_ShouldReturnValidationError_GivenNullOrWhitespaceString(string? input)
+    [Test]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public void Create_GivenNullOrWhitespaceString_ShouldReturnValidationError(string? input)
+
     {
         // Act
         var result = ConversationId.Create(input);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("ConversationId string cannot be null or empty");
+        result.ShouldBeValidationFailure("ConversationId string cannot be null or empty");
     }
 
-    [Theory]
-    [InlineData("not-a-guid")]
-    [InlineData("12345")]
-    [InlineData("invalid-guid-format")]
-    [InlineData("123e4567-e89b-12d3-a456-42661417400")]  // Missing last character
-    public void Create_ShouldReturnValidationError_GivenInvalidGuidString(string invalidGuidString)
+    [Test]
+    [TestCase("not-a-guid")]
+    [TestCase("12345")]
+    [TestCase("invalid-guid-format")]
+    [TestCase("123e4567-e89b-12d3-a456-42661417400")]  // Missing last character
+    public void Create_GivenInvalidGuidString_ShouldReturnValidationError(string invalidGuidString)
+
     {
         // Act
         var result = ConversationId.Create(invalidGuidString);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("ConversationId must be a valid GUID format");
+        result.ShouldBeValidationFailure("ConversationId must be a valid GUID format");
     }
 
-    [Fact]
-    public void ToString_ShouldReturnGuidString_GivenValidConversationId()
+    [Test]
+    public void ToString_GivenValidConversationId_ShouldReturnGuidString()
     {
         // Arrange
-        var guid = Guid.NewGuid();
-        var conversationId = ConversationId.Create(guid).Value;
+        var guid = ValidGuid();
+        var conversationId = ConversationId.Create(guid).ShouldBeSuccessWithValue();
+
 
         // Act
         var result = conversationId.ToString();
 
         // Assert
-        result.Should().Be(guid.ToString());
+        result.ShouldBe(guid.ToString());
     }
 
-    [Fact]
-    public void ImplicitOperator_ShouldConvertToGuid_GivenValidConversationId()
+    [Test]
+    public void ImplicitOperator_GivenValidConversationId_ShouldConvertToGuid()
     {
         // Arrange
-        var originalGuid = Guid.NewGuid();
-        var conversationId = ConversationId.Create(originalGuid).Value;
+        var originalGuid = ValidGuid();
+        var conversationId = ConversationId.Create(originalGuid).ShouldBeSuccessWithValue();
+
 
         // Act
         Guid convertedGuid = conversationId;
 
         // Assert
-        convertedGuid.Should().Be(originalGuid);
+        convertedGuid.ShouldBe(originalGuid);
     }
 
-    [Fact]
-    public void Equality_ShouldReturnTrue_GivenSameGuidValues()
+    [Test]
+    public void Equality_GivenSameGuidValues_ShouldReturnTrue()
     {
         // Arrange
-        var guid = Guid.NewGuid();
-        var conversationId1 = ConversationId.Create(guid).Value;
-        var conversationId2 = ConversationId.Create(guid).Value;
+        var guid = ValidGuid();
+        var conversationId1 = ConversationId.Create(guid).ShouldBeSuccessWithValue();
+        var conversationId2 = ConversationId.Create(guid).ShouldBeSuccessWithValue();
 
         // Act & Assert
-        conversationId1.Should().Be(conversationId2);
-        conversationId1.Equals(conversationId2).Should().BeTrue();
-        (conversationId1 == conversationId2).Should().BeTrue();
-        (conversationId1 != conversationId2).Should().BeFalse();
+        conversationId1.ShouldBe(conversationId2);
+        conversationId1.Equals(conversationId2).ShouldBeTrue();
+        (conversationId1 == conversationId2).ShouldBeTrue();
+        (conversationId1 != conversationId2).ShouldBeFalse();
     }
 
-    [Fact]
-    public void Equality_ShouldReturnFalse_GivenDifferentGuidValues()
+    [Test]
+    public void Equality_GivenDifferentGuidValues_ShouldReturnFalse()
     {
         // Arrange
-        var conversationId1 = ConversationId.New();
-        var conversationId2 = ConversationId.New();
+        var conversationId1 = ValidConversationId();
+        var conversationId2 = ValidConversationId();
 
         // Act & Assert
-        conversationId1.Should().NotBe(conversationId2);
-        conversationId1.Equals(conversationId2).Should().BeFalse();
-        (conversationId1 == conversationId2).Should().BeFalse();
-        (conversationId1 != conversationId2).Should().BeTrue();
+        conversationId1.ShouldNotBe(conversationId2);
+        conversationId1.Equals(conversationId2).ShouldBeFalse();
+        (conversationId1 == conversationId2).ShouldBeFalse();
+        (conversationId1 != conversationId2).ShouldBeTrue();
     }
 
-    [Fact]
-    public void GetHashCode_ShouldReturnSameValue_GivenSameGuidValues()
+    [Test]
+    public void GetHashCode_GivenSameGuidValues_ShouldReturnSameValue()
     {
         // Arrange
-        var guid = Guid.NewGuid();
-        var conversationId1 = ConversationId.Create(guid).Value;
-        var conversationId2 = ConversationId.Create(guid).Value;
+        var guid = ValidGuid();
+        var conversationId1 = ConversationId.Create(guid).ShouldBeSuccessWithValue();
+        var conversationId2 = ConversationId.Create(guid).ShouldBeSuccessWithValue();
+
 
         // Act
         var hashCode1 = conversationId1.GetHashCode();
         var hashCode2 = conversationId2.GetHashCode();
 
         // Assert
-        hashCode1.Should().Be(hashCode2);
+        hashCode1.ShouldBe(hashCode2);
+    }
+
+    [Test]
+    public void Factory_ShouldCreateEqualConversationIdsFromSameGuid()
+    {
+        // Arrange & Act
+        var (conversationId1, conversationId2) = ChatDomainFactory.EqualConversationIds();
+
+        // Assert
+        conversationId1.ShouldBe(conversationId2);
+        conversationId1.GetHashCode().ShouldBe(conversationId2.GetHashCode());
+    }
+
+    [Test]
+    public void Factory_ShouldCreateUniqueConversationIds()
+    {
+        // Arrange & Act
+        var conversationIds = ChatDomainFactory.ValidConversationIds(5).ToList();
+
+        // Assert
+        conversationIds.Count.ShouldBe(5);
+        conversationIds.ShouldBeUnique();
+        conversationIds.ShouldAllBe(id => id.Value != Guid.Empty);
+
     }
 }

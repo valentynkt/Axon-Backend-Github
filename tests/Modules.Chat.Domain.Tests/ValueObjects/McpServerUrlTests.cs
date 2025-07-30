@@ -1,76 +1,75 @@
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Shared.Common;
-using FluentAssertions;
-using Xunit;
 
 namespace Axon.Modules.Chat.Domain.Tests.ValueObjects;
 
-public sealed class McpServerUrlTests
+[TestFixture]
+[Category("Unit")]
+[Category("Domain")]
+public sealed class McpServerUrlTests : DomainTestBase
 {
-    [Theory]
-    [InlineData("https://api.example.com", "https://api.example.com/")]
-    [InlineData("https://localhost:8080", "https://localhost:8080/")]
-    [InlineData("https://subdomain.example.com/path", "https://subdomain.example.com/path")]
-    [InlineData("https://api.example.com:443/v1/mcp", "https://api.example.com/v1/mcp")]
-    public void Create_ShouldReturnSuccessResult_GivenValidHttpsUrl(string validUrl, string expectedNormalizedUrl)
+    [Test]
+    [TestCase("https://api.example.com", "https://api.example.com/")]
+    [TestCase("https://localhost:8080", "https://localhost:8080/")]
+    [TestCase("https://subdomain.example.com/path", "https://subdomain.example.com/path")]
+    [TestCase("https://api.example.com:443/v1/mcp", "https://api.example.com/v1/mcp")]
+    public void Create_GivenValidHttpsUrl_ShouldReturnSuccessWithNormalizedUrl(string validUrl, string expectedNormalizedUrl)
+
     {
         // Act
         var result = McpServerUrl.Create(validUrl);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.ToString().Should().Be(expectedNormalizedUrl);
+        result.ShouldBeSuccessAnd(mcpUrl => 
+            mcpUrl.Value.ToString().ShouldBe(expectedNormalizedUrl));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Create_ShouldReturnValidationError_GivenNullOrWhitespaceString(string? input)
+    [Test]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public void Create_GivenNullOrWhitespaceString_ShouldReturnValidationError(string? input)
+
     {
         // Act
         var result = McpServerUrl.Create(input);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("MCP server URL cannot be null or empty");
+        result.ShouldBeValidationFailure("MCP server URL cannot be null or empty");
     }
 
-    [Theory]
-    [InlineData("not-a-url")]
-    [InlineData("://invalid-url")]
-    [InlineData("relative/path")]
-    public void Create_ShouldReturnValidationError_GivenInvalidUrl(string invalidUrl)
+    [Test]
+    [TestCase("not-a-url")]
+    [TestCase("://invalid-url")]
+    [TestCase("relative/path")]
+    public void Create_GivenInvalidUrl_ShouldReturnValidationError(string invalidUrl)
+
     {
         // Act
         var result = McpServerUrl.Create(invalidUrl);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("MCP server URL must be a valid absolute URL");
+        result.ShouldBeValidationFailure("MCP server URL must be a valid absolute URL");
     }
 
-    [Theory]
-    [InlineData("http://example.com")]
-    [InlineData("ftp://example.com")]
-    [InlineData("ws://example.com")]
-    [InlineData("file://example.com")]
-    [InlineData("file://local/path")]
-    public void Create_ShouldReturnValidationError_GivenNonHttpsScheme(string nonHttpsUrl)
+    [Test]
+    [TestCase("http://example.com")]
+    [TestCase("ftp://example.com")]
+    [TestCase("ws://example.com")]
+    [TestCase("file://example.com")]
+    [TestCase("file://local/path")]
+    public void Create_GivenNonHttpsScheme_ShouldReturnValidationError(string nonHttpsUrl)
+
     {
         // Act
         var result = McpServerUrl.Create(nonHttpsUrl);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("MCP server URL must use HTTPS scheme for security");
+        result.ShouldBeValidationFailure("MCP server URL must use HTTPS scheme for security");
     }
 
-    [Fact]
-    public void Create_ShouldReturnSuccessResult_GivenValidHttpsUri()
+    [Test]
+    public void Create_GivenValidHttpsUri_ShouldReturnSuccessWithCorrectValue()
+
     {
         // Arrange
         var validUri = new Uri("https://api.example.com/mcp");
@@ -79,24 +78,24 @@ public sealed class McpServerUrlTests
         var result = McpServerUrl.Create(validUri);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Value.Should().Be(validUri);
+        result.ShouldBeSuccessAnd(mcpUrl => 
+            mcpUrl.Value.ShouldBe(validUri));
     }
 
-    [Fact]
-    public void Create_ShouldReturnValidationError_GivenNullUri()
+    [Test]
+    public void Create_GivenNullUri_ShouldReturnValidationError()
+
     {
         // Act
         var result = McpServerUrl.Create((Uri?)null);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("MCP server URI cannot be null");
+        result.ShouldBeValidationFailure("MCP server URI cannot be null");
     }
 
-    [Fact]
-    public void Create_ShouldReturnValidationError_GivenRelativeUri()
+    [Test]
+    public void Create_GivenRelativeUri_ShouldReturnValidationError()
+
     {
         // Arrange
         var relativeUri = new Uri("/relative/path", UriKind.Relative);
@@ -105,13 +104,12 @@ public sealed class McpServerUrlTests
         var result = McpServerUrl.Create(relativeUri);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("MCP server URI must be absolute");
+        result.ShouldBeValidationFailure("MCP server URI must be absolute");
     }
 
-    [Fact]
-    public void Create_ShouldReturnValidationError_GivenNonHttpsUriScheme()
+    [Test]
+    public void Create_GivenNonHttpsUriScheme_ShouldReturnValidationError()
+
     {
         // Arrange
         var httpUri = new Uri("http://example.com");
@@ -120,110 +118,138 @@ public sealed class McpServerUrlTests
         var result = McpServerUrl.Create(httpUri);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Be("MCP server URI must use HTTPS scheme for security");
+        result.ShouldBeValidationFailure("MCP server URI must use HTTPS scheme for security");
     }
 
-    [Fact]
-    public void ToString_ShouldReturnUriString_GivenValidMcpServerUrl()
+    [Test]
+    public void ToString_GivenValidMcpServerUrl_ShouldReturnUriString()
     {
         // Arrange
         var urlString = "https://api.example.com/mcp";
-        var mcpServerUrl = McpServerUrl.Create(urlString).Value;
+        var mcpServerUrl = McpServerUrl.Create(urlString).ShouldBeSuccessWithValue();
+
 
         // Act
         var result = mcpServerUrl.ToString();
 
         // Assert
-        result.Should().Be(urlString);
+        result.ShouldBe(urlString);
     }
 
-    [Fact]
-    public void ImplicitOperator_ShouldConvertToUri_GivenValidMcpServerUrl()
+    [Test]
+    public void ImplicitOperator_GivenValidMcpServerUrl_ShouldConvertToUri()
     {
         // Arrange
         var originalUri = new Uri("https://api.example.com/mcp");
-        var mcpServerUrl = McpServerUrl.Create(originalUri).Value;
+        var mcpServerUrl = McpServerUrl.Create(originalUri).ShouldBeSuccessWithValue();
+
 
         // Act
         Uri convertedUri = mcpServerUrl;
 
         // Assert
-        convertedUri.Should().Be(originalUri);
+        convertedUri.ShouldBe(originalUri);
     }
 
-    [Fact]
-    public void ImplicitOperator_ShouldConvertToString_GivenValidMcpServerUrl()
+    [Test]
+    public void ImplicitOperator_GivenValidMcpServerUrl_ShouldConvertToString()
     {
         // Arrange
         var urlString = "https://api.example.com/mcp";
-        var mcpServerUrl = McpServerUrl.Create(urlString).Value;
+        var mcpServerUrl = McpServerUrl.Create(urlString).ShouldBeSuccessWithValue();
+
 
         // Act
         string convertedString = mcpServerUrl;
 
         // Assert
-        convertedString.Should().Be(urlString);
+        convertedString.ShouldBe(urlString);
     }
 
-    [Fact]
-    public void Equality_ShouldReturnTrue_GivenSameUriValues()
+    [Test]
+    public void Equality_GivenSameUriValues_ShouldReturnTrue()
     {
         // Arrange
         var urlString = "https://api.example.com/mcp";
-        var mcpServerUrl1 = McpServerUrl.Create(urlString).Value;
-        var mcpServerUrl2 = McpServerUrl.Create(urlString).Value;
+        var mcpServerUrl1 = McpServerUrl.Create(urlString).ShouldBeSuccessWithValue();
+        var mcpServerUrl2 = McpServerUrl.Create(urlString).ShouldBeSuccessWithValue();
 
         // Act & Assert
-        mcpServerUrl1.Should().Be(mcpServerUrl2);
-        mcpServerUrl1.Equals(mcpServerUrl2).Should().BeTrue();
-        (mcpServerUrl1 == mcpServerUrl2).Should().BeTrue();
-        (mcpServerUrl1 != mcpServerUrl2).Should().BeFalse();
+        mcpServerUrl1.ShouldBe(mcpServerUrl2);
+        mcpServerUrl1.Equals(mcpServerUrl2).ShouldBeTrue();
+        (mcpServerUrl1 == mcpServerUrl2).ShouldBeTrue();
+        (mcpServerUrl1 != mcpServerUrl2).ShouldBeFalse();
     }
 
-    [Fact]
-    public void Equality_ShouldReturnFalse_GivenDifferentUriValues()
+    [Test]
+    public void Equality_GivenDifferentUriValues_ShouldReturnFalse()
     {
         // Arrange
-        var mcpServerUrl1 = McpServerUrl.Create("https://api1.example.com").Value;
-        var mcpServerUrl2 = McpServerUrl.Create("https://api2.example.com").Value;
+        var mcpServerUrl1 = McpServerUrl.Create("https://api1.example.com").ShouldBeSuccessWithValue();
+        var mcpServerUrl2 = McpServerUrl.Create("https://api2.example.com").ShouldBeSuccessWithValue();
 
         // Act & Assert
-        mcpServerUrl1.Should().NotBe(mcpServerUrl2);
-        mcpServerUrl1.Equals(mcpServerUrl2).Should().BeFalse();
-        (mcpServerUrl1 == mcpServerUrl2).Should().BeFalse();
-        (mcpServerUrl1 != mcpServerUrl2).Should().BeTrue();
+        mcpServerUrl1.ShouldNotBe(mcpServerUrl2);
+        mcpServerUrl1.Equals(mcpServerUrl2).ShouldBeFalse();
+        (mcpServerUrl1 == mcpServerUrl2).ShouldBeFalse();
+        (mcpServerUrl1 != mcpServerUrl2).ShouldBeTrue();
     }
 
-    [Fact]
-    public void GetHashCode_ShouldReturnSameValue_GivenSameUriValues()
+    [Test]
+    public void GetHashCode_GivenSameUriValues_ShouldReturnSameValue()
     {
         // Arrange
         var urlString = "https://api.example.com/mcp";
-        var mcpServerUrl1 = McpServerUrl.Create(urlString).Value;
-        var mcpServerUrl2 = McpServerUrl.Create(urlString).Value;
+        var mcpServerUrl1 = McpServerUrl.Create(urlString).ShouldBeSuccessWithValue();
+        var mcpServerUrl2 = McpServerUrl.Create(urlString).ShouldBeSuccessWithValue();
+
 
         // Act
         var hashCode1 = mcpServerUrl1.GetHashCode();
         var hashCode2 = mcpServerUrl2.GetHashCode();
 
         // Assert
-        hashCode1.Should().Be(hashCode2);
+        hashCode1.ShouldBe(hashCode2);
     }
 
-    [Theory]
-    [InlineData("https://API.EXAMPLE.COM", "https://api.example.com")]
-    [InlineData("https://example.com:443", "https://example.com/")]
-    public void Equality_ShouldHandleUriNormalization_GivenEquivalentUris(string url1, string url2)
+    [Test]
+    [TestCase("https://API.EXAMPLE.COM", "https://api.example.com")]
+    [TestCase("https://example.com:443", "https://example.com/")]
+    public void Equality_GivenEquivalentUris_ShouldHandleUriNormalization(string url1, string url2)
     {
         // Arrange
-        var mcpServerUrl1 = McpServerUrl.Create(url1).Value;
-        var mcpServerUrl2 = McpServerUrl.Create(url2).Value;
+        var mcpServerUrl1 = McpServerUrl.Create(url1).ShouldBeSuccessWithValue();
+        var mcpServerUrl2 = McpServerUrl.Create(url2).ShouldBeSuccessWithValue();
+
 
         // Act & Assert
         // Note: This test verifies that Uri normalization is handled correctly
         // The behavior depends on how Uri internally normalizes URLs
-        mcpServerUrl1.Should().Be(mcpServerUrl2);
+        mcpServerUrl1.ShouldBe(mcpServerUrl2);
+    }
+
+    [Test]
+    public void Factory_ShouldCreateValidMcpServerUrl()
+    {
+        // Act
+        var mcpServerUrl = ChatDomainFactory.ValidMcpServerUrl();
+
+        // Assert
+        mcpServerUrl.Value.Scheme.ShouldBe("https");
+        mcpServerUrl.Value.IsAbsoluteUri.ShouldBeTrue();
+    }
+
+    [Test]
+    public void Factory_ShouldCreateMcpServerUrlFromCustomUrl()
+    {
+        // Arrange
+        var customUrl = "https://custom.example.com/api/mcp";
+
+        // Act
+        var mcpServerUrl = ChatDomainFactory.ValidMcpServerUrl(customUrl);
+
+        // Assert
+        mcpServerUrl.Value.ToString().ShouldBe(customUrl);
+
     }
 }

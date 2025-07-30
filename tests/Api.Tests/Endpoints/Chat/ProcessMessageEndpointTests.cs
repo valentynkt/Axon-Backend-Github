@@ -7,12 +7,13 @@ using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Types;
 using Axon.Shared.Common;
-using FluentAssertions;
+using Shouldly;
+
 using MediatR;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Xunit;
+using NUnit.Framework;
 
 // Aliases to resolve type ambiguity
 using ApiProcessMessageResponse = Axon.Api.Contracts.Chat.ProcessMessageResponse;
@@ -20,18 +21,27 @@ using ApplicationProcessMessageResponse = Axon.Modules.Chat.Application.Commands
 
 namespace Axon.Api.Tests.Endpoints.Chat;
 
-public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+[TestFixture]
+public sealed class ProcessMessageEndpointTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private WebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
-    public ProcessMessageEndpointTests(WebApplicationFactory<Program> factory)
+    [OneTimeSetUp]
+    public void OneTimeSetUp()
     {
-        _factory = factory;
+        _factory = new WebApplicationFactory<Program>();
         _client = _factory.CreateClient();
     }
 
-    [Fact]
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+    }
+
+    [Test]
     public async Task ProcessMessage_ShouldReturnOkResult_GivenValidRequestWithoutMcp()
     {
         // Arrange
@@ -64,13 +74,14 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.Response.Should().Be("Hello! How can I help you?");
-        content.ConversationId.Should().Be("conv-123");
-        content.ToolExecutions.Should().BeNull();
+        content.ShouldNotBeNull();
+        content!.Response.ShouldBe("Hello! How can I help you?");
+        content.ConversationId.ShouldBe("conv-123");
+        content.ToolExecutions.ShouldBeNull();
+
 
         // Verify mediator was called correctly
         mockMediator.Verify(x => x.Send(
@@ -83,7 +94,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnOkResult_GivenValidRequestWithMcpConfiguration()
     {
         // Arrange
@@ -126,16 +137,17 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.Response.Should().Be("The weather is sunny and 72°F.");
-        content.ConversationId.Should().Be("conv-456");
-        content.ToolExecutions.Should().HaveCount(1);
-        content.ToolExecutions![0].ToolName.Should().Be("weather");
-        content.ToolExecutions[0].Success.Should().BeTrue();
-        content.ToolExecutions[0].DurationMs.Should().Be(500);
+        content.ShouldNotBeNull();
+        content!.Response.ShouldBe("The weather is sunny and 72°F.");
+        content.ConversationId.ShouldBe("conv-456");
+        content.ToolExecutions!.Length.ShouldBe(1);
+        content.ToolExecutions![0].ToolName.ShouldBe("weather");
+        content.ToolExecutions[0].Success.ShouldBeTrue();
+        content.ToolExecutions[0].DurationMs.ShouldBe(500);
+
 
         // Verify mediator was called with MCP configuration
         mockMediator.Verify(x => x.Send(
@@ -149,7 +161,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnBadRequest_GivenValidationError()
     {
         // Arrange
@@ -178,14 +190,15 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("Message cannot be empty");
-        content.Should().Contain("Validation Error");
+        content.ShouldContain("Message cannot be empty");
+        content.ShouldContain("Validation Error");
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnNotFound_GivenNotFoundError()
     {
         // Arrange
@@ -214,14 +227,15 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("Conversation not found");
-        content.Should().Contain("Not Found");
+        content.ShouldContain("Conversation not found");
+        content.ShouldContain("Not Found");
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnBadGateway_GivenExternalServiceError()
     {
         // Arrange
@@ -250,14 +264,15 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
         
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("AI service is unavailable");
-        content.Should().Contain("External Service Error");
+        content.ShouldContain("AI service is unavailable");
+        content.ShouldContain("External Service Error");
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnInternalServerError_GivenUnknownError()
     {
         // Arrange
@@ -286,14 +301,15 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
         
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("An unexpected error occurred");
-        content.Should().Contain("Internal Server Error");
+        content.ShouldContain("An unexpected error occurred");
+        content.ShouldContain("Internal Server Error");
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldGenerateConversationId_GivenNullConversationIdInResponse()
     {
         // Arrange
@@ -325,27 +341,29 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.ConversationId.Should().NotBeNullOrEmpty();
+        content.ShouldNotBeNull();
+        content!.ConversationId.ShouldNotBeNullOrEmpty();
         
         // Verify it's a valid GUID format
-        Guid.TryParse(content.ConversationId, out _).Should().BeTrue();
+        Guid.TryParse(content.ConversationId, out _).ShouldBeTrue();
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnUnsupportedMediaType_GivenNullRequestBody()
     {
         // Act
         var response = await _client.PostAsync("/api/chat/process", null);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldHandleEmptyToolExecutions_GivenEmptyArray()
     {
         // Arrange
@@ -377,15 +395,16 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.ToolExecutions.Should().NotBeNull();
-        content.ToolExecutions.Should().BeEmpty();
+        content.ShouldNotBeNull();
+        content!.ToolExecutions.ShouldNotBeNull();
+        content.ToolExecutions.ShouldBeEmpty();
+
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldHandleCancellation_GivenCancelledRequest()
     {
         // Arrange
@@ -412,9 +431,8 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
         cts.Cancel();
 
         // Act & Assert
-        await FluentActions
-            .Invoking(() => client.PostAsJsonAsync("/api/chat/process", request, cts.Token))
-            .Should()
-            .ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => client.PostAsJsonAsync("/api/chat/process", request, cts.Token));
+
     }
 }

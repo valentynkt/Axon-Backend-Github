@@ -5,11 +5,11 @@ using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Types;
 using Axon.Shared.Common;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Xunit;
+using NUnit.Framework;
 
 // Aliases to resolve type ambiguity
 using ApiProcessMessageResponse = Axon.Api.Contracts.Chat.ProcessMessageResponse;
@@ -20,16 +20,24 @@ namespace Axon.Api.Tests.Behavior;
 /// End-to-end behavior tests for the Chat/Direct_MCP feature.
 /// These tests validate complete user scenarios and business flows.
 /// </summary>
-public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFactory<Program>>
+[TestFixture]
+public sealed class ChatProcessingBehaviorTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private WebApplicationFactory<Program> _factory = null!;
 
-    public ChatProcessingBehaviorTests(WebApplicationFactory<Program> factory)
+    [OneTimeSetUp]
+    public void OneTimeSetUp()
     {
-        _factory = factory;
+        _factory = new WebApplicationFactory<Program>();
     }
 
-    [Fact]
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
+    {
+        _factory?.Dispose();
+    }
+
+    [Test]
     public async Task UserScenario_SimpleTextChat_ShouldProcessSuccessfully()
     {
         // Scenario: User sends a simple text message without MCP tools
@@ -59,13 +67,14 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.Response.Should().Contain("Hello!");
-        content.ConversationId.Should().Be("response-001");
-        content.ToolExecutions.Should().BeNull();
+        content.ShouldNotBeNull();
+        content!.Response.ShouldContain("Hello!");
+        content.ConversationId.ShouldBe("response-001");
+        content.ToolExecutions.ShouldBeNull();
+
 
         // Verify the AI client received the correct request
         mockAiClient.Verify(x => x.ProcessMessageAsync(
@@ -76,7 +85,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_ContinuingConversation_ShouldMaintainContext()
     {
         // Scenario: User continues an existing conversation
@@ -106,11 +115,12 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.ConversationId.Should().Be("response-002");
+        content.ShouldNotBeNull();
+        content!.ConversationId.ShouldBe("response-002");
+
 
         // Verify context is passed to AI client
         mockAiClient.Verify(x => x.ProcessMessageAsync(
@@ -120,7 +130,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_McpToolIntegration_ShouldExecuteTools()
     {
         // Scenario: User requests information that requires MCP tool execution
@@ -166,16 +176,17 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.Response.Should().Contain("75°F");
-        content.Response.Should().Contain("sunny");
-        content.ToolExecutions.Should().HaveCount(1);
-        content.ToolExecutions![0].ToolName.Should().Be("get_weather");
-        content.ToolExecutions[0].Success.Should().BeTrue();
-        content.ToolExecutions[0].DurationMs.Should().Be(850);
+        content.ShouldNotBeNull();
+        content!.Response.ShouldContain("75°F");
+        content.Response.ShouldContain("sunny");
+        content.ToolExecutions!.Length.ShouldBe(1);
+        content.ToolExecutions![0].ToolName.ShouldBe("get_weather");
+        content.ToolExecutions[0].Success.ShouldBeTrue();
+        content.ToolExecutions[0].DurationMs.ShouldBe(850);
+
 
         // Verify MCP configuration is passed correctly
         mockAiClient.Verify(x => x.ProcessMessageAsync(
@@ -188,7 +199,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_McpToolFailure_ShouldHandleGracefully()
     {
         // Scenario: MCP tool execution fails but conversation continues
@@ -231,18 +242,19 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.Response.Should().Contain("temporarily unavailable");
-        content.ToolExecutions.Should().HaveCount(1);
-        content.ToolExecutions![0].ToolName.Should().Be("get_stock_price");
-        content.ToolExecutions[0].Success.Should().BeFalse();
-        content.ToolExecutions[0].DurationMs.Should().Be(2000);
+        content.ShouldNotBeNull();
+        content!.Response.ShouldContain("temporarily unavailable");
+        content.ToolExecutions!.Length.ShouldBe(1);
+        content.ToolExecutions![0].ToolName.ShouldBe("get_stock_price");
+        content.ToolExecutions[0].Success.ShouldBeFalse();
+        content.ToolExecutions[0].DurationMs.ShouldBe(2000);
+
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_InvalidMcpConfiguration_ShouldReturnValidationError()
     {
         // Scenario: User provides invalid MCP server configuration
@@ -273,14 +285,15 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("HTTPS scheme");
-        content.Should().Contain("security");
+        content.ShouldContain("HTTPS scheme");
+        content.ShouldContain("security");
+
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_AiServiceDown_ShouldReturnServiceError()
     {
         // Scenario: AI service is temporarily unavailable
@@ -307,14 +320,15 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
         
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("temporarily unavailable");
-        content.Should().Contain("External Service Error");
+        content.ShouldContain("temporarily unavailable");
+        content.ShouldContain("External Service Error");
+
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_MultipleToolExecution_ShouldHandleComplexRequests()
     {
         // Scenario: User request requires multiple MCP tool executions
@@ -355,21 +369,22 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
         var response = await client.PostAsJsonAsync("/api/chat/process", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         
         var content = await response.Content.ReadFromJsonAsync<ApiProcessMessageResponse>();
-        content.Should().NotBeNull();
-        content!.Response.Should().Contain("trip");
-        content.ToolExecutions.Should().HaveCount(3);
+        content.ShouldNotBeNull();
+        content!.Response.ShouldContain("trip");
+        content.ToolExecutions!.Length.ShouldBe(3);
         
         // Verify all tools were executed
         var toolNames = content.ToolExecutions!.Select(t => t.ToolName).ToArray();
-        toolNames.Should().Contain("get_weather");
-        toolNames.Should().Contain("get_traffic");
-        toolNames.Should().Contain("get_hotels");
+        toolNames.ShouldContain("get_weather");
+        toolNames.ShouldContain("get_traffic");
+        toolNames.ShouldContain("get_hotels");
         
         // All tools should have succeeded
-        content.ToolExecutions.Should().OnlyContain(t => t.Success);
+        content.ToolExecutions.ShouldAllBe(t => t.Success);
+
     }
 
     private HttpClient CreateClientWithMockedAi(IAiClient mockAiClient)
