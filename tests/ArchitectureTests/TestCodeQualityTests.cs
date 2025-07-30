@@ -149,6 +149,10 @@ public class TestCodeQualityTests
 
         foreach (var assembly in _testAssemblies)
         {
+            // Skip architecture tests to avoid self-reference
+            if (assembly.GetName().Name?.Contains("ArchitectureTests") == true)
+                continue;
+                
             var testClasses = assembly.GetTypes()
                 .Where(t => t.Namespace?.Contains("Tests") == true)
                 .Where(t => t.Name.EndsWith("Tests"));

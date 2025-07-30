@@ -20,16 +20,24 @@ namespace Axon.Api.Tests.Behavior;
 /// End-to-end behavior tests for the Chat/Direct_MCP feature.
 /// These tests validate complete user scenarios and business flows.
 /// </summary>
-public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFactory<Program>>
+[TestFixture]
+public sealed class ChatProcessingBehaviorTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private WebApplicationFactory<Program> _factory = null!;
 
-    public ChatProcessingBehaviorTests(WebApplicationFactory<Program> factory)
+    [OneTimeSetUp]
+    public void OneTimeSetUp()
     {
-        _factory = factory;
+        _factory = new WebApplicationFactory<Program>();
     }
 
-    [Fact]
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
+    {
+        _factory?.Dispose();
+    }
+
+    [Test]
     public async Task UserScenario_SimpleTextChat_ShouldProcessSuccessfully()
     {
         // Scenario: User sends a simple text message without MCP tools
@@ -77,7 +85,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_ContinuingConversation_ShouldMaintainContext()
     {
         // Scenario: User continues an existing conversation
@@ -122,7 +130,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_McpToolIntegration_ShouldExecuteTools()
     {
         // Scenario: User requests information that requires MCP tool execution
@@ -191,7 +199,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_McpToolFailure_ShouldHandleGracefully()
     {
         // Scenario: MCP tool execution fails but conversation continues
@@ -246,7 +254,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_InvalidMcpConfiguration_ShouldReturnValidationError()
     {
         // Scenario: User provides invalid MCP server configuration
@@ -285,7 +293,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_AiServiceDown_ShouldReturnServiceError()
     {
         // Scenario: AI service is temporarily unavailable
@@ -320,7 +328,7 @@ public sealed class ChatProcessingBehaviorTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task UserScenario_MultipleToolExecution_ShouldHandleComplexRequests()
     {
         // Scenario: User request requires multiple MCP tool executions

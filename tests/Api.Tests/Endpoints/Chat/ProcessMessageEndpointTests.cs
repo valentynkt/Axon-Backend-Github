@@ -13,7 +13,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Xunit;
+using NUnit.Framework;
 
 // Aliases to resolve type ambiguity
 using ApiProcessMessageResponse = Axon.Api.Contracts.Chat.ProcessMessageResponse;
@@ -21,18 +21,27 @@ using ApplicationProcessMessageResponse = Axon.Modules.Chat.Application.Commands
 
 namespace Axon.Api.Tests.Endpoints.Chat;
 
-public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+[TestFixture]
+public sealed class ProcessMessageEndpointTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private WebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
-    public ProcessMessageEndpointTests(WebApplicationFactory<Program> factory)
+    [OneTimeSetUp]
+    public void OneTimeSetUp()
     {
-        _factory = factory;
+        _factory = new WebApplicationFactory<Program>();
         _client = _factory.CreateClient();
     }
 
-    [Fact]
+    [OneTimeTearDown]
+    public void OneTimeTearDown()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+    }
+
+    [Test]
     public async Task ProcessMessage_ShouldReturnOkResult_GivenValidRequestWithoutMcp()
     {
         // Arrange
@@ -85,7 +94,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnOkResult_GivenValidRequestWithMcpConfiguration()
     {
         // Arrange
@@ -152,7 +161,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnBadRequest_GivenValidationError()
     {
         // Arrange
@@ -189,7 +198,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnNotFound_GivenNotFoundError()
     {
         // Arrange
@@ -226,7 +235,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnBadGateway_GivenExternalServiceError()
     {
         // Arrange
@@ -263,7 +272,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnInternalServerError_GivenUnknownError()
     {
         // Arrange
@@ -300,7 +309,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldGenerateConversationId_GivenNullConversationIdInResponse()
     {
         // Arrange
@@ -343,7 +352,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldReturnUnsupportedMediaType_GivenNullRequestBody()
     {
         // Act
@@ -354,7 +363,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldHandleEmptyToolExecutions_GivenEmptyArray()
     {
         // Arrange
@@ -395,7 +404,7 @@ public sealed class ProcessMessageEndpointTests : IClassFixture<WebApplicationFa
 
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessMessage_ShouldHandleCancellation_GivenCancelledRequest()
     {
         // Arrange
