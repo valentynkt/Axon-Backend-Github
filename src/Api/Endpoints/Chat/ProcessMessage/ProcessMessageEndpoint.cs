@@ -4,6 +4,7 @@ using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using FastEndpoints;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Axon.Api.Endpoints.Chat.ProcessMessage;
 
@@ -28,26 +29,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
         Post("/api/chat/process");
         AllowAnonymous();
         
-        Summary(s =>
-        {
-            s.Summary = "Process a chat message with automatic MCP tool integration";
-            s.Description = """
-                Processes a user message through the AI chat system with automatic MCP tool integration.
-                All enabled MCP servers from configuration are automatically available.
-                Built with FastEndpoints for high performance and clean API design.
-                """;
-            s.ExampleRequest = new ProcessMessageRequest(
-                Message: "Hello, how can you help me today?",
-                ConversationId: null);
-            s.ResponseExamples[200] = new Contracts.Chat.ProcessMessageResponse(
-                Response: "Hello! I'm here to help you with any questions you might have.",
-                ConversationId: Guid.NewGuid().ToString(),
-                ToolExecutions: null);
-            s.Responses[200] = "Message processed successfully";
-            s.Responses[400] = "Invalid request data";
-            s.Responses[500] = "Internal server error";
-            s.Responses[502] = "External service error";
-        });
+        Summary(ConfigureOpenApiExamples);
         
         Tags("Chat");
     }
@@ -55,6 +37,10 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
     public override async Task HandleAsync(ProcessMessageRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
+
+        using var activity = Activity.Current?.Source.StartActivity("ProcessMessage");
+        activity?.SetTag("message.length", req.Message.Length.ToString());
+        activity?.SetTag("conversation.id", req.ConversationId);
 
         _logger.LogInformation(
             "Processing chat message with length {MessageLength} for conversation {ConversationId}",
@@ -71,15 +57,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
 
         if (result.IsFailure)
         {
-            _logger.LogWarning(
-                "Failed to process chat message: {Error}",
-                result.Error);
-                
-            var statusCode = _errorMapper.MapToStatusCode(result.Error);
-            var problemDetails = _errorMapper.MapToProblemDetails(result.Error);
-            
-            HttpContext.Response.StatusCode = statusCode;
-            await HttpContext.Response.WriteAsJsonAsync(problemDetails, ct);
+            await WriteErrorResponseAsync(result.Error, ct);
             return;
         }
 
@@ -101,5 +79,39 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
             apiResponse.ConversationId);
 
         await HttpContext.Response.WriteAsJsonAsync(apiResponse, ct);
+    }
+
+    private async Task WriteErrorResponseAsync(Shared.Common.Error error, CancellationToken ct)
+    {
+        _logger.LogWarning(
+            "Failed to process chat message: {Error}",
+            error);
+            
+        var statusCode = _errorMapper.MapToStatusCode(error);
+        var problemDetails = _errorMapper.MapToProblemDetails(error);
+        
+        HttpContext.Response.StatusCode = statusCode;
+        await HttpContext.Response.WriteAsJsonAsync(problemDetails, ct);
+    }
+
+    private static void ConfigureOpenApiExamples(Summary s)
+    {
+        s.Summary = "Process a chat message with automatic MCP tool integration";
+        s.Description = """
+            Processes a user message through the AI chat system with automatic MCP tool integration.
+            All enabled MCP servers from configuration are automatically available.
+            Built with FastEndpoints for high performance and clean API design.
+            """;
+        s.ExampleRequest = new ProcessMessageRequest(
+            Message: "Hello, how can you help me today?",
+            ConversationId: null);
+        s.ResponseExamples[200] = new Contracts.Chat.ProcessMessageResponse(
+            Response: "Hello! I'm here to help you with any questions you might have.",
+            ConversationId: Guid.NewGuid().ToString(),
+            ToolExecutions: null);
+        s.Responses[200] = "Message processed successfully";
+        s.Responses[400] = "Invalid request data";
+        s.Responses[500] = "Internal server error";
+        s.Responses[502] = "External service error";
     }
 }
