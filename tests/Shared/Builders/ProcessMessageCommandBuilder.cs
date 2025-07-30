@@ -8,9 +8,6 @@ namespace Axon.Tests.Shared.Builders;
 public class ProcessMessageCommandBuilder
 {
     private string _message = "Default test message";
-    private string? _mcpServerUrl;
-    private Dictionary<string, string>? _mcpHeaders;
-    private string[]? _allowedTools;
     private string? _previousResponseId;
 
     /// <summary>
@@ -48,78 +45,6 @@ public class ProcessMessageCommandBuilder
     /// </summary>
     public ProcessMessageCommandBuilder WithWhitespaceMessage() => WithMessage("   ");
 
-    /// <summary>
-    /// Sets the MCP server URL
-    /// </summary>
-    public ProcessMessageCommandBuilder WithMcpServerUrl(string url)
-    {
-        _mcpServerUrl = url;
-        return this;
-    }
-
-    /// <summary>
-    /// Sets a valid MCP server URL
-    /// </summary>
-    public ProcessMessageCommandBuilder WithValidMcpServer() => 
-        WithMcpServerUrl("https://api.example.com/mcp");
-
-    /// <summary>
-    /// Sets an invalid MCP server URL (for validation testing)
-    /// </summary>
-    public ProcessMessageCommandBuilder WithInvalidMcpServer() => 
-        WithMcpServerUrl("not-a-valid-url");
-
-    /// <summary>
-    /// Sets MCP headers
-    /// </summary>
-    public ProcessMessageCommandBuilder WithMcpHeaders(Dictionary<string, string> headers)
-    {
-        _mcpHeaders = headers;
-        return this;
-    }
-
-    /// <summary>
-    /// Sets authentication headers for MCP
-    /// </summary>
-    public ProcessMessageCommandBuilder WithAuthHeaders() => 
-        WithMcpHeaders(new Dictionary<string, string>
-        {
-            { "Authorization", "Bearer test-token" },
-            { "X-API-Key", "test-api-key" }
-        });
-
-    /// <summary>
-    /// Sets custom headers for MCP
-    /// </summary>
-    public ProcessMessageCommandBuilder WithCustomHeaders(string key, string value) => 
-        WithMcpHeaders(new Dictionary<string, string> { { key, value } });
-
-    /// <summary>
-    /// Sets allowed tools
-    /// </summary>
-    public ProcessMessageCommandBuilder WithAllowedTools(params string[] tools)
-    {
-        _allowedTools = tools;
-        return this;
-    }
-
-    /// <summary>
-    /// Sets common allowed tools
-    /// </summary>
-    public ProcessMessageCommandBuilder WithCommonTools() => 
-        WithAllowedTools("weather", "calendar", "search");
-
-    /// <summary>
-    /// Sets a single allowed tool
-    /// </summary>
-    public ProcessMessageCommandBuilder WithSingleTool(string tool) => 
-        WithAllowedTools(tool);
-
-    /// <summary>
-    /// Sets no allowed tools (empty array)
-    /// </summary>
-    public ProcessMessageCommandBuilder WithNoTools() => 
-        WithAllowedTools();
 
     /// <summary>
     /// Sets the previous response ID
@@ -137,13 +62,10 @@ public class ProcessMessageCommandBuilder
         WithPreviousResponseId(Guid.NewGuid().ToString());
 
     /// <summary>
-    /// Sets up a complete MCP configuration
+    /// Sets up a complete configuration with previous response
     /// </summary>
-    public ProcessMessageCommandBuilder WithFullMcpConfiguration() =>
-        WithValidMcpServer()
-        .WithAuthHeaders()
-        .WithCommonTools()
-        .WithValidPreviousResponse();
+    public ProcessMessageCommandBuilder WithFullConfiguration() =>
+        WithValidPreviousResponse();
 
     /// <summary>
     /// Sets up a minimal valid command
@@ -160,9 +82,6 @@ public class ProcessMessageCommandBuilder
     /// </summary>
     public ProcessMessageCommand Build() => new(
         Message: _message,
-        McpServerUrl: _mcpServerUrl,
-        McpHeaders: _mcpHeaders,
-        AllowedTools: _allowedTools,
         PreviousResponseId: _previousResponseId);
 
     /// <summary>
@@ -183,8 +102,8 @@ public class ProcessMessageCommandBuilder
         new ProcessMessageCommandBuilder().AsMinimalValid();
 
     /// <summary>
-    /// Creates a builder for a complete MCP-enabled command
+    /// Creates a builder for a complete command with previous response
     /// </summary>  
-    public static ProcessMessageCommandBuilder WithMcp() => 
-        new ProcessMessageCommandBuilder().WithFullMcpConfiguration();
+    public static ProcessMessageCommandBuilder WithPreviousResponse() => 
+        new ProcessMessageCommandBuilder().WithFullConfiguration();
 }

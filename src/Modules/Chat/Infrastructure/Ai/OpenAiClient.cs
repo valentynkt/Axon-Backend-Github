@@ -49,7 +49,7 @@ public sealed class OpenAiClient : IAiClient
         ArgumentNullException.ThrowIfNull(request);
         
         using var activity = ActivitySource.StartActivity("ProcessMessage");
-        activity?.SetTag("mcp.server_url", request.McpConfig?.ServerUrl ?? "none");
+        activity?.SetTag("mcp.server_count", request.McpConfigs?.Count ?? 0);
         activity?.SetTag("message.length", request.Message.Length);
         
         var stopwatch = Stopwatch.StartNew();
@@ -57,16 +57,16 @@ public sealed class OpenAiClient : IAiClient
         try
         {
             _logger.LogInformation(
-                "Processing message with OpenAI model {Model} and MCP server {McpServer}",
+                "Processing message with OpenAI model {Model} and {McpServerCount} MCP servers",
                 _options.Model,
-                request.McpConfig?.ServerUrl ?? "none");
+                request.McpConfigs?.Count ?? 0);
 
             // Execute OpenAI request
             var (content, responseId) = await ExecuteOpenAiRequest(request, activity, cancellationToken);
             stopwatch.Stop();
 
             // Simulate MCP tool execution if configured
-            var toolExecutions = SimulateToolExecution(request.McpConfig, stopwatch.Elapsed, activity);
+            var toolExecutions = SimulateToolExecution(request.McpConfigs, stopwatch.Elapsed, activity);
 
             var response = new AiResponse(
                 Content: content,
@@ -123,14 +123,18 @@ public sealed class OpenAiClient : IAiClient
             Temperature = (float)_options.Temperature
         };
 
-        // Add MCP tool if configured
-        if (_options.McpEnabled && request.McpConfig != null)
+        // Add MCP tools if configured
+        if (_options.McpEnabled && request.McpConfigs?.Count > 0)
         {
             // Note: OpenAI.NET might not support MCP tools directly yet
             // This would create the appropriate MCP tool configuration when available:
-            // var mcpTool = CreateMcpTool(request.McpConfig);
-            // completionOptions.Tools.Add(mcpTool);
+            // foreach (var mcpConfig in request.McpConfigs)
+            // {
+            //     var mcpTool = CreateMcpTool(mcpConfig);
+            //     completionOptions.Tools.Add(mcpTool);
+            // }
             activity?.SetTag("mcp.enabled", true);
+            activity?.SetTag("mcp.server_count", request.McpConfigs.Count);
         }
 
         // Execute chat completion
@@ -146,23 +150,28 @@ public sealed class OpenAiClient : IAiClient
     }
 
     private static ToolExecution[]? SimulateToolExecution(
-        McpServerConfig? config, 
+        IReadOnlyCollection<McpServerConfig>? configs, 
         TimeSpan duration, 
         Activity? activity)
     {
-        if (config == null)
+        if (configs == null || configs.Count == 0)
             return null;
             
-        var toolExecutions = new[]
-        {
-            ToolExecution.Success(
-                toolName: "weather_check",
-                arguments: "{\"location\":\"Boston\"}",
-                result: $"Simulated weather data from {config.ServerUrl}",
-                executionTime: duration)
-        };
+        var toolExecutions = new List<ToolExecution>();
+        var executionTimePerTool = TimeSpan.FromMilliseconds(duration.TotalMilliseconds / configs.Count);
         
-        activity?.SetTag("tools.executed", toolExecutions.Length);
-        return toolExecutions;
+        foreach (var config in configs)
+        {
+            var toolExecution = ToolExecution.Success(
+                toolName: $"tool_from_{config.ServerLabel}",
+                arguments: "{\"query\":\"simulated_request\"}",
+                result: $"Simulated response from {config.ServerUrl}",
+                executionTime: executionTimePerTool);
+                
+            toolExecutions.Add(toolExecution);
+        }
+        
+        activity?.SetTag("tools.executed", toolExecutions.Count);
+        return toolExecutions.ToArray();
     }
 }

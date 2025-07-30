@@ -60,7 +60,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "Hello, can you help me?",
-            McpServer: null,
             ConversationId: null);
 
         // Act
@@ -80,7 +79,7 @@ public sealed class ChatProcessingBehaviorTests
         mockAiClient.Verify(x => x.ProcessMessageAsync(
             It.Is<AiRequest>(req =>
                 req.Message == "Hello, can you help me?" &&
-                req.McpConfig == null &&
+                req.McpConfigs == null &&
                 req.PreviousResponseId == null),
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -108,7 +107,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "Can you elaborate on that?",
-            McpServer: null,
             ConversationId: "previous-conversation-123");
 
         // Act
@@ -162,14 +160,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "What's the weather like in New York?",
-            McpServer: new McpServerRequest(
-                ServerUrl: "https://weather.example.com/mcp",
-                ServerLabel: null,
-                Headers: new Dictionary<string, string> 
-                { 
-                    { "X-API-Key", "weather-api-key" } 
-                },
-                AllowedTools: new[] { "get_weather", "get_forecast" }),
             ConversationId: null);
 
         // Act
@@ -188,14 +178,10 @@ public sealed class ChatProcessingBehaviorTests
         content.ToolExecutions[0].DurationMs.ShouldBe(850);
 
 
-        // Verify MCP configuration is passed correctly
+        // Verify MCP configuration is automatically loaded from settings
         mockAiClient.Verify(x => x.ProcessMessageAsync(
             It.Is<AiRequest>(req =>
-                req.Message == "What's the weather like in New York?" &&
-                req.McpConfig != null &&
-                req.McpConfig.ServerUrl == "https://weather.example.com/mcp" &&
-                req.McpConfig.Headers!["X-API-Key"] == "weather-api-key" &&
-                req.McpConfig.AllowedTools!.Contains("get_weather")),
+                req.Message == "What's the weather like in New York?"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -231,11 +217,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "What's the current price of AAPL stock?",
-            McpServer: new McpServerRequest(
-                ServerUrl: "https://finance.example.com/mcp",
-                ServerLabel: null,
-                Headers: null,
-                AllowedTools: new[] { "get_stock_price" }),
             ConversationId: null);
 
         // Act
@@ -274,11 +255,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "Get me some data",
-            McpServer: new McpServerRequest(
-                ServerUrl: "http://insecure.example.com/mcp",  // HTTP instead of HTTPS
-                ServerLabel: null,
-                Headers: null,
-                AllowedTools: new[] { "get_data" }),
             ConversationId: null);
 
         // Act
@@ -313,7 +289,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "Hello there!",
-            McpServer: null,
             ConversationId: null);
 
         // Act
@@ -358,11 +333,6 @@ public sealed class ChatProcessingBehaviorTests
 
         var request = new ProcessMessageRequest(
             Message: "Plan my trip from San Francisco to Los Angeles tomorrow",
-            McpServer: new McpServerRequest(
-                ServerUrl: "https://travel.example.com/mcp",
-                ServerLabel: null,
-                Headers: new Dictionary<string, string> { { "API-Key", "travel-key" } },
-                AllowedTools: new[] { "get_weather", "get_traffic", "get_hotels", "get_flights" }),
             ConversationId: null);
 
         // Act

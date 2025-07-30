@@ -1,0 +1,27 @@
+{
+  "artifact": "PR_BODY",
+  "module": "Chat",
+  "feature": "ProcessMessage",
+  "gate": "Ship",
+  "status": "blocked",
+  "links": [
+    "/Users/valentynkit/Repos/Axon-Backend/Docs/features/Chat/ProcessMessage/PR_BODY.md",
+    "/Users/valentynkit/Repos/Axon-Backend/Docs/DECISION_LOG.md"
+  ],
+  "blocking_issues": [
+    "Build failed with 53 compilation errors",
+    "Test files contain obsolete ProcessMessageCommand constructor calls",
+    "McpServerRequest references missing after deletion",
+    "IMcpServerResolver method calls need updating"
+  ],
+  "required_actions": [
+    "Fix all compilation errors in test files",
+    "Update test files to use new ProcessMessageCommand constructor signature",
+    "Remove references to deleted McpServerRequest class",
+    "Update IMcpServerResolver method calls in test files",
+    "Achieve green build with 0 warnings/0 errors",
+    "Run full test suite after build fix",
+    "Complete health check verification"
+  ],
+  "summary": "Ship phase BLOCKED: FastEndpoints migration ready for merge pending compilation error fixes in test files. PR body prepared, decision log updated, contracts maintain compatibility."
+}

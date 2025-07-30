@@ -14,13 +14,16 @@ namespace Axon.Modules.Chat.Application.Commands.ProcessMessage;
 public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageCommand, Result<ProcessMessageResponse>>
 {
     private readonly IAiClient _aiClient;
+    private readonly IMcpServerResolver _mcpServerResolver;
     private readonly ILogger<ProcessMessageHandler> _logger;
 
     public ProcessMessageHandler(
         IAiClient aiClient,
+        IMcpServerResolver mcpServerResolver,
         ILogger<ProcessMessageHandler> logger)
     {
         _aiClient = aiClient;
+        _mcpServerResolver = mcpServerResolver;
         _logger = logger;
     }
 
@@ -31,18 +34,17 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
         ArgumentNullException.ThrowIfNull(request);
         
         _logger.LogInformation(
-            "Processing message with length {MessageLength} and MCP server {McpServerUrl}",
-            request.Message.Length,
-            request.McpServerUrl ?? "none");
+            "Processing message with length {MessageLength}",
+            request.Message.Length);
 
-        // Create MCP configuration if provided
-        var mcpConfig = CreateMcpConfigurationFromRequest(request);
+        // Build AI request with MCP configurations
+        var aiRequestResult = BuildAiRequest(request);
+        if (aiRequestResult.IsFailure)
+        {
+            return aiRequestResult.Error;
+        }
 
-        // Create AI request
-        var aiRequest = new AiRequest(
-            Message: request.Message,
-            McpConfig: mcpConfig,
-            PreviousResponseId: request.PreviousResponseId);
+        var (aiRequest, mcpServerCount) = aiRequestResult.Value;
 
         // Process message via AI client
         var processResult = await _aiClient.ProcessMessageAsync(aiRequest, cancellationToken);
@@ -54,45 +56,57 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
             return processResult.Error;
         }
 
-        var aiClientResponse = processResult.Value;
+        var aiResponse = processResult.Value;
         
         // Map AI response to API response
-        var response = MapToApiResponse(aiClientResponse);
+        var response = MapToApiResponse(aiResponse);
 
         _logger.LogInformation(
-            "Successfully processed message with {ToolCount} tool executions",
-            response.ToolExecutions?.Length ?? 0);
+            "Successfully processed message with {ToolCount} tool executions using {McpServerCount} MCP servers",
+            response.ToolExecutions?.Length ?? 0,
+            mcpServerCount);
 
         return response;
     }
 
-    private static McpServerConfig? CreateMcpConfigurationFromRequest(ProcessMessageCommand request)
+    private Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand request)
     {
-        if (string.IsNullOrWhiteSpace(request.McpServerUrl))
-            return null;
+        // Get all enabled MCP servers from configuration
+        var mcpServersResult = _mcpServerResolver.GetEnabledServerConfigurations();
+        if (mcpServersResult.IsFailure)
+        {
+            _logger.LogError(
+                "Failed to load MCP server configurations: {Error}",
+                mcpServersResult.Error);
+            return mcpServersResult.Error;
+        }
 
-        return new McpServerConfig(
-            ServerUrl: request.McpServerUrl,
-            ServerLabel: "User-provided MCP Server",
-            Headers: request.McpHeaders,
-            AllowedTools: request.AllowedTools,
-            RequireApproval: false);
+        var enabledMcpServers = mcpServersResult.Value;
+        _logger.LogDebug("Using {McpServerCount} enabled MCP servers", enabledMcpServers.Count);
+
+        // Create AI request with all enabled MCP servers
+        var aiRequest = new AiRequest(
+            Message: request.Message,
+            McpConfigs: enabledMcpServers.Count > 0 ? enabledMcpServers : null,
+            PreviousResponseId: request.PreviousResponseId);
+
+        return (aiRequest, enabledMcpServers.Count);
     }
 
-    private static ProcessMessageResponse MapToApiResponse(AiResponse aiClientResponse)
+    private static ProcessMessageResponse MapToApiResponse(AiResponse aiResponse)
     {
         // Generate conversation ID if not provided in response
-        var conversationId = aiClientResponse.ResponseId ?? ConversationId.New().ToString();
+        var conversationId = aiResponse.ResponseId ?? ConversationId.New().ToString();
         
         // Map tool executions to summaries
-        var toolSummaries = aiClientResponse.ToolExecutions?.Select(tool =>
+        var toolSummaries = aiResponse.ToolExecutions?.Select(tool =>
             new ToolExecutionSummary(
                 ToolName: tool.ToolName,
                 Success: tool.IsSuccess,
                 Duration: tool.ExecutionTime)).ToArray();
 
         return new ProcessMessageResponse(
-            Response: aiClientResponse.Content,
+            Response: aiResponse.Content,
             ConversationId: conversationId,
             ToolExecutions: toolSummaries);
     }
