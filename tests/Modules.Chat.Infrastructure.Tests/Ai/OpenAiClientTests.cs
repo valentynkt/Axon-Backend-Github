@@ -4,27 +4,32 @@ using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Errors;
 using Axon.Modules.Chat.Infrastructure.Ai;
 using Axon.Shared.Common;
-using FluentAssertions;
+using Shouldly;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using RichardSzalay.MockHttp;
-using Xunit;
+using NUnit.Framework;
 
 namespace Axon.Modules.Chat.Infrastructure.Tests.Ai;
 
-public sealed class OpenAiClientTests : IDisposable
+[TestFixture]
+[Category("Unit")]
+[Category("Infrastructure")]
+public sealed class OpenAiClientTests : ApplicationTestBase
 {
-    private readonly Mock<ILogger<OpenAiClient>> _mockLogger;
-    private readonly OpenAiOptions _options;
-    private readonly IOptions<OpenAiOptions> _mockOptions;
-    private readonly MockHttpMessageHandler _mockHttpHandler;
-    private readonly HttpClient _httpClient;
-    private bool _disposed;
+    private Mock<ILogger<OpenAiClient>> _mockLogger = null!;
+    private OpenAiOptions _options = null!;
+    private IOptions<OpenAiOptions> _mockOptions = null!;
+    private MockHttpMessageHandler _mockHttpHandler = null!;
+    private HttpClient _httpClient = null!;
 
-    public OpenAiClientTests()
+    [SetUp]
+    public void SetUp()
     {
-        _mockLogger = new Mock<ILogger<OpenAiClient>>();
+        _mockLogger = CreateTypedLoggerMock<OpenAiClient>();
+
         _options = new OpenAiOptions
         {
             ApiKey = "test-api-key",
@@ -40,29 +45,35 @@ public sealed class OpenAiClientTests : IDisposable
         _httpClient = new HttpClient(_mockHttpHandler);
     }
 
-    [Fact]
-    public void Constructor_ShouldInitializeCorrectly_GivenValidOptions()
+    [TearDown]
+    public void TearDown()
+    {
+        _mockHttpHandler?.Dispose();
+        _httpClient?.Dispose();
+    }
+
+    [Test]
+    public void Constructor_GivenValidOptions_ShouldInitializeCorrectly()
+
     {
         // Act
         var client = CreateOpenAiClient();
 
         // Assert
-        client.Should().NotBeNull();
+        client.ShouldNotBeNull();
         // Verify that no exceptions are thrown during construction
     }
 
-    [Fact]
-    public void Constructor_ShouldThrowArgumentNullException_GivenNullOptions()
+    [Test]
+    public void Constructor_GivenNullOptions_ShouldThrowArgumentNullException()
     {
         // Act & Assert
-        FluentActions
-            .Invoking(() => new OpenAiClient(null!, _mockLogger.Object))
-            .Should()
-            .Throw<ArgumentNullException>();
+        Should.Throw<ArgumentNullException>(() => new OpenAiClient(null!, _mockLogger.Object));
     }
 
-    [Fact]
-    public async Task ProcessMessageAsync_ShouldReturnSuccessResult_GivenValidRequestWithoutMcp()
+    [Test]
+    public async Task ProcessMessageAsync_GivenValidRequestWithoutMcp_ShouldReturnSuccessResult()
+
     {
         // Arrange
         var client = CreateOpenAiClient();
@@ -78,26 +89,22 @@ public sealed class OpenAiClientTests : IDisposable
         // Act & Assert
         // This test would need to be an integration test or we'd need dependency injection for HttpClient
         // For now, we'll skip the actual API call and focus on the structure
-        await FluentActions
-            .Invoking(() => client.ProcessMessageAsync(request, CancellationToken.None))
-            .Should()
-            .NotThrowAsync<ArgumentNullException>();
+        await Should.NotThrowAsync(() => client.ProcessMessageAsync(request, CancellationToken.None));
     }
 
-    [Fact]
+    [Test]
+
     public async Task ProcessMessageAsync_ShouldThrowArgumentNullException_GivenNullRequest()
     {
         // Arrange
         var client = CreateOpenAiClient();
 
         // Act & Assert
-        await FluentActions
-            .Invoking(() => client.ProcessMessageAsync(null!, CancellationToken.None))
-            .Should()
-            .ThrowAsync<ArgumentNullException>();
+        await Should.ThrowAsync<ArgumentNullException>(() => client.ProcessMessageAsync(null!, CancellationToken.None));
     }
 
-    [Fact]
+    [Test]
+
     public async Task ProcessMessageAsync_ShouldLogProcessingInformation_GivenValidRequest()
     {
         // Arrange
@@ -139,12 +146,13 @@ public sealed class OpenAiClientTests : IDisposable
             Times.AtLeastOnce);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("Short")]
-    [InlineData("This is a longer message that should be processed correctly by the AI client")]
-    public async Task ProcessMessageAsync_ShouldHandleVariousMessageLengths_GivenDifferentInputs(string message)
+    [Test]
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("Short")]
+    [TestCase("This is a longer message that should be processed correctly by the AI client")]
+    public async Task ProcessMessageAsync_GivenDifferentInputs_ShouldHandleVariousMessageLengths(string message)
+
     {
         // Arrange
         var client = CreateOpenAiClient();
@@ -178,7 +186,8 @@ public sealed class OpenAiClientTests : IDisposable
             Times.AtLeastOnce);
     }
 
-    [Fact]
+    [Test]
+
     public async Task ProcessMessageAsync_ShouldHandleCancellation_GivenCancelledToken()
     {
         // Arrange
@@ -188,13 +197,11 @@ public sealed class OpenAiClientTests : IDisposable
         cancellationTokenSource.Cancel();
 
         // Act & Assert
-        await FluentActions
-            .Invoking(() => client.ProcessMessageAsync(request, cancellationTokenSource.Token))
-            .Should()
-            .ThrowAsync<OperationCanceledException>();
+        await Should.ThrowAsync<OperationCanceledException>(() => client.ProcessMessageAsync(request, cancellationTokenSource.Token));
     }
 
-    [Fact]
+    [Test]
+
     public void CreateMcpTool_ShouldCreatePlaceholderTool_GivenMcpConfig()
     {
         // This test verifies the placeholder implementation
@@ -206,10 +213,11 @@ public sealed class OpenAiClientTests : IDisposable
         // - Should have placeholder parameters until full MCP integration
         
         // Currently a placeholder test - no assertions needed
-        Assert.True(true);
+        Assert.Pass("Placeholder test for future MCP integration");
     }
 
-    [Fact]
+    [Test]
+
     public void SimulateMcpToolExecution_ShouldReturnToolExecution_GivenMcpConfig()
     {
         // This test verifies the placeholder simulation
@@ -222,7 +230,8 @@ public sealed class OpenAiClientTests : IDisposable
         // - Should use server URL in results
         
         // Currently a placeholder test - no assertions needed
-        Assert.True(true);
+        Assert.Pass("Placeholder test for future MCP integration");
+
     }
 
     private OpenAiClient CreateOpenAiClient()
@@ -230,13 +239,5 @@ public sealed class OpenAiClientTests : IDisposable
         return new OpenAiClient(_mockOptions, _mockLogger.Object);
     }
 
-    public void Dispose()
-    {
-        if (!_disposed)
-        {
-            _mockHttpHandler?.Dispose();
-            _httpClient?.Dispose();
-            _disposed = true;
-        }
-    }
+
 }

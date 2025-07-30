@@ -1,0 +1,6 @@
+{
+  "Axon.Modules.Chat.Application, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Modules\/Chat\/Application",
+  "Axon.Modules.Chat.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Modules\/Chat\/Domain",
+  "Axon.Shared.Common.Abstractions, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Shared\/Common.Abstractions",
+  "Axon.Shared.Common, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Shared\/Common"
+}

@@ -3,6 +3,7 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -10,18 +11,26 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="FluentAssertions" Version="6.12.2" />
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="NUnit.Analyzers" Version="4.3.0" />
+    <PackageReference Include="Shouldly" Version="4.2.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
+    <ProjectReference Include="../Shared/Axon.Tests.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+    <Using Include="Shouldly" />
+    <Using Include="Axon.Shared.Common" />
+    <Using Include="Axon.Tests.Shared.TestBase" />
+    <Using Include="Axon.Tests.Shared.Extensions" />
+    <Using Include="Axon.Tests.Shared.Factories" />
   </ItemGroup>
 
 </Project>

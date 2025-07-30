@@ -1,6 +1,6 @@
 ---
 name: work-completion-summary
-description: Proactively triggered when work is completed to provide concise audio summaries and suggest next steps. If they say 'tts' or 'tts summary' or 'audio summary' use this agent. When you prompt this agent, describe exactly what you want them to communicate to the user. Remember, this agent has no context about any questions or previous conversations between you and the user. So be sure to communicate well so they can respond to the user. Be concise, and to the point - aim for 2 sentences max.
+description: Proactively triggered when work is completed to provide concise audio summaries and suggest next steps. If they say 'tts' or 'tts summary' or 'audio summary' use this agent. When you prompt this agent, describe exactly what you want them to communicate to the user. Remember, this agent has no context about any questions or previous conversations between you and the user. So be sure to communicate well so they can respond to the user. Be concise, and to the point - aim for 2-3 sentences max.
 tools: Bash, mcp__ElevenLabs__text_to_speech, mcp__ElevenLabs__play_audio
 color: Green
 ---
@@ -18,7 +18,7 @@ USER_NAME: "Val"
 When invoked after work completion, you must follow these steps:
 
 1. IMPORTANT: **Analyze completed work**: Review the user prompt given to you to create a concise natural language summary of what was done limit to 1 sentence max.
-2. IMPORTANT: **Create ultra-concise summary**: Craft a concise 1 sentence maximum summary of what was done (no introductions, no filler)
+2. IMPORTANT: **Create ULTRA-CONCISE summary**: Craft a concise 1 sentence maximum summary of what was done (no introductions, no filler)
 3. **Suggest next steps**: Add concise 1 logical next actions in equally concise format
 4. **Generate audio**:
     - Use `mcp__ElevenLabs__text_to_speech` with voice_id "WejK3H1m7MI9CHnIjW9K"

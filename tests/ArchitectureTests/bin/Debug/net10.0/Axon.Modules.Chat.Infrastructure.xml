@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Axon.Modules.Chat.Infrastructure</name>
+    </assembly>
+    <members>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.McpTool">
+            <summary>
+            MCP tool configuration for OpenAI Responses API
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.OpenAiRequest">
+            <summary>
+            OpenAI Responses API request with MCP support
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.OpenAiMessage">
+            <summary>
+            OpenAI message in conversation
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.OpenAiResponse">
+            <summary>
+            OpenAI Responses API response with MCP tool results
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.OpenAiChoice">
+            <summary>
+            OpenAI response choice
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.OpenAiUsage">
+            <summary>
+            OpenAI token usage information
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.Models.McpCall">
+            <summary>
+            MCP tool call result
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.OpenAiClient">
+            <summary>
+            OpenAI client implementation with direct MCP integration
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions">
+            <summary>
+            Configuration options for OpenAI client
+            </summary>
+        </member>
+        <member name="F:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.SectionName">
+            <summary>
+            Configuration section name
+            </summary>
+        </member>
+        <member name="P:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.ApiKey">
+            <summary>
+            OpenAI API key
+            </summary>
+        </member>
+        <member name="P:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.Model">
+            <summary>
+            Model to use for chat completions
+            </summary>
+        </member>
+        <member name="P:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.MaxTokens">
+            <summary>
+            Maximum tokens in response
+            </summary>
+        </member>
+        <member name="P:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.TimeoutSeconds">
+            <summary>
+            Request timeout in seconds
+            </summary>
+        </member>
+        <member name="P:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.Temperature">
+            <summary>
+            Temperature for response randomness (0.0 to 2.0)
+            </summary>
+        </member>
+        <member name="P:Axon.Modules.Chat.Infrastructure.Ai.OpenAiOptions.McpEnabled">
+            <summary>
+            Whether MCP integration is enabled
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Infrastructure.Configuration.ServiceRegistration">
+            <summary>
+            Service registration for Chat Infrastructure layer
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Infrastructure.Configuration.ServiceRegistration.AddChatInfrastructure(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)">
+            <summary>
+            Register Chat Infrastructure services
+            </summary>
+            <param name="services">Service collection</param>
+            <param name="configuration">Application configuration</param>
+            <returns>Service collection for chaining</returns>
+        </member>
+    </members>
+</doc>

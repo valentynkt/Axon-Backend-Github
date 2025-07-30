@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Axon.Modules.Chat.Application</name>
+    </assembly>
+    <members>
+        <member name="T:Axon.Modules.Chat.Application.Abstractions.IAiClient">
+            <summary>
+            Port for AI client that supports direct MCP tool integration
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.Abstractions.IAiClient.ProcessMessageAsync(Axon.Modules.Chat.Application.DTOs.AiRequest,System.Threading.CancellationToken)">
+            <summary>
+            Process message with direct MCP tool support
+            </summary>
+            <param name="request">Message processing request with MCP configuration</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Result containing AI response with tool results</returns>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageCommand">
+            <summary>
+            Command for processing chat messages with direct MCP support
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageCommand.#ctor(System.String,System.String,System.Collections.Generic.Dictionary{System.String,System.String},System.String[],System.String)">
+            <summary>
+            Command for processing chat messages with direct MCP support
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageHandler">
+            <summary>
+            Handler for processing chat messages with direct MCP support
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageResponse">
+            <summary>
+            Response containing processed message with tool results
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageResponse.#ctor(System.String,System.String,Axon.Modules.Chat.Application.Commands.ProcessMessage.ToolExecutionSummary[])">
+            <summary>
+            Response containing processed message with tool results
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.Commands.ProcessMessage.ToolExecutionSummary">
+            <summary>
+            Tool execution summary for API responses
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.Commands.ProcessMessage.ToolExecutionSummary.#ctor(System.String,System.Boolean,System.TimeSpan)">
+            <summary>
+            Tool execution summary for API responses
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageValidator">
+            <summary>
+            Validator for ProcessMessageCommand
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.DTOs.AiRequest">
+            <summary>
+            AI processing request with MCP server configuration
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.DTOs.AiRequest.#ctor(System.String,Axon.Modules.Chat.Application.DTOs.McpServerConfig,System.String)">
+            <summary>
+            AI processing request with MCP server configuration
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.DTOs.AiResponse">
+            <summary>
+            AI response with tool execution results
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.DTOs.AiResponse.#ctor(System.String,System.String,Axon.Modules.Chat.Domain.Types.ToolExecution[])">
+            <summary>
+            AI response with tool execution results
+            </summary>
+        </member>
+        <member name="T:Axon.Modules.Chat.Application.DTOs.McpServerConfig">
+            <summary>
+            MCP server configuration for direct tool access
+            </summary>
+        </member>
+        <member name="M:Axon.Modules.Chat.Application.DTOs.McpServerConfig.#ctor(System.String,System.String,System.Collections.Generic.Dictionary{System.String,System.String},System.String[],System.Boolean)">
+            <summary>
+            MCP server configuration for direct tool access
+            </summary>
+        </member>
+    </members>
+</doc>

@@ -1,0 +1,114 @@
+[
+  {
+    "session_id": "43a4c251-cd0d-4c07-bad7-87acfbaa8225",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/43a4c251-cd0d-4c07-bad7-87acfbaa8225.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "40c84f69-0b2d-4662-a1bd-6831285de2cd",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/40c84f69-0b2d-4662-a1bd-6831285de2cd.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "f051e862-2eb4-426d-a491-a193aeda6b68",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/f051e862-2eb4-426d-a491-a193aeda6b68.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "f051e862-2eb4-426d-a491-a193aeda6b68",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/f051e862-2eb4-426d-a491-a193aeda6b68.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "eb086602-7daf-4983-9d85-7a2e37bbf6da",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/eb086602-7daf-4983-9d85-7a2e37bbf6da.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude needs your permission to use Write"
+  },
+  {
+    "session_id": "f051e862-2eb4-426d-a491-a193aeda6b68",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/f051e862-2eb4-426d-a491-a193aeda6b68.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "f051e862-2eb4-426d-a491-a193aeda6b68",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/f051e862-2eb4-426d-a491-a193aeda6b68.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "6029a76e-13dc-4602-a43b-76b6a681d486",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/6029a76e-13dc-4602-a43b-76b6a681d486.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "6029a76e-13dc-4602-a43b-76b6a681d486",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/6029a76e-13dc-4602-a43b-76b6a681d486.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "6029a76e-13dc-4602-a43b-76b6a681d486",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/6029a76e-13dc-4602-a43b-76b6a681d486.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "942ce7fe-a961-4a65-a176-39b2836f20d3",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/942ce7fe-a961-4a65-a176-39b2836f20d3.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "942ce7fe-a961-4a65-a176-39b2836f20d3",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/942ce7fe-a961-4a65-a176-39b2836f20d3.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "942ce7fe-a961-4a65-a176-39b2836f20d3",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/942ce7fe-a961-4a65-a176-39b2836f20d3.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "942ce7fe-a961-4a65-a176-39b2836f20d3",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/942ce7fe-a961-4a65-a176-39b2836f20d3.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "942ce7fe-a961-4a65-a176-39b2836f20d3",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/942ce7fe-a961-4a65-a176-39b2836f20d3.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  },
+  {
+    "session_id": "942ce7fe-a961-4a65-a176-39b2836f20d3",
+    "transcript_path": "/Users/valentynkit/.claude/projects/-Users-valentynkit-Repos-Axon-Backend/942ce7fe-a961-4a65-a176-39b2836f20d3.jsonl",
+    "cwd": "/Users/valentynkit/Repos/Axon-Backend",
+    "hook_event_name": "Notification",
+    "message": "Claude is waiting for your input"
+  }
+]

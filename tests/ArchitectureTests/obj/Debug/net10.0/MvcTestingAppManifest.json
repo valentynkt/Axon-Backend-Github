@@ -1,0 +1,13 @@
+{
+  "Axon.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Api",
+  "Axon.Api.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/tests\/Api.Tests",
+  "Axon.Modules.Chat.Application, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Modules\/Chat\/Application",
+  "Axon.Modules.Chat.Application.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/tests\/Modules.Chat.Application.Tests",
+  "Axon.Modules.Chat.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Modules\/Chat\/Domain",
+  "Axon.Modules.Chat.Domain.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/tests\/Modules.Chat.Domain.Tests",
+  "Axon.Modules.Chat.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Modules\/Chat\/Infrastructure",
+  "Axon.Modules.Chat.Infrastructure.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/tests\/Modules.Chat.Infrastructure.Tests",
+  "Axon.Shared.Common.Abstractions, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Shared\/Common.Abstractions",
+  "Axon.Shared.Common, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/src\/Shared\/Common",
+  "Axon.Tests.Shared, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "\/Users\/valentynkit\/Repos\/Axon-Backend\/tests\/Shared"
+}
