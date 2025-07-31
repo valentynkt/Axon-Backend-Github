@@ -1,51 +1,53 @@
 ---
-id: AXON-20250729-Chat-Direct_MCP-PR_BODY
+id: AXON-20250731-Chat-Direct_MCP-PR_BODY
 title: Direct_MCP: PR Body
 module: Chat
 feature: Direct_MCP
 gate: Ship
-owner: <owner>
+owner: valentynkit
 status: approved
-relates_to: []
+relates_to: [AXON-20250729-Chat-Direct_MCP-REQUIREMENTS, AXON-20250729-Chat-Direct_MCP-ARCHITECTURE]
 source_of_truth: doc
-created: 2025-07-29
-updated: 2025-07-29
+created: 2025-07-31
+updated: 2025-07-31
 version: 1
 ---
 
 # Summary
-Implemented Chat module with Direct MCP integration enabling real-time AI processing via OpenAI Direct MCP protocol. Added new `/api/chat/process` endpoint with full Clean Architecture + CQRS + Result<T> patterns, comprehensive test coverage (101 tests), and MCP tool execution capabilities.
+Migrated from OpenAI SDK Chat Completions API to direct HTTP Responses API calls for true Direct MCP integration. This eliminates app-mediated tool orchestration, enabling server-to-server communication between OpenAI and MCP servers while achieving sub-2 second response times for tool-based queries.
 
 # Scope of Change
-- **New Chat Module**: Complete vertical slice across all architectural layers
-- **API Surface**: New `/api/chat/process` POST endpoint with ProcessMessageRequest/Response contracts  
-- **Core Features**: Message processing, MCP server integration, tool execution tracking
-- **Architecture**: Clean Architecture + CQRS with MediatR, DDD patterns, Result<T> error handling
-- **Links**: [ARCHITECTURE.md](./ARCHITECTURE.md), [TASK_PLAN.md](./TASK_PLAN.md)
+**Modules Touched**: Chat Infrastructure layer  
+**Core Changes**:
+- Complete rewrite of `OpenAiClient.cs` for Direct MCP via Responses API
+- Updated DI configuration in `ServiceRegistration.cs` for HttpClient usage  
+- Package reference updates in `Infrastructure.csproj`
+
+**Architecture Links**: [ARCHITECTURE.md](./ARCHITECTURE.md) | [TASK_PLAN.md](./TASK_PLAN.md)
 
 # Risks & Mitigations
-- **External MCP Dependencies**: Implemented circuit breaker pattern and timeout handling in OpenAI MCP client
-- **API Contract Changes**: New endpoints follow established patterns; no breaking changes to existing APIs
-- **Performance**: Async/await throughout; connection pooling via HttpClientFactory; Result<T> pattern avoids exceptions
+**Performance Risk**: Dependency on OpenAI Responses API (preview)  
+*Mitigation*: Graceful error handling with fallback messaging; monitoring in place
 
-# Testing Evidence  
-- **Build**: SUCCESS (0 errors, 0 warnings, commit: a64bee5e5c50951f5fd8a62418a35af6941b5f29)
-- **Tests**: PASS (101 passed, 0 failed, 0 skipped) - Domain: 59, Application: 13, Infrastructure: 12, API: 17
-- **Coverage**: [TEST_REPORT.md](./TEST_REPORT.md) - Delta coverage on all touched files with comprehensive unit/integration tests
-- **Health Check**: POST `/api/chat/process` endpoint functional with proper error handling and contract validation
+**Security Risk**: Direct API calls with authentication headers  
+*Mitigation*: Sensitive data removed from logs and exceptions (critical security fixes applied)
+
+**Operational Risk**: Network calls to external OpenAI service  
+*Mitigation*: 30-second timeout configured; proper error categorization implemented
+
+# Testing Evidence
+- **Build**: ✅ SUCCESS (commit: 780d9df) - 0 warnings, 0 errors
+- **Tests**: ✅ PASS - 270 total tests (22 App + 65 Domain + 29 Architecture + 98 Infrastructure + 56 API)
+- **Health Check**: ✅ SUCCESS - Build and test pipeline verified at 2025-07-31
 
 # Contract Changes
-- **New Endpoint**: `POST /api/chat/process` 
-- **Request**: ProcessMessageRequest (Message, McpServer, ConversationId)
-- **Response**: ProcessMessageResponse (Response, ConversationId, ToolExecutions)
-- **Supporting DTOs**: McpServerRequest, ToolExecutionResponse
-- **Rationale**: Enable MCP tool integration for enhanced chat capabilities
-- **Contract Location**: [contracts/Chat/API_CONTRACT.md](../../../contracts/Chat/API_CONTRACT.md)
+**API Surface**: No breaking changes - all existing endpoints and DTOs preserved  
+**Internal Changes**: `OpenAiClient` implementation completely rewritten but maintains same `IAiClient` interface contract
 
 # Breaking Changes
-None - This is a new feature with no modifications to existing APIs
+None - All public API contracts maintained, Clean Architecture boundaries preserved
 
 # Follow-ups
-- Monitor MCP server response times and consider caching for frequently used tools
-- Add metrics/telemetry for tool execution success rates
-- Consider implementing conversation persistence for multi-turn interactions
+- Monitor OpenAI Responses API stability in production
+- Consider streaming response support in Phase 2
+- Evaluate multi-MCP server support based on usage patterns

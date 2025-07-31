@@ -3,6 +3,7 @@ using Axon.Modules.Chat.Infrastructure.Ai;
 using Axon.Modules.Chat.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 
 namespace Axon.Modules.Chat.Infrastructure.Configuration;
 
@@ -34,7 +35,11 @@ public static class ServiceRegistration
             configuration.GetSection(McpServersOptions.SectionName));
 
         // Register services
-        services.AddScoped<IAiClient, OpenAiClient>();
+        services.AddHttpClient<IAiClient, OpenAiClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.openai.com/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         services.AddScoped<IMcpServerResolver, McpServerResolver>();
 
         return services;

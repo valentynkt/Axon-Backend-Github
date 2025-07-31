@@ -5,12 +5,14 @@ using FastEndpoints;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Axon.Api.Endpoints.Chat.ProcessMessage;
 
 /// <summary>
 /// FastEndpoints implementation for processing chat messages with direct MCP support
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1848:Use the LoggerMessage delegates", Justification = "Structured logging with interpolation is more readable for this use case")]
 public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Contracts.Chat.ProcessMessageResponse>
 {
     private readonly IMediator _mediator;
@@ -27,6 +29,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
     public override void Configure()
     {
         Post("/api/chat/process");
+        // TODO: Add authentication/rate limiting before production
         AllowAnonymous();
         
         Summary(ConfigureOpenApiExamples);
@@ -39,7 +42,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
         ArgumentNullException.ThrowIfNull(req);
 
         using var activity = Activity.Current?.Source.StartActivity("ProcessMessage");
-        activity?.SetTag("message.length", req.Message.Length.ToString());
+        activity?.SetTag("message.length", req.Message.Length.ToString(CultureInfo.InvariantCulture));
         activity?.SetTag("conversation.id", req.ConversationId);
 
         _logger.LogInformation(
@@ -73,6 +76,9 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
                     Success: tool.Success,
                     DurationMs: (int)tool.Duration.TotalMilliseconds)).ToArray());
 
+        activity?.SetTag("response.tool_execution_count", (apiResponse.ToolExecutions?.Length ?? 0).ToString(CultureInfo.InvariantCulture));
+        activity?.SetTag("response.conversation_id", apiResponse.ConversationId);
+
         _logger.LogInformation(
             "Successfully processed chat message with {ToolExecutionCount} tool executions for conversation {ConversationId}",
             apiResponse.ToolExecutions?.Length ?? 0,
@@ -94,7 +100,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
         await HttpContext.Response.WriteAsJsonAsync(problemDetails, ct);
     }
 
-    private static void ConfigureOpenApiExamples(Summary s)
+    private static void ConfigureOpenApiExamples(EndpointSummary s)
     {
         s.Summary = "Process a chat message with automatic MCP tool integration";
         s.Description = """
