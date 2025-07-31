@@ -65,7 +65,8 @@ public sealed class McpServerResolver : IMcpServerResolver
             ServerLabel: serverConfig.ServerLabel ?? configKey,
             Headers: serverConfig.Headers?.Count > 0 ? serverConfig.Headers : null,
             AllowedTools: serverConfig.AllowedTools?.Length > 0 ? serverConfig.AllowedTools : null,
-            RequireApproval: serverConfig.RequireApproval);
+            RequireApproval: serverConfig.RequireApproval,
+            TimeoutSeconds: serverConfig.TimeoutSeconds);
     }
 
     private void LogAndSkipDisabledServer(string configKey)

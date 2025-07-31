@@ -11,6 +11,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Shouldly;
@@ -32,19 +33,21 @@ public sealed class ProcessMessageEndpointFastEndpointsTests
 {
     private Mock<IMediator> _mockMediator = null!;
     private Mock<IErrorMapper> _mockErrorMapper = null!;
+    private Mock<ILogger<ProcessMessageEndpoint>> _mockLogger = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mockMediator = new Mock<IMediator>();
         _mockErrorMapper = new Mock<IErrorMapper>();
+        _mockLogger = new Mock<ILogger<ProcessMessageEndpoint>>();
     }
 
     [Test]
     public void Constructor_ShouldInitialize_GivenValidDependencies()
     {
         // Act & Assert - Constructor should not throw
-        var endpoint = new ProcessMessageEndpoint(_mockMediator.Object, _mockErrorMapper.Object);
+        var endpoint = new ProcessMessageEndpoint(_mockMediator.Object, _mockErrorMapper.Object, _mockLogger.Object);
         endpoint.ShouldNotBeNull();
     }
 
@@ -53,7 +56,7 @@ public sealed class ProcessMessageEndpointFastEndpointsTests
     {
         // Act & Assert
         Should.Throw<ArgumentNullException>(() => 
-            new ProcessMessageEndpoint(null!, _mockErrorMapper.Object));
+            new ProcessMessageEndpoint(null!, _mockErrorMapper.Object, _mockLogger.Object));
     }
 
     [Test]
@@ -61,14 +64,22 @@ public sealed class ProcessMessageEndpointFastEndpointsTests
     {
         // Act & Assert
         Should.Throw<ArgumentNullException>(() => 
-            new ProcessMessageEndpoint(_mockMediator.Object, null!));
+            new ProcessMessageEndpoint(_mockMediator.Object, null!, _mockLogger.Object));
+    }
+
+    [Test]
+    public void Constructor_ShouldThrowArgumentNullException_GivenNullLogger()
+    {
+        // Act & Assert
+        Should.Throw<ArgumentNullException>(() => 
+            new ProcessMessageEndpoint(_mockMediator.Object, _mockErrorMapper.Object, null!));
     }
 
     [Test]
     public void Endpoint_ShouldBeProperlyConfiguredForFastEndpoints()
     {
         // Arrange
-        var endpoint = new ProcessMessageEndpoint(_mockMediator.Object, _mockErrorMapper.Object);
+        var endpoint = new ProcessMessageEndpoint(_mockMediator.Object, _mockErrorMapper.Object, _mockLogger.Object);
         
         // Act & Assert
         // Verify endpoint is ready for FastEndpoints registration

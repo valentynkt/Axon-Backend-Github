@@ -8,4 +8,5 @@ public sealed record McpServerConfig(
     string ServerLabel,
     Dictionary<string, string>? Headers = null,
     string[]? AllowedTools = null,
-    bool RequireApproval = false);
+    bool RequireApproval = false,
+    int TimeoutSeconds = 30);

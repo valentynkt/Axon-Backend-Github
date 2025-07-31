@@ -6,20 +6,20 @@ using NUnit.Framework;
 namespace Axon.Api.Tests.Endpoints.Chat.ProcessMessage;
 
 /// <summary>
-/// Unit tests for ProcessMessageValidator (API layer)
+/// Unit tests for ProcessMessageRequestValidator (API layer)
 /// </summary>
 [TestFixture]
 [Category("Unit")]
 [Category("Api")]
 [Category("Validation")]
-public sealed class ProcessMessageValidatorTests
+public sealed class ProcessMessageRequestValidatorTests
 {
-    private ProcessMessageValidator _validator = null!;
+    private ProcessMessageRequestValidator _validator = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _validator = new ProcessMessageValidator();
+        _validator = new ProcessMessageRequestValidator();
     }
 
     #region Message Validation Tests

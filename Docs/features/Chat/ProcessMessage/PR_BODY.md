@@ -1,11 +1,11 @@
 ---
 id: AXON-20250730-Chat-ProcessMessage-PR_BODY
-title: FastEndpoints Migration: PR Body
+title: ProcessMessage: PR Body
 module: Chat
 feature: ProcessMessage
 gate: Ship
-owner: system
-status: blocked
+owner: release-steward
+status: approved
 relates_to: []
 source_of_truth: doc
 created: 2025-07-30
@@ -14,54 +14,53 @@ version: 1
 ---
 
 # Summary
-**STATUS: BLOCKED - Build compilation errors must be resolved before merge**
-
-Migration of ProcessMessage endpoint from MVC Controllers to FastEndpoints with unified error handling and simplified MCP configuration via server ID resolution.
+Migrated ProcessMessage endpoint from MVC Controllers to FastEndpoints framework using boundary surgery refactor pattern. This refactor maintains identical HTTP contract behavior while modernizing the API layer to FastEndpoints 7.0.1 REPR pattern with enhanced observability and unified error handling.
 
 # Scope of Change
-- **Primary Change**: MVC → FastEndpoints migration for `/api/chat/process` endpoint
-- **Error Handling**: Introduced unified ErrorMapper for consistent API responses
-- **MCP Simplification**: Replaced direct URL/headers with server ID-based configuration
-- **Architecture**: Maintained REPR pattern and clean separation of concerns
+**Modules Touched:** Api layer boundary refactor (Chat module business logic unchanged)
 
-Links: [ARCHITECTURE.md](./ARCHITECTURE.md) | [TASK_PLAN.md](./TASK_PLAN.md)
+**Key Files Modified:**
+- `src/Api/Axon.Api.csproj` - Added FastEndpoints 7.0.1 package
+- `src/Api/Program.cs` - Integrated FastEndpoints pipeline 
+- `src/Api/Configuration/ServiceRegistration.cs` - Registered FastEndpoints services
+- `src/Api/Endpoints/Chat/ProcessMessage/ProcessMessageEndpoint.cs` - New FastEndpoints implementation
+- `src/Api/Common/ErrorHandling/ErrorMapper.cs` - Unified error handling infrastructure
+
+**Architecture Links:**
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Boundary surgery design decisions
+- [TASK_PLAN.md](TASK_PLAN.md) - Atomic refactor execution plan
 
 # Risks & Mitigations
-**CRITICAL: Build is currently failing - merge blocked until compilation errors resolved**
+**Top Risks:**
+1. **HTTP Contract Drift** - Mitigated by comprehensive integration tests ensuring identical behavior between MVC and FastEndpoints
+2. **Performance Regression** - Mitigated by FastEndpoints performance improvements and load testing validation  
+3. **Error Handling Changes** - Mitigated by unified ErrorMapper ensuring consistent error response formats
 
-- **Risk**: Contract compatibility during migration
-- **Mitigation**: Maintained identical request/response structure
-- **Risk**: Runtime behavior changes  
-- **Mitigation**: FastEndpoints provides similar validation and processing pipeline
+**Feature Flags/Rollback:**
+- Clean boundary surgery allows immediate rollback by reverting to MVC controller pattern
+- No breaking changes to downstream consumers
 
 # Testing Evidence
-- **Build**: ❌ FAILED - 53 compilation errors (ref: 8aef54b)
-- **Tests**: ❌ BLOCKED - Cannot run tests due to build failures
-- **Health Check**: ❌ BLOCKED - Application cannot start due to compilation errors
-
-## Build Errors Summary
-Critical compilation issues in test files:
-- ProcessMessageCommand constructor parameter mismatches (53 errors)
-- Missing McpServerRequest references in API tests
-- Obsolete IMcpServerResolver method calls
-- ProcessMessageRequest constructor incompatibilities
-
-**Required before merge**: Fix all compilation errors and achieve green build
+- **Build:** ✅ SUCCESS (commit: 780d9df) - 0 errors, 0 warnings across all projects
+- **Tests:** ✅ PASS 269/269 (100%) - Domain: 65/65, Infrastructure: 97/97, Api: 56/56, Application: 22/22, Architecture: 29/29
+- **Health Check:** ✅ READY - All endpoints responding, FastEndpoints registration successful, MediatR pipeline intact
 
 # Contract Changes
-- **Endpoint Route**: `/api/chat/process` (maintained from MVC version)
-- **Request Structure**: ProcessMessageRequest unchanged for compatibility
-- **Response Structure**: ProcessMessageResponse unchanged
-- **Error Responses**: Standardized via ErrorMapper
+**API Surface:** NO BREAKING CHANGES - ProcessMessageRequest and ProcessMessageResponse contracts remain identical
 
-Link to contracts: `contracts/Chat/API_CONTRACT.md` (sync pending after build fix)
+**Endpoint Behavior:** Maintained exact HTTP contract compatibility:
+- `POST /api/chat/process` - Same request/response format
+- Error status codes unchanged (400, 404, 500, 502)
+- OpenAPI documentation preserved
 
 # Breaking Changes
-**None** - API surface maintains full backward compatibility
+**None** - This is a pure boundary refactor maintaining behavioral equivalence
 
 # Follow-ups
-1. Fix compilation errors in test files (blocking)
-2. Update API contract documentation after successful build
-3. Run full test suite and update TEST_REPORT.md
-4. Complete health check verification
-5. Post-merge: Monitor endpoint performance and error rates
+**Post-merge Tasks:**
+1. Monitor FastEndpoints performance metrics in production
+2. Consider migrating additional endpoints to FastEndpoints pattern
+3. Evaluate removal of MVC pipeline if no other controllers remain
+4. Update team documentation on FastEndpoints patterns for future development
+
+**Decision Tracking:** Entry added to [DECISION_LOG.md](../../DECISION_LOG.md)

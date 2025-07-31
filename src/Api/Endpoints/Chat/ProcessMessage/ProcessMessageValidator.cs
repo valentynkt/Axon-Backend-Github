@@ -7,9 +7,9 @@ namespace Axon.Api.Endpoints.Chat.ProcessMessage;
 /// <summary>
 /// Validator for ProcessMessageRequest using FastEndpoints validation
 /// </summary>
-public sealed class ProcessMessageValidator : Validator<ProcessMessageRequest>
+public sealed class ProcessMessageRequestValidator : Validator<ProcessMessageRequest>
 {
-    public ProcessMessageValidator()
+    public ProcessMessageRequestValidator()
     {
         RuleFor(x => x.Message)
             .NotEmpty()

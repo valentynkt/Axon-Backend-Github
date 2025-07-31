@@ -45,9 +45,7 @@ public sealed class ErrorMapper : IErrorMapper
             _ => "Internal Server Error"
         };
 
-        var detail = error.Type == ErrorType.InternalError && statusCode == StatusCodes.Status500InternalServerError
-            ? "An unexpected error occurred"
-            : error.Message;
+        var detail = GetErrorDetailMessage(error, statusCode);
 
         return new ProblemDetails
         {
@@ -56,5 +54,18 @@ public sealed class ErrorMapper : IErrorMapper
             Status = statusCode,
             Type = $"https://httpstatuses.com/{statusCode}"
         };
+    }
+
+    private static string GetErrorDetailMessage(Error error, int statusCode)
+    {
+        return ShouldSanitizeErrorMessage(error.Type, statusCode) 
+            ? "An unexpected error occurred" 
+            : error.Message;
+    }
+
+    private static bool ShouldSanitizeErrorMessage(ErrorType errorType, int statusCode)
+    {
+        return errorType == ErrorType.InternalError && 
+               statusCode == StatusCodes.Status500InternalServerError;
     }
 }

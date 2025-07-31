@@ -54,26 +54,25 @@ public sealed class OpenAiClientTests : ApplicationTestBase
 
     [Test]
     public void Constructor_GivenValidOptions_ShouldInitializeCorrectly()
-
     {
         // Act
         var client = CreateOpenAiClient();
 
         // Assert
         client.ShouldNotBeNull();
-        // Verify that no exceptions are thrown during construction
+        // Verify HttpClient timeout is configured correctly
+        _httpClient.Timeout.ShouldBe(TimeSpan.FromSeconds(_options.TimeoutSeconds));
     }
 
     [Test]
     public void Constructor_GivenNullOptions_ShouldThrowArgumentNullException()
     {
         // Act & Assert
-        Should.Throw<ArgumentNullException>(() => new OpenAiClient(null!, _mockLogger.Object));
+        Should.Throw<ArgumentNullException>(() => new OpenAiClient(null!, _mockOptions, _mockLogger.Object));
     }
 
     [Test]
     public async Task ProcessMessageAsync_GivenValidRequestWithoutMcp_ShouldReturnSuccessResult()
-
     {
         // Arrange
         var client = CreateOpenAiClient();
@@ -82,14 +81,25 @@ public sealed class OpenAiClientTests : ApplicationTestBase
             McpConfigs: null,
             PreviousResponseId: null);
 
-        // Note: Since OpenAiClient uses the OpenAI.NET library which creates its own HttpClient,
-        // we can't easily mock the HTTP calls without complex setup.
-        // For this test, we'll focus on the behavior we can control.
+        // Mock successful OpenAI API response
+        _mockHttpHandler
+            .When("https://api.openai.com/v1/responses")
+            .Respond("application/json", """
+                {
+                    "id": "test-response-id",
+                    "output_text": "Hello! How can I help you?",
+                    "mcp_calls": null
+                }
+                """);
 
-        // Act & Assert
-        // This test would need to be an integration test or we'd need dependency injection for HttpClient
-        // For now, we'll skip the actual API call and focus on the structure
-        await Should.NotThrowAsync(() => client.ProcessMessageAsync(request, CancellationToken.None));
+        // Act
+        var result = await client.ProcessMessageAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Content.ShouldBe("Hello! How can I help you?");
+        result.Value.ResponseId.ShouldBe("test-response-id");
+        result.Value.ToolExecutions.ShouldBeNull();
     }
 
     [Test]
@@ -104,7 +114,6 @@ public sealed class OpenAiClientTests : ApplicationTestBase
     }
 
     [Test]
-
     public async Task ProcessMessageAsync_ShouldLogProcessingInformation_GivenValidRequest()
     {
         // Arrange
@@ -114,7 +123,8 @@ public sealed class OpenAiClientTests : ApplicationTestBase
             ServerLabel: "Test Server",
             Headers: null,
             AllowedTools: null,
-            RequireApproval: false);
+            RequireApproval: false,
+            TimeoutSeconds: 45);
 
         var mcpConfigs = new List<McpServerConfig> { mcpConfig }.AsReadOnly();
         var request = new AiRequest(
@@ -122,29 +132,41 @@ public sealed class OpenAiClientTests : ApplicationTestBase
             McpConfigs: mcpConfigs,
             PreviousResponseId: "prev-123");
 
-        try
-        {
-            // Act
-            await client.ProcessMessageAsync(request, CancellationToken.None);
-        }
-        catch (HttpRequestException)
-        {
-            // Expected to fail due to no actual API setup, but we can still check logging
-        }
-        catch (TaskCanceledException)
-        {
-            // Expected timeout due to no actual API setup, but we can still check logging
-        }
+        // Mock successful OpenAI API response with MCP calls
+        _mockHttpHandler
+            .When("https://api.openai.com/v1/responses")
+            .Respond("application/json", """
+                {
+                    "id": "test-response-with-mcp",
+                    "output_text": "I've processed your message with MCP tools.",
+                    "mcp_calls": [
+                        {
+                            "tool_name": "test_tool",
+                            "arguments": {"query": "test"},
+                            "output": {"result": "success"},
+                            "error": null
+                        }
+                    ]
+                }
+                """);
+
+        // Act
+        var result = await client.ProcessMessageAsync(request, CancellationToken.None);
 
         // Assert - Verify logging occurred
         _mockLogger.Verify(
             x => x.Log(
                 LogLevel.Information,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Processing message with OpenAI model gpt-4o")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Processing message with OpenAI Responses API (Direct MCP) using model gpt-4o")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.AtLeastOnce);
+
+        // Verify successful result
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.ToolExecutions.ShouldNotBeNull();
+        result.Value.ToolExecutions!.Length.ShouldBe(1);
     }
 
     [Test]
@@ -153,7 +175,6 @@ public sealed class OpenAiClientTests : ApplicationTestBase
     [TestCase("Short")]
     [TestCase("This is a longer message that should be processed correctly by the AI client")]
     public async Task ProcessMessageAsync_GivenDifferentInputs_ShouldHandleVariousMessageLengths(string message)
-
     {
         // Arrange
         var client = CreateOpenAiClient();
@@ -162,33 +183,32 @@ public sealed class OpenAiClientTests : ApplicationTestBase
             McpConfigs: null,
             PreviousResponseId: null);
 
-        try
-        {
-            // Act
-            await client.ProcessMessageAsync(request, CancellationToken.None);
-        }
-        catch (HttpRequestException)
-        {
-            // Expected to fail due to no actual API setup
-        }
-        catch (TaskCanceledException)
-        {
-            // Expected timeout due to no actual API setup
-        }
+        // Mock successful OpenAI API response
+        _mockHttpHandler
+            .When("https://api.openai.com/v1/responses")
+            .Respond("application/json", $@"{{
+                ""id"": ""test-response-{message.Length}"",
+                ""output_text"": ""Processed message of length {message.Length}"",
+                ""mcp_calls"": null
+            }}");
 
-        // Assert - Verify message length is logged correctly  
+        // Act
+        var result = await client.ProcessMessageAsync(request, CancellationToken.None);
+
+        // Assert - Verify success and logging
+        result.IsSuccess.ShouldBeTrue();
+        
         _mockLogger.Verify(
             x => x.Log(
                 LogLevel.Information,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Processing message with OpenAI model gpt-4o")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Processing message with OpenAI Responses API (Direct MCP) using model gpt-4o")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.AtLeastOnce);
     }
 
     [Test]
-
     public async Task ProcessMessageAsync_ShouldHandleCancellation_GivenCancelledToken()
     {
         // Arrange
@@ -199,6 +219,33 @@ public sealed class OpenAiClientTests : ApplicationTestBase
 
         // Act & Assert
         await Should.ThrowAsync<OperationCanceledException>(() => client.ProcessMessageAsync(request, cancellationTokenSource.Token));
+    }
+
+    [Test]
+    public async Task ProcessMessageAsync_ShouldReturnFailureResult_GivenHttpError()
+    {
+        // Arrange
+        var client = CreateOpenAiClient();
+        var request = new AiRequest("Test message", null, null);
+
+        // Mock HTTP error response
+        _mockHttpHandler
+            .When("https://api.openai.com/v1/responses")
+            .Respond(HttpStatusCode.BadRequest, "application/json", """
+                {
+                    "error": {
+                        "message": "Invalid request",
+                        "type": "invalid_request_error"
+                    }
+                }
+                """);
+
+        // Act
+        var result = await client.ProcessMessageAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe(ChatErrors.AiClient.Unavailable.Code);
     }
 
     [Test]
@@ -237,7 +284,7 @@ public sealed class OpenAiClientTests : ApplicationTestBase
 
     private OpenAiClient CreateOpenAiClient()
     {
-        return new OpenAiClient(_mockOptions, _mockLogger.Object);
+        return new OpenAiClient(_httpClient, _mockOptions, _mockLogger.Object);
     }
 
 

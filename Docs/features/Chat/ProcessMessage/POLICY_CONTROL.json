@@ -1,0 +1,9 @@
+{
+  "artifact": "POLICY_REPORT",
+  "module": "Chat",
+  "feature": "ProcessMessage", 
+  "gate": "G3",
+  "status": "draft",
+  "links": [],
+  "summary": "FAIL with 2 blockers, 1 warning, 2 advisory. Top blocker: Security violation - sensitive data logging in error responses."
+}
