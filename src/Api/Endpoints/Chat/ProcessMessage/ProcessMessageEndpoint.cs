@@ -29,6 +29,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
     public override void Configure()
     {
         Post("/api/chat/process");
+        // TODO: Add authentication/rate limiting before production
         AllowAnonymous();
         
         Summary(ConfigureOpenApiExamples);

@@ -146,7 +146,7 @@ public sealed class OpenAiClient : IAiClient
                 var mcpTool = CreateMcpTool(mcpConfig);
                 tools.Add(mcpTool);
                 
-                activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.url", mcpConfig.ServerUrl);
+                activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.domain", new Uri(mcpConfig.ServerUrl).Host);
                 activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.tools_count", mcpConfig.AllowedTools?.Length ?? 0);
             }
             
