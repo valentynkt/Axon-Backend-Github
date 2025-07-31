@@ -79,7 +79,7 @@ public sealed class ChatProcessingBehaviorTests
         mockAiClient.Verify(x => x.ProcessMessageAsync(
             It.Is<AiRequest>(req =>
                 req.Message == "Hello, can you help me?" &&
-                req.McpConfigs == null &&
+                req.McpConfigs != null && // MCP configs are now loaded from configuration
                 req.PreviousResponseId == null),
             It.IsAny<CancellationToken>()), Times.Once);
     }

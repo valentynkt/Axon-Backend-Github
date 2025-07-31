@@ -158,8 +158,9 @@ public sealed class OpenAiClient : IAiClient
         var jsonPayload = BuildRequestPayload(request, tools);
         
         _logger.LogDebug(
-            "Sending request to OpenAI Responses API with payload size {PayloadSize} bytes",
-            jsonPayload.Length);
+            "Sending request to OpenAI Responses API with payload size {PayloadSize} bytes. Payload: {Payload}",
+            jsonPayload.Length,
+            jsonPayload);
 
         // Execute request
         using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
@@ -169,11 +170,12 @@ public sealed class OpenAiClient : IAiClient
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError(
-                "OpenAI Responses API returned error {StatusCode}",
-                response.StatusCode);
+                "OpenAI Responses API returned error {StatusCode}. Response: {ResponseBody}",
+                response.StatusCode,
+                responseBody);
                 
             throw new HttpRequestException(
-                $"OpenAI API returned {response.StatusCode}");
+                $"OpenAI API returned {response.StatusCode}: {responseBody}");
         }
 
         // Parse response
@@ -197,15 +199,32 @@ public sealed class OpenAiClient : IAiClient
     /// </summary>
     private string BuildRequestPayload(AiRequest request, List<object> tools)
     {
-        var requestPayload = new
+        // Build base payload - only include supported parameters
+        var requestPayload = new Dictionary<string, object>
         {
-            model = _options.Model,
-            input = request.Message,
-            tools = tools.Count > 0 ? tools.ToArray() : null,
-            previous_response_id = request.PreviousResponseId,
-            max_output_tokens = _options.MaxTokens,
-            temperature = _options.Temperature
+            ["model"] = _options.Model,
+            ["input"] = request.Message
         };
+
+        // Add tools if any are configured
+        if (tools.Count > 0)
+        {
+            requestPayload["tools"] = tools.ToArray();
+        }
+
+        // Add optional parameters if they have valid values
+        if (_options.MaxTokens > 0)
+        {
+            requestPayload["max_output_tokens"] = _options.MaxTokens;
+        }
+
+        if (_options.Temperature >= 0.0 && _options.Temperature <= 2.0)
+        {
+            requestPayload["temperature"] = _options.Temperature;
+        }
+
+        // Note: previous_response_id removed as it may not be supported by the API
+        // TODO: Re-add when conversation context is officially supported
 
         return JsonSerializer.Serialize(requestPayload, _snakeCaseJsonOptions);
     }
@@ -220,8 +239,7 @@ public sealed class OpenAiClient : IAiClient
             ["type"] = "mcp",
             ["server_url"] = mcpConfig.ServerUrl,
             ["server_label"] = mcpConfig.ServerLabel ?? DefaultMcpServerLabel,
-            ["require_approval"] = mcpConfig.RequireApproval,
-            ["timeout_seconds"] = mcpConfig.TimeoutSeconds
+            ["require_approval"] = mcpConfig.RequireApproval ? "always" : "never"
         };
 
         // Add headers if configured
@@ -235,6 +253,9 @@ public sealed class OpenAiClient : IAiClient
         {
             tool["allowed_tools"] = mcpConfig.AllowedTools;
         }
+
+        // Note: timeout_seconds removed as it may not be supported
+        // The timeout is typically handled at the HTTP client level
 
         return tool;
     }
