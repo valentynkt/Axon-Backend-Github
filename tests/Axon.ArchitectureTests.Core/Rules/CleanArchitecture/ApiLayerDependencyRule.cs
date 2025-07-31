@@ -102,7 +102,7 @@ public sealed class ApiLayerDependencyRule : LayerBoundaryRule
         return parameters.Any(p => p.ParameterType.Name.Contains("Mediator", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static IEnumerable<Type> GetReferencedTypes(Type type)
+    private static HashSet<Type> GetReferencedTypes(Type type)
     {
         // Simplified - get types from method parameters, return types, and fields
         var referencedTypes = new HashSet<Type>();

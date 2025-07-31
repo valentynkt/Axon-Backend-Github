@@ -27,7 +27,7 @@ public sealed class CommandImplementationRule : PatternComplianceRule
                 .Where(t => IsCommandType(t))
                 .ToList();
 
-            foreach var commandType in commandTypes)
+            foreach (var commandType in commandTypes)
             {
                 ValidateCommandNaming(commandType, violations);
                 ValidateCommandStructure(commandType, violations);

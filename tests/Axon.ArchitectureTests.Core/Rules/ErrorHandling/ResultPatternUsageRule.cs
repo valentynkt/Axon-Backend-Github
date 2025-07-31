@@ -286,7 +286,7 @@ public sealed class ResultPatternUsageRule : PatternComplianceRule
     /// <summary>
     /// Checks if a method is async.
     /// </summary>
-    private static bool IsAsyncMethod(MethodInfo method)
+    private static new bool IsAsyncMethod(MethodInfo method)
     {
         return method.ReturnType == typeof(Task) || 
                (method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>));

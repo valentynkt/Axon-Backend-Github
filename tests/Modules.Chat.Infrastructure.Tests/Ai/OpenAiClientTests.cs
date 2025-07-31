@@ -36,7 +36,6 @@ public sealed class OpenAiClientTests : ApplicationTestBase
             Model = "gpt-4o",
             MaxTokens = 1000,
             Temperature = 0.5,
-            TimeoutSeconds = 30,
             McpEnabled = true
         };
 

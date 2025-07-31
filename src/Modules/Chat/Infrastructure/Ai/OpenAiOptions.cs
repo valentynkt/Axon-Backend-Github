@@ -34,4 +34,9 @@ public sealed class OpenAiOptions
     /// Whether MCP integration is enabled
     /// </summary>
     public bool McpEnabled { get; set; } = true;
+
+    /// <summary>
+    /// HTTP client timeout in seconds
+    /// </summary>
+    public int TimeoutSeconds { get; set; } = 30;
 }

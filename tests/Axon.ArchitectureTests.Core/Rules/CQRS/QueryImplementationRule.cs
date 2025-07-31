@@ -176,8 +176,6 @@ public sealed class QueryImplementationRule : PatternComplianceRule
     /// </summary>
     private void ValidateQueryFiltering(Type queryType, List<RuleViolation> violations)
     {
-        var properties = GetPublicProperties(queryType);
-        
         // Queries with "GetAll" or "List" patterns should have filtering
         if (queryType.Name.Contains("GetAll", StringComparison.OrdinalIgnoreCase) ||
             queryType.Name.Contains("ListAll", StringComparison.OrdinalIgnoreCase))
@@ -204,7 +202,7 @@ public sealed class QueryImplementationRule : PatternComplianceRule
     /// <summary>
     /// Checks if the query returns a collection type.
     /// </summary>
-    private bool HasCollectionReturnType(Type queryType)
+    private static bool HasCollectionReturnType(Type queryType)
     {
         var requestInterface = queryType.GetInterfaces()
             .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IRequest<>));
