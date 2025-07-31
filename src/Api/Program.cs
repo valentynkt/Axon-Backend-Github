@@ -1,4 +1,6 @@
 using Axon.Api.Configuration;
+using FastEndpoints;
+using FastEndpoints.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+
+// Configure FastEndpoints (before MVC controllers)
+app.UseFastEndpoints()
+   .UseSwaggerGen();
+
+// Configure MVC controllers (existing functionality)
 app.MapControllers();
 
 // Keep existing health endpoints

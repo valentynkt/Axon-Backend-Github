@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Infrastructure.Ai;
+using Axon.Modules.Chat.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,8 +29,13 @@ public static class ServiceRegistration
         services.Configure<OpenAiOptions>(
             configuration.GetSection(OpenAiOptions.SectionName));
 
-        // Register AI client
+        // Configure MCP servers options
+        services.Configure<McpServersOptions>(
+            configuration.GetSection(McpServersOptions.SectionName));
+
+        // Register services
         services.AddScoped<IAiClient, OpenAiClient>();
+        services.AddScoped<IMcpServerResolver, McpServerResolver>();
 
         return services;
     }

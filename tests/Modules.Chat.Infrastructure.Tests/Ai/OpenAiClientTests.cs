@@ -79,7 +79,7 @@ public sealed class OpenAiClientTests : ApplicationTestBase
         var client = CreateOpenAiClient();
         var request = new AiRequest(
             Message: "Hello, AI!",
-            McpConfig: null,
+            McpConfigs: null,
             PreviousResponseId: null);
 
         // Note: Since OpenAiClient uses the OpenAI.NET library which creates its own HttpClient,
@@ -116,9 +116,10 @@ public sealed class OpenAiClientTests : ApplicationTestBase
             AllowedTools: null,
             RequireApproval: false);
 
+        var mcpConfigs = new List<McpServerConfig> { mcpConfig }.AsReadOnly();
         var request = new AiRequest(
             Message: "Test message",
-            McpConfig: mcpConfig,
+            McpConfigs: mcpConfigs,
             PreviousResponseId: "prev-123");
 
         try
@@ -158,7 +159,7 @@ public sealed class OpenAiClientTests : ApplicationTestBase
         var client = CreateOpenAiClient();
         var request = new AiRequest(
             Message: message,
-            McpConfig: null,
+            McpConfigs: null,
             PreviousResponseId: null);
 
         try

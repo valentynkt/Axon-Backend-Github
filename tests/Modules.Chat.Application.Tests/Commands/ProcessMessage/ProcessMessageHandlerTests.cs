@@ -18,13 +18,15 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
 {
     private ProcessMessageHandler _handler = null!;
     private Mock<ILogger<ProcessMessageHandler>> _typedLoggerMock = null!;
+    private Mock<IMcpServerResolver> _mcpServerResolverMock = null!;
 
     [SetUp]
     public void SetUp()
     {
         // Create typed logger mock for ProcessMessageHandler
         _typedLoggerMock = CreateTypedLoggerMock<ProcessMessageHandler>();
-        _handler = new ProcessMessageHandler(AiClientMock.Object, _typedLoggerMock.Object);
+        _mcpServerResolverMock = new Mock<IMcpServerResolver>();
+        _handler = new ProcessMessageHandler(AiClientMock.Object, _mcpServerResolverMock.Object, _typedLoggerMock.Object);
     }
 
     [Test]
@@ -40,8 +42,12 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
             .WithResponseId("response-123")
             .Build();
 
-        AiClientMock
+        // Setup empty MCP servers (no enabled servers)
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
 
@@ -58,23 +64,41 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
 
         // Verify AI client was called with correct parameters
         AiClientMock.Verify(x => x.ProcessMessageAsync(
-
             It.Is<AiRequest>(req => 
                 req.Message == "Hello, AI!" && 
-                req.McpConfig == null &&
+                req.McpConfigs == null &&
                 req.PreviousResponseId == null),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task Handle_GivenValidMessageWithMcpConfiguration_ShouldReturnSuccessResult()
+    public async Task Handle_GivenValidMessageWithEnabledMcpServers_ShouldReturnSuccessResult()
     {
         // Arrange
         var command = ProcessMessageCommandBuilder
             .ForMessage("Check the weather")
-            .WithFullMcpConfiguration()
             .WithPreviousResponseId("prev-123")
             .Build();
+
+        var mcpServers = new List<McpServerConfig>
+        {
+            new McpServerConfig(
+                ServerUrl: "https://weather.api.com/mcp",
+                ServerLabel: "Weather Service",
+                Headers: new Dictionary<string, string> { { "Authorization", "Bearer token" } },
+                AllowedTools: ["weather"],
+                RequireApproval: false),
+            new McpServerConfig(
+                ServerUrl: "https://search.api.com/mcp",
+                ServerLabel: "Search Service",
+                Headers: null,
+                AllowedTools: ["search"],
+                RequireApproval: true)
+        }.AsReadOnly();
+
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(mcpServers));
 
         var expectedAiResponse = AiResponseBuilder
             .ForContent("The weather in Boston is sunny and 72°F.")
@@ -83,7 +107,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
             .Build();
 
         AiClientMock
-
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
 
@@ -101,17 +124,44 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
             response.ToolExecutions[0].Duration.TotalMilliseconds.ShouldBe(500);
         });
 
-        // Verify AI client was called with MCP configuration
-        AiClientMock.Verify(x => x.ProcessMessageAsync(
+        // Verify MCP server resolver was called
+        _mcpServerResolverMock.Verify(x => x.GetEnabledServerConfigurations(), Times.Once);
 
+        // Verify AI client was called with all MCP configurations
+        AiClientMock.Verify(x => x.ProcessMessageAsync(
             It.Is<AiRequest>(req =>
                 req.Message == "Check the weather" &&
-                req.McpConfig != null &&
-                req.McpConfig.ServerUrl == "https://api.example.com/mcp" &&
-                req.McpConfig.ServerLabel == "User-provided MCP Server" &&
-
+                req.McpConfigs != null &&
+                req.McpConfigs.Count == 2 &&
+                req.McpConfigs.Any(c => c.ServerUrl == "https://weather.api.com/mcp") &&
+                req.McpConfigs.Any(c => c.ServerUrl == "https://search.api.com/mcp") &&
                 req.PreviousResponseId == "prev-123"),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task Handle_GivenMcpResolverFailure_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var command = ProcessMessageCommandBuilder.ForMessage("Test message").Build();
+        var expectedError = Error.InternalError("Failed to load MCP configuration");
+
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Failure(expectedError));
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeFailure();
+        result.Error.ShouldBe(expectedError);
+
+        // Verify AI client was not called
+        AiClientMock.Verify(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Verify error was logged
+        VerifyLoggerCalledWith(_typedLoggerMock, LogLevel.Error, "Failed to load MCP server configurations");
     }
 
     [Test]
@@ -124,8 +174,11 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
             .WithoutResponseId()
             .Build();
 
-        AiClientMock
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
 
@@ -148,8 +201,11 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
         var command = ProcessMessageCommandBuilder.ForMessage("Hello").Build();
         var expectedError = Error.ExternalService("AI service is unavailable");
 
-        AiClientMock
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Failure(expectedError));
 
@@ -162,40 +218,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
     }
 
     [Test]
-    public async Task Handle_GivenNullOrWhitespaceServerUrl_ShouldSkipMcpConfiguration()
-    {
-        // Arrange
-        var command = ProcessMessageCommandBuilder
-            .ForMessage("Hello")
-            .WithMcpServerUrl("   ")  // Whitespace only
-            .WithCustomHeaders("test", "value")
-            .WithSingleTool("tool1")
-            .Build();
-
-        var expectedAiResponse = AiResponseBuilder
-            .ForContent("Response")
-            .WithResponseId("123")
-            .Build();
-
-        AiClientMock
-
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldBeSuccess();
-
-        // Verify AI client was called without MCP configuration
-        AiClientMock.Verify(x => x.ProcessMessageAsync(
-
-            It.Is<AiRequest>(req => req.McpConfig == null),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Test]
     public async Task Handle_GivenNullRequest_ShouldThrowArgumentNullException()
     {
         // Act & Assert
@@ -203,7 +225,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
     }
 
     [Test]
-
     public async Task Handle_ShouldLogInformationMessages_GivenSuccessfulProcessing()
     {
         // Arrange
@@ -216,8 +237,11 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
         
         var expectedAiResponse = new AiResponse("Response", "123", toolExecutions);
 
-        AiClientMock
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
 
@@ -229,7 +253,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
 
         // Verify logging occurred (information level calls)
         _typedLoggerMock.Verify(
-
             x => x.Log(
                 LogLevel.Information,
                 It.IsAny<EventId>(),
@@ -239,7 +262,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
             Times.AtLeastOnce);
 
         _typedLoggerMock.Verify(
-
             x => x.Log(
                 LogLevel.Information,
                 It.IsAny<EventId>(),
@@ -250,15 +272,17 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
     }
 
     [Test]
-
     public async Task Handle_ShouldLogErrorMessage_GivenAiClientFailure()
     {
         // Arrange
         var command = new ProcessMessageCommand("Test message");
         var expectedError = Error.ExternalService("Service unavailable");
 
-        AiClientMock
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Failure(expectedError));
 
@@ -270,7 +294,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
 
         // Verify error logging occurred
         _typedLoggerMock.Verify(
-
             x => x.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
@@ -281,7 +304,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
     }
 
     [Test]
-
     public async Task Handle_ShouldMapToolExecutionsCorrectly_GivenMultipleToolExecutions()
     {
         // Arrange
@@ -294,8 +316,11 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
 
         var expectedAiResponse = new AiResponse("Tool results processed", "456", toolExecutions);
 
-        AiClientMock
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
 
@@ -318,39 +343,6 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
     }
 
     [Test]
-    [TestCase("")]
-    [TestCase("   ")]
-    [TestCase(null)]
-    public async Task Handle_GivenInvalidMcpServerUrl_ShouldCreateMcpConfigAsNull(string? mcpServerUrl)
-
-    {
-        // Arrange
-        var command = new ProcessMessageCommand(
-            Message: "Test",
-            McpServerUrl: mcpServerUrl);
-
-        var expectedAiResponse = new AiResponse("Response", "123", null);
-
-        AiClientMock
-
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-
-        // Verify AI client was called without MCP configuration
-        AiClientMock.Verify(x => x.ProcessMessageAsync(
-
-            It.Is<AiRequest>(req => req.McpConfig == null),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Test]
-
     public async Task Handle_ShouldHandleCancellation_GivenCancelledToken()
     {
         // Arrange
@@ -358,13 +350,31 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
 
-        AiClientMock
+        _mcpServerResolverMock
+            .Setup(x => x.GetEnabledServerConfigurations())
+            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
 
+        AiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());
 
         // Act & Assert
         await Should.ThrowAsync<OperationCanceledException>(() => _handler.Handle(command, cancellationTokenSource.Token));
-
     }
+
+    #region Test Helper Methods
+
+    private new static void VerifyLoggerCalledWith<T>(Mock<ILogger<T>> loggerMock, LogLevel logLevel, string messageContent)
+    {
+        loggerMock.Verify(
+            x => x.Log(
+                logLevel,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains(messageContent)),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.AtLeastOnce);
+    }
+
+    #endregion
 }

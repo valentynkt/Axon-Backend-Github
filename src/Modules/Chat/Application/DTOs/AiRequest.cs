@@ -1,9 +1,9 @@
 namespace Axon.Modules.Chat.Application.DTOs;
 
 /// <summary>
-/// AI processing request with MCP server configuration
+/// AI processing request with multiple MCP server configurations
 /// </summary>
 public sealed record AiRequest(
     string Message,
-    McpServerConfig? McpConfig = null,
+    IReadOnlyCollection<McpServerConfig>? McpConfigs = null,
     string? PreviousResponseId = null);

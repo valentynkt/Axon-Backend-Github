@@ -5,5 +5,4 @@ namespace Axon.Api.Contracts.Chat;
 /// </summary>
 public sealed record ProcessMessageRequest(
     string Message,
-    McpServerRequest? McpServer = null,
     string? ConversationId = null);

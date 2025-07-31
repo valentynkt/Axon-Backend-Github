@@ -12,14 +12,6 @@ Process a chat message with optional MCP tool integration.
 ```json
 {
   "message": "string (required)",
-  "mcpServer": {
-    "serverUrl": "string (required)",
-    "serverLabel": "string (optional)",
-    "headers": {
-      "key": "value"
-    },
-    "allowedTools": ["tool1", "tool2"]
-  },
   "conversationId": "string (optional)"
 }
 ```
@@ -50,8 +42,9 @@ Process a chat message with optional MCP tool integration.
 
 ### ProcessMessageRequest
 - `Message` (string, required): User message to process
-- `McpServer` (McpServerRequest, optional): MCP server configuration
 - `ConversationId` (string, optional): Conversation identifier for context
+
+**Note**: MCP server configuration is now handled server-side via appsettings.json. All enabled MCP servers are automatically loaded without client configuration.
 
 ### ProcessMessageResponse  
 - `Response` (string, required): AI-generated response
@@ -59,6 +52,7 @@ Process a chat message with optional MCP tool integration.
 - `ToolExecutions` (ToolExecutionResponse[], optional): Executed tool results
 
 ### McpServerRequest
+**DEPRECATED**: MCP server configuration moved to server-side appsettings.json configuration.
 - `ServerUrl` (string, required): MCP server endpoint URL
 - `ServerLabel` (string, optional): Human-readable server name
 - `Headers` (Dictionary<string,string>, optional): Custom headers for MCP requests
@@ -71,3 +65,4 @@ Process a chat message with optional MCP tool integration.
 
 ## Change History
 - **2025-07-29**: Initial Chat module API contract - NEW endpoint, non-breaking
+- **2025-07-30**: MCP Config Migration - BREAKING CHANGE: Removed mcpServer parameter from ProcessMessageRequest, MCP servers now configured server-side
