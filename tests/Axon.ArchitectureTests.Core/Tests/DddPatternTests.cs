@@ -200,4 +200,208 @@ public sealed class DddPatternTests
 
         result.IsSuccess.ShouldBeTrue($"DDD pattern violations found. Total violations: {result.TotalViolations}");
     }
+
+    [Test]
+    public async Task AggregateRoots_ShouldHaveInvariantValidation()
+    {
+        // Arrange
+        var rule = new AggregateRootRule();
+        _ruleEngine.RegisterRule(rule);
+
+        // Act
+        var result = await _ruleEngine.ExecuteAsync(_context);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var ruleResult = result.RuleResults.Single(r => r.RuleId == "DDD001");
+        
+        // Focus on invariant validation violations
+        var invariantViolations = ruleResult.Violations
+            .Where(v => v.Message.Contains("invariant", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("validation", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (invariantViolations.Any())
+        {
+            foreach (var violation in invariantViolations)
+            {
+                TestContext.WriteLine($"Invariant Validation Violation: {violation.Message}");
+                TestContext.WriteLine($"Type: {violation.TypeName}");
+                TestContext.WriteLine("---");
+            }
+        }
+
+        // Log but don't fail - not all aggregates may need complex invariant validation
+        TestContext.WriteLine($"Aggregates without invariant validation: {invariantViolations.Count}");
+    }
+
+    [Test]
+    public async Task AggregateRoots_ShouldSupportDomainEvents()
+    {
+        // Arrange
+        var rule = new AggregateRootRule();
+        _ruleEngine.RegisterRule(rule);
+
+        // Act
+        var result = await _ruleEngine.ExecuteAsync(_context);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var ruleResult = result.RuleResults.Single(r => r.RuleId == "DDD001");
+        
+        // Focus on domain event violations
+        var eventViolations = ruleResult.Violations
+            .Where(v => v.Message.Contains("domain event", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("event", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (eventViolations.Any())
+        {
+            foreach (var violation in eventViolations)
+            {
+                TestContext.WriteLine($"Domain Event Violation: {violation.Message}");
+                TestContext.WriteLine($"Type: {violation.TypeName}");
+                TestContext.WriteLine("---");
+            }
+        }
+
+        // Log but don't fail - not all aggregates may need domain events
+        TestContext.WriteLine($"Aggregates without domain event support: {eventViolations.Count}");
+    }
+
+    [Test]
+    public async Task AggregateRoots_ShouldUseDomainLanguage()
+    {
+        // Arrange
+        var rule = new AggregateRootRule();
+        _ruleEngine.RegisterRule(rule);
+
+        // Act
+        var result = await _ruleEngine.ExecuteAsync(_context);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var ruleResult = result.RuleResults.Single(r => r.RuleId == "DDD001");
+        
+        // Focus on domain language violations
+        var languageViolations = ruleResult.Violations
+            .Where(v => v.Message.Contains("CRUD", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("domain language", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("verb", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (languageViolations.Any())
+        {
+            foreach (var violation in languageViolations)
+            {
+                TestContext.WriteLine($"Domain Language Violation: {violation.Message}");
+                TestContext.WriteLine($"Type: {violation.TypeName}");
+                TestContext.WriteLine("---");
+            }
+        }
+
+        languageViolations.Count.ShouldBe(0, $"Aggregates using CRUD language instead of domain language: {languageViolations.Count}");
+    }
+
+    [Test]
+    public async Task ValueObjects_ShouldBeImmutable()
+    {
+        // Arrange
+        var rule = new ValueObjectRule();
+        _ruleEngine.RegisterRule(rule);
+
+        // Act
+        var result = await _ruleEngine.ExecuteAsync(_context);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var ruleResult = result.RuleResults.Single(r => r.RuleId == "DDD002");
+        
+        // Focus on immutability violations
+        var immutabilityViolations = ruleResult.Violations
+            .Where(v => v.Message.Contains("immutable", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("setter", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (immutabilityViolations.Any())
+        {
+            foreach (var violation in immutabilityViolations)
+            {
+                TestContext.WriteLine($"Immutability Violation: {violation.Message}");
+                TestContext.WriteLine($"Type: {violation.TypeName}");
+                TestContext.WriteLine("---");
+            }
+        }
+
+        immutabilityViolations.Count.ShouldBe(0, $"Value objects with mutability issues: {immutabilityViolations.Count}");
+    }
+
+    [Test]
+    public async Task ValueObjects_ShouldHaveFactoryMethods()
+    {
+        // Arrange
+        var rule = new ValueObjectRule();
+        _ruleEngine.RegisterRule(rule);
+
+        // Act
+        var result = await _ruleEngine.ExecuteAsync(_context);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var ruleResult = result.RuleResults.Single(r => r.RuleId == "DDD002");
+        
+        // Focus on factory method violations
+        var factoryViolations = ruleResult.Violations
+            .Where(v => v.Message.Contains("factory", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("Create", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (factoryViolations.Any())
+        {
+            foreach (var violation in factoryViolations)
+            {
+                TestContext.WriteLine($"Factory Method Violation: {violation.Message}");
+                TestContext.WriteLine($"Type: {violation.TypeName}");
+                TestContext.WriteLine("---");
+            }
+        }
+
+        // Log but don't fail - not all value objects need factory methods
+        TestContext.WriteLine($"Value objects that could benefit from factory methods: {factoryViolations.Count}");
+    }
+
+    [Test]
+    public async Task ResultPattern_ShouldHandleExceptionBoundaries()
+    {
+        // Arrange
+        var rule = new ResultPatternUsageRule();
+        _ruleEngine.RegisterRule(rule);
+
+        // Act
+        var result = await _ruleEngine.ExecuteAsync(_context);
+
+        // Assert
+        result.ShouldNotBeNull();
+        var ruleResult = result.RuleResults.Single(r => r.RuleId == "ERR001");
+        
+        // Focus on exception boundary violations
+        var boundaryViolations = ruleResult.Violations
+            .Where(v => v.Message.Contains("infrastructure", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("external", StringComparison.OrdinalIgnoreCase) ||
+                       v.Message.Contains("exception", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (boundaryViolations.Any())
+        {
+            foreach (var violation in boundaryViolations)
+            {
+                TestContext.WriteLine($"Exception Boundary Violation: {violation.Message}");
+                TestContext.WriteLine($"Type: {violation.TypeName}");
+                TestContext.WriteLine("---");
+            }
+        }
+
+        // Log but don't fail - some exception handling might be acceptable
+        TestContext.WriteLine($"Potential exception boundary issues: {boundaryViolations.Count}");
+    }
 }

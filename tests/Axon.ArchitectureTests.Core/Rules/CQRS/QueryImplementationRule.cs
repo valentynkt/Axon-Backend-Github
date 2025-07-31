@@ -33,6 +33,9 @@ public sealed class QueryImplementationRule : PatternComplianceRule
                 ValidateQueryLocation(queryType, violations);
                 ValidateQueryMediatRInterface(queryType, violations);
                 ValidateQueryReturnType(queryType, violations);
+                ValidateQueryReadOnlyBehavior(queryType, violations);
+                ValidateQueryPaging(queryType, violations);
+                ValidateQueryFiltering(queryType, violations);
             }
         }, cancellationToken);
 
@@ -111,6 +114,121 @@ public sealed class QueryImplementationRule : PatternComplianceRule
                     $"Change '{queryType.Name}' to return appropriate data type or convert to Command"));
             }
         }
+    }
+
+    /// <summary>
+    /// Validates that queries don't contain state-changing operations or mutable collections.
+    /// </summary>
+    private void ValidateQueryReadOnlyBehavior(Type queryType, List<RuleViolation> violations)
+    {
+        var properties = GetPublicProperties(queryType);
+        
+        foreach (var property in properties)
+        {
+            // Check for mutable collections that might be modified
+            if (IsMutableCollectionType(property.PropertyType))
+            {
+                violations.Add(CreateViolation(
+                    queryType,
+                    $"Query property '{property.Name}' uses mutable collection type '{property.PropertyType.Name}'",
+                    $"Use IReadOnlyCollection<T>, IReadOnlyList<T>, or immutable collection for '{property.Name}'"));
+            }
+
+            // Check for properties with public setters
+            if (property.CanWrite && property.SetMethod?.IsPublic == true)
+            {
+                violations.Add(CreateViolation(
+                    queryType,
+                    $"Query property '{property.Name}' has public setter, violating read-only principle",
+                    $"Make property '{property.Name}' init-only or readonly"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that queries follow proper paging patterns when dealing with collections.
+    /// </summary>
+    private void ValidateQueryPaging(Type queryType, List<RuleViolation> violations)
+    {
+        var properties = GetPublicProperties(queryType);
+        var hasPotentialCollectionResult = HasCollectionReturnType(queryType);
+        
+        if (hasPotentialCollectionResult)
+        {
+            var hasPagingProperties = properties.Any(p => 
+                p.Name.Contains("Page", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("Skip", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("Take", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase));
+
+            if (!hasPagingProperties && queryType.Name.Contains("List", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add(CreateViolation(
+                    queryType,
+                    "Queries returning collections should include paging parameters",
+                    $"Add paging properties (PageSize, PageNumber) to '{queryType.Name}'"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that queries have appropriate filtering capabilities.
+    /// </summary>
+    private void ValidateQueryFiltering(Type queryType, List<RuleViolation> violations)
+    {
+        var properties = GetPublicProperties(queryType);
+        
+        // Queries with "GetAll" or "List" patterns should have filtering
+        if (queryType.Name.Contains("GetAll", StringComparison.OrdinalIgnoreCase) ||
+            queryType.Name.Contains("ListAll", StringComparison.OrdinalIgnoreCase))
+        {
+            violations.Add(CreateViolation(
+                queryType,
+                "Avoid 'GetAll' or 'ListAll' patterns without filtering capabilities",
+                $"Add filtering parameters or rename '{queryType.Name}' to be more specific"));
+        }
+    }
+
+    /// <summary>
+    /// Checks if a type is a mutable collection type.
+    /// </summary>
+    private static bool IsMutableCollectionType(Type type)
+    {
+        return (type.IsGenericType && 
+                (type.GetGenericTypeDefinition() == typeof(List<>) ||
+                 type.GetGenericTypeDefinition() == typeof(IList<>) ||
+                 type.GetGenericTypeDefinition() == typeof(ICollection<>))) ||
+               type.IsArray;
+    }
+
+    /// <summary>
+    /// Checks if the query returns a collection type.
+    /// </summary>
+    private bool HasCollectionReturnType(Type queryType)
+    {
+        var requestInterface = queryType.GetInterfaces()
+            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IRequest<>));
+
+        if (requestInterface != null)
+        {
+            var returnType = requestInterface.GetGenericArguments()[0];
+            return IsCollectionType(returnType);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a type represents a collection.
+    /// </summary>
+    private static bool IsCollectionType(Type type)
+    {
+        return type.IsArray ||
+               (type.IsGenericType && 
+                (type.GetGenericTypeDefinition() == typeof(IEnumerable<>) ||
+                 type.GetGenericTypeDefinition() == typeof(ICollection<>) ||
+                 type.GetGenericTypeDefinition() == typeof(IList<>) ||
+                 type.GetGenericTypeDefinition() == typeof(List<>)));
     }
 
     private static bool IsRecord(Type type) =>

@@ -8,6 +8,17 @@
   <Folder Name="/src/Api/">
     <Project Path="src/Api/Axon.Api.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Chat/" />
+  <Folder Name="/src/Modules/Chat/Application/">
+    <Project Path="src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Chat/Domain/">
+    <Project Path="src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Chat/Infrastructure/">
+    <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Shared/" />
   <Folder Name="/src/Shared/Common.Abstractions/">
     <Project Path="src/Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
@@ -15,20 +26,15 @@
   <Folder Name="/src/Shared/Common/">
     <Project Path="src/Shared/Common/Axon.Shared.Common.csproj" />
   </Folder>
-  <Folder Name="/src/Modules/" />
-  <Folder Name="/src/Modules/Chat/" />
-  <Folder Name="/src/Modules/Chat/Domain/">
-    <Project Path="src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
-  </Folder>
-  <Folder Name="/src/Modules/Chat/Application/">
-    <Project Path="src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
-  </Folder>
-  <Folder Name="/src/Modules/Chat/Infrastructure/">
-    <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
-  </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Api.Tests/">
     <Project Path="tests/Api.Tests/Axon.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Axon.ArchitectureTests.Core/">
+    <Project Path="tests/Axon.ArchitectureTests.Core/Axon.ArchitectureTests.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/Axon.ArchitectureTests.Framework/">
+    <Project Path="tests/Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
   </Folder>
   <Folder Name="/tests/Modules.Chat.Application.Tests/">
     <Project Path="tests/Modules.Chat.Application.Tests/Axon.Modules.Chat.Application.Tests.csproj" />
@@ -41,14 +47,5 @@
   </Folder>
   <Folder Name="/tests/Shared/">
     <Project Path="tests/Shared/Axon.Tests.Shared.csproj" />
-  </Folder>
-  <Folder Name="/tests/ArchitectureTests/">
-    <Project Path="tests/ArchitectureTests/Axon.ArchitectureTests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Axon.ArchitectureTests.Framework/">
-    <Project Path="tests/Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
-  </Folder>
-  <Folder Name="/tests/Axon.ArchitectureTests.Core/">
-    <Project Path="tests/Axon.ArchitectureTests.Core/Axon.ArchitectureTests.Core.csproj" />
   </Folder>
 </Solution>

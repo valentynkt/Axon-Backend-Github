@@ -37,6 +37,9 @@ public sealed class ResultPatternUsageRule : PatternComplianceRule
                 ValidateMethodReturnTypes(type, violations);
                 ValidateExceptionUsage(type, violations);
                 ValidateResultHandling(type, violations);
+                ValidateResultComposition(type, violations);
+                ValidateExceptionBoundaries(type, violations);
+                ValidateNullHandling(type, violations);
             }
         }, cancellationToken);
 
@@ -151,5 +154,141 @@ public sealed class ResultPatternUsageRule : PatternComplianceRule
                 methodName.Contains("ensure") ||
                 parameters.Any(p => p.Name?.ToLower().Contains("validation") == true)) &&
                !ReturnsResult(method);
+    }
+
+    /// <summary>
+    /// Validates that Result types are properly composed and chained.
+    /// </summary>
+    private void ValidateResultComposition(Type type, List<RuleViolation> violations)
+    {
+        var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        
+        foreach (var method in methods)
+        {
+            if (ReturnsResult(method))
+            {
+                var parameters = method.GetParameters();
+                var hasMultipleResultParams = parameters.Count(p => IsResultType(p.ParameterType)) > 1;
+                
+                if (hasMultipleResultParams)
+                {
+                    violations.Add(CreateViolation(
+                        type,
+                        $"Method '{method.Name}' accepts multiple Result parameters - consider using Result composition patterns",
+                        $"Use Result.Combine() or similar patterns to compose multiple Results in '{method.Name}'"));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that exceptions are properly handled at infrastructure boundaries.
+    /// </summary>
+    private void ValidateExceptionBoundaries(Type type, List<RuleViolation> violations)
+    {
+        // Check if this is an infrastructure service that should wrap exceptions
+        if (IsInfrastructureService(type))
+        {
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            
+            foreach (var method in methods.Where(m => !m.IsSpecialName))
+            {
+                if (!ReturnsResult(method) && InteractsWithExternalSystems(method))
+                {
+                    violations.Add(CreateViolation(
+                        type,
+                        $"Infrastructure method '{method.Name}' should wrap external exceptions in Result pattern",
+                        $"Wrap try-catch blocks in '{method.Name}' and return Result.Failure() for exceptions"));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that null handling follows Result pattern instead of null checks.
+    /// </summary>
+    private void ValidateNullHandling(Type type, List<RuleViolation> violations)
+    {
+        var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        
+        foreach (var method in methods)
+        {
+            var parameters = method.GetParameters();
+            
+            // Methods with nullable reference parameters should consider Result pattern
+            foreach (var param in parameters)
+            {
+                if (IsNullableReferenceType(param.ParameterType) && !IsResultType(param.ParameterType))
+                {
+                    var methodName = method.Name.ToLower();
+                    if (methodName.Contains("find") || methodName.Contains("get") || methodName.Contains("retrieve"))
+                    {
+                        violations.Add(CreateViolation(
+                            type,
+                            $"Method '{method.Name}' with nullable parameter '{param.Name}' should consider Result pattern",
+                            $"Consider using Result<T> instead of nullable types in '{method.Name}' for explicit success/failure handling"));
+                    }
+                }
+            }
+
+            // Methods returning nullable reference types should consider Result pattern
+            if (IsNullableReferenceType(method.ReturnType) && !IsResultType(method.ReturnType))
+            {
+                var methodName = method.Name.ToLower();
+                if (methodName.Contains("find") || methodName.Contains("get") || methodName.Contains("retrieve"))
+                {
+                    violations.Add(CreateViolation(
+                        type,
+                        $"Method '{method.Name}' returns nullable type - consider Result<T> for explicit not-found handling",
+                        $"Change '{method.Name}' to return Result<T> instead of nullable type"));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a type is an infrastructure service.
+    /// </summary>
+    private static bool IsInfrastructureService(Type type)
+    {
+        return type.Namespace?.Contains(".Infrastructure.", StringComparison.OrdinalIgnoreCase) == true ||
+               type.Namespace?.EndsWith(".Infrastructure", StringComparison.OrdinalIgnoreCase) == true ||
+               type.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase) ||
+               type.Name.EndsWith("Service", StringComparison.OrdinalIgnoreCase) ||
+               type.Name.EndsWith("Client", StringComparison.OrdinalIgnoreCase) ||
+               type.Name.EndsWith("Gateway", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks if a method likely interacts with external systems.
+    /// </summary>
+    private static bool InteractsWithExternalSystems(MethodInfo method)
+    {
+        var methodName = method.Name.ToLower();
+        return methodName.Contains("save") ||
+               methodName.Contains("load") ||
+               methodName.Contains("send") ||
+               methodName.Contains("receive") ||
+               methodName.Contains("fetch") ||
+               methodName.Contains("call") ||
+               methodName.Contains("request") ||
+               IsAsyncMethod(method);
+    }
+
+    /// <summary>
+    /// Checks if a type is a nullable reference type.
+    /// </summary>
+    private static bool IsNullableReferenceType(Type type)
+    {
+        return !type.IsValueType && type != typeof(string);
+    }
+
+    /// <summary>
+    /// Checks if a method is async.
+    /// </summary>
+    private static bool IsAsyncMethod(MethodInfo method)
+    {
+        return method.ReturnType == typeof(Task) || 
+               (method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>));
     }
 }
