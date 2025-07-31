@@ -1,2 +1,3 @@
 # Decision Log (append-only)
 2025-07-29 | Chat/Direct_MCP | AXON-20250729-Chat-Direct_MCP-PR_BODY | ADR: n/a | Contracts: changed | New Chat module with MCP integration - vertical slice, Clean Architecture + CQRS patterns
+2025-07-31 | Testing/ArchitectureFramework | AXON-20250731-Testing-ArchitectureFramework-PR_BODY | ADR: n/a | Contracts: none | Enhanced architecture testing from 3 to 76 tests - Clean Architecture, CQRS, DDD, Security, Performance validation

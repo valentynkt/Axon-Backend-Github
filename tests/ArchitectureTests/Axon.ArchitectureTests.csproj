@@ -29,6 +29,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Reference main projects to analyze their assemblies -->
+    <ProjectReference Include="../../src/Api/Axon.Api.csproj" />
+    <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
+    <ProjectReference Include="../../src/Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
+    <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
+    <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
+    <ProjectReference Include="../../src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
+    
     <!-- Reference test projects to analyze their assemblies -->
     <ProjectReference Include="../Api.Tests/Axon.Api.Tests.csproj" />
     <ProjectReference Include="../Modules.Chat.Domain.Tests/Axon.Modules.Chat.Domain.Tests.csproj" />

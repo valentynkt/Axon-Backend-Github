@@ -2,6 +2,7 @@ using Axon.Api.Contracts.Chat;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Shared.Common;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Axon.Api.Endpoints.Chat;
@@ -27,6 +28,7 @@ public sealed class ProcessMessageEndpoint : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Processed message response</returns>
     [HttpPost("process")]
+    [AllowAnonymous]
     [ProducesResponseType<Contracts.Chat.ProcessMessageResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]

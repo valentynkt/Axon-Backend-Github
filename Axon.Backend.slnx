@@ -45,4 +45,10 @@
   <Folder Name="/tests/ArchitectureTests/">
     <Project Path="tests/ArchitectureTests/Axon.ArchitectureTests.csproj" />
   </Folder>
+  <Folder Name="/tests/Axon.ArchitectureTests.Framework/">
+    <Project Path="tests/Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
+  </Folder>
+  <Folder Name="/tests/Axon.ArchitectureTests.Core/">
+    <Project Path="tests/Axon.ArchitectureTests.Core/Axon.ArchitectureTests.Core.csproj" />
+  </Folder>
 </Solution>
