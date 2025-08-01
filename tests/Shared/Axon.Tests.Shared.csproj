@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
+    <ProjectReference Include="../../src/Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
     <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="../Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
@@ -35,6 +36,9 @@
     <Using Include="Shouldly" />
     <Using Include="Moq" />
     <Using Include="Axon.Shared.Common" />
+    <Using Include="Axon.Shared.Common.Abstractions" />
+    <Using Include="System.Collections.Concurrent" />
+    <Using Include="System.Text" />
   </ItemGroup>
 
 </Project>

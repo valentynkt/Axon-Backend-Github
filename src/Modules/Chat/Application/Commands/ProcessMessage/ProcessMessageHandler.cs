@@ -1,6 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Shared.Common;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -8,22 +7,25 @@ using Microsoft.Extensions.Logging;
 namespace Axon.Modules.Chat.Application.Commands.ProcessMessage;
 
 /// <summary>
-/// Handler for processing chat messages with direct MCP support
+/// Coordinator for processing chat messages - handles only orchestration and coordination
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1848:Use the LoggerMessage delegates", Justification = "Structured logging with interpolation is more readable")]
 public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageCommand, Result<ProcessMessageResponse>>
 {
     private readonly IAiClient _aiClient;
-    private readonly IMcpServerResolver _mcpServerResolver;
+    private readonly IMessageRequestBuilder _requestBuilder;
+    private readonly IResponseMappingService _responseMappingService;
     private readonly ILogger<ProcessMessageHandler> _logger;
 
     public ProcessMessageHandler(
         IAiClient aiClient,
-        IMcpServerResolver mcpServerResolver,
+        IMessageRequestBuilder requestBuilder,
+        IResponseMappingService responseMappingService,
         ILogger<ProcessMessageHandler> logger)
     {
         _aiClient = aiClient;
-        _mcpServerResolver = mcpServerResolver;
+        _requestBuilder = requestBuilder;
+        _responseMappingService = responseMappingService;
         _logger = logger;
     }
 
@@ -39,8 +41,8 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
             "Processing message with length {MessageLength}",
             request.Message.Length);
 
-        // Build AI request with MCP configurations
-        var aiRequestResult = BuildAiRequest(request);
+        // Build AI request with MCP configurations using dedicated service
+        var aiRequestResult = _requestBuilder.BuildAiRequest(request);
         if (aiRequestResult.IsFailure)
         {
             return aiRequestResult.Error;
@@ -60,8 +62,8 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
 
         var aiResponse = processResult.Value;
         
-        // Map AI response to API response
-        var response = MapToApiResponse(aiResponse);
+        // Map AI response to API response using dedicated service
+        var response = _responseMappingService.MapToApiResponse(aiResponse);
 
         _logger.LogInformation(
             "Successfully processed message with {ToolCount} tool executions using {McpServerCount} MCP servers",
@@ -71,45 +73,4 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
         return response;
     }
 
-    private Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand request)
-    {
-        // Get all enabled MCP servers from configuration
-        var mcpServersResult = _mcpServerResolver.GetEnabledServerConfigurations();
-        if (mcpServersResult.IsFailure)
-        {
-            _logger.LogError(
-                "Failed to load MCP server configurations: {Error}",
-                mcpServersResult.Error);
-            return mcpServersResult.Error;
-        }
-
-        var enabledMcpServers = mcpServersResult.Value;
-        _logger.LogDebug("Using {McpServerCount} enabled MCP servers", enabledMcpServers.Count);
-
-        // Create AI request with all enabled MCP servers
-        var aiRequest = new AiRequest(
-            Message: request.Message,
-            McpConfigs: enabledMcpServers.Count > 0 ? enabledMcpServers : null,
-            PreviousResponseId: request.PreviousResponseId);
-
-        return (aiRequest, enabledMcpServers.Count);
-    }
-
-    private static ProcessMessageResponse MapToApiResponse(AiResponse aiResponse)
-    {
-        // Generate conversation ID if not provided in response
-        var conversationId = aiResponse.ResponseId ?? ConversationId.New().ToString();
-        
-        // Map tool executions to summaries
-        var toolSummaries = aiResponse.ToolExecutions?.Select(tool =>
-            new ToolExecutionSummary(
-                ToolName: tool.ToolName,
-                Success: tool.IsSuccess,
-                Duration: tool.ExecutionTime)).ToArray();
-
-        return new ProcessMessageResponse(
-            Response: aiResponse.Content,
-            ConversationId: conversationId,
-            ToolExecutions: toolSummaries);
-    }
 }

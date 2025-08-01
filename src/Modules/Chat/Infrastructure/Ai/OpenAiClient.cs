@@ -1,14 +1,10 @@
 using System.Diagnostics;
-using System.Text.Json;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Modules.Chat.Domain.Errors;
 using Axon.Modules.Chat.Domain.Types;
-// POLICY FIX: Infrastructure should not depend on Domain
-// using Axon.Modules.Chat.Domain.Errors;
-// using Axon.Modules.Chat.Domain.Types;
 using Axon.Modules.Chat.Infrastructure.Ai.Models;
 using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;
@@ -26,29 +22,38 @@ public sealed class OpenAiClient : IAiClient
     private readonly HttpClient _httpClient;
     private readonly OpenAiOptions _options;
     private readonly ILogger<OpenAiClient> _logger;
+    private readonly IErrorMappingService _errorMappingService;
+    private readonly IToolExecutionService _toolExecutionService;
+    private readonly IJsonSerializationService _jsonSerializationService;
+    private readonly IActivityTracker _activityTracker;
     
     // Constants for configuration values
     private const string OpenAiResponsesApiUrl = "https://api.openai.com/v1/responses";
     private const string DefaultMcpServerLabel = "mcp_server";
-    private const string UnknownToolName = "unknown_tool";
-    
-    private static readonly JsonSerializerOptions _snakeCaseJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        WriteIndented = false
-    };
 
     public OpenAiClient(
         HttpClient httpClient,
         IOptions<OpenAiOptions> openAiOptions,
-        ILogger<OpenAiClient> logger)
+        ILogger<OpenAiClient> logger,
+        IErrorMappingService errorMappingService,
+        IToolExecutionService toolExecutionService,
+        IJsonSerializationService jsonSerializationService,
+        IActivityTracker activityTracker)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(openAiOptions);
+        ArgumentNullException.ThrowIfNull(errorMappingService);
+        ArgumentNullException.ThrowIfNull(toolExecutionService);
+        ArgumentNullException.ThrowIfNull(jsonSerializationService);
+        ArgumentNullException.ThrowIfNull(activityTracker);
         
         _httpClient = httpClient;
         _options = openAiOptions.Value;
         _logger = logger;
+        _errorMappingService = errorMappingService;
+        _toolExecutionService = toolExecutionService;
+        _jsonSerializationService = jsonSerializationService;
+        _activityTracker = activityTracker;
         
         // Configure HttpClient for OpenAI API
         _httpClient.DefaultRequestHeaders.Authorization = 
@@ -67,8 +72,9 @@ public sealed class OpenAiClient : IAiClient
         ArgumentNullException.ThrowIfNull(request);
         
         using var activity = ActivitySource.StartActivity("ProcessMessage");
-        activity?.SetTag("mcp.server_count", request.McpConfigs?.Count ?? 0);
-        activity?.SetTag("message.length", request.Message.Length);
+        _activityTracker.SetTags(activity, 
+            ("mcp.server_count", request.McpConfigs?.Count ?? 0),
+            ("message.length", request.Message.Length));
         
         var stopwatch = Stopwatch.StartNew();
         
@@ -91,9 +97,10 @@ public sealed class OpenAiClient : IAiClient
                 ResponseId: responsesApiResponse.Id ?? Guid.NewGuid().ToString(),
                 ToolExecutions: toolExecutions);
 
-            activity?.SetTag("response.length", response.Content.Length);
-            activity?.SetTag("duration.ms", stopwatch.ElapsedMilliseconds);
-            activity?.SetTag("response.id", response.ResponseId);
+            _activityTracker.SetTags(activity, 
+                ("response.length", response.Content.Length),
+                ("duration.ms", stopwatch.ElapsedMilliseconds),
+                ("response.id", response.ResponseId));
             
             _logger.LogInformation(
                 "Successfully processed message in {Duration}ms with {ToolCount} tool executions using Direct MCP",
@@ -114,21 +121,14 @@ public sealed class OpenAiClient : IAiClient
     private Result<AiResponse> HandleProcessingException(Exception ex, Stopwatch stopwatch, Activity? activity)
     {
         stopwatch.Stop();
-        activity?.SetTag("error", true);
+        _activityTracker.MarkError(activity, ex);
         
         _logger.LogError(ex,
             "Failed to process message with Direct MCP after {Duration}ms: {Error}",
             stopwatch.ElapsedMilliseconds,
             ex.Message);
 
-        return ex switch
-        {
-            HttpRequestException => ChatErrors.AiClient.Unavailable,
-            TimeoutException => ChatErrors.AiClient.ProcessingTimeout,
-            UnauthorizedAccessException => ChatErrors.AiClient.Unavailable,
-            JsonException => ChatErrors.AiClient.InvalidResponse,
-            _ => ChatErrors.AiClient.InvalidResponse
-        };
+        return _errorMappingService.MapProcessingException(ex);
     }
 
     /// <summary>
@@ -149,12 +149,14 @@ public sealed class OpenAiClient : IAiClient
                 var mcpTool = CreateMcpTool(mcpConfig);
                 tools.Add(mcpTool);
                 
-                activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.domain", new Uri(mcpConfig.ServerUrl).Host);
-                activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.tools_count", mcpConfig.AllowedTools?.Length ?? 0);
+                _activityTracker.SetTags(activity,
+                    ($"mcp.server.{mcpConfig.ServerLabel}.domain", new Uri(mcpConfig.ServerUrl).Host),
+                    ($"mcp.server.{mcpConfig.ServerLabel}.tools_count", mcpConfig.AllowedTools?.Length ?? 0));
             }
             
-            activity?.SetTag("mcp.enabled", true);
-            activity?.SetTag("mcp.servers_configured", request.McpConfigs.Count);
+            _activityTracker.SetTags(activity,
+                ("mcp.enabled", true),
+                ("mcp.servers_configured", request.McpConfigs.Count));
         }
 
         // Build request payload
@@ -182,7 +184,7 @@ public sealed class OpenAiClient : IAiClient
         }
 
         // Parse response
-        var apiResponse = JsonSerializer.Deserialize<ResponsesApiResponse>(responseBody, _snakeCaseJsonOptions);
+        var apiResponse = _jsonSerializationService.DeserializeFromSnakeCase<ResponsesApiResponse>(responseBody);
         
         if (apiResponse == null)
         {
@@ -229,7 +231,7 @@ public sealed class OpenAiClient : IAiClient
         // Note: previous_response_id removed as it may not be supported by the API
         // TODO: Re-add when conversation context is officially supported
 
-        return JsonSerializer.Serialize(requestPayload, _snakeCaseJsonOptions);
+        return _jsonSerializationService.SerializeToSnakeCase(requestPayload);
     }
 
     /// <summary>
@@ -277,53 +279,16 @@ public sealed class OpenAiClient : IAiClient
             return null;
         }
 
-        var toolExecutions = new List<ToolExecution>();
-        var averageExecutionTime = TimeSpan.FromMilliseconds(totalDuration.TotalMilliseconds / response.McpCalls.Length);
+        // Use the service to extract tool executions, avoiding direct Domain type instantiation
+        var toolExecutions = _toolExecutionService.ExtractFromMcpCalls(
+            response.McpCalls, 
+            totalDuration);
         
-        foreach (var mcpCall in response.McpCalls)
-        {
-            var toolExecution = mcpCall.Error != null
-                ? ToolExecution.Failure(
-                    toolName: mcpCall.ToolName ?? UnknownToolName,
-                    arguments: JsonSerializer.Serialize(mcpCall.Arguments ?? new object()),
-                    errorMessage: mcpCall.Error,
-                    executionTime: averageExecutionTime)
-                : ToolExecution.Success(
-                    toolName: mcpCall.ToolName ?? UnknownToolName,
-                    arguments: JsonSerializer.Serialize(mcpCall.Arguments ?? new object()),
-                    result: JsonSerializer.Serialize(mcpCall.Output ?? ""),
-                    executionTime: averageExecutionTime);
-                
-            toolExecutions.Add(toolExecution);
-            
-            _logger.LogDebug(
-                "MCP tool execution: {ToolName} -> {Status} in ~{Duration}ms",
-                mcpCall.ToolName,
-                mcpCall.Error != null ? "Failed" : "Success",
-                averageExecutionTime.TotalMilliseconds);
-        }
+        _activityTracker.SetTags(activity,
+            ("tools.executed", toolExecutions.Length),
+            ("tools.successful", toolExecutions.Count(t => t.IsSuccess)),
+            ("tools.failed", toolExecutions.Count(t => !t.IsSuccess)));
         
-        activity?.SetTag("tools.executed", toolExecutions.Count);
-        activity?.SetTag("tools.successful", toolExecutions.Count(t => t.IsSuccess));
-        activity?.SetTag("tools.failed", toolExecutions.Count(t => !t.IsSuccess));
-        
-        return toolExecutions.ToArray();
+        return toolExecutions;
     }
 }
-
-/// <summary>
-/// OpenAI Responses API response model
-/// </summary>
-internal sealed record ResponsesApiResponse(
-    string? Id,
-    string? OutputText,
-    McpCallItem[]? McpCalls);
-
-/// <summary>
-/// MCP call item in the response
-/// </summary>
-internal sealed record McpCallItem(
-    string? ToolName,
-    object? Arguments,
-    object? Output,
-    string? Error);

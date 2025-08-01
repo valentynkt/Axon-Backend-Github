@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Infrastructure.Ai;
 using Axon.Modules.Chat.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
@@ -34,7 +35,13 @@ public static class ServiceRegistration
         services.Configure<McpServersOptions>(
             configuration.GetSection(McpServersOptions.SectionName));
 
-        // Register services
+        // Register Application services (maintaining clean architecture)
+        services.AddScoped<IErrorMappingService, ErrorMappingService>();
+        services.AddScoped<IToolExecutionService, ToolExecutionService>();
+        services.AddScoped<IJsonSerializationService, JsonSerializationService>();
+        services.AddScoped<IActivityTracker, ActivityTracker>();
+        
+        // Register Infrastructure services
         services.AddHttpClient<IAiClient, OpenAiClient>(client =>
         {
             client.BaseAddress = new Uri("https://api.openai.com/");

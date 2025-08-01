@@ -1,0 +1,18 @@
+using Axon.Modules.Chat.Application.Commands.ProcessMessage;
+using Axon.Modules.Chat.Application.DTOs;
+using Axon.Shared.Common;
+
+namespace Axon.Modules.Chat.Application.Abstractions;
+
+/// <summary>
+/// Service for building AI requests with MCP configuration integration
+/// </summary>
+public interface IMessageRequestBuilder
+{
+    /// <summary>
+    /// Builds an AI request with integrated MCP configuration
+    /// </summary>
+    /// <param name="command">Process message command</param>
+    /// <returns>Result containing AI request and MCP server count</returns>
+    Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand command);
+}
