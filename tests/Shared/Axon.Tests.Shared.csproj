@@ -5,7 +5,7 @@
     <IsTestProject>true</IsTestProject>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Suppress test-specific analyzer warnings -->
-    <NoWarn>CA1062;CA1822;CA1869</NoWarn>
+    <NoWarn>CA1062;CA1822;CA1869;NUnit1033</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +27,7 @@
     <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
     <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
+    <ProjectReference Include="../Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
   </ItemGroup>
 
   <ItemGroup>

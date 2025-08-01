@@ -348,7 +348,7 @@ public sealed class ProcessMessageHandlerTests : ApplicationTestBase
         // Arrange
         var command = new ProcessMessageCommand("Test message");
         using var cancellationTokenSource = new CancellationTokenSource();
-        cancellationTokenSource.Cancel();
+        await cancellationTokenSource.CancelAsync();
 
         _mcpServerResolverMock
             .Setup(x => x.GetEnabledServerConfigurations())

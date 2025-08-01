@@ -38,8 +38,9 @@ public sealed class RepositoryPatternRule : PatternComplianceRule
     }
 
     private static bool IsRepository(Type type) =>
-        type.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase) ||
-        type.Name.Contains("Repository", StringComparison.OrdinalIgnoreCase);
+        !IsExcludedType(type) &&
+        (type.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase) ||
+        type.Name.Contains("Repository", StringComparison.OrdinalIgnoreCase));
 
     private void ValidateRepositoryLocation(Type repositoryType, List<RuleViolation> violations)
     {
@@ -158,4 +159,25 @@ public sealed class RepositoryPatternRule : PatternComplianceRule
         methodName.Contains("Process", StringComparison.OrdinalIgnoreCase) ||
         methodName.Contains("Validate", StringComparison.OrdinalIgnoreCase) ||
         methodName.Contains("Transform", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsExcludedType(Type type)
+    {
+        // Exclude test assemblies
+        if (type.Assembly.GetName().Name?.Contains("Test", StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+            
+        // Exclude architecture rule classes themselves
+        if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+            
+        // Exclude rule classes
+        if (type.Name.EndsWith("Rule", StringComparison.OrdinalIgnoreCase))
+            return true;
+            
+        // Exclude test classes
+        if (type.Name.EndsWith("Tests", StringComparison.OrdinalIgnoreCase))
+            return true;
+            
+        return false;
+    }
 }

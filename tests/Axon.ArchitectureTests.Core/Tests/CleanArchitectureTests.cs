@@ -46,10 +46,10 @@ public sealed class CleanArchitectureTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -74,10 +74,10 @@ public sealed class CleanArchitectureTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -102,10 +102,10 @@ public sealed class CleanArchitectureTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -130,10 +130,10 @@ public sealed class CleanArchitectureTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"CRITICAL Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"CRITICAL Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -157,14 +157,14 @@ public sealed class CleanArchitectureTests
 
         // Assert
         result.ShouldNotBeNull();
-        TestContext.WriteLine($"Execution Summary: {result.GetSummary()}");
+        await TestContext.Out.WriteLineAsync($"Execution Summary: {result.GetSummary()}");
         
         foreach (var ruleResult in result.RuleResults.Where(r => !r.IsSuccess))
         {
-            TestContext.WriteLine($"\nFailed Rule: {ruleResult.RuleId}");
+            await TestContext.Out.WriteLineAsync($"\nFailed Rule: {ruleResult.RuleId}");
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"  - {violation.Message} ({violation.TypeName})");
+                await TestContext.Out.WriteLineAsync($"  - {violation.Message} ({violation.TypeName})");
             }
         }
 

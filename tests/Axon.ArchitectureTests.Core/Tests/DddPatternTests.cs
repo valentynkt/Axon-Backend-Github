@@ -47,10 +47,10 @@ public sealed class DddPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Aggregate Root Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Aggregate Root Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -75,10 +75,10 @@ public sealed class DddPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Value Object Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Value Object Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -103,10 +103,10 @@ public sealed class DddPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Domain Service Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Domain Service Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -131,10 +131,10 @@ public sealed class DddPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Repository Pattern Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Repository Pattern Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -159,10 +159,10 @@ public sealed class DddPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Result Pattern Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Result Pattern Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -187,14 +187,14 @@ public sealed class DddPatternTests
 
         // Assert
         result.ShouldNotBeNull();
-        TestContext.WriteLine($"Execution Summary: {result.GetSummary()}");
+        await TestContext.Out.WriteLineAsync($"Execution Summary: {result.GetSummary()}");
         
         foreach (var ruleResult in result.RuleResults.Where(r => !r.IsSuccess))
         {
-            TestContext.WriteLine($"\nFailed Rule: {ruleResult.RuleId}");
+            await TestContext.Out.WriteLineAsync($"\nFailed Rule: {ruleResult.RuleId}");
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"  - {violation.Message} ({violation.TypeName})");
+                await TestContext.Out.WriteLineAsync($"  - {violation.Message} ({violation.TypeName})");
             }
         }
 
@@ -225,14 +225,14 @@ public sealed class DddPatternTests
         {
             foreach (var violation in invariantViolations)
             {
-                TestContext.WriteLine($"Invariant Validation Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Invariant Validation Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log but don't fail - not all aggregates may need complex invariant validation
-        TestContext.WriteLine($"Aggregates without invariant validation: {invariantViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Aggregates without invariant validation: {invariantViolations.Count}");
     }
 
     [Test]
@@ -259,14 +259,14 @@ public sealed class DddPatternTests
         {
             foreach (var violation in eventViolations)
             {
-                TestContext.WriteLine($"Domain Event Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Domain Event Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log but don't fail - not all aggregates may need domain events
-        TestContext.WriteLine($"Aggregates without domain event support: {eventViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Aggregates without domain event support: {eventViolations.Count}");
     }
 
     [Test]
@@ -294,9 +294,9 @@ public sealed class DddPatternTests
         {
             foreach (var violation in languageViolations)
             {
-                TestContext.WriteLine($"Domain Language Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Domain Language Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -327,9 +327,9 @@ public sealed class DddPatternTests
         {
             foreach (var violation in immutabilityViolations)
             {
-                TestContext.WriteLine($"Immutability Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Immutability Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -360,14 +360,14 @@ public sealed class DddPatternTests
         {
             foreach (var violation in factoryViolations)
             {
-                TestContext.WriteLine($"Factory Method Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Factory Method Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log but don't fail - not all value objects need factory methods
-        TestContext.WriteLine($"Value objects that could benefit from factory methods: {factoryViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Value objects that could benefit from factory methods: {factoryViolations.Count}");
     }
 
     [Test]
@@ -395,13 +395,13 @@ public sealed class DddPatternTests
         {
             foreach (var violation in boundaryViolations)
             {
-                TestContext.WriteLine($"Exception Boundary Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Exception Boundary Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log but don't fail - some exception handling might be acceptable
-        TestContext.WriteLine($"Potential exception boundary issues: {boundaryViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Potential exception boundary issues: {boundaryViolations.Count}");
     }
 }

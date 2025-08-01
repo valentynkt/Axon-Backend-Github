@@ -39,13 +39,35 @@ public sealed class RepositoryImplementationRule : PatternComplianceRule
     }
 
     private static bool IsRepositoryType(Type type) =>
-        type.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase) ||
-        IsInRepositoryNamespace(type);
+        !IsExcludedType(type) &&
+        (type.Name.EndsWith("Repository", StringComparison.OrdinalIgnoreCase) ||
+        IsInRepositoryNamespace(type));
 
     private static bool IsInRepositoryNamespace(Type type) =>
         type.Namespace?.Contains(".Repositories", StringComparison.OrdinalIgnoreCase) == true ||
         type.Namespace?.Contains(".Repository", StringComparison.OrdinalIgnoreCase) == true ||
         type.Namespace?.Contains(".Infrastructure", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsExcludedType(Type type)
+    {
+        // Exclude test assemblies
+        if (type.Assembly.GetName().Name?.Contains("Test", StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+            
+        // Exclude architecture rule classes themselves
+        if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+            
+        // Exclude rule classes
+        if (type.Name.EndsWith("Rule", StringComparison.OrdinalIgnoreCase))
+            return true;
+            
+        // Exclude test classes
+        if (type.Name.EndsWith("Tests", StringComparison.OrdinalIgnoreCase))
+            return true;
+            
+        return false;
+    }
 
     private void ValidateRepositoryNaming(Type repositoryType, List<RuleViolation> violations)
     {

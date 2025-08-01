@@ -19,11 +19,11 @@ public sealed class IntegrationTests
         
         // Assert
         assemblies.ShouldNotBeEmpty();
-        TestContext.WriteLine($"Loaded {assemblies.Count()} assemblies");
+        TestContext.Out.WriteLine($"Loaded {assemblies.Count()} assemblies");
         
         foreach (var assembly in assemblies.Take(5))
         {
-            TestContext.WriteLine($"  - {assembly.GetName().Name}");
+            TestContext.Out.WriteLine($"  - {assembly.GetName().Name}");
         }
     }
 
@@ -42,7 +42,7 @@ public sealed class IntegrationTests
         context.Assemblies.ShouldNotBeEmpty();
         context.Types.ShouldNotBeEmpty();
         
-        TestContext.WriteLine($"Context contains {context.Types.Count()} types from {context.Assemblies.Count()} assemblies");
+        TestContext.Out.WriteLine($"Context contains {context.Types.Count()} types from {context.Assemblies.Count()} assemblies");
     }
 
     [Test]
@@ -67,15 +67,15 @@ public sealed class IntegrationTests
         var ruleResult = result.RuleResults.Single();
         ruleResult.RuleId.ShouldBe("CA001");
         
-        TestContext.WriteLine($"Rule executed in {ruleResult.ExecutionTime.TotalMilliseconds}ms");
-        TestContext.WriteLine($"Result: {(ruleResult.IsSuccess ? "PASSED" : "FAILED")}");
+        await TestContext.Out.WriteLineAsync($"Rule executed in {ruleResult.ExecutionTime.TotalMilliseconds}ms");
+        await TestContext.Out.WriteLineAsync($"Result: {(ruleResult.IsSuccess ? "PASSED" : "FAILED")}");
         
         if (!ruleResult.IsSuccess)
         {
-            TestContext.WriteLine($"Violations: {ruleResult.Violations.Count}");
+            await TestContext.Out.WriteLineAsync($"Violations: {ruleResult.Violations.Count}");
             foreach (var violation in ruleResult.Violations.Take(3))
             {
-                TestContext.WriteLine($"  - {violation.TypeName}: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"  - {violation.TypeName}: {violation.Message}");
             }
         }
         
@@ -107,12 +107,12 @@ public sealed class IntegrationTests
         result.ShouldNotBeNull();
         result.RuleResults.Count.ShouldBe(2);
         
-        TestContext.WriteLine($"Engine executed {result.RuleResults.Count} rules in {result.TotalExecutionTime.TotalMilliseconds}ms");
-        TestContext.WriteLine($"Summary: {result.GetSummary()}");
+        await TestContext.Out.WriteLineAsync($"Engine executed {result.RuleResults.Count} rules in {result.TotalExecutionTime.TotalMilliseconds}ms");
+        await TestContext.Out.WriteLineAsync($"Summary: {result.GetSummary()}");
         
         foreach (var ruleResult in result.RuleResults)
         {
-            TestContext.WriteLine($"  {ruleResult.RuleId}: {(ruleResult.IsSuccess ? "PASSED" : "FAILED")} ({ruleResult.ExecutionTime.TotalMilliseconds}ms)");
+            await TestContext.Out.WriteLineAsync($"  {ruleResult.RuleId}: {(ruleResult.IsSuccess ? "PASSED" : "FAILED")} ({ruleResult.ExecutionTime.TotalMilliseconds}ms)");
         }
         
         // Verify all expected rules were executed

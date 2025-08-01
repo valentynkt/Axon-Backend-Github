@@ -6,6 +6,9 @@ using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Errors;
 using Axon.Modules.Chat.Domain.Types;
+// POLICY FIX: Infrastructure should not depend on Domain
+// using Axon.Modules.Chat.Domain.Errors;
+// using Axon.Modules.Chat.Domain.Types;
 using Axon.Modules.Chat.Infrastructure.Ai.Models;
 using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;

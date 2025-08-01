@@ -214,7 +214,7 @@ public sealed class OpenAiClientTests : ApplicationTestBase
         var client = CreateOpenAiClient();
         var request = new AiRequest("Test message", null, null);
         using var cancellationTokenSource = new CancellationTokenSource();
-        cancellationTokenSource.Cancel();
+        await cancellationTokenSource.CancelAsync();
 
         // Act & Assert
         await Should.ThrowAsync<OperationCanceledException>(() => client.ProcessMessageAsync(request, cancellationTokenSource.Token));

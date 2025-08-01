@@ -46,10 +46,10 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Command Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Command Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -74,10 +74,10 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Query Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Query Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -102,10 +102,10 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Handler Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Handler Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -130,10 +130,10 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"Folder Structure Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine($"Suggested Fix: {violation.SuggestedFix}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Folder Structure Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync($"Suggested Fix: {violation.SuggestedFix}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -157,14 +157,14 @@ public sealed class CqrsPatternTests
 
         // Assert
         result.ShouldNotBeNull();
-        TestContext.WriteLine($"Execution Summary: {result.GetSummary()}");
+        await TestContext.Out.WriteLineAsync($"Execution Summary: {result.GetSummary()}");
         
         foreach (var ruleResult in result.RuleResults.Where(r => !r.IsSuccess))
         {
-            TestContext.WriteLine($"\nFailed Rule: {ruleResult.RuleId}");
+            await TestContext.Out.WriteLineAsync($"\nFailed Rule: {ruleResult.RuleId}");
             foreach (var violation in ruleResult.Violations)
             {
-                TestContext.WriteLine($"  - {violation.Message} ({violation.TypeName})");
+                await TestContext.Out.WriteLineAsync($"  - {violation.Message} ({violation.TypeName})");
             }
         }
 
@@ -195,9 +195,9 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in asyncViolations)
             {
-                TestContext.WriteLine($"Async Pattern Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Async Pattern Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -227,14 +227,14 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in validationViolations)
             {
-                TestContext.WriteLine($"Validation Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Validation Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log count but don't fail - validation attributes might be optional in some cases
-        TestContext.WriteLine($"Commands without validation attributes: {validationViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Commands without validation attributes: {validationViolations.Count}");
     }
 
     [Test]
@@ -261,9 +261,9 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in readOnlyViolations)
             {
-                TestContext.WriteLine($"Read-Only Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Read-Only Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
@@ -295,14 +295,14 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in srpViolations)
             {
-                TestContext.WriteLine($"SRP Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"SRP Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log but don't fail - SRP violations might be acceptable in some cases
-        TestContext.WriteLine($"Potential SRP violations in handlers: {srpViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Potential SRP violations in handlers: {srpViolations.Count}");
     }
 
     [Test]
@@ -328,13 +328,13 @@ public sealed class CqrsPatternTests
         {
             foreach (var violation in pagingViolations)
             {
-                TestContext.WriteLine($"Paging Violation: {violation.Message}");
-                TestContext.WriteLine($"Type: {violation.TypeName}");
-                TestContext.WriteLine("---");
+                await TestContext.Out.WriteLineAsync($"Paging Violation: {violation.Message}");
+                await TestContext.Out.WriteLineAsync($"Type: {violation.TypeName}");
+                await TestContext.Out.WriteLineAsync("---");
             }
         }
 
         // Log but don't fail - paging might not be needed for all collection queries
-        TestContext.WriteLine($"Queries without paging parameters: {pagingViolations.Count}");
+        await TestContext.Out.WriteLineAsync($"Queries without paging parameters: {pagingViolations.Count}");
     }
 }

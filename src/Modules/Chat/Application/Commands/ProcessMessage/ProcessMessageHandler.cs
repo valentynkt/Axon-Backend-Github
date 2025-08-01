@@ -31,7 +31,9 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
         ProcessMessageCommand request,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        // POLICY FIX: Use Result pattern instead of throwing exceptions
+        if (request is null)
+            return Error.Validation("ProcessMessageCommand cannot be null");
         
         _logger.LogInformation(
             "Processing message with length {MessageLength}",
