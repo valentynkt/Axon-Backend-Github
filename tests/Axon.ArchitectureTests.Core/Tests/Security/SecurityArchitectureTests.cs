@@ -69,7 +69,7 @@ public sealed class SecurityArchitectureTests : ArchitectureTestBase
     {
         // Arrange & Act
         var rule = new SecurityHeadersRule();
-        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "SEC006");
+        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "SEC_HEADERS_001");
 
         // Assert
         AssertRuleSuccess(ruleResult, "Security headers patterns");

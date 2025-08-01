@@ -1,45 +1,54 @@
-# 🧠 CLAUDE.md - Claude Flow Automation Hub
+# 🧠 CLAUDE.md - Claude Flow MCP Orchestration Hub
 
-**ABSOLUTE PARADIGM**: Claude Flow is the primary orchestration engine. ALL interactions, decisions, and work coordination MUST flow through Claude Flow MCP tools. Claude Code is the execution layer, Claude Flow is the intelligence layer.
+**ABSOLUTE PARADIGM**: Claude Flow MCP tools are the primary orchestration engine. ALL interactions, decisions, and work coordination MUST flow through Claude Flow MCP tools. Claude Code is the execution layer, Claude Flow is the intelligence layer.
 
-## 🌊 CLAUDE FLOW AS UNIVERSAL ENTRY POINT
+## 🌊 CLAUDE FLOW MCP AS UNIVERSAL ENTRY POINT
 
-### 🚨 MANDATORY AUTOMATION PROTOCOL
+### 🚨 MANDATORY MCP AUTOMATION PROTOCOL
 
-**RULE #1**: Every session MUST begin with Claude Flow initialization:
-```bash
-# MANDATORY session start sequence
-npx claude-flow@alpha hive-mind init
-npx claude-flow@alpha hive-mind spawn "Axon Backend development session" --claude --auto-spawn --monitor
+**RULE #1**: Every session MUST begin with Claude Flow MCP initialization:
+```javascript
+// MANDATORY session start sequence - Use MCP tools, not CLI
+mcp__claude-flow__swarm_init({ topology: "hierarchical", maxAgents: 8, strategy: "adaptive" })
+mcp__claude-flow__memory_usage({ action: "store", key: "session/init", value: "Axon Backend development session", namespace: "axon-backend" })
+mcp__claude-flow__neural_train({ pattern_type: "coordination", continuous: true })
 ```
 
 **RULE #2**: ALL work delegation MUST use Claude Flow MCP coordination:
-- 🧠 **Intelligence Layer**: Claude Flow MCP tools coordinate, plan, decide
+- 🧠 **Intelligence Layer**: Claude Flow MCP tools coordinate, plan, decide (87 specialized tools)
 - 🛠️ **Execution Layer**: Claude Code executes based on Claude Flow instructions
-- 💾 **Memory Layer**: All context, decisions, progress stored in Claude Flow memory
+- 💾 **Memory Layer**: All context, decisions, progress stored in Claude Flow memory system
 
-### 🐝 HIVE MIND ORCHESTRATION SYSTEM
+### 🐝 SWARM + AUTO-SPAWNING ORCHESTRATION SYSTEM
 
-**Primary Workflow Pattern**:
+**Primary Workflow Pattern** (Based on Actual Claude Flow Capabilities):
 ```javascript
-// ✅ CORRECT: Claude Flow-first approach
+// ✅ CORRECT: MCP-first approach with auto-spawning
 [Message 1 - Intelligence Coordination]:
-  mcp__claude-flow__hive_mind_init()
-  mcp__claude-flow__swarm_init { topology: "hierarchical", maxAgents: 8 }
-  mcp__claude-flow__agent_spawn { type: "coordinator", name: "Session Manager" }
-  mcp__claude-flow__agent_spawn { type: "architect", name: "Code Architect" }
-  mcp__claude-flow__agent_spawn { type: "coder", name: "Implementation Expert" }
-  mcp__claude-flow__agent_spawn { type: "tester", name: "Quality Guardian" }
-  mcp__claude-flow__memory_usage { action: "store", key: "session/init", value: {...} }
+  // Initialize swarm topology (hierarchical works WITH coordination, not as alternative)
+  mcp__claude-flow__swarm_init({ topology: "hierarchical", maxAgents: 8, strategy: "adaptive" })
+  
+  // Auto-spawn agents through task orchestration (preferred over manual spawn)
+  mcp__claude-flow__task_orchestrate({ 
+    task: "Build feature X", 
+    strategy: "adaptive",
+    priority: "high",
+    maxAgents: 4  // Auto-spawns needed agents
+  })
+  
+  // Store session context in memory system
+  mcp__claude-flow__memory_usage({ action: "store", key: "session/init", value: "session-data", namespace: "axon-backend" })
 
 [Message 2 - Execution Coordination]:
-  mcp__claude-flow__task_orchestrate { task: "Build feature X", strategy: "adaptive" }
-  mcp__claude-flow__hooks_pre_task { description: "Feature development", auto_spawn_agents: true }
-  Task("Coordinator Agent: Orchestrate feature development with full Claude Flow integration")
-  Task("Architect Agent: Design system with Claude Flow memory persistence")
-  Task("Coder Agent: Implement with Claude Flow progress tracking")
-  Task("Tester Agent: Validate with Claude Flow quality gates")
-  TodoWrite { todos: [10+ comprehensive todos with Claude Flow coordination] }
+  // Task orchestration with auto-spawning (no manual agent creation needed)
+  mcp__claude-flow__task_orchestrate({ task: "Implement Axon feature", strategy: "parallel" })
+  
+  // Neural pattern training for continuous learning
+  mcp__claude-flow__neural_train({ pattern_type: "coordination", continuous: true })
+  
+  // Use Task tool for Claude Code execution coordination
+  Task("Implementation: Execute feature based on Claude Flow orchestration")
+  TodoWrite({ todos: ["comprehensive todos coordinated by Claude Flow MCP"] })
 ```
 
 ## 🎯 AXON BACKEND + CLAUDE FLOW INTEGRATION
@@ -48,14 +57,14 @@ npx claude-flow@alpha hive-mind spawn "Axon Backend development session" --claud
 
 **Stack**: .NET 10 Preview • Clean Architecture • DDD • CQRS (MediatR) • FastEndpoints • **Claude Flow MCP Orchestration** • OpenAI Direct MCP • NUnit • Shouldly
 
-**Enhanced Architecture with Claude Flow Layer**:
+**Enhanced Architecture with Claude Flow MCP Layer**:
 ```
-🧠 Claude Flow Intelligence Layer (NEW!)
-├── Hive Mind Coordination
-├── Memory Management & Persistence  
-├── Agent Orchestration & Delegation
-├── Workflow Automation & Optimization
-└── Performance Analytics & Learning
+🧠 Claude Flow MCP Intelligence Layer (87 Tools + 64 Agents)
+├── Swarm Coordination (hierarchical/mesh/ring/star topologies)
+├── Memory Management & Persistence (SQLite with 12 tables)
+├── Auto-Spawning Agent Orchestration (64 specialized agents)
+├── Neural Pattern Learning & Optimization
+└── Performance Analytics & Continuous Learning
 
 🏗️ Clean Architecture Implementation Layer
 ├── src/Api/ (HTTP host, endpoints, DTOs)
@@ -67,70 +76,89 @@ npx claude-flow@alpha hive-mind spawn "Axon Backend development session" --claud
 └── tests/ (Mirrors src/ structure)
 ```
 
-### 🔄 CLAUDE FLOW LIFECYCLE MANAGEMENT
+### 🔄 CLAUDE FLOW MCP LIFECYCLE MANAGEMENT
 
-**Every Development Session Pattern**:
-```bash
-# 1. Session Initialization (MANDATORY)
-npx claude-flow@alpha hooks pre-task --description "Development session" --auto-spawn-agents
+**Every Development Session Pattern** (MCP Tools Only):
+```javascript
+// 1. Session Initialization (MANDATORY MCP)
+mcp__claude-flow__swarm_init({ topology: "hierarchical", strategy: "adaptive" })
+mcp__claude-flow__memory_usage({ action: "store", key: "session/start", namespace: "axon-backend" })
 
-# 2. Memory Context Loading (AUTOMATIC)
-npx claude-flow@alpha memory query "axon-backend" --namespace project
+// 2. Memory Context Loading (MCP MEMORY)
+mcp__claude-flow__memory_search({ pattern: "axon-backend", namespace: "project" })
+mcp__claude-flow__memory_usage({ action: "retrieve", key: "project/context" })
 
-# 3. Agent Coordination Setup (ORCHESTRATED)
-npx claude-flow@alpha hive-mind spawn "Development objective" --claude --execute
+// 3. Task Orchestration with Auto-Spawning (PREFERRED)
+mcp__claude-flow__task_orchestrate({ 
+  task: "Development objective", 
+  strategy: "adaptive",
+  maxAgents: 6  // Auto-spawns needed agents
+})
 
-# 4. Progress Tracking (CONTINUOUS)
-npx claude-flow@alpha hooks post-edit --file "path" --memory-key "session/progress"
+// 4. Progress Tracking (CONTINUOUS MCP)
+mcp__claude-flow__performance_report({ format: "summary", timeframe: "24h" })
+mcp__claude-flow__memory_usage({ action: "store", key: "session/progress" })
 
-# 5. Session Completion (AUTOMATED)
-npx claude-flow@alpha hooks session-end --export-metrics --generate-summary
+// 5. Session Learning (NEURAL PATTERNS)
+mcp__claude-flow__neural_train({ pattern_type: "coordination", continuous: true })
+mcp__claude-flow__neural_patterns({ action: "learn", operation: "development-session" })
 ```
 
 ## 🛠️ DEVELOPMENT COMMANDS (Claude Flow Enhanced)
 
-### Essential Commands with Claude Flow Integration
-```bash
-# Build with Claude Flow monitoring
-npx claude-flow@alpha hooks pre-task --description "Build solution" && \
-dotnet build && \
-npx claude-flow@alpha hooks post-task --analyze-performance
+### Essential Commands with Claude Flow MCP Integration
+```javascript
+// Build with Claude Flow MCP monitoring
+mcp__claude-flow__task_orchestrate({ task: "Build solution", strategy: "sequential" })
+// Followed by: Bash({ command: "dotnet build", description: "Build Axon Backend solution" })
+mcp__claude-flow__performance_report({ format: "detailed" })
 
-# Test execution with progress tracking
-npx claude-flow@alpha hooks pre-task --description "Run tests" && \
-dotnet test && \
-npx claude-flow@alpha hooks post-task --generate-insights
+// Test execution with MCP progress tracking
+mcp__claude-flow__task_orchestrate({ task: "Run tests", strategy: "parallel" })
+// Followed by: Bash({ command: "dotnet test", description: "Run all test suites" })
+mcp__claude-flow__neural_patterns({ action: "analyze", operation: "test-execution" })
 
-# Architecture validation with Claude Flow memory
-npx claude-flow@alpha memory store "arch-test-results" "$(dotnet test tests/Axon.ArchitectureTests.Core/)"
+// Architecture validation with MCP memory
+// First run tests, then store results
+mcp__claude-flow__memory_usage({ 
+  action: "store", 
+  key: "arch-test-results", 
+  value: "test-results-data",
+  namespace: "axon-backend" 
+})
 
-# Feature development with full orchestration
-npx claude-flow@alpha hive-mind spawn "Implement ProcessMessage feature" --claude --auto-spawn --execute
+// Feature development with MCP orchestration (auto-spawning preferred)
+mcp__claude-flow__task_orchestrate({ 
+  task: "Implement ProcessMessage feature",
+  strategy: "adaptive",
+  priority: "high",
+  maxAgents: 5  // Auto-spawns: architect, coder, tester agents
+})
 ```
 
-## 🧠 CLAUDE FLOW MCP TOOL ECOSYSTEM
+## 🧠 CLAUDE FLOW MCP TOOL ECOSYSTEM (87 ACTUAL TOOLS)
 
 ### Core Orchestration Tools (ALWAYS USE THESE)
-- `mcp__claude-flow__hive_mind_init` - Initialize session intelligence
-- `mcp__claude-flow__swarm_init` - Setup coordination topology  
-- `mcp__claude-flow__agent_spawn` - Create specialized agents
-- `mcp__claude-flow__task_orchestrate` - Coordinate complex workflows
-- `mcp__claude-flow__memory_usage` - Persistent memory management
-- `mcp__claude-flow__hooks_*` - Lifecycle event automation
+- `mcp__claude-flow__swarm_init` - Setup coordination topology (hierarchical/mesh/ring/star)
+- `mcp__claude-flow__task_orchestrate` - Coordinate complex workflows with auto-spawning
+- `mcp__claude-flow__memory_usage` - Persistent memory management (SQLite backend)
+- `mcp__claude-flow__neural_train` - Train neural patterns for continuous learning
+- `mcp__claude-flow__performance_report` - Generate analytics and insights
+- `mcp__claude-flow__agent_spawn` - Manual agent creation (use sparingly, prefer auto-spawn)
 
 ### Intelligence Enhancement Tools
-- `mcp__claude-flow__neural_train` - Learn from development patterns
-- `mcp__claude-flow__neural_patterns` - Analyze cognitive approaches
+- `mcp__claude-flow__neural_patterns` - Analyze cognitive approaches and patterns
 - `mcp__claude-flow__learning_adapt` - Improve coordination over time
 - `mcp__claude-flow__bottleneck_analyze` - Identify performance issues
-- `mcp__claude-flow__performance_report` - Generate analytics
+- `mcp__claude-flow__cognitive_analyze` - Analyze development behaviors
+- `mcp__claude-flow__pattern_recognize` - Recognize code and workflow patterns
 
 ### Workflow Automation Tools  
 - `mcp__claude-flow__workflow_create` - Define reusable workflows
+- `mcp__claude-flow__workflow_execute` - Execute predefined workflows
 - `mcp__claude-flow__automation_setup` - Configure automation rules
-- `mcp__claude-flow__pipeline_create` - Setup CI/CD coordination  
-- `mcp__claude-flow__scheduler_manage` - Task scheduling
 - `mcp__claude-flow__parallel_execute` - Concurrent task execution
+- `mcp__claude-flow__batch_process` - Process multiple items efficiently
 
 ### GitHub Integration Tools
 - `mcp__claude-flow__github_repo_analyze` - Deep repository analysis
@@ -163,25 +191,30 @@ npx claude-flow@alpha hive-mind spawn "Implement ProcessMessage feature" --claud
 **Feature Development with Full Claude Flow Orchestration**:
 ```javascript
 // Phase 1: Intelligence & Planning (Claude Flow leads)
-mcp__claude-flow__hive_mind_spawn("Implement user authentication")
-mcp__claude-flow__memory_usage("store", "auth-requirements", specifications)
-mcp__claude-flow__agent_spawn("architect", "Auth System Designer")
-mcp__claude-flow__neural_patterns("analyze", "authentication-patterns")
+mcp__claude-flow__task_orchestrate({ 
+  task: "Implement user authentication",
+  strategy: "adaptive",
+  maxAgents: 4  // Auto-spawns architect, coder, tester
+})
+mcp__claude-flow__memory_usage({ action: "store", key: "auth-requirements", value: specifications })
+mcp__claude-flow__neural_patterns({ action: "analyze", pattern: "authentication-patterns" })
 
 // Phase 2: Coordination & Design (Claude Flow orchestrates)  
-mcp__claude-flow__task_orchestrate("Design auth architecture")
-mcp__claude-flow__workflow_create("auth-implementation-pipeline")
-mcp__claude-flow__performance_report("baseline-metrics")
+mcp__claude-flow__workflow_create({ 
+  name: "auth-implementation-pipeline",
+  steps: ["design", "implement", "test", "validate"]
+})
+mcp__claude-flow__performance_report({ format: "baseline-metrics" })
 
 // Phase 3: Execution (Claude Code executes under Claude Flow guidance)
 Task("Implementation Agent: Build auth following Claude Flow design")
-TodoWrite([10+ todos coordinated by Claude Flow])
-Read/Write/Edit operations based on Claude Flow instructions
+TodoWrite([{content: "Implement authentication following Claude Flow orchestration", priority: "high"}])
+// Read/Write/Edit operations based on Claude Flow instructions
 
 // Phase 4: Validation & Learning (Claude Flow validates & learns)
-mcp__claude-flow__bottleneck_analyze("auth-implementation")
-mcp__claude-flow__neural_train("auth-development-patterns")  
-mcp__claude-flow__memory_usage("store", "auth-lessons", learnings)
+mcp__claude-flow__bottleneck_analyze({ component: "auth-implementation" })
+mcp__claude-flow__neural_train({ pattern_type: "auth-development-patterns" })  
+mcp__claude-flow__memory_usage({ action: "store", key: "auth-lessons", value: "learnings" })
 ```
 
 ## 🎯 AXON BACKEND DEVELOPMENT WITH CLAUDE FLOW
@@ -191,14 +224,19 @@ mcp__claude-flow__memory_usage("store", "auth-lessons", learnings)
 **CQRS Command Development with Full Orchestration**:
 ```javascript
 // 1. Strategic Planning (Claude Flow Intelligence)
-mcp__claude-flow__hive_mind_spawn("ProcessMessage command implementation")
-mcp__claude-flow__memory_usage("query", "cqrs-patterns")
-mcp__claude-flow__agent_spawn("architect", "CQRS Command Designer")
+mcp__claude-flow__task_orchestrate({ 
+  task: "ProcessMessage command implementation",
+  strategy: "adaptive",
+  maxAgents: 3
+})
+mcp__claude-flow__memory_search({ pattern: "cqrs-patterns", namespace: "axon-backend" })
 
 // 2. Architecture Design (Claude Flow Coordination)
-mcp__claude-flow__task_orchestrate("Design ProcessMessage architecture")
-mcp__claude-flow__neural_patterns("analyze", "vertical-slice-patterns")
-mcp__claude-flow__workflow_create("cqrs-implementation-workflow")
+mcp__claude-flow__workflow_create({ 
+  name: "cqrs-implementation-workflow",
+  steps: ["design", "implement", "test"]
+})
+mcp__claude-flow__neural_patterns({ action: "analyze", pattern: "vertical-slice-patterns" })
 
 // 3. Implementation (Claude Code Execution)
 Task("CQRS Agent: Implement ProcessMessage with Claude Flow coordination")
@@ -206,8 +244,8 @@ Write("src/Modules/Chat/Application/Commands/ProcessMessage/ProcessMessageComman
 Write("src/Modules/Chat/Application/Commands/ProcessMessage/ProcessMessageHandler.cs")
 
 // 4. Validation & Learning (Claude Flow Quality Gates)
-mcp__claude-flow__performance_report("cqrs-implementation-metrics")
-mcp__claude-flow__neural_train("clean-architecture-patterns")
+mcp__claude-flow__performance_report({ format: "cqrs-implementation-metrics" })
+mcp__claude-flow__neural_train({ pattern_type: "clean-architecture-patterns" })
 ```
 
 ### Result Pattern with Claude Flow Enhancement
@@ -217,13 +255,14 @@ public async Task<Result<ProcessMessageResponse>> Handle(
     ProcessMessageCommand command, 
     CancellationToken cancellationToken)
 {
-    // Claude Flow pre-execution hook
-    await claudeFlow.HookPreExecution("ProcessMessage", command);
+    // Claude Flow pre-execution logging
+    await _logger.LogInformationAsync("Processing message with Claude Flow coordination");
     
     var result = await ProcessMessageCore(command, cancellationToken);
     
     // Claude Flow post-execution learning
-    await claudeFlow.HookPostExecution("ProcessMessage", result);
+    await _logger.LogInformationAsync("Successfully processed message. Response ID: {ResponseId}", 
+        result.IsSuccess ? result.Value.ConversationId : "failed");
     
     return result;
 }
@@ -233,27 +272,46 @@ public async Task<Result<ProcessMessageResponse>> Handle(
 
 ### 🔄 DAILY DEVELOPMENT AUTOMATION
 
-**Morning Routine (Fully Automated)**:
-```bash
-# Claude Flow handles entire morning setup
-npx claude-flow@alpha automation-setup --rules morning-dev-routine
-npx claude-flow@alpha hive-mind spawn "Daily development session" --auto-spawn --execute
-# Automatically: updates dependencies, runs tests, analyzes metrics, plans day
+**Morning Routine (MCP Orchestrated)**:
+```javascript
+// Claude Flow handles entire morning setup via MCP
+mcp__claude-flow__automation_setup({ 
+  rules: [{
+    name: "morning-dev-routine",
+    triggers: ["session-start"],
+    actions: ["update-dependencies", "run-tests", "analyze-metrics", "plan-day"]
+  }]
+})
+mcp__claude-flow__task_orchestrate({ 
+  task: "Daily development session", 
+  strategy: "adaptive",
+  maxAgents: 3
+})
 ```
 
 **Feature Development (90% Automated)**:
-```bash
-# Claude Flow orchestrates entire feature lifecycle
-npx claude-flow@alpha workflow-create feature-development-pipeline
-npx claude-flow@alpha hive-mind spawn "Build OAuth integration" --claude --execute
-# Automatically: designs architecture, generates code, writes tests, reviews quality
+```javascript
+// Claude Flow orchestrates entire feature lifecycle via MCP
+mcp__claude-flow__workflow_create({ 
+  name: "feature-development-pipeline",
+  steps: ["design-architecture", "generate-code", "write-tests", "review-quality"]
+})
+mcp__claude-flow__task_orchestrate({ 
+  task: "Build OAuth integration", 
+  strategy: "adaptive",
+  maxAgents: 5
+})
 ```
 
 **Code Review (Fully Automated)**:
-```bash
-# Claude Flow handles comprehensive code review
-npx claude-flow@alpha github-code-review --pr 123 --deep-analysis --auto-fix
-# Automatically: analyzes code, suggests improvements, validates architecture, updates docs
+```javascript
+// Claude Flow handles comprehensive code review via MCP
+mcp__claude-flow__github_code_review({ 
+  repo: "axon-backend",
+  pr: 123, 
+  deep_analysis: true, 
+  auto_fix_violations: true 
+})
 ```
 
 ## 🎖️ SUCCESS METRICS & CONTINUOUS LEARNING
@@ -267,43 +325,64 @@ npx claude-flow@alpha github-code-review --pr 123 --deep-analysis --auto-fix
 ### Continuous Improvement Loop
 ```javascript
 // Every development cycle enhances Claude Flow intelligence
-mcp__claude-flow__neural_train("axon-backend-patterns")
-mcp__claude-flow__performance_report("development-velocity") 
-mcp__claude-flow__bottleneck_analyze("development-workflow")
-mcp__claude-flow__learning_adapt("optimization-strategies")
+mcp__claude-flow__neural_train({ pattern_type: "axon-backend-patterns", continuous: true })
+mcp__claude-flow__performance_report({ format: "development-velocity", timeframe: "7d" })
+mcp__claude-flow__bottleneck_analyze({ component: "development-workflow" })
+mcp__claude-flow__learning_adapt({ experience: { context: "development-session" } })
 ```
 
 ## 🚨 ANTI-PATTERNS (STRICTLY FORBIDDEN)
 
 **❌ NEVER DO THESE**:
-- Manual task coordination (always use Claude Flow orchestration)
-- Direct Claude Code execution without Claude Flow planning
-- Memory management outside Claude Flow system
+- Manual task coordination (always use Claude Flow MCP orchestration)
+- Direct Claude Code execution without Claude Flow MCP planning
+- Memory management outside Claude Flow MCP system
 - Sequential operations when Claude Flow supports parallel execution
-- Decision-making without Claude Flow intelligence input
-- Architecture changes without Claude Flow validation
-- Performance optimization without Claude Flow analytics
+- Decision-making without Claude Flow MCP intelligence input
+- Architecture changes without Claude Flow MCP validation
+- Performance optimization without Claude Flow MCP analytics
+- CLI commands instead of MCP tools (use `mcp__claude-flow__*` not `npx claude-flow@alpha`)
 
 **✅ ALWAYS DO THESE**:
-- Start every session with `hive-mind spawn`
+- Start every session with `mcp__claude-flow__swarm_init` and `mcp__claude-flow__task_orchestrate`
 - Delegate strategic decisions to Claude Flow MCP tools
-- Store all context and learnings in Claude Flow memory
-- Use Claude Flow agents for specialized coordination
-- Follow Claude Flow workflow orchestration patterns
-- Validate architecture through Claude Flow quality gates
-- Learn and adapt through Claude Flow neural patterns
+- Store all context and learnings in Claude Flow memory via MCP
+- Use auto-spawning through task orchestration instead of manual agent creation
+- Follow Claude Flow workflow orchestration patterns via MCP
+- Validate architecture through Claude Flow quality gates via MCP
+- Learn and adapt through Claude Flow neural patterns via MCP
 
 ---
 
 ## 🎉 ULTIMATE GOAL ACHIEVED
 
 **This CLAUDE.md transforms the development experience**:
-- 🧠 **Intelligence-First**: Claude Flow makes all strategic decisions
+- 🧠 **Intelligence-First**: Claude Flow MCP tools make all strategic decisions
 - 🤖 **90% Automation**: Only 10% manual execution required
-- 💾 **Persistent Learning**: Every session improves the system
+- 💾 **Persistent Learning**: Every session improves the system via neural training
 - ⚡ **Maximum Performance**: 300-500% development velocity increase
 - 🎯 **Perfect Quality**: Architecture + Intelligence = Zero defects
 
-**Start every session with**: `npx claude-flow@alpha hive-mind spawn "Today's objective" --claude --auto-spawn --execute`
+**Start every session with**: 
+```javascript
+mcp__claude-flow__swarm_init({ topology: "hierarchical", strategy: "adaptive" })
+mcp__claude-flow__task_orchestrate({ 
+  task: "Today's objective", 
+  strategy: "adaptive",
+  maxAgents: 6  // Auto-spawns needed agents
+})
+```
 
-Claude Flow is now your primary development partner, handling strategy, coordination, memory, and learning while you focus on creative problem-solving and high-level guidance.
+## 📚 SUBSYSTEM ARCHITECTURE INDEX
+
+This CLAUDE.md orchestrates specialized subsystem prompts for maximum efficiency:
+
+### 🎯 Core Subsystems (Auto-loaded when needed)
+- **[.claude/subsystems/mcp-tools-reference.md]** - Complete MCP tools catalog (87 actual tools)
+- **[.claude/subsystems/automation-workflows.md]** - Advanced workflow orchestration patterns  
+- **[.claude/subsystems/axon-patterns.md]** - Axon Backend specific development templates
+
+### 🔧 Additional Subsystems (On-demand based on user feedback)
+Future subsystems will be added based on actual needs, maintaining focus on the current 3 core subsystems with possible 1-2 additions as needed.
+
+Claude Flow MCP tools are now your primary development partner, handling strategy, coordination, memory, and learning while you focus on creative problem-solving and high-level guidance.

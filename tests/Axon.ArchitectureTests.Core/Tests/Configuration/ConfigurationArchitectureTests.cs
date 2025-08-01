@@ -14,7 +14,7 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
     {
         // Arrange & Act
         var rule = new AppSettingsRule();
-        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG001");
+        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CONFIG_001");
 
         // Assert
         AssertRuleSuccess(ruleResult, "App settings IOptions<T> patterns");
@@ -111,7 +111,7 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
     {
         // Arrange & Act
         var rule = new AppSettingsRule();
-        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG001");
+        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CONFIG_001");
         
         // Assert - Log but don't fail (informational)
         LogInformationalViolations(ruleResult, new[] { "section", "structure" }, "Configuration Structure");

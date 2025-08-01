@@ -17,7 +17,8 @@ public sealed class CleanArchitectureTests
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        var assemblies = AssemblyAnalyzer.LoadSolutionAssemblies();
+        // Load only production assemblies for architecture validation
+        var assemblies = AssemblyAnalyzer.LoadProductionAssemblies();
         var configuration = new ArchitectureSettings();
         _context = new ArchitectureContext(assemblies, configuration);
     }

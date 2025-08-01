@@ -26,7 +26,7 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
     {
         // Arrange & Act
         var rule = new MetricsRule();
-        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS002");
+        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS_002");
 
         // Assert
         AssertRuleSuccess(ruleResult, "Metrics patterns");
@@ -100,7 +100,7 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
     {
         // Arrange & Act
         var rule = new MetricsRule();
-        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS002");
+        var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS_002");
         
         // Log but don't fail - business metrics might not be needed everywhere (informational)
         LogInformationalViolations(ruleResult, new[] { "business" }, "Business Metrics");

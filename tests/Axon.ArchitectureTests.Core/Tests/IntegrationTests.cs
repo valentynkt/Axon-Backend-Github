@@ -15,7 +15,8 @@ public sealed class IntegrationTests
     public void Framework_ShouldLoadAssembliesSuccessfully()
     {
         // Arrange
-        var assemblies = AssemblyAnalyzer.LoadSolutionAssemblies();
+        // Load production assemblies for validation
+        var assemblies = AssemblyAnalyzer.LoadAssembliesForTesting();
         
         // Assert
         assemblies.ShouldNotBeEmpty();
@@ -31,7 +32,8 @@ public sealed class IntegrationTests
     public void Framework_ShouldCreateContextSuccessfully()
     {
         // Arrange
-        var assemblies = AssemblyAnalyzer.LoadSolutionAssemblies();
+        // Load production assemblies for validation
+        var assemblies = AssemblyAnalyzer.LoadAssembliesForTesting();
         var configuration = new ArchitectureSettings();
         
         // Act
@@ -49,7 +51,8 @@ public sealed class IntegrationTests
     public async Task RuleEngine_ShouldExecuteRuleSuccessfully()
     {
         // Arrange
-        var assemblies = AssemblyAnalyzer.LoadSolutionAssemblies();
+        // Load production assemblies for validation
+        var assemblies = AssemblyAnalyzer.LoadAssembliesForTesting();
         var configuration = new ArchitectureSettings();
         var context = new ArchitectureContext(assemblies, configuration);
         var ruleEngine = new RuleEngine();
@@ -87,7 +90,8 @@ public sealed class IntegrationTests
     public async Task RuleEngine_WithMultipleRules_ShouldExecuteAllRules()
     {
         // Arrange
-        var assemblies = AssemblyAnalyzer.LoadSolutionAssemblies();
+        // Load production assemblies for validation
+        var assemblies = AssemblyAnalyzer.LoadAssembliesForTesting();
         var configuration = new ArchitectureSettings();
         var context = new ArchitectureContext(assemblies, configuration);
         var ruleEngine = new RuleEngine();

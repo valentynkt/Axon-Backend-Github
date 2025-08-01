@@ -20,7 +20,7 @@ public abstract class ArchitectureTestBase
     [OneTimeSetUp]
     public virtual void OneTimeSetUp()
     {
-        var assemblies = AssemblyAnalyzer.LoadSolutionAssemblies();
+        var assemblies = AssemblyAnalyzer.LoadProductionAssemblies();
         Configuration = new ArchitectureSettings();
         Context = new ArchitectureContext(assemblies, Configuration);
     }
