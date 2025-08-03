@@ -1,68 +1,48 @@
 {
-  "workflow_id": "conversation-persistence-sparc-20250803",
-  "current_phase": "specification",
-  "phase_details": {
-    "specification": {
-      "status": "in_progress",
-      "agent_assigned": "specification-agent",
-      "agent_expertise": "9.6/10",
-      "started_at": "2025-08-03T21:23:24.111Z",
-      "estimated_completion": "2025-08-03T21:40:00.000Z",
-      "deliverables": {
-        "requirements_document": "pending",
-        "event_sourcing_specification": "pending",
-        "auditing_requirements": "pending",
-        "base_abstractions_design": "pending",
-        "postgresql_integration_plan": "pending"
-      },
-      "human_checkpoint": {
-        "scheduled": true,
-        "validation_criteria": [
-          "requirements_completeness",
-          "event_sourcing_clarity",
-          "auditing_comprehensiveness",
-          "technical_feasibility"
+  "currentPhase": 1,
+  "phases": {
+    "1": {
+      "name": "Specification",
+      "status": "completed", 
+      "startTime": "2025-08-03T21:22:17.739Z",
+      "completionTime": "2025-08-03T21:31:08.902Z",
+      "deliverables": [
+        "/Users/valentynkit/Repos/Axon-Backend/.claude/agents/sparc/state/deliverables/specification/conversation-persistence-specification-v2.md"
+      ],
+      "humanCheckpoint": {
+        "required": true,
+        "status": "pending",
+        "criticalDecisions": [
+          "Abstraction hierarchy approval: IIdentifiable<TId> → BaseEntity<TId> → AuditableEntity<TId>",
+          "EF built-in auditing with Shadow Properties + SaveChangesInterceptor",
+          "Repository pattern: Generic + Specialized repositories",
+          "Event sourcing scope: ALL conversation changes vs specific operations",
+          "CQRS read models for query optimization",
+          "Integration approach with existing Chat module"
         ]
       }
     },
-    "pseudocode": {
+    "2": {
+      "name": "Pseudocode",
       "status": "pending",
-      "dependencies": ["specification_approved"],
-      "agent_ready": "pseudocode-agent"
+      "dependencies": ["Phase 1 human approval"]
     },
-    "architecture": {
+    "3": {
+      "name": "Architecture", 
       "status": "pending",
-      "dependencies": ["pseudocode_approved"],
-      "agent_ready": "architecture-agent"
+      "dependencies": ["Phase 2 completion"]
     },
-    "refinement": {
-      "status": "pending",
-      "dependencies": ["architecture_approved"],
-      "agent_ready": "refinement-agent"
+    "4": {
+      "name": "Refinement",
+      "status": "pending", 
+      "dependencies": ["Phase 3 completion"]
     },
-    "completion": {
+    "5": {
+      "name": "Completion",
       "status": "pending",
-      "dependencies": ["refinement_approved"],
-      "agent_ready": "completion-agent"
+      "dependencies": ["Phase 4 completion"]
     }
   },
-  "context_analysis": {
-    "existing_domain_structure": {
-      "base_classes": ["Entity<TId>", "AggregateRoot<TId>"],
-      "domain_events": ["IDomainEvent", "DomainEvent"],
-      "chat_domain": {
-        "aggregates": ["Conversation"],
-        "entities": ["Message"],
-        "value_objects": ["ConversationId", "MessageId", "MessageRole"],
-        "events": ["MessageAddedDomainEvent", "ConversationCompletedDomainEvent", "ToolExecutedDomainEvent"]
-      },
-      "missing_elements": [
-        "IAuditable interface",
-        "Event sourcing infrastructure",
-        "Persistence-specific domain events",
-        "Audit trail entities",
-        "Event store abstractions"
-      ]
-    }
-  }
+  "overallProgress": "20%",
+  "lastUpdated": "2025-08-03T21:31:08.902Z"
 }
