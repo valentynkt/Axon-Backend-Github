@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using Axon.Modules.Chat.Infrastructure.Ai.Abstractions;
 using Axon.Modules.Chat.Infrastructure.Ai.Models;
@@ -12,6 +13,19 @@ public sealed class ResponseParser : IResponseParser
 {
     private readonly IPayloadSerializer _payloadSerializer;
     private readonly ILogger<ResponseParser> _logger;
+    
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, string, int, Exception?> LogResponseReceivedAction =
+        LoggerMessage.Define<string, int>(
+            LogLevel.Debug,
+            new EventId(5001, "LogResponseReceived"),
+            "Received response from OpenAI with ID {ResponseId} and {ContentLength} characters");
+            
+    private static readonly Action<ILogger, HttpStatusCode, string, Exception?> LogApiErrorAction =
+        LoggerMessage.Define<HttpStatusCode, string>(
+            LogLevel.Error,
+            new EventId(5002, "LogApiError"),
+            "OpenAI Responses API returned error {StatusCode}. Response: {ResponseBody}");
 
     public ResponseParser(
         IPayloadSerializer payloadSerializer,
@@ -41,10 +55,9 @@ public sealed class ResponseParser : IResponseParser
             throw new JsonException("Failed to deserialize OpenAI Responses API response");
         }
 
-        _logger.LogDebug(
-            "Received response from OpenAI with ID {ResponseId} and {ContentLength} characters",
-            apiResponse.Id,
-            apiResponse.OutputText?.Length ?? 0);
+        // Extract text content for logging
+        var textContent = ExtractTextContent(apiResponse);
+        LogResponseReceivedAction(_logger, apiResponse.Id ?? "unknown", textContent.Length, null);
 
         return apiResponse;
     }
@@ -59,13 +72,50 @@ public sealed class ResponseParser : IResponseParser
     {
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError(
-                "OpenAI Responses API returned error {StatusCode}. Response: {ResponseBody}",
-                response.StatusCode,
-                responseBody);
+            LogApiErrorAction(_logger, response.StatusCode, responseBody, null);
                 
             throw new HttpRequestException(
                 $"OpenAI API returned {response.StatusCode}: {responseBody}");
         }
+    }
+
+    /// <summary>
+    /// Extract text content from OpenAI Responses API response
+    /// </summary>
+    private static string ExtractTextContent(ResponsesApiResponse response)
+    {
+        if (response.Output == null || response.Output.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Look for message type output items
+        foreach (var outputItem in response.Output)
+        {
+            if (outputItem.Type == "message" && outputItem.Content != null)
+            {
+                try
+                {
+                    // Try to deserialize as array of message content items
+                    var jsonElement = (JsonElement)outputItem.Content;
+                    if (jsonElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var contentItem in jsonElement.EnumerateArray())
+                        {
+                            if (contentItem.TryGetProperty("text", out var textProperty))
+                            {
+                                return textProperty.GetString() ?? string.Empty;
+                            }
+                        }
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Ignore parsing errors and continue
+                }
+            }
+        }
+
+        return string.Empty;
     }
 }

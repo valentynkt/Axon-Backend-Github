@@ -1,5 +1,5 @@
 using Axon.Shared.Common;
-using Axon.Tests.Shared.Extensions;
+using Axon.Tests.Shared.Tests.Extensions;
 
 namespace Axon.Tests.Shared.Tests.Utilities;
 

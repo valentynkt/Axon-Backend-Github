@@ -37,7 +37,7 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
         return violations;
     }
 
-    private async Task ValidateLazyLoadingPatterns(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateLazyLoadingPatterns(List<Type> types, List<RuleViolation> violations)
     {
         foreach (var type in types)
         {
@@ -61,10 +61,13 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
 
                     if (isNavigationProperty && !hasLazyLoading)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Navigation property '{property.Name}' in '{type.Name}' should implement lazy loading",
-                            type.FullName!,
-                            property.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Navigation property '{property.Name}' in '{type.Name}' should implement lazy loading",
+                            Severity = RuleSeverity.Warning
+                        });
                     }
                 }
             }
@@ -73,7 +76,7 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateConnectionPooling(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateConnectionPooling(List<Type> types, List<RuleViolation> violations)
     {
         var repositoryTypes = types.Where(t => 
             t.Name.EndsWith("Repository") ||
@@ -107,10 +110,13 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
 
                         if (!hasPoolingAttribute)
                         {
-                            violations.Add(new RuleViolation(
-                                $"Data access method '{method.Name}' in '{repoType.Name}' should use connection pooling",
-                                repoType.FullName!,
-                                method.Name));
+                            violations.Add(new RuleViolation
+                            {
+                                TypeName = repoType.FullName!,
+                                AssemblyName = repoType.Assembly.FullName!,
+                                Message = $"Data access method '{method.Name}' in '{repoType.Name}' should use connection pooling",
+                                Severity = RuleSeverity.Error
+                            });
                         }
                     }
                 }
@@ -120,7 +126,7 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateMemoryEfficiency(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateMemoryEfficiency(List<Type> types, List<RuleViolation> violations)
     {
         foreach (var type in types)
         {
@@ -137,10 +143,13 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
 
                     if (!hasDisposalPattern)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Type '{type.Name}' with event handlers should implement IDisposable",
-                            type.FullName!,
-                            "Class"));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Type '{type.Name}' with event handlers should implement IDisposable",
+                            Severity = RuleSeverity.Error
+                        });
                     }
                 }
 
@@ -155,10 +164,13 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
 
                     if (!hasCapacityOptimization && method.Name.ToLower().Contains("get"))
                     {
-                        violations.Add(new RuleViolation(
-                            $"Method '{method.Name}' in '{type.Name}' returns collections without capacity optimization",
-                            type.FullName!,
-                            method.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Method '{method.Name}' in '{type.Name}' returns collections without capacity optimization",
+                            Severity = RuleSeverity.Error
+                        });
                     }
                 }
             }
@@ -167,7 +179,7 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateBatchProcessing(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateBatchProcessing(List<Type> types, List<RuleViolation> violations)
     {
         var serviceTypes = types.Where(t => 
             t.Name.EndsWith("Service") ||
@@ -200,10 +212,13 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
                          methodName.Contains("save") || methodName.Contains("update")) && 
                         !hasBatchProcessing)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Method '{method.Name}' in '{serviceType.Name}' processes collections but lacks batch optimization",
-                            serviceType.FullName!,
-                            method.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = serviceType.FullName!,
+                            AssemblyName = serviceType.Assembly.FullName!,
+                            Message = $"Method '{method.Name}' in '{serviceType.Name}' processes collections but lacks batch optimization",
+                            Severity = RuleSeverity.Error
+                        });
                     }
                 }
             }
@@ -219,16 +234,19 @@ public sealed class AdvancedPerformanceRule : ArchitectureRuleBase
 public class SlaComplianceRule : ArchitectureRuleBase
 {
     public override string RuleId => "PERF006";
+    public override string Name => "SLA Compliance Rule";
     public override string Category => "Performance - SLA Compliance";
     public override string Description => "Critical operations must complete within defined SLA timeouts";
     public override RuleSeverity Severity => RuleSeverity.Critical;
 
-    protected override IEnumerable<RuleViolation> ExecuteRule(IArchitectureContext context)
+    protected override async Task<IEnumerable<RuleViolation>> ExecuteValidationAsync(IArchitectureContext context, CancellationToken cancellationToken)
     {
         var criticalHandlers = context.Types
             .Where(t => t.Name.EndsWith("Handler") && IsCriticalHandler(t))
             .ToList();
 
+        var violations = new List<RuleViolation>();
+        
         foreach (var handler in criticalHandlers)
         {
             var handleMethod = handler.GetMethods()
@@ -236,18 +254,21 @@ public class SlaComplianceRule : ArchitectureRuleBase
 
             if (handleMethod != null && !HasTimeoutAttribute(handleMethod))
             {
-                yield return new RuleViolation
+                violations.Add(new RuleViolation
                 {
-                    Type = handler.FullName ?? handler.Name,
-                    Member = handleMethod.Name,
-                    Description = $"Critical handler {handler.Name} lacks SLA timeout specification",
+                    TypeName = handler.FullName ?? handler.Name,
+                    AssemblyName = handler.Assembly.GetName().Name ?? "Unknown",
+                    Message = $"Critical handler {handler.Name} lacks SLA timeout specification",
                     Severity = RuleSeverity.Critical
-                };
+                });
             }
         }
+        
+        await Task.CompletedTask;
+        return violations;
     }
 
-    private bool IsCriticalHandler(Type type)
+    private static bool IsCriticalHandler(Type type)
     {
         // ProcessMessage and other critical business operations
         return type.Name.Contains("ProcessMessage") ||
@@ -255,7 +276,7 @@ public class SlaComplianceRule : ArchitectureRuleBase
                type.Name.Contains("Authorization");
     }
 
-    private bool HasTimeoutAttribute(MethodInfo method)
+    private static bool HasTimeoutAttribute(MethodInfo method)
     {
         // Check for timeout or SLA-related attributes
         return method.GetCustomAttributes()
@@ -270,32 +291,39 @@ public class SlaComplianceRule : ArchitectureRuleBase
 public class LinearScalingRule : ArchitectureRuleBase
 {
     public override string RuleId => "PERF007";
+    public override string Name => "Linear Scaling Rule";
     public override string Category => "Performance - Scalability";
     public override string Description => "Services must scale linearly up to 100 concurrent requests";
-    public override RuleSeverity Severity => RuleSeverity.High;
+    public override RuleSeverity Severity => RuleSeverity.Error;
 
-    protected override IEnumerable<RuleViolation> ExecuteRule(IArchitectureContext context)
+    protected override async Task<IEnumerable<RuleViolation>> ExecuteValidationAsync(IArchitectureContext context, CancellationToken cancellationToken)
     {
         var serviceTypes = context.Types
             .Where(t => t.Name.EndsWith("Service") || t.Name.EndsWith("Handler"))
             .Where(t => !t.IsAbstract && !t.IsInterface)
             .ToList();
 
+        var violations = new List<RuleViolation>();
+        
         foreach (var serviceType in serviceTypes)
         {
             if (HasBlockingOperations(serviceType))
             {
-                yield return new RuleViolation
+                violations.Add(new RuleViolation
                 {
-                    Type = serviceType.FullName ?? serviceType.Name,
-                    Description = $"Service {serviceType.Name} contains blocking operations that prevent linear scaling",
-                    Severity = RuleSeverity.High
-                };
+                    TypeName = serviceType.FullName ?? serviceType.Name,
+                    AssemblyName = serviceType.Assembly.GetName().Name ?? "Unknown",
+                    Message = $"Service {serviceType.Name} contains blocking operations that prevent linear scaling",
+                    Severity = RuleSeverity.Error
+                });
             }
         }
+        
+        await Task.CompletedTask;
+        return violations;
     }
 
-    private bool HasBlockingOperations(Type type)
+    private static bool HasBlockingOperations(Type type)
     {
         var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
         

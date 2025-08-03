@@ -47,7 +47,7 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
         return violations;
     }
 
-    private async Task ValidateWeakCryptography(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateWeakCryptography(List<Type> types, List<RuleViolation> violations)
     {
         foreach (var type in types)
         {
@@ -66,10 +66,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
                 {
                     if (methodName.Contains(weakAlgorithm) || returnTypeName.Contains(weakAlgorithm))
                     {
-                        violations.Add(new RuleViolation(
-                            $"Method '{method.Name}' in '{type.Name}' uses weak cryptographic algorithm '{weakAlgorithm}'",
-                            type.FullName!,
-                            method.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Method '{method.Name}' in '{type.Name}' uses weak cryptographic algorithm '{weakAlgorithm}'",
+                            Severity = RuleSeverity.Critical
+                        });
                     }
                 }
 
@@ -81,10 +84,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
                     {
                         if (parameterTypeName.Contains(weakAlgorithm))
                         {
-                            violations.Add(new RuleViolation(
-                                $"Method '{method.Name}' in '{type.Name}' accepts weak cryptographic type '{weakAlgorithm}'",
-                                type.FullName!,
-                                method.Name));
+                            violations.Add(new RuleViolation
+                            {
+                                TypeName = type.FullName!,
+                                AssemblyName = type.Assembly.FullName!,
+                                Message = $"Method '{method.Name}' in '{type.Name}' accepts weak cryptographic type '{weakAlgorithm}'",
+                                Severity = RuleSeverity.Critical
+                            });
                         }
                     }
                 }
@@ -99,10 +105,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
                 {
                     if (fieldTypeName.Contains(weakAlgorithm))
                     {
-                        violations.Add(new RuleViolation(
-                            $"Field '{field.Name}' in '{type.Name}' uses weak cryptographic type '{weakAlgorithm}'",
-                            type.FullName!,
-                            field.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Field '{field.Name}' in '{type.Name}' uses weak cryptographic type '{weakAlgorithm}'",
+                            Severity = RuleSeverity.Critical
+                        });
                     }
                 }
             }
@@ -111,7 +120,7 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateKeyManagement(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateKeyManagement(List<Type> types, List<RuleViolation> violations)
     {
         foreach (var type in types)
         {
@@ -126,10 +135,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
                     var fieldName = field.Name.ToLower();
                     if (fieldName.Contains("key") || fieldName.Contains("secret") || fieldName.Contains("password"))
                     {
-                        violations.Add(new RuleViolation(
-                            $"Field '{field.Name}' in '{type.Name}' appears to contain hardcoded cryptographic material",
-                            type.FullName!,
-                            field.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Field '{field.Name}' in '{type.Name}' appears to contain hardcoded cryptographic material",
+                            Severity = RuleSeverity.Critical
+                        });
                     }
                 }
             }
@@ -148,10 +160,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
 
                     if (!hasSecureStorage)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Property '{property.Name}' in '{type.Name}' stores cryptographic material without protection attributes",
-                            type.FullName!,
-                            property.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Property '{property.Name}' in '{type.Name}' stores cryptographic material without protection attributes",
+                            Severity = RuleSeverity.Critical
+                        });
                     }
                 }
             }
@@ -160,7 +175,7 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateRandomGeneration(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateRandomGeneration(List<Type> types, List<RuleViolation> violations)
     {
         foreach (var type in types)
         {
@@ -179,10 +194,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
                     
                     if (usesWeakRandom)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Method '{method.Name}' in '{type.Name}' uses weak random number generation (System.Random)",
-                            type.FullName!,
-                            method.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Method '{method.Name}' in '{type.Name}' uses weak random number generation (System.Random)",
+                            Severity = RuleSeverity.Critical
+                        });
                     }
                 }
             }
@@ -191,7 +209,7 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateCertificateHandling(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateCertificateHandling(List<Type> types, List<RuleViolation> violations)
     {
         foreach (var type in types)
         {
@@ -216,10 +234,13 @@ public sealed class CryptographyPatternsRule : ArchitectureRuleBase
                         
                         if (hasBypassIndicator)
                         {
-                            violations.Add(new RuleViolation(
-                                $"Method '{method.Name}' in '{type.Name}' appears to bypass certificate validation",
-                                type.FullName!,
-                                method.Name));
+                            violations.Add(new RuleViolation
+                            {
+                                TypeName = type.FullName!,
+                                AssemblyName = type.Assembly.FullName!,
+                                Message = $"Method '{method.Name}' in '{type.Name}' appears to bypass certificate validation",
+                                Severity = RuleSeverity.Critical
+                            });
                         }
                     }
                 }

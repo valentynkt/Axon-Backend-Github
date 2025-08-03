@@ -40,6 +40,8 @@ public static class ServiceRegistration
         services.AddScoped<IToolExecutionService, ToolExecutionService>();
         services.AddScoped<IJsonSerializationService, JsonSerializationService>();
         services.AddScoped<IActivityTracker, ActivityTracker>();
+        services.AddScoped<IMessageRequestBuilder, MessageRequestBuilder>();
+        services.AddScoped<IResponseMappingService, ResponseMappingService>();
         
         // Register Infrastructure services
         services.AddHttpClient<IAiClient, OpenAiClient>(client =>

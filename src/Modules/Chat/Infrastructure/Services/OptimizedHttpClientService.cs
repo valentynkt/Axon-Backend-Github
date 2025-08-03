@@ -120,10 +120,59 @@ public interface IOptimizedHttpClientService
 public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, IDisposable
 {
     private readonly HttpClient _httpClient;
-    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
-    private readonly IAsyncPolicy<HttpResponseMessage> _circuitBreakerPolicy;
-    private readonly IAsyncPolicy<HttpResponseMessage> _combinedPolicy;
+    private readonly Polly.Retry.AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
+    private readonly Polly.CircuitBreaker.AsyncCircuitBreakerPolicy<HttpResponseMessage> _circuitBreakerPolicy;
+    private readonly Polly.Wrap.AsyncPolicyWrap<HttpResponseMessage> _combinedPolicy;
     private readonly ILogger<OptimizedHttpClientService> _logger;
+    
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, int, int, int, Exception?> LogServiceInitializedAction =
+        LoggerMessage.Define<int, int, int>(
+            LogLevel.Information,
+            new EventId(7001, "LogServiceInitialized"),
+            "OptimizedHttpClientService initialized with timeout: {Timeout}s, max connections: {MaxConnections}, pool lifetime: {PoolLifetime}s");
+            
+    private static readonly Action<ILogger, HttpStatusCode, HttpMethod, Uri?, Exception?> LogRequestFailedAction =
+        LoggerMessage.Define<HttpStatusCode, HttpMethod, Uri?>(
+            LogLevel.Warning,
+            new EventId(7002, "LogRequestFailed"),
+            "HTTP request failed with status {StatusCode}: {Method} {Uri}");
+            
+    private static readonly Action<ILogger, HttpMethod, Uri?, Exception?> LogRequestExceptionAction =
+        LoggerMessage.Define<HttpMethod, Uri?>(
+            LogLevel.Error,
+            new EventId(7003, "LogRequestException"),
+            "HTTP request failed with exception: {Method} {Uri}");
+            
+    private static readonly Action<ILogger, Exception?> LogCircuitBreakerResetAction =
+        LoggerMessage.Define(
+            LogLevel.Information,
+            new EventId(7004, "LogCircuitBreakerReset"),
+            "Circuit breaker reset - requests will be allowed again");
+            
+    private static readonly Action<ILogger, Exception?> LogCircuitBreakerHalfOpenAction =
+        LoggerMessage.Define(
+            LogLevel.Information,
+            new EventId(7005, "LogCircuitBreakerHalfOpen"),
+            "Circuit breaker half-open - testing if service has recovered");
+            
+    private static readonly Action<ILogger, long, long, long, double, Exception?> LogServiceDisposedAction =
+        LoggerMessage.Define<long, long, long, double>(
+            LogLevel.Information,
+            new EventId(7006, "LogServiceDisposed"),
+            "OptimizedHttpClientService disposed. Final metrics - Total: {Total}, Successful: {Successful}, Failed: {Failed}, Success Rate: {SuccessRate:P1}");
+            
+    private static readonly Action<ILogger, int, int, double, string?, Exception?> LogHttpRetryAction =
+        LoggerMessage.Define<int, int, double, string?>(
+            LogLevel.Warning,
+            new EventId(7007, "LogHttpRetry"),
+            "HTTP request retry {RetryCount}/{MaxRetries} after {Delay}ms delay. Reason: {Reason}");
+            
+    private static readonly Action<ILogger, double, int, string?, Exception?> LogCircuitBreakerOpenedAction =
+        LoggerMessage.Define<double, int, string?>(
+            LogLevel.Error,
+            new EventId(7008, "LogCircuitBreakerOpened"),
+            "Circuit breaker opened for {Duration}s due to {FailureThreshold} failures. Last exception: {Exception}");
     
     // Performance tracking
     private long _totalRequests;
@@ -153,11 +202,7 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
         // Combine policies: retry first, then circuit breaker
         _combinedPolicy = Policy.WrapAsync(_retryPolicy, _circuitBreakerPolicy);
         
-        _logger.LogInformation(
-            "OptimizedHttpClientService initialized with timeout: {Timeout}s, max connections: {MaxConnections}, pool lifetime: {PoolLifetime}s",
-            opts.TimeoutSeconds,
-            opts.MaxConnectionsPerEndpoint,
-            opts.PooledConnectionLifetimeSeconds);
+        LogServiceInitializedAction(_logger, opts.TimeoutSeconds, opts.MaxConnectionsPerEndpoint, opts.PooledConnectionLifetimeSeconds, null);
     }
 
     /// <inheritdoc />
@@ -183,11 +228,7 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
             else
             {
                 IncrementFailedRequests();
-                _logger.LogWarning(
-                    "HTTP request failed with status {StatusCode}: {Method} {Uri}",
-                    response.StatusCode,
-                    request.Method,
-                    request.RequestUri);
+                LogRequestFailedAction(_logger, response.StatusCode, request.Method, request.RequestUri, null);
             }
             
             return response;
@@ -195,10 +236,7 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
         catch (Exception ex)
         {
             IncrementFailedRequests();
-            _logger.LogError(ex, 
-                "HTTP request failed with exception: {Method} {Uri}",
-                request.Method,
-                request.RequestUri);
+            LogRequestExceptionAction(_logger, request.Method, request.RequestUri, ex);
             throw;
         }
     }
@@ -249,7 +287,7 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
         _httpClient.DefaultRequestHeaders.Add("Keep-Alive", "timeout=60, max=100");
     }
 
-    private IAsyncPolicy<HttpResponseMessage> BuildRetryPolicy(RetryPolicyOptions retryOptions)
+    private Polly.Retry.AsyncRetryPolicy<HttpResponseMessage> BuildRetryPolicy(RetryPolicyOptions retryOptions)
     {
         return HttpPolicyExtensions
             .HandleTransientHttpError() // Handles HttpRequestException and 5XX, 408 status codes
@@ -261,16 +299,12 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
                     retryOptions.MaxDelayMs)),
                 onRetry: (outcome, timespan, retryCount, context) =>
                 {
-                    _logger.LogWarning(
-                        "HTTP request retry {RetryCount}/{MaxRetries} after {Delay}ms delay. Reason: {Reason}",
-                        retryCount,
-                        retryOptions.MaxRetries,
-                        timespan.TotalMilliseconds,
-                        outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString());
+                    LogHttpRetryAction(_logger, retryCount, retryOptions.MaxRetries, timespan.TotalMilliseconds,
+                        outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString(), outcome.Exception);
                 });
     }
 
-    private IAsyncPolicy<HttpResponseMessage> BuildCircuitBreakerPolicy(CircuitBreakerOptions cbOptions)
+    private Polly.CircuitBreaker.AsyncCircuitBreakerPolicy<HttpResponseMessage> BuildCircuitBreakerPolicy(CircuitBreakerOptions cbOptions)
     {
         return HttpPolicyExtensions
             .HandleTransientHttpError()
@@ -279,19 +313,16 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
                 TimeSpan.FromSeconds(cbOptions.DurationOfBreakSeconds),
                 onBreak: (exception, duration) =>
                 {
-                    _logger.LogError(
-                        "Circuit breaker opened for {Duration}s due to {FailureThreshold} failures. Last exception: {Exception}",
-                        duration.TotalSeconds,
-                        cbOptions.FailureThreshold,
-                        exception.Exception?.Message ?? exception.Result?.StatusCode.ToString());
+                    LogCircuitBreakerOpenedAction(_logger, duration.TotalSeconds, cbOptions.FailureThreshold,
+                        exception.Exception?.Message ?? exception.Result?.StatusCode.ToString(), exception.Exception);
                 },
                 onReset: () =>
                 {
-                    _logger.LogInformation("Circuit breaker reset - requests will be allowed again");
+                    LogCircuitBreakerResetAction(_logger, null);
                 },
                 onHalfOpen: () =>
                 {
-                    _logger.LogInformation("Circuit breaker half-open - testing if service has recovered");
+                    LogCircuitBreakerHalfOpenAction(_logger, null);
                 });
     }
 
@@ -353,9 +384,7 @@ public sealed class OptimizedHttpClientService : IOptimizedHttpClientService, ID
     public void Dispose()
     {
         var (total, successful, failed, successRate) = GetMetrics();
-        _logger.LogInformation(
-            "OptimizedHttpClientService disposed. Final metrics - Total: {Total}, Successful: {Successful}, Failed: {Failed}, Success Rate: {SuccessRate:P1}",
-            total, successful, failed, successRate);
+        LogServiceDisposedAction(_logger, total, successful, failed, successRate, null);
         
         _httpClient?.Dispose();
     }

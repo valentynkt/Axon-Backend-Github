@@ -294,7 +294,6 @@ public abstract class LondonSchoolTestBase
         
         TestContext.WriteLine($"Verifying rate limiting: {maxRequests} requests per {timeWindow}");
     }
-}
 
     /// <summary>
     /// Sets up a mock to return a specific result and verifies it was called

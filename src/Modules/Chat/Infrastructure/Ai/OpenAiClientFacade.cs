@@ -69,8 +69,11 @@ public sealed class OpenAiClientFacade : IAiClient
             // Parse tool executions from the response
             var toolExecutions = _toolExtractor.ExtractToolExecutions(response, stopwatch.Elapsed, activity);
 
+            // Extract text content from response
+            var textContent = ExtractTextContent(response);
+            
             var aiResponse = new AiResponse(
-                Content: response.OutputText ?? string.Empty,
+                Content: textContent,
                 ResponseId: response.Id ?? Guid.NewGuid().ToString(),
                 ToolExecutions: toolExecutions);
 
@@ -122,5 +125,45 @@ public sealed class OpenAiClientFacade : IAiClient
             JsonException => ChatErrors.AiClient.InvalidResponse,
             _ => ChatErrors.AiClient.InvalidResponse
         };
+    }
+
+    /// <summary>
+    /// Extract text content from OpenAI Responses API response
+    /// </summary>
+    private static string ExtractTextContent(ResponsesApiResponse response)
+    {
+        if (response.Output == null || response.Output.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Look for message type output items
+        foreach (var outputItem in response.Output)
+        {
+            if (outputItem.Type == "message" && outputItem.Content != null)
+            {
+                try
+                {
+                    // Try to deserialize as array of message content items
+                    var jsonElement = (JsonElement)outputItem.Content;
+                    if (jsonElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var contentItem in jsonElement.EnumerateArray())
+                        {
+                            if (contentItem.TryGetProperty("text", out var textProperty))
+                            {
+                                return textProperty.GetString() ?? string.Empty;
+                            }
+                        }
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Ignore parsing errors and continue
+                }
+            }
+        }
+
+        return string.Empty;
     }
 }

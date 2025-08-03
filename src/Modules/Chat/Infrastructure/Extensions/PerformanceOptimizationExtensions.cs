@@ -167,7 +167,7 @@ public static class PerformanceOptimizationExtensions
                       ?? originalDescriptor.ImplementationInstance;
 
                 // Create decorator with original service as dependency
-                return ActivatorUtilities.CreateInstance(serviceProvider, typeof(TDecorator), originalService ?? throw new InvalidOperationException("Unable to create original service instance"));
+                return ActivatorUtilities.CreateInstance<TDecorator>(serviceProvider, originalService ?? throw new InvalidOperationException("Unable to create original service instance"));
             },
             originalDescriptor.Lifetime);
 
@@ -222,6 +222,12 @@ public static class PerformanceConfigurationValidation
     /// </summary>
     /// <param name="configuration">Configuration to log</param>
     /// <param name="logger">Logger instance</param>
+    private static readonly Action<Microsoft.Extensions.Logging.ILogger, int, int, int, int, int, Exception?> LogPerformanceConfigurationAction =
+        Microsoft.Extensions.Logging.LoggerMessage.Define<int, int, int, int, int>(
+            Microsoft.Extensions.Logging.LogLevel.Information,
+            new Microsoft.Extensions.Logging.EventId(1001, "LogPerformanceConfiguration"),
+            "Performance Optimization Configuration - HTTP Timeout: {HttpTimeout}s, Max Connections: {MaxConnections}, Pool Lifetime: {PoolLifetime}s, Max Retries: {MaxRetries}, Circuit Breaker Threshold: {CBThreshold}");
+
     public static void LogPerformanceConfiguration(
         this IConfiguration configuration,
         Microsoft.Extensions.Logging.ILogger logger)
@@ -229,17 +235,13 @@ public static class PerformanceConfigurationValidation
         var httpOptions = configuration.GetSection(OptimizedHttpClientOptions.SectionName)
             .Get<OptimizedHttpClientOptions>() ?? new OptimizedHttpClientOptions();
         
-        logger.LogInformation(
-            "Performance Optimization Configuration - " +
-            "HTTP Timeout: {HttpTimeout}s, " +
-            "Max Connections: {MaxConnections}, " +
-            "Pool Lifetime: {PoolLifetime}s, " +
-            "Max Retries: {MaxRetries}, " +
-            "Circuit Breaker Threshold: {CBThreshold}",
+        LogPerformanceConfigurationAction(
+            logger,
             httpOptions.TimeoutSeconds,
             httpOptions.MaxConnectionsPerEndpoint,
             httpOptions.PooledConnectionLifetimeSeconds,
             httpOptions.Retry.MaxRetries,
-            httpOptions.CircuitBreaker.FailureThreshold);
+            httpOptions.CircuitBreaker.FailureThreshold,
+            null);
     }
 }

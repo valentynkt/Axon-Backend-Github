@@ -1,7 +1,7 @@
 using Axon.Shared.Common;
 using System.Diagnostics;
 
-namespace Axon.Tests.Shared.Performance;
+namespace Axon.Tests.Shared.Tests.Performance;
 
 /// <summary>
 /// Performance benchmarks and stress tests for shared utilities

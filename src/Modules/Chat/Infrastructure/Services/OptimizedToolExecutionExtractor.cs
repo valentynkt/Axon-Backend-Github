@@ -15,6 +15,25 @@ public sealed class OptimizedToolExecutionExtractor : IDisposable
     private readonly ArrayPool<byte> _bufferPool;
     private readonly ILogger<OptimizedToolExecutionExtractor> _logger;
     
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, int, int, double, Exception?> LogExtractedExecutionsAction =
+        LoggerMessage.Define<int, int, double>(
+            LogLevel.Debug,
+            new EventId(6001, "LogExtractedExecutions"),
+            "Extracted {ExecutionCount} tool executions from {ResponseCount} responses using pooled arrays. Pool efficiency: {PoolEfficiency:P1}");
+            
+    private static readonly Action<ILogger, Exception?> LogParsingFailedAction =
+        LoggerMessage.Define(
+            LogLevel.Warning,
+            new EventId(6002, "LogParsingFailed"),
+            "Failed to parse JSON response for tool executions");
+            
+    private static readonly Action<ILogger, long, long, double, Exception?> LogExtractorDisposedAction =
+        LoggerMessage.Define<long, long, double>(
+            LogLevel.Information,
+            new EventId(6003, "LogExtractorDisposed"),
+            "OptimizedToolExecutionExtractor disposed. Pool metrics - Hits: {Hits}, Allocations: {Allocations}, Efficiency: {Efficiency:P1}");
+    
     // Performance tracking
     private long _poolHits;
     private long _poolAllocations;
@@ -108,11 +127,7 @@ public sealed class OptimizedToolExecutionExtractor : IDisposable
             Array.Copy(pooledResults, result, actualCount);
             
             IncrementPoolHits();
-            _logger.LogDebug(
-                "Extracted {ExecutionCount} tool executions from {ResponseCount} responses using pooled arrays. Pool efficiency: {PoolEfficiency:P1}",
-                actualCount,
-                responses.Length,
-                GetPoolEfficiency());
+            LogExtractedExecutionsAction(_logger, actualCount, responses.Length, GetPoolEfficiency(), null);
             
             return result;
         }
@@ -154,13 +169,13 @@ public sealed class OptimizedToolExecutionExtractor : IDisposable
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Failed to parse JSON response for tool executions");
+            LogParsingFailedAction(_logger, ex);
             IncrementPoolAllocations();
             return Array.Empty<ToolExecution>();
         }
     }
 
-    private ToolExecution? ParseToolExecutionFromReader(ref Utf8JsonReader reader)
+    private static ToolExecution? ParseToolExecutionFromReader(ref Utf8JsonReader reader)
     {
         string? toolName = null;
         string? arguments = null;
@@ -253,8 +268,6 @@ public sealed class OptimizedToolExecutionExtractor : IDisposable
     public void Dispose()
     {
         var (hits, allocations, efficiency) = GetPoolMetrics();
-        _logger.LogInformation(
-            "OptimizedToolExecutionExtractor disposed. Pool metrics - Hits: {Hits}, Allocations: {Allocations}, Efficiency: {Efficiency:P1}",
-            hits, allocations, efficiency);
+        LogExtractorDisposedAction(_logger, hits, allocations, efficiency, null);
     }
 }

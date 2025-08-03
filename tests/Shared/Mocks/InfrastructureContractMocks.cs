@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Modules.Chat.Infrastructure.Ai.Models;
+// using Axon.Modules.Chat.Infrastructure.Ai.Models; // Commented out - Infrastructure dependency not available in shared utilities
 using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -48,13 +48,13 @@ public static class InfrastructureContractMocks
         Mock<HttpMessageHandler> handlerMock,
         string responseId,
         string outputText,
-        Axon.Modules.Chat.Infrastructure.Ai.Models.McpCallItem[]? mcpCalls = null)
+        object[]? mcpCalls = null) // Simplified to avoid infrastructure dependency
     {
         var response = new
         {
             id = responseId,
             output_text = outputText,
-            mcp_calls = mcpCalls ?? Array.Empty<Axon.Modules.Chat.Infrastructure.Ai.Models.McpCallItem>()
+            mcp_calls = mcpCalls ?? Array.Empty<object>()
         };
 
         handlerMock.Protected()
@@ -225,7 +225,7 @@ public class InfrastructureBehaviorScenario
     public InfrastructureBehaviorScenario WithSuccessfulHttpResponse(
         string responseId,
         string outputText,
-        Axon.Modules.Chat.Infrastructure.Ai.Models.McpCallItem[]? mcpCalls = null)
+        object[]? mcpCalls = null) // Simplified to avoid infrastructure dependency
     {
         InfrastructureContractMocks.SetupOpenAiResponse(_httpHandlerMock, responseId, outputText, mcpCalls);
         return this;

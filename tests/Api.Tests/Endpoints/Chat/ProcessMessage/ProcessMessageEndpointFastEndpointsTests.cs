@@ -99,7 +99,7 @@ public sealed class ProcessMessageEndpointFastEndpointsTests
 [TestFixture]
 [Category("FastEndpoints")]
 [Category("Integration")]
-public sealed class ProcessMessageEndpointFastEndpointsIntegrationTests
+public sealed class ProcessMessageEndpointFastEndpointsIntegrationTests : IDisposable
 {
     private WebApplicationFactory<Program> _factory = null!;
 
@@ -111,6 +111,11 @@ public sealed class ProcessMessageEndpointFastEndpointsIntegrationTests
 
     [OneTimeTearDown]
     public void OneTimeTearDown()
+    {
+        _factory?.Dispose();
+    }
+
+    public void Dispose()
     {
         _factory?.Dispose();
     }

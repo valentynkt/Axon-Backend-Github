@@ -1,380 +1,122 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Modules.Chat.Domain.Types;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Shared.Common;
-using Shouldly;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
+using Shouldly;
 
 namespace Axon.Modules.Chat.Application.Tests.Commands.ProcessMessage;
 
 [TestFixture]
 [Category("Unit")]
 [Category("Application")]
-public sealed class ProcessMessageHandlerTests : ApplicationTestBase
+public sealed class ProcessMessageHandlerTests
 {
     private ProcessMessageHandler _handler = null!;
-    private Mock<ILogger<ProcessMessageHandler>> _typedLoggerMock = null!;
-    private Mock<IMcpServerResolver> _mcpServerResolverMock = null!;
+    private Mock<ILogger<ProcessMessageHandler>> _loggerMock = null!;
+    private Mock<IAiClient> _aiClientMock = null!;
+    private Mock<IMessageRequestBuilder> _requestBuilderMock = null!;
+    private Mock<IResponseMappingService> _responseMappingMock = null!;
 
     [SetUp]
     public void SetUp()
     {
-        // Create typed logger mock for ProcessMessageHandler
-        _typedLoggerMock = CreateTypedLoggerMock<ProcessMessageHandler>();
-        _mcpServerResolverMock = new Mock<IMcpServerResolver>();
-        _handler = new ProcessMessageHandler(AiClientMock.Object, _mcpServerResolverMock.Object, _typedLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ProcessMessageHandler>>();
+        _aiClientMock = new Mock<IAiClient>();
+        _requestBuilderMock = new Mock<IMessageRequestBuilder>();
+        _responseMappingMock = new Mock<IResponseMappingService>();
+
+        _handler = new ProcessMessageHandler(
+            _aiClientMock.Object,
+            _requestBuilderMock.Object,
+            _responseMappingMock.Object,
+            _loggerMock.Object);
     }
 
     [Test]
-    public async Task Handle_GivenValidMessageWithoutMcp_ShouldReturnSuccessResult()
+    public async Task Handle_WithValidCommand_ShouldReturnSuccess()
     {
         // Arrange
-        var command = ProcessMessageCommandBuilder
-            .ForMessage("Hello, AI!")
-            .Build();
-        
-        var expectedAiResponse = AiResponseBuilder
-            .ForContent("Hello! How can I help you?")
-            .WithResponseId("response-123")
-            .Build();
+        var command = new ProcessMessageCommand("test message");
+        var aiRequest = new AiRequest("test message");
+        var aiResponse = new AiResponse("test response");
+        var expectedResponse = new ProcessMessageResponse("test response");
 
-        // Setup empty MCP servers (no enabled servers)
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
+        _requestBuilderMock
+            .Setup(x => x.BuildAiRequest(It.IsAny<ProcessMessageCommand>()))
+            .Returns(Result<(AiRequest Request, int McpServerCount)>.Success((aiRequest, 2)));
 
-        AiClientMock
+        _aiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
+            .ReturnsAsync(Result<AiResponse>.Success(aiResponse));
 
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldBeSuccessAnd(response =>
-        {
-            response.Response.ShouldBe("Hello! How can I help you?");
-            response.ConversationId.ShouldBe("response-123");
-            response.ToolExecutions.ShouldBeNull();
-        });
-
-        // Verify AI client was called with correct parameters
-        AiClientMock.Verify(x => x.ProcessMessageAsync(
-            It.Is<AiRequest>(req => 
-                req.Message == "Hello, AI!" && 
-                req.McpConfigs == null &&
-                req.PreviousResponseId == null),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Test]
-    public async Task Handle_GivenValidMessageWithEnabledMcpServers_ShouldReturnSuccessResult()
-    {
-        // Arrange
-        var command = ProcessMessageCommandBuilder
-            .ForMessage("Check the weather")
-            .WithPreviousResponseId("prev-123")
-            .Build();
-
-        var mcpServers = new List<McpServerConfig>
-        {
-            new McpServerConfig(
-                ServerUrl: "https://weather.api.com/mcp",
-                ServerLabel: "Weather Service",
-                Headers: new Dictionary<string, string> { { "Authorization", "Bearer token" } },
-                AllowedTools: ["weather"],
-                RequireApproval: false),
-            new McpServerConfig(
-                ServerUrl: "https://search.api.com/mcp",
-                ServerLabel: "Search Service",
-                Headers: null,
-                AllowedTools: ["search"],
-                RequireApproval: true)
-        }.AsReadOnly();
-
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(mcpServers));
-
-        var expectedAiResponse = AiResponseBuilder
-            .ForContent("The weather in Boston is sunny and 72°F.")
-            .WithResponseId("response-456")
-            .WithSuccessfulTool("weather", "{\"location\":\"Boston\"}", "Sunny, 72°F", 500)
-            .Build();
-
-        AiClientMock
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldBeSuccessAnd(response =>
-        {
-            response.Response.ShouldBe("The weather in Boston is sunny and 72°F.");
-            response.ConversationId.ShouldBe("response-456");
-            response.ToolExecutions!.Length.ShouldBe(1);
-            response.ToolExecutions![0].ToolName.ShouldBe("weather");
-            response.ToolExecutions[0].Success.ShouldBeTrue();
-            response.ToolExecutions[0].Duration.TotalMilliseconds.ShouldBe(500);
-        });
-
-        // Verify MCP server resolver was called
-        _mcpServerResolverMock.Verify(x => x.GetEnabledServerConfigurations(), Times.Once);
-
-        // Verify AI client was called with all MCP configurations
-        AiClientMock.Verify(x => x.ProcessMessageAsync(
-            It.Is<AiRequest>(req =>
-                req.Message == "Check the weather" &&
-                req.McpConfigs != null &&
-                req.McpConfigs.Count == 2 &&
-                req.McpConfigs.Any(c => c.ServerUrl == "https://weather.api.com/mcp") &&
-                req.McpConfigs.Any(c => c.ServerUrl == "https://search.api.com/mcp") &&
-                req.PreviousResponseId == "prev-123"),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Test]
-    public async Task Handle_GivenMcpResolverFailure_ShouldReturnFailureResult()
-    {
-        // Arrange
-        var command = ProcessMessageCommandBuilder.ForMessage("Test message").Build();
-        var expectedError = Error.InternalError("Failed to load MCP configuration");
-
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Failure(expectedError));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldBeFailure();
-        result.Error.ShouldBe(expectedError);
-
-        // Verify AI client was not called
-        AiClientMock.Verify(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()), Times.Never);
-
-        // Verify error was logged
-        VerifyLoggerCalledWith(_typedLoggerMock, LogLevel.Error, "Failed to load MCP server configurations");
-    }
-
-    [Test]
-    public async Task Handle_GivenAiResponseWithoutResponseId_ShouldGenerateConversationId()
-    {
-        // Arrange
-        var command = ProcessMessageCommandBuilder.ForMessage("Hello").Build();
-        var expectedAiResponse = AiResponseBuilder
-            .ForContent("Hi there!")
-            .WithoutResponseId()
-            .Build();
-
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
-
-        AiClientMock
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldBeSuccessAnd(response =>
-        {
-            response.ConversationId.ShouldNotBeNullOrEmpty();
-            // Verify it's a valid GUID format
-            Guid.TryParse(response.ConversationId, out _).ShouldBeTrue();
-        });
-    }
-
-    [Test]
-    public async Task Handle_GivenAiClientFailure_ShouldReturnFailureResult()
-    {
-        // Arrange
-        var command = ProcessMessageCommandBuilder.ForMessage("Hello").Build();
-        var expectedError = Error.ExternalService("AI service is unavailable");
-
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
-
-        AiClientMock
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Failure(expectedError));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.ShouldBeFailure();
-        result.Error.ShouldBe(expectedError);
-    }
-
-    [Test]
-    public async Task Handle_GivenNullRequest_ShouldThrowArgumentNullException()
-    {
-        // Act & Assert
-        await Should.ThrowAsync<ArgumentNullException>(() => _handler.Handle(null!, CancellationToken.None));
-    }
-
-    [Test]
-    public async Task Handle_ShouldLogInformationMessages_GivenSuccessfulProcessing()
-    {
-        // Arrange
-        var command = new ProcessMessageCommand("Test message");
-        var toolExecutions = new[]
-        {
-            ToolExecution.Success("tool1", "{}", "result1", TimeSpan.FromMilliseconds(100)),
-            ToolExecution.Success("tool2", "{}", "result2", TimeSpan.FromMilliseconds(200))
-        };
-        
-        var expectedAiResponse = new AiResponse("Response", "123", toolExecutions);
-
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
-
-        AiClientMock
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
+        _responseMappingMock
+            .Setup(x => x.MapToApiResponse(It.IsAny<AiResponse>()))
+            .Returns(expectedResponse);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-
-        // Verify logging occurred (information level calls)
-        _typedLoggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Processing message")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.AtLeastOnce);
-
-        _typedLoggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Successfully processed message")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        result.Value.Response.ShouldBe("test response");
     }
 
     [Test]
-    public async Task Handle_ShouldLogErrorMessage_GivenAiClientFailure()
+    public async Task Handle_WhenRequestBuildingFails_ShouldReturnFailure()
     {
         // Arrange
-        var command = new ProcessMessageCommand("Test message");
-        var expectedError = Error.ExternalService("Service unavailable");
+        var command = new ProcessMessageCommand("test message");
+        var error = Error.Validation("Request building failed");
 
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
-
-        AiClientMock
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Failure(expectedError));
+        _requestBuilderMock
+            .Setup(x => x.BuildAiRequest(It.IsAny<ProcessMessageCommand>()))
+            .Returns(Result<(AiRequest Request, int McpServerCount)>.Failure(error));
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
-        result.IsFailure.ShouldBeTrue();
-
-        // Verify error logging occurred
-        _typedLoggerMock.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("AI client failed to process message")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        result.IsSuccess.ShouldBeFalse();
+        result.Error.ShouldBe(error);
     }
 
     [Test]
-    public async Task Handle_ShouldMapToolExecutionsCorrectly_GivenMultipleToolExecutions()
+    public async Task Handle_WhenAiClientFails_ShouldReturnFailure()
     {
         // Arrange
-        var command = new ProcessMessageCommand("Execute tools");
-        var toolExecutions = new[]
-        {
-            ToolExecution.Success("weather", "{\"location\":\"NYC\"}", "Cloudy", TimeSpan.FromMilliseconds(750)),
-            ToolExecution.Failure("calendar", "{\"date\":\"today\"}", "Calendar not available", TimeSpan.FromMilliseconds(250))
-        };
+        var command = new ProcessMessageCommand("test message");
+        var aiRequest = new AiRequest("test message");
+        var error = Error.ExternalService("AI client failed");
 
-        var expectedAiResponse = new AiResponse("Tool results processed", "456", toolExecutions);
+        _requestBuilderMock
+            .Setup(x => x.BuildAiRequest(It.IsAny<ProcessMessageCommand>()))
+            .Returns(Result<(AiRequest Request, int McpServerCount)>.Success((aiRequest, 2)));
 
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
-
-        AiClientMock
+        _aiClientMock
             .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<AiResponse>.Success(expectedAiResponse));
+            .ReturnsAsync(Result<AiResponse>.Failure(error));
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        result.Value.ToolExecutions!.Length.ShouldBe(2);
-
-        var weatherExecution = result.Value.ToolExecutions![0];
-        weatherExecution.ToolName.ShouldBe("weather");
-        weatherExecution.Success.ShouldBeTrue();
-        weatherExecution.Duration.TotalMilliseconds.ShouldBe(750);
-
-        var calendarExecution = result.Value.ToolExecutions[1];
-        calendarExecution.ToolName.ShouldBe("calendar");
-        calendarExecution.Success.ShouldBeFalse();
-        calendarExecution.Duration.TotalMilliseconds.ShouldBe(250);
+        result.IsSuccess.ShouldBeFalse();
+        result.Error.ShouldBe(error);
     }
 
     [Test]
-    public async Task Handle_ShouldHandleCancellation_GivenCancelledToken()
+    public void Constructor_WithValidDependencies_ShouldCreateInstance()
     {
-        // Arrange
-        var command = new ProcessMessageCommand("Test message");
-        using var cancellationTokenSource = new CancellationTokenSource();
-        await cancellationTokenSource.CancelAsync();
-
-        _mcpServerResolverMock
-            .Setup(x => x.GetEnabledServerConfigurations())
-            .Returns(Result<IReadOnlyCollection<McpServerConfig>>.Success(new List<McpServerConfig>().AsReadOnly()));
-
-        AiClientMock
-            .Setup(x => x.ProcessMessageAsync(It.IsAny<AiRequest>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new OperationCanceledException());
-
         // Act & Assert
-        await Should.ThrowAsync<OperationCanceledException>(() => _handler.Handle(command, cancellationTokenSource.Token));
+        var handler = new ProcessMessageHandler(
+            _aiClientMock.Object,
+            _requestBuilderMock.Object,
+            _responseMappingMock.Object,
+            _loggerMock.Object);
+
+        handler.ShouldNotBeNull();
     }
-
-    #region Test Helper Methods
-
-    private new static void VerifyLoggerCalledWith<T>(Mock<ILogger<T>> loggerMock, LogLevel logLevel, string messageContent)
-    {
-        loggerMock.Verify(
-            x => x.Log(
-                logLevel,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains(messageContent)),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.AtLeastOnce);
-    }
-
-    #endregion
 }

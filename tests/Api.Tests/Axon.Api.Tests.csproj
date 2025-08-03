@@ -26,7 +26,6 @@
     <ProjectReference Include="../../src/Api/Axon.Api.csproj" />
     <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
-    <ProjectReference Include="../Shared/Axon.Tests.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

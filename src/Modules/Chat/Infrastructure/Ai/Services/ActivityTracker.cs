@@ -13,6 +13,25 @@ public sealed class ActivityTracker : IActivityTracker
     private static readonly ActivitySource ActivitySource = new("Axon.Chat.Infrastructure.OpenAi");
     private readonly ILogger<ActivityTracker> _logger;
 
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, string, int, Exception?> LogProcessingStartAction =
+        LoggerMessage.Define<string, int>(
+            LogLevel.Information,
+            new EventId(9001, "LogProcessingStart"),
+            "Processing message with OpenAI Responses API (Direct MCP) using model {Model} and {McpServerCount} MCP servers");
+            
+    private static readonly Action<ILogger, double, int, Exception?> LogProcessingSuccessAction =
+        LoggerMessage.Define<double, int>(
+            LogLevel.Information,
+            new EventId(9002, "LogProcessingSuccess"),
+            "Successfully processed message in {Duration}ms with {ToolCount} tool executions using Direct MCP");
+            
+    private static readonly Action<ILogger, double, string, Exception?> LogProcessingFailureAction =
+        LoggerMessage.Define<double, string>(
+            LogLevel.Error,
+            new EventId(9003, "LogProcessingFailure"),
+            "Failed to process message with Direct MCP after {Duration}ms: {Error}");
+
     public ActivityTracker(ILogger<ActivityTracker> logger)
     {
         _logger = logger;
@@ -63,10 +82,7 @@ public sealed class ActivityTracker : IActivityTracker
     /// <param name="toolCount">Number of tool executions</param>
     public void LogProcessingStart(string model, int mcpServerCount)
     {
-        _logger.LogInformation(
-            "Processing message with OpenAI Responses API (Direct MCP) using model {Model} and {McpServerCount} MCP servers",
-            model,
-            mcpServerCount);
+        LogProcessingStartAction(_logger, model, mcpServerCount, null);
     }
 
     /// <summary>
@@ -76,10 +92,7 @@ public sealed class ActivityTracker : IActivityTracker
     /// <param name="toolCount">Number of tool executions</param>
     public void LogProcessingSuccess(TimeSpan duration, int toolCount)
     {
-        _logger.LogInformation(
-            "Successfully processed message in {Duration}ms with {ToolCount} tool executions using Direct MCP",
-            duration.TotalMilliseconds,
-            toolCount);
+        LogProcessingSuccessAction(_logger, duration.TotalMilliseconds, toolCount, null);
     }
 
     /// <summary>
@@ -89,9 +102,6 @@ public sealed class ActivityTracker : IActivityTracker
     /// <param name="duration">Processing duration before failure</param>
     public void LogProcessingFailure(Exception ex, TimeSpan duration)
     {
-        _logger.LogError(ex,
-            "Failed to process message with Direct MCP after {Duration}ms: {Error}",
-            duration.TotalMilliseconds,
-            ex.Message);
+        LogProcessingFailureAction(_logger, duration.TotalMilliseconds, ex.Message, ex);
     }
 }

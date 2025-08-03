@@ -89,11 +89,12 @@ public sealed class OpenAiClient : IAiClient
             var responsesApiResponse = await ExecuteResponsesApiRequest(request, activity, cancellationToken);
             stopwatch.Stop();
 
-            // Parse tool executions from the response
-            var toolExecutions = ExtractToolExecutions(responsesApiResponse, stopwatch.Elapsed, activity);
+            // Extract text content and tool executions from the response
+            var textContent = ExtractTextContent(responsesApiResponse);
+            var toolExecutions = ExtractToolExecutions(responsesApiResponse);
 
             var response = new AiResponse(
-                Content: responsesApiResponse.OutputText ?? string.Empty,
+                Content: textContent,
                 ResponseId: responsesApiResponse.Id ?? Guid.NewGuid().ToString(),
                 ToolExecutions: toolExecutions);
 
@@ -191,10 +192,11 @@ public sealed class OpenAiClient : IAiClient
             throw new JsonException("Failed to deserialize OpenAI Responses API response");
         }
 
+        var textContent = ExtractTextContent(apiResponse);
         _logger.LogDebug(
             "Received response from OpenAI with ID {ResponseId} and {ContentLength} characters",
             apiResponse.Id,
-            apiResponse.OutputText?.Length ?? 0);
+            textContent.Length);
 
         return apiResponse;
     }
@@ -223,7 +225,8 @@ public sealed class OpenAiClient : IAiClient
             requestPayload["max_output_tokens"] = _options.MaxTokens;
         }
 
-        if (_options.Temperature >= 0.0 && _options.Temperature <= 2.0)
+        // Only include temperature for models that support it (not o1/o4 models)
+        if (_options.Temperature >= 0.0 && _options.Temperature <= 2.0 && !IsReasoningModel(_options.Model))
         {
             requestPayload["temperature"] = _options.Temperature;
         }
@@ -266,29 +269,78 @@ public sealed class OpenAiClient : IAiClient
     }
 
     /// <summary>
+    /// Extract text content from OpenAI Responses API response
+    /// </summary>
+    private string ExtractTextContent(ResponsesApiResponse response)
+    {
+        if (response.Output == null || response.Output.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Look for message type output items
+        foreach (var outputItem in response.Output)
+        {
+            if (outputItem.Type == "message" && outputItem.Content != null)
+            {
+                try
+                {
+                    // Try to deserialize as array of message content items
+                    var jsonElement = (JsonElement)outputItem.Content;
+                    if (jsonElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var contentItem in jsonElement.EnumerateArray())
+                        {
+                            if (contentItem.TryGetProperty("text", out var textProperty))
+                            {
+                                return textProperty.GetString() ?? string.Empty;
+                            }
+                        }
+                    }
+                }
+                catch (InvalidOperationException ex)
+                {
+                    _logger.LogWarning(ex, "Failed to parse message content from output item");
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
     /// Extract tool execution information from OpenAI Responses API response
     /// </summary>
-    private ToolExecution[]? ExtractToolExecutions(
-        ResponsesApiResponse response, 
-        TimeSpan totalDuration, 
-        Activity? activity)
+    private ToolExecution[]? ExtractToolExecutions(ResponsesApiResponse response)
     {
-        // Check if response contains MCP tool calls
-        if (response.McpCalls == null || response.McpCalls.Length == 0)
+        if (response.Output == null || response.Output.Length == 0)
         {
             return null;
         }
 
-        // Use the service to extract tool executions, avoiding direct Domain type instantiation
-        var toolExecutions = _toolExecutionService.ExtractFromMcpCalls(
-            response.McpCalls, 
-            totalDuration);
-        
-        _activityTracker.SetTags(activity,
-            ("tools.executed", toolExecutions.Length),
-            ("tools.successful", toolExecutions.Count(t => t.IsSuccess)),
-            ("tools.failed", toolExecutions.Count(t => !t.IsSuccess)));
-        
-        return toolExecutions;
+        foreach (var outputItem in response.Output)
+        {
+            if (outputItem.Type == "mcp_list_tools" && outputItem.Content != null)
+            {
+                // Parse MCP tool list content - for now, we just log it as no actual calls were made
+                _logger.LogDebug("Received MCP tool list in response");
+            }
+            // TODO: Add support for other MCP output types like tool call results
+        }
+
+        // For now, return null as we're only seeing tool lists, not actual tool executions
+        // This will be expanded when we handle actual tool call results
+        return null;
+    }
+
+    /// <summary>
+    /// Check if the model is a reasoning model (o1/o4 series) that doesn't support temperature parameter
+    /// </summary>
+    /// <param name="model">The model name</param>
+    /// <returns>True if it's a reasoning model</returns>
+    private static bool IsReasoningModel(string model)
+    {
+        return model.StartsWith("o1", StringComparison.OrdinalIgnoreCase) ||
+               model.StartsWith("o4", StringComparison.OrdinalIgnoreCase);
     }
 }

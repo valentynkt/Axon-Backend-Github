@@ -65,6 +65,49 @@ public sealed record OperationMetrics(
 public sealed class PerformanceMonitoringService : IPerformanceMonitoringService, IHostedService, IDisposable
 {
     private readonly ILogger<PerformanceMonitoringService> _logger;
+    
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, string, double, Exception?> LogSlowOperationAction =
+        LoggerMessage.Define<string, double>(
+            LogLevel.Warning,
+            new EventId(2001, "LogSlowOperation"),
+            "Slow operation detected: {OperationName} took {ExecutionTime}ms");
+            
+    private static readonly Action<ILogger, double, double, double, long, int, Exception?> LogPerformanceReportAction =
+        LoggerMessage.Define<double, double, double, long, int>(
+            LogLevel.Information,
+            new EventId(2002, "LogPerformanceReport"),
+            "Performance Report - Score: {Score:F1}/100, Avg Execution Time: {AvgTime:F1}ms, Cache Hit Rate: {CacheHitRate:P1}, Memory Usage: {MemoryMB}MB, Active Operations: {Operations}");
+            
+    private static readonly Action<ILogger, string, double, int, Exception?> LogSlowOperationInReportAction =
+        LoggerMessage.Define<string, double, int>(
+            LogLevel.Warning,
+            new EventId(2003, "LogSlowOperationInReport"),
+            "Slow operation: {OperationName} - Avg: {AvgTime:F1}ms, Count: {Count}");
+            
+    private static readonly Action<ILogger, Exception?> LogReportFailedAction =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(2004, "LogReportFailed"),
+            "Failed to generate performance report");
+            
+    private static readonly Action<ILogger, Exception?> LogServiceStartedAction =
+        LoggerMessage.Define(
+            LogLevel.Information,
+            new EventId(2005, "LogServiceStarted"),
+            "Performance monitoring service started");
+            
+    private static readonly Action<ILogger, double, TimeSpan, Exception?> LogServiceStoppedAction =
+        LoggerMessage.Define<double, TimeSpan>(
+            LogLevel.Information,
+            new EventId(2006, "LogServiceStopped"),
+            "Performance monitoring service stopped. Final score: {Score:F1}/100, Uptime: {Uptime}");
+            
+    private static readonly Action<ILogger, double, Exception?> LogServiceDisposedAction =
+        LoggerMessage.Define<double>(
+            LogLevel.Information,
+            new EventId(2007, "LogServiceDisposed"),
+            "PerformanceMonitoringService disposed. Final performance score: {Score:F1}/100");
     private readonly Timer _reportingTimer;
     private readonly DateTime _startTime;
     
@@ -112,10 +155,7 @@ public sealed class PerformanceMonitoringService : IPerformanceMonitoringService
         // Log slow operations
         if (executionTime.TotalMilliseconds > 1000) // Log operations > 1 second
         {
-            _logger.LogWarning(
-                "Slow operation detected: {OperationName} took {ExecutionTime}ms",
-                operationName,
-                executionTime.TotalMilliseconds);
+            LogSlowOperationAction(_logger, operationName, executionTime.TotalMilliseconds, null);
         }
     }
 
@@ -205,7 +245,7 @@ public sealed class PerformanceMonitoringService : IPerformanceMonitoringService
         }
     }
 
-    private double CalculatePerformanceScore(double avgExecutionTime, double cacheHitRate, long memoryUsageMB)
+    private static double CalculatePerformanceScore(double avgExecutionTime, double cacheHitRate, long memoryUsageMB)
     {
         // Simple performance scoring algorithm (can be enhanced)
         var executionTimeScore = Math.Max(0, 100 - avgExecutionTime / 10); // Penalize slow operations
@@ -221,14 +261,13 @@ public sealed class PerformanceMonitoringService : IPerformanceMonitoringService
         {
             var summary = GetPerformanceSummary();
             
-            _logger.LogInformation(
-                "Performance Report - Score: {Score:F1}/100, Avg Execution Time: {AvgTime:F1}ms, " +
-                "Cache Hit Rate: {CacheHitRate:P1}, Memory Usage: {MemoryMB}MB, Active Operations: {Operations}",
+            LogPerformanceReportAction(_logger,
                 summary.PerformanceScore,
                 summary.AverageExecutionTimeMs,
                 summary.CacheHitRate,
                 summary.TotalMemoryUsageMB,
-                summary.ActiveOperations);
+                summary.ActiveOperations,
+                null);
             
             // Report on slow operations
             lock (_metricsLock)
@@ -240,23 +279,29 @@ public sealed class PerformanceMonitoringService : IPerformanceMonitoringService
                         var avgTime = times.Average(t => t.TotalMilliseconds);
                         if (avgTime > 500) // Report operations averaging > 500ms
                         {
-                            _logger.LogWarning(
-                                "Slow operation: {OperationName} - Avg: {AvgTime:F1}ms, Count: {Count}",
-                                operationName, avgTime, times.Count);
+                            LogSlowOperationInReportAction(_logger, operationName, avgTime, times.Count, null);
                         }
                     }
                 }
             }
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Failed to generate performance report");
+            LogReportFailedAction(_logger, ex);
+        }
+        catch (ArgumentException ex)
+        {
+            LogReportFailedAction(_logger, ex);
+        }
+        catch (OutOfMemoryException ex)
+        {
+            LogReportFailedAction(_logger, ex);
         }
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Performance monitoring service started");
+        LogServiceStartedAction(_logger, null);
         return Task.CompletedTask;
     }
 
@@ -266,10 +311,7 @@ public sealed class PerformanceMonitoringService : IPerformanceMonitoringService
         
         // Generate final performance report
         var summary = GetPerformanceSummary();
-        _logger.LogInformation(
-            "Performance monitoring service stopped. Final score: {Score:F1}/100, Uptime: {Uptime}",
-            summary.PerformanceScore,
-            summary.SystemUptime);
+        LogServiceStoppedAction(_logger, summary.PerformanceScore, summary.SystemUptime, null);
         
         return Task.CompletedTask;
     }
@@ -279,8 +321,6 @@ public sealed class PerformanceMonitoringService : IPerformanceMonitoringService
         _reportingTimer?.Dispose();
         
         var summary = GetPerformanceSummary();
-        _logger.LogInformation(
-            "PerformanceMonitoringService disposed. Final performance score: {Score:F1}/100",
-            summary.PerformanceScore);
+        LogServiceDisposedAction(_logger, summary.PerformanceScore, null);
     }
 }

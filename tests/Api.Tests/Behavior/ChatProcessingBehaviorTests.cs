@@ -21,7 +21,7 @@ namespace Axon.Api.Tests.Behavior;
 /// These tests validate complete user scenarios and business flows.
 /// </summary>
 [TestFixture]
-public sealed class ChatProcessingBehaviorTests
+public sealed class ChatProcessingBehaviorTests : IDisposable
 {
     private WebApplicationFactory<Program> _factory = null!;
 
@@ -355,6 +355,11 @@ public sealed class ChatProcessingBehaviorTests
         // All tools should have succeeded
         content.ToolExecutions.ShouldAllBe(t => t.Success);
 
+    }
+
+    public void Dispose()
+    {
+        _factory?.Dispose();
     }
 
     private HttpClient CreateClientWithMockedAi(IAiClient mockAiClient)

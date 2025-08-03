@@ -435,5 +435,3 @@ public static class TestDataGenerators
         }
     }
 }
-
-npx claude-flow@alpha hive-mind spawn "We have a lot of not useful tests in Shared repo that we don't need, I would like you to carefully review all the tests in Axon.Tests.Shared And decide what should stay there, what should be removed completely or moved to specific Tests project. Currnetly the Axon.Tests.Shared has a lot of tests that shouldn't be there, after that you have to precisely review the tests that we have and if all of them follow the same approach and practices and stabilize, fix all the errors" --claude

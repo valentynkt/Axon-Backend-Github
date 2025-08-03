@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Tests.Types;
 [Category("Unit")]
 [Category("Domain")]
 [Category("Types")]
-public sealed class ToolExecutionTests : DomainTestBase
+public sealed class ToolExecutionTests
 {
     #region Constructor Tests
 
@@ -435,7 +435,7 @@ public sealed class ToolExecutionTests : DomainTestBase
         {
             var execution = ToolExecution.Success(
                 $"tool-{i}",
-                $"""{"iteration": {i}}""",
+                $"{{\"iteration\": {i}}}",
                 $"result-{i}",
                 TimeSpan.FromMilliseconds(i));
             executions.Add(execution);

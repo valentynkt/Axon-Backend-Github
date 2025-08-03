@@ -42,7 +42,7 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
         return violations;
     }
 
-    private async Task ValidateSecureConfiguration(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateSecureConfiguration(List<Type> types, List<RuleViolation> violations)
     {
         var configurationTypes = types.Where(t => 
             t.Name.EndsWith("Options") ||
@@ -69,19 +69,25 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
 
                     if (!hasProtectionAttribute)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Sensitive configuration property '{property.Name}' in '{configType.Name}' lacks protection attributes",
-                            configType.FullName!,
-                            property.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = configType.FullName!,
+                            AssemblyName = configType.Assembly.FullName!,
+                            Message = $"Sensitive configuration property '{property.Name}' in '{configType.Name}' lacks protection attributes",
+                            Severity = RuleSeverity.Error
+                        });
                     }
 
                     // Check if sensitive data is stored as plain string
                     if (property.PropertyType == typeof(string))
                     {
-                        violations.Add(new RuleViolation(
-                            $"Sensitive configuration property '{property.Name}' in '{configType.Name}' should use SecureString or encrypted type",
-                            configType.FullName!,
-                            property.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = configType.FullName!,
+                            AssemblyName = configType.Assembly.FullName!,
+                            Message = $"Sensitive configuration property '{property.Name}' in '{configType.Name}' should use SecureString or encrypted type",
+                            Severity = RuleSeverity.Error
+                        });
                     }
                 }
             }
@@ -90,7 +96,7 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateEnvironmentConfiguration(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateEnvironmentConfiguration(List<Type> types, List<RuleViolation> violations)
     {
         var configurationTypes = types.Where(t => 
             t.Name.EndsWith("Options") ||
@@ -108,10 +114,13 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
 
             if (!hasEnvironmentBinding)
             {
-                violations.Add(new RuleViolation(
-                    $"Configuration type '{configType.Name}' lacks environment-specific binding attributes",
-                    configType.FullName!,
-                    "Class"));
+                violations.Add(new RuleViolation
+                {
+                    TypeName = configType.FullName!,
+                    AssemblyName = configType.Assembly.FullName!,
+                    Message = $"Configuration type '{configType.Name}' lacks environment-specific binding attributes",
+                    Severity = RuleSeverity.Error
+                });
             }
 
             // Check for environment-specific properties
@@ -122,17 +131,20 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
 
             if (!hasEnvironmentProperties && configType.Name.Contains("App"))
             {
-                violations.Add(new RuleViolation(
-                    $"Application configuration type '{configType.Name}' should include environment identification",
-                    configType.FullName!,
-                    "Class"));
+                violations.Add(new RuleViolation
+                {
+                    TypeName = configType.FullName!,
+                    AssemblyName = configType.Assembly.FullName!,
+                    Message = $"Application configuration type '{configType.Name}' should include environment identification",
+                    Severity = RuleSeverity.Error
+                });
             }
         }
         
         await Task.CompletedTask;
     }
 
-    private async Task ValidateConfigurationValidation(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateConfigurationValidation(List<Type> types, List<RuleViolation> violations)
     {
         var configurationTypes = types.Where(t => 
             t.Name.EndsWith("Options") ||
@@ -148,10 +160,13 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
 
             if (!implementsValidation)
             {
-                violations.Add(new RuleViolation(
-                    $"Configuration type '{configType.Name}' should implement validation interface",
-                    configType.FullName!,
-                    "Class"));
+                violations.Add(new RuleViolation
+                {
+                    TypeName = configType.FullName!,
+                    AssemblyName = configType.Assembly.FullName!,
+                    Message = $"Configuration type '{configType.Name}' should implement validation interface",
+                    Severity = RuleSeverity.Error
+                });
             }
 
             // Check for validation attributes on properties
@@ -172,10 +187,13 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
 
                 if (isCriticalProperty && !hasValidationAttributes)
                 {
-                    violations.Add(new RuleViolation(
-                        $"Critical configuration property '{property.Name}' in '{configType.Name}' lacks validation attributes",
-                        configType.FullName!,
-                        property.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        TypeName = configType.FullName!,
+                        AssemblyName = configType.Assembly.FullName!,
+                        Message = $"Critical configuration property '{property.Name}' in '{configType.Name}' lacks validation attributes",
+                        Severity = RuleSeverity.Error
+                    });
                 }
             }
         }
@@ -183,7 +201,7 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateConfigurationChangeDetection(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateConfigurationChangeDetection(List<Type> types, List<RuleViolation> violations)
     {
         var configurationServiceTypes = types.Where(t => 
             t.Name.Contains("Configuration") && t.Name.Contains("Service"))
@@ -202,10 +220,13 @@ public sealed class AdvancedConfigurationRule : ArchitectureRuleBase
 
             if (!hasChangeDetection && !implementsChangeNotification)
             {
-                violations.Add(new RuleViolation(
-                    $"Configuration service '{serviceType.Name}' should support configuration change detection",
-                    serviceType.FullName!,
-                    "Class"));
+                violations.Add(new RuleViolation
+                {
+                    TypeName = serviceType.FullName!,
+                    AssemblyName = serviceType.Assembly.FullName!,
+                    Message = $"Configuration service '{serviceType.Name}' should support configuration change detection",
+                    Severity = RuleSeverity.Error
+                });
             }
         }
         

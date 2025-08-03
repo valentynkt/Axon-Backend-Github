@@ -37,7 +37,7 @@ public sealed class DependencyInversionRule : PatternComplianceRule
         return violations;
     }
 
-    private IEnumerable<Type> GetApplicationLayerTypes(IEnumerable<Type> types) =>
+    private static IEnumerable<Type> GetApplicationLayerTypes(IEnumerable<Type> types) =>
         types.Where(t => IsInApplicationLayer(t));
 
     private static IEnumerable<Type> GetInfrastructureLayerTypes(IEnumerable<Type> types) =>
@@ -218,24 +218,26 @@ public sealed class DependencyInversionRule : PatternComplianceRule
         }
     }
 
-    private Dictionary<string, List<MethodInfo>> GroupMethodsByPurpose(MethodInfo[] methods)
+    private static Dictionary<string, List<MethodInfo>> GroupMethodsByPurpose(MethodInfo[] methods)
     {
         var groups = new Dictionary<string, List<MethodInfo>>();
         
         foreach (var method in methods)
         {
             var purpose = DeterminePurpose(method);
-            if (!groups.ContainsKey(purpose))
+            if (!groups.TryGetValue(purpose, out List<MethodInfo>? value))
             {
-                groups[purpose] = new List<MethodInfo>();
+                value = new List<MethodInfo>();
+                groups[purpose] = value;
             }
-            groups[purpose].Add(method);
+
+            value.Add(method);
         }
         
         return groups;
     }
 
-    private string DeterminePurpose(MethodInfo method)
+    private static string DeterminePurpose(MethodInfo method)
     {
         var name = method.Name.ToLowerInvariant();
         
@@ -253,7 +255,12 @@ public sealed class DependencyInversionRule : PatternComplianceRule
         return "Other";
     }
 
-    private IEnumerable<Type> GetConcreteDependencies(Type type)
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="type"></param>
+    /// <returns></returns>
+    public IEnumerable<Type> GetConcreteDependencies(Type type)
     {
         var dependencies = new HashSet<Type>();
         
@@ -272,7 +279,7 @@ public sealed class DependencyInversionRule : PatternComplianceRule
         return dependencies;
     }
 
-    private IEnumerable<Type> GetAllDependencies(Type type)
+    public IEnumerable<Type> GetAllDependencies(Type type)
     {
         var dependencies = new HashSet<Type>();
         
@@ -293,54 +300,62 @@ public sealed class DependencyInversionRule : PatternComplianceRule
         return dependencies;
     }
 
-    private IEnumerable<Type> GetImplementedApplicationInterfaces(Type type)
+    private static IEnumerable<Type> GetImplementedApplicationInterfaces(Type type)
     {
         return type.GetInterfaces()
             .Where(i => IsInApplicationLayer(i));
     }
 
-    private bool IsInfrastructureConcrete(Type type) =>
+    private static bool IsInfrastructureConcrete(Type type) =>
         IsInfrastructureLayer(type) && IsConcreteType(type);
 
-    private bool IsConcreteImplementation(Type type) =>
+    private static bool IsConcreteImplementation(Type type) =>
         type.IsClass && !type.IsAbstract && !IsConfigurationOrStartupType(type);
 
     private bool IsAbstraction(Type type) =>
         type.IsInterface || type.IsAbstract;
 
-    private bool IsConcreteType(Type type) =>
+    private static bool IsConcreteType(Type type) =>
         type.IsClass && !type.IsAbstract && !type.IsInterface;
 
-    private bool IsAllowedConcreteDependency(Type type) =>
+    private static bool IsAllowedConcreteDependency(Type type) =>
         type.IsPrimitive || 
         type == typeof(string) || 
         type.Namespace?.StartsWith("System") == true ||
         IsValueType(type) ||
         IsConfigurationOrStartupType(type);
 
-    private bool IsConfigurationOrStartupType(Type type) =>
+    private static bool IsConfigurationOrStartupType(Type type) =>
         type.Name.EndsWith("Options") ||
         type.Name.EndsWith("Settings") ||
         type.Name.EndsWith("Configuration") ||
         type.Name.Contains("Startup");
 
-    private bool ShouldHaveImplementation(Type abstraction) =>
+    private static bool ShouldHaveImplementation(Type abstraction) =>
         abstraction.IsInterface && 
-        !abstraction.Name.StartsWith("I") || // Consider marker interfaces
+        !abstraction.Name.StartsWith($"I") || // Consider marker interfaces
         abstraction.GetMethods().Any(); // Has methods to implement
 
     private bool IsExternalDependency(Type type) =>
         !type.Namespace?.StartsWith("Axon") == true;
 
-    private bool IsStaticDependency(Type type, Type dependency)
+    private static bool IsStaticDependency(Type type, Type dependency)
     {
         // Check for static method calls (simplified heuristic)
         var methods = type.GetMethods(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
         return methods.Any(m => m.Name.Contains(dependency.Name));
     }
 
-    private bool IsValueType(Type type) =>
+    private static bool IsValueType(Type type) =>
         type.IsValueType || 
         (type.Namespace?.StartsWith("Axon") == true && 
          (type.Name.EndsWith("Id") || type.Name.EndsWith("Value")));
+
+    private static bool InheritsFrom(Type type, Type baseType) =>
+        type.IsSubclassOf(baseType) || 
+        (baseType.IsInterface && baseType.IsAssignableFrom(type));
+
+    private static bool IsInfrastructureLayer(Type type) =>
+        type.Namespace?.Contains(".Infrastructure.", StringComparison.OrdinalIgnoreCase) == true ||
+        type.Namespace?.EndsWith(".Infrastructure", StringComparison.OrdinalIgnoreCase) == true;
 }

@@ -1,6 +1,9 @@
 using Axon.ArchitectureTests.Core.Rules.EventDriven;
-using Axon.Tests.Shared.Extensions;
-using Axon.Tests.Shared.TestBase;
+using Axon.ArchitectureTests.Core.TestBase;
+using Axon.ArchitectureTests.Framework.Contracts;
+// Removed due to circular dependency
+// using Axon.Tests.Shared.Tests.Extensions;
+// using Axon.Tests.Shared.TestBase;
 
 namespace Axon.ArchitectureTests.Core.Tests.EventDriven;
 
@@ -63,8 +66,8 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
             new EventSourcingRule()
         };
         
-        var result = await ExecuteRulesAndValidateAsync(rules, "Event-driven architecture validation");
-        result.ShouldBeCompliant("All event-driven rules should pass");
+        var result = await ExecuteRulesAndValidateAsync(rules);
+        AssertAllRulesSuccess(result);
     }
 
     [Test]
@@ -73,8 +76,17 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         var rule = new DomainEventsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "EVT001");
         
-        var immutabilityViolations = FilterViolations(ruleResult, "immutable", "setter");
-        LogViolations(immutabilityViolations, "Event Immutability Violations");
+        var immutabilityViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("immutable", StringComparison.OrdinalIgnoreCase) || 
+            v.Message.Contains("setter", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        if (immutabilityViolations.Any())
+        {
+            Console.WriteLine("Event Immutability Violations:");
+            foreach (var violation in immutabilityViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         immutabilityViolations.Count.ShouldBe(0, $"Mutable events found: {immutabilityViolations.Count}");
     }
@@ -85,11 +97,20 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         var rule = new EventHandlersRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "EVT003");
         
-        var idempotencyViolations = FilterViolations(ruleResult, "idempotent");
-        LogViolations(idempotencyViolations, "Handler Idempotency Violations");
+        var idempotencyViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("idempotent", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (idempotencyViolations.Any())
+        {
+            Console.WriteLine("Handler Idempotency Violations:");
+            foreach (var violation in idempotencyViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - idempotency might be handled at infrastructure level
-        await TestContext.Out.WriteLineAsync($"Handlers without explicit idempotency: {idempotencyViolations.Count}");
+        Console.WriteLine($"Handlers without explicit idempotency: {idempotencyViolations.Count}");
     }
 
     [Test]
@@ -98,11 +119,21 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         var rule = new EventStoreRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "EVT004");
         
-        var versioningViolations = FilterViolations(ruleResult, "version", "schema");
-        LogViolations(versioningViolations, "Event Versioning Violations");
+        var versioningViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("version", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("schema", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (versioningViolations.Any())
+        {
+            Console.WriteLine("Event Versioning Violations:");
+            foreach (var violation in versioningViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - versioning might not be needed in all scenarios
-        await TestContext.Out.WriteLineAsync($"Events without versioning: {versioningViolations.Count}");
+        Console.WriteLine($"Events without versioning: {versioningViolations.Count}");
     }
 
     [Test]
@@ -111,8 +142,19 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         var rule = new IntegrationEventsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "EVT002");
         
-        var failureViolations = FilterViolations(ruleResult, "failure", "retry", "dead letter");
-        LogViolations(failureViolations, "Event Publishing Failure Violations");
+        var failureViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("failure", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("retry", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("dead letter", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (failureViolations.Any())
+        {
+            Console.WriteLine("Event Publishing Failure Violations:");
+            foreach (var violation in failureViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         failureViolations.Count.ShouldBe(0, $"Event publishing without failure handling: {failureViolations.Count}");
     }
@@ -123,11 +165,20 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         var rule = new DomainEventsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "EVT001");
         
-        var aggregateViolations = FilterViolations(ruleResult, "aggregate");
-        LogViolations(aggregateViolations, "Aggregate Domain Event Violations");
+        var aggregateViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("aggregate", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (aggregateViolations.Any())
+        {
+            Console.WriteLine("Aggregate Domain Event Violations:");
+            foreach (var violation in aggregateViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - not all aggregates need to raise events
-        await TestContext.Out.WriteLineAsync($"Aggregates without domain events: {aggregateViolations.Count}");
+        Console.WriteLine($"Aggregates without domain events: {aggregateViolations.Count}");
     }
 
     [Test]
@@ -136,10 +187,20 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         var rule = new EventSourcingRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "EVT005");
         
-        var consistencyViolations = FilterViolations(ruleResult, "projection", "consistency");
-        LogViolations(consistencyViolations, "Projection Consistency Violations");
+        var consistencyViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("projection", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("consistency", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (consistencyViolations.Any())
+        {
+            Console.WriteLine("Projection Consistency Violations:");
+            foreach (var violation in consistencyViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - projections might not be used everywhere
-        await TestContext.Out.WriteLineAsync($"Potential projection consistency issues: {consistencyViolations.Count}");
+        Console.WriteLine($"Potential projection consistency issues: {consistencyViolations.Count}");
     }
 }

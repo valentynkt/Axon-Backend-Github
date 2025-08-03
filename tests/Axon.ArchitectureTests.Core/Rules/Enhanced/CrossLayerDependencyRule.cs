@@ -66,7 +66,7 @@ public sealed class CrossLayerDependencyRule : PatternComplianceRule
         };
     }
 
-    private string? DetermineLayer(Type type)
+    private static string? DetermineLayer(Type type)
     {
         var namespaceParts = type.Namespace?.Split('.');
         if (namespaceParts == null) return null;
@@ -151,7 +151,7 @@ public sealed class CrossLayerDependencyRule : PatternComplianceRule
         }
     }
 
-    private bool IsInvalidDependencyDirection(string sourceLayer, string targetLayer)
+    private static bool IsInvalidDependencyDirection(string sourceLayer, string targetLayer)
     {
         // Special cases
         if (targetLayer == "Shared") return false; // All layers can depend on Shared
@@ -256,7 +256,7 @@ public sealed class CrossLayerDependencyRule : PatternComplianceRule
         Dictionary<Type, HashSet<Type>> dependencies, 
         List<RuleViolation> violations)
     {
-        foreach (var (type, directDeps) in dependencies)
+        foreach (var (type, _) in dependencies)
         {
             var transitiveDeps = GetTransitiveDependencies(type, dependencies, new HashSet<Type>());
             var chainLength = CalculateMaxDependencyChainLength(type, dependencies);
@@ -279,7 +279,7 @@ public sealed class CrossLayerDependencyRule : PatternComplianceRule
         }
     }
 
-    private HashSet<Type> GetTransitiveDependencies(
+    private static HashSet<Type> GetTransitiveDependencies(
         Type type, 
         Dictionary<Type, HashSet<Type>> dependencies, 
         HashSet<Type> visited)
@@ -303,7 +303,7 @@ public sealed class CrossLayerDependencyRule : PatternComplianceRule
         return transitive;
     }
 
-    private int CalculateMaxDependencyChainLength(
+    private static int CalculateMaxDependencyChainLength(
         Type type, 
         Dictionary<Type, HashSet<Type>> dependencies, 
         HashSet<Type> visited = null!)
@@ -327,7 +327,7 @@ public sealed class CrossLayerDependencyRule : PatternComplianceRule
         return maxLength;
     }
 
-    private class TypeDependencyAnalysis
+    private sealed class TypeDependencyAnalysis
     {
         public Dictionary<Type, HashSet<Type>> Dependencies { get; set; } = new();
         public Dictionary<Type, string> LayerMapping { get; set; } = new();

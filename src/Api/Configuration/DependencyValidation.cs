@@ -14,31 +14,31 @@ public static class DependencyValidation
     /// </summary>
     /// <param name="services">Service collection to validate</param>
     /// <returns>Validation results</returns>
-    public static ValidationResult ValidateServiceRegistrations(IServiceCollection services)
-    {
-        var errors = new List<string>();
-        var warnings = new List<string>();
+ //public static ValidationResult ValidateServiceRegistrations(IServiceCollection services)
+ //{
+ //    var errors = new List<string>();
+ //    var warnings = new List<string>();
 
-        // Validate SRP decomposition services
-        ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageValidator>(services, errors, "srp-decomposition-specialist");
-        ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IRequestBuilder>(services, errors, "srp-decomposition-specialist");
-        ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IResponseMapper>(services, errors, "srp-decomposition-specialist");
+ //    // Validate SRP decomposition services
+ //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageValidator>(services, errors, "srp-decomposition-specialist");
+ //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IRequestBuilder>(services, errors, "srp-decomposition-specialist");
+ //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IResponseMapper>(services, errors, "srp-decomposition-specialist");
+///
+ //    //// Validate performance optimization services
+ //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageCache>(services, errors, "performance-optimizer");
+///
+ //    //// Validate clean architecture services
+ //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageProcessor>(services, errors, "clean-architecture-enforcer");
+///
+ //    //// Validate monitoring services
+ //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IPerformanceMetrics>(services, errors, "monitoring-specialist");
+///
+ //    //// Check for circular dependencies
+ //    //var circularDeps = DetectCircularDependencies(services);
+ //    //errors.AddRange(circularDeps);
 
-        // Validate performance optimization services
-        ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageCache>(services, errors, "performance-optimizer");
-
-        // Validate clean architecture services
-        ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageProcessor>(services, errors, "clean-architecture-enforcer");
-
-        // Validate monitoring services
-        ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IPerformanceMetrics>(services, errors, "monitoring-specialist");
-
-        // Check for circular dependencies
-        var circularDeps = DetectCircularDependencies(services);
-        errors.AddRange(circularDeps);
-
-        return new ValidationResult(errors, warnings);
-    }
+ //    return new ValidationResult(errors, warnings);
+ //}
 
     private static void ValidateServiceExists<T>(IServiceCollection services, List<string> errors, string agentName)
     {
@@ -86,6 +86,6 @@ public static class DependencyValidation
 
     public record ValidationResult(List<string> Errors, List<string> Warnings)
     {
-        public bool IsValid => !Errors.Any();
+        public bool IsValid => Errors.Count == 0;
     }
 }

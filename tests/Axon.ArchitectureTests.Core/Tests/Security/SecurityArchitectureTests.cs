@@ -1,5 +1,7 @@
 using Axon.ArchitectureTests.Core.Rules.Security;
-using Axon.Tests.Shared.TestBase;
+using Axon.ArchitectureTests.Core.TestBase;
+using Axon.ArchitectureTests.Framework.Contracts;
+// using Axon.Tests.Shared.TestBase; // Removed due to circular dependency
 
 namespace Axon.ArchitectureTests.Core.Tests.Security;
 
@@ -90,10 +92,10 @@ public sealed class SecurityArchitectureTests : ArchitectureTestBase
         };
 
         // Act
-        var result = await ExecuteRulesAndValidateAsync(rules, "All Security Rules");
+        var result = await ExecuteRulesAndValidateAsync(rules);
 
         // Assert
-        AssertAllRulesSuccess(result, "Security architecture compliance");
+        AssertAllRulesSuccess(result);
     }
 
     [Test]
@@ -104,7 +106,8 @@ public sealed class SecurityArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "SEC002");
         
         // Assert - Focus on API endpoint security violations
-        AssertNoSpecificViolations(ruleResult, new[] { "endpoint", "authorize" }, "API Security");
+        AssertNoSpecificViolations(ruleResult, "endpoint");
+        AssertNoSpecificViolations(ruleResult, "authorize");
     }
 
     [Test]
@@ -115,7 +118,8 @@ public sealed class SecurityArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "SEC005");
         
         // Assert - Focus on logging violations
-        AssertNoSpecificViolations(ruleResult, new[] { "logging", "sensitive" }, "Data Logging");
+        AssertNoSpecificViolations(ruleResult, "logging");
+        AssertNoSpecificViolations(ruleResult, "sensitive");
     }
 
     [Test]
@@ -126,7 +130,10 @@ public sealed class SecurityArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "SEC003");
         
         // Assert - Log but don't fail (informational)
-        LogInformationalViolations(ruleResult, new[] { "dependency" }, "Dependency Security");
+        if (ruleResult.Violations?.Any(v => v.Message.Contains("dependency", StringComparison.OrdinalIgnoreCase)) == true)
+        {
+            Console.WriteLine("Informational: Found dependency security violations");
+        }
     }
 
     [Test]
@@ -137,6 +144,7 @@ public sealed class SecurityArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "SEC005");
         
         // Assert - Focus on encryption violations
-        AssertNoSpecificViolations(ruleResult, new[] { "encryption", "plaintext" }, "Encryption");
+        AssertNoSpecificViolations(ruleResult, "encryption");
+        AssertNoSpecificViolations(ruleResult, "plaintext");
     }
 }

@@ -1,6 +1,6 @@
 using Axon.Shared.Common;
 using Axon.Shared.Common.Abstractions;
-using Axon.Tests.Shared.Extensions;
+// // using Axon.Tests.Shared.Tests.Extensions; // Removed to prevent circular dependency // Removed to fix circular dependency
 using Axon.Tests.Shared.Builders;
 using Axon.Tests.Shared.Generators;
 

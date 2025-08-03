@@ -26,6 +26,9 @@
   <Folder Name="/src/Shared/Common/">
     <Project Path="src/Shared/Common/Axon.Shared.Common.csproj" />
   </Folder>
+  <Folder Name="/src/Shared/Domain/">
+    <Project Path="src/Shared/Domain/Axon.Shared.Domain.csproj" />
+  </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Api.Tests/">
     <Project Path="tests/Api.Tests/Axon.Api.Tests.csproj" />
@@ -44,8 +47,5 @@
   </Folder>
   <Folder Name="/tests/Modules.Chat.Infrastructure.Tests/">
     <Project Path="tests/Modules.Chat.Infrastructure.Tests/Axon.Modules.Chat.Infrastructure.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Shared/">
-    <Project Path="tests/Shared/Axon.Tests.Shared.csproj" />
   </Folder>
 </Solution>

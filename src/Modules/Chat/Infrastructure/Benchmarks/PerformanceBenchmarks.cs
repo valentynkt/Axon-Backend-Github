@@ -16,6 +16,19 @@ namespace Axon.Modules.Chat.Infrastructure.Benchmarks;
 public sealed class PerformanceBenchmarks
 {
     private readonly ILogger<PerformanceBenchmarks> _logger;
+    
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, Exception?> LogBenchmarksStartAction =
+        LoggerMessage.Define(
+            LogLevel.Information,
+            new EventId(4001, "LogBenchmarksStart"),
+            "Starting comprehensive performance benchmarks");
+            
+    private static readonly Action<ILogger, double, double, Exception?> LogBenchmarksCompleteAction =
+        LoggerMessage.Define<double, double>(
+            LogLevel.Information,
+            new EventId(4002, "LogBenchmarksComplete"),
+            "Performance Benchmarks Complete - Average Execution Improvement: {ExecutionImprovement:P1}, Average Memory Improvement: {MemoryImprovement:P1}");
 
     public PerformanceBenchmarks(ILogger<PerformanceBenchmarks>? logger = null)
     {
@@ -41,7 +54,7 @@ public sealed class PerformanceBenchmarks
     /// <returns>Collection of benchmark results</returns>
     public async Task<IReadOnlyList<BenchmarkResults>> RunAllBenchmarksAsync()
     {
-        _logger.LogInformation("Starting comprehensive performance benchmarks");
+        LogBenchmarksStartAction(_logger, null);
         
         var results = new List<BenchmarkResults>
         {
@@ -55,11 +68,7 @@ public sealed class PerformanceBenchmarks
         var totalImprovement = results.Average(r => r.ImprovementPercentage);
         var totalMemoryImprovement = results.Average(r => r.MemoryImprovementPercentage);
         
-        _logger.LogInformation(
-            "Performance Benchmarks Complete - Average Execution Improvement: {ExecutionImprovement:P1}, " +
-            "Average Memory Improvement: {MemoryImprovement:P1}",
-            totalImprovement / 100,
-            totalMemoryImprovement / 100);
+        LogBenchmarksCompleteAction(_logger, totalImprovement / 100, totalMemoryImprovement / 100, null);
 
         return results;
     }
@@ -67,7 +76,7 @@ public sealed class PerformanceBenchmarks
     /// <summary>
     /// Benchmark MCP configuration caching performance
     /// </summary>
-    private async Task<BenchmarkResults> BenchmarkMcpConfigurationCachingAsync()
+    private static async Task<BenchmarkResults> BenchmarkMcpConfigurationCachingAsync()
     {
         const int iterations = 1000;
         
@@ -135,7 +144,7 @@ public sealed class PerformanceBenchmarks
     /// <summary>
     /// Benchmark ArrayPool usage for tool execution extraction
     /// </summary>
-    private async Task<BenchmarkResults> BenchmarkArrayPoolUsageAsync()
+    private static async Task<BenchmarkResults> BenchmarkArrayPoolUsageAsync()
     {
         const int iterations = 500;
         var sampleJsonResponses = GenerateSampleJsonResponses(10);
@@ -191,7 +200,7 @@ public sealed class PerformanceBenchmarks
     /// <summary>
     /// Benchmark batch JSON serialization performance
     /// </summary>
-    private async Task<BenchmarkResults> BenchmarkBatchJsonSerializationAsync()
+    private static async Task<BenchmarkResults> BenchmarkBatchJsonSerializationAsync()
     {
         const int iterations = 200;
         var sampleObjects = GenerateSampleObjects(50);
@@ -247,7 +256,7 @@ public sealed class PerformanceBenchmarks
     /// <summary>
     /// Benchmark HTTP client optimization (simulation)
     /// </summary>
-    private BenchmarkResults BenchmarkHttpClientOptimization()
+    private static BenchmarkResults BenchmarkHttpClientOptimization()
     {
         // This is a simulation since we can't easily benchmark actual HTTP calls
         // In real scenarios, you would measure against actual endpoints

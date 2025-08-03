@@ -36,6 +36,43 @@ public sealed class BatchJsonSerializer : IBatchJsonSerializer, IDisposable
     private readonly JsonSerializerOptions _optimizedOptions;
     private readonly ILogger<BatchJsonSerializer> _logger;
     
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, int, long, Exception?> LogBatchSerializedAction =
+        LoggerMessage.Define<int, long>(
+            LogLevel.Debug,
+            new EventId(3001, "LogBatchSerialized"),
+            "Batch serialized {ObjectCount} objects in single operation. Total batches: {BatchCount}");
+            
+    private static readonly Action<ILogger, int, Exception?> LogBatchSerializationFailedAction =
+        LoggerMessage.Define<int>(
+            LogLevel.Error,
+            new EventId(3002, "LogBatchSerializationFailed"),
+            "Failed to batch serialize {ObjectCount} objects");
+            
+    private static readonly Action<ILogger, string, Exception?> LogBatchDeserializationFailedAction =
+        LoggerMessage.Define<string>(
+            LogLevel.Error,
+            new EventId(3003, "LogBatchDeserializationFailed"),
+            "Failed to batch deserialize JSON: {JsonPreview}");
+            
+    private static readonly Action<ILogger, string, Exception?> LogSingleSerializationFailedAction =
+        LoggerMessage.Define<string>(
+            LogLevel.Error,
+            new EventId(3004, "LogSingleSerializationFailed"),
+            "Failed to serialize object of type {ObjectType}");
+            
+    private static readonly Action<ILogger, int, Exception?> LogBatchDeserializedAction =
+        LoggerMessage.Define<int>(
+            LogLevel.Debug,
+            new EventId(3005, "LogBatchDeserialized"),
+            "Batch deserialized {ObjectCount} objects from JSON");
+            
+    private static readonly Action<ILogger, long, long, double, Exception?> LogSerializerDisposedAction =
+        LoggerMessage.Define<long, long, double>(
+            LogLevel.Information,
+            new EventId(3006, "LogSerializerDisposed"),
+            "BatchJsonSerializer disposed. Metrics - Batch Operations: {BatchOps}, Total Objects: {TotalObjects}, Avg per Batch: {AvgPerBatch:F1}");
+    
     // Performance tracking
     private long _batchOperations;
     private long _totalObjectsSerialized;
@@ -96,16 +133,13 @@ public sealed class BatchJsonSerializer : IBatchJsonSerializer, IDisposable
             var result = System.Text.Encoding.UTF8.GetString(jsonBytes);
             
             IncrementBatchOperations(objectArray.Length);
-            _logger.LogDebug(
-                "Batch serialized {ObjectCount} objects in single operation. Total batches: {BatchCount}",
-                objectArray.Length,
-                GetBatchOperationCount());
+            LogBatchSerializedAction(_logger, objectArray.Length, GetBatchOperationCount(), null);
             
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to batch serialize {ObjectCount} objects", objectArray.Length);
+            LogBatchSerializationFailedAction(_logger, objectArray.Length, ex);
             throw;
         }
     }
@@ -144,13 +178,13 @@ public sealed class BatchJsonSerializer : IBatchJsonSerializer, IDisposable
 
             await Task.Yield(); // Async completion point
             
-            _logger.LogDebug("Batch deserialized {ObjectCount} objects from JSON", results.Count);
+            LogBatchDeserializedAction(_logger, results.Count, null);
             return results.AsReadOnly();
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to batch deserialize JSON: {JsonPreview}", 
-                json.Length > 100 ? json[..100] + "..." : json);
+            var jsonPreview = json.Length > 100 ? json[..100] + "..." : json;
+            LogBatchDeserializationFailedAction(_logger, jsonPreview, ex);
             throw;
         }
     }
@@ -183,7 +217,7 @@ public sealed class BatchJsonSerializer : IBatchJsonSerializer, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to serialize object of type {ObjectType}", typeof(T).Name);
+            LogSingleSerializationFailedAction(_logger, typeof(T).Name, ex);
             throw;
         }
     }
@@ -222,8 +256,6 @@ public sealed class BatchJsonSerializer : IBatchJsonSerializer, IDisposable
     public void Dispose()
     {
         var (batchOps, totalObjects, avgPerBatch) = GetMetrics();
-        _logger.LogInformation(
-            "BatchJsonSerializer disposed. Metrics - Batch Operations: {BatchOps}, Total Objects: {TotalObjects}, Avg per Batch: {AvgPerBatch:F1}",
-            batchOps, totalObjects, avgPerBatch);
+        LogSerializerDisposedAction(_logger, batchOps, totalObjects, avgPerBatch, null);
     }
 }

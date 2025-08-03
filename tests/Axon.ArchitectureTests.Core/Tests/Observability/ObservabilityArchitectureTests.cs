@@ -1,5 +1,7 @@
 using Axon.ArchitectureTests.Core.Rules.Observability;
-using Axon.Tests.Shared.TestBase;
+using Axon.ArchitectureTests.Core.TestBase;
+using Axon.ArchitectureTests.Framework.Contracts;
+// using Axon.Tests.Shared.TestBase; // Removed due to circular dependency
 
 namespace Axon.ArchitectureTests.Core.Tests.Observability;
 
@@ -67,10 +69,10 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
         };
 
         // Act
-        var result = await ExecuteRulesAndValidateAsync(rules, "All Observability Rules");
+        var result = await ExecuteRulesAndValidateAsync(rules);
 
         // Assert
-        AssertAllRulesSuccess(result, "Observability architecture compliance");
+        AssertAllRulesSuccess(result);
     }
 
     [Test]
@@ -81,7 +83,18 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS001");
         
         // Log but don't fail - log level usage might vary (informational)
-        LogInformationalViolations(ruleResult, new[] { "log level", "logging level" }, "Log Level Usage");
+        var logLevelViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("log level", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("logging level", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (logLevelViolations.Any())
+        {
+            Console.WriteLine("Log Level Usage Violations:");
+            foreach (var violation in logLevelViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
     }
 
     [Test]
@@ -91,8 +104,9 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
         var rule = new LoggingPatternsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS001");
         
-        // Assert - Focus on structured logging violations using Framework helper
-        AssertNoSpecificViolations(ruleResult, new[] { "structured", "interpolation" }, "Structured Logging");
+        // Assert - Focus on structured logging violations
+        AssertNoSpecificViolations(ruleResult, "structured");
+        AssertNoSpecificViolations(ruleResult, "interpolation");
     }
 
     [Test]
@@ -103,7 +117,17 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS_002");
         
         // Log but don't fail - business metrics might not be needed everywhere (informational)
-        LogInformationalViolations(ruleResult, new[] { "business" }, "Business Metrics");
+        var businessMetricsViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("business", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (businessMetricsViolations.Any())
+        {
+            Console.WriteLine("Business Metrics Violations:");
+            foreach (var violation in businessMetricsViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
     }
 
     [Test]
@@ -113,8 +137,9 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
         var rule = new TracingRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS003");
         
-        // Assert - Focus on correlation ID violations using Framework helper
-        AssertNoSpecificViolations(ruleResult, new[] { "correlation", "trace id" }, "Correlation ID");
+        // Assert - Focus on correlation ID violations
+        AssertNoSpecificViolations(ruleResult, "correlation");
+        AssertNoSpecificViolations(ruleResult, "trace id");
     }
 
     [Test]
@@ -124,7 +149,8 @@ public sealed class ObservabilityArchitectureTests : ArchitectureTestBase
         var rule = new LoggingPatternsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "OBS001");
         
-        // Assert - Focus on error observability violations using Framework helper
-        AssertNoSpecificViolations(ruleResult, new[] { "error", "exception" }, "Error Observability");
+        // Assert - Focus on error observability violations
+        AssertNoSpecificViolations(ruleResult, "error");
+        AssertNoSpecificViolations(ruleResult, "exception");
     }
 }

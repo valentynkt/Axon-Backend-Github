@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 using Axon.Shared.Common;
-using Axon.Tests.Shared.Extensions;
+// using Axon.Tests.Shared.Tests.Extensions; // Removed to fix circular dependency
 using Axon.Tests.Shared.TestBase;
 using Microsoft.Extensions.Logging;
 using Moq;

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Tests.Shared.Performance;
+namespace Axon.Tests.Shared.Tests.Performance;
 
 /// <summary>
 /// Performance Validation Report - Validates 90% improvement target achievements
@@ -69,7 +69,7 @@ public sealed class PerformanceValidationReport
         TestContext.WriteLine($"   Optimized Memory: {optimizedMemory / 1024.0:F1}KB");
         TestContext.WriteLine($"   Memory Reduction: {memoryReduction:F1}%");
         
-        memoryReduction.ShouldBeGreaterThan(35.0, "Memory optimization should achieve 35%+ reduction");
+        memoryReduction.ShouldBeGreaterThan((long)35.0, "Memory optimization should achieve 35%+ reduction");
         
         TestContext.WriteLine("   ✅ Memory Optimization: TARGET ACHIEVED");
         TestContext.WriteLine();

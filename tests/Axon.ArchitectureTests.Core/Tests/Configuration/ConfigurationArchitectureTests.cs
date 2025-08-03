@@ -1,5 +1,7 @@
 using Axon.ArchitectureTests.Core.Rules.Configuration;
-using Axon.Tests.Shared.TestBase;
+using Axon.ArchitectureTests.Core.TestBase;
+using Axon.ArchitectureTests.Framework.Contracts;
+// using Axon.Tests.Shared.TestBase; // Removed due to circular dependency - using local ArchitectureTestBase
 
 namespace Axon.ArchitectureTests.Core.Tests.Configuration;
 
@@ -78,10 +80,10 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         };
 
         // Act
-        var result = await ExecuteRulesAndValidateAsync(rules, "All Configuration Rules");
+        var result = await ExecuteRulesAndValidateAsync(rules);
 
         // Assert
-        AssertAllRulesSuccess(result, "Configuration architecture compliance");
+        AssertAllRulesSuccess(result);
     }
 
     [Test]
@@ -92,7 +94,8 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG002");
         
         // Assert - Focus on validation attribute violations
-        AssertNoSpecificViolations(ruleResult, new[] { "validation", "attribute" }, "Validation Attribute");
+        AssertNoSpecificViolations(ruleResult, "validation");
+        AssertNoSpecificViolations(ruleResult, "attribute");
     }
 
     [Test]
@@ -103,7 +106,8 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG003");
         
         // Assert - Focus on hardcoded value violations
-        AssertNoSpecificViolations(ruleResult, new[] { "hardcoded", "constant" }, "Hardcoded Value");
+        AssertNoSpecificViolations(ruleResult, "hardcoded");
+        AssertNoSpecificViolations(ruleResult, "constant");
     }
 
     [Test]
@@ -114,7 +118,18 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CONFIG_001");
         
         // Assert - Log but don't fail (informational)
-        LogInformationalViolations(ruleResult, new[] { "section", "structure" }, "Configuration Structure");
+        var structureViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("section", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("structure", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (structureViolations.Any())
+        {
+            Console.WriteLine("Configuration Structure Violations:");
+            foreach (var violation in structureViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
     }
 
     [Test]
@@ -125,7 +140,9 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG004");
         
         // Assert - Focus on security violations
-        AssertNoSpecificViolations(ruleResult, new[] { "secret", "hardcoded", "critical" }, "Secrets Security");
+        AssertNoSpecificViolations(ruleResult, "secret");
+        AssertNoSpecificViolations(ruleResult, "hardcoded");
+        AssertNoSpecificViolations(ruleResult, "critical");
     }
 
     [Test]
@@ -136,7 +153,8 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG005");
         
         // Assert - Focus on logging structure violations
-        AssertNoSpecificViolations(ruleResult, new[] { "structured", "performance" }, "Logging Structure");
+        AssertNoSpecificViolations(ruleResult, "structured");
+        AssertNoSpecificViolations(ruleResult, "performance");
     }
 
     [Test]
@@ -147,6 +165,7 @@ public sealed class ConfigurationArchitectureTests : ArchitectureTestBase
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "CFG002");
         
         // Assert - Focus on binding safety violations
-        AssertNoSpecificViolations(ruleResult, new[] { "binding", "type conversion" }, "Configuration Binding");
+        AssertNoSpecificViolations(ruleResult, "binding");
+        AssertNoSpecificViolations(ruleResult, "type conversion");
     }
 }

@@ -20,7 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
-    <ProjectReference Include="../Shared/Axon.Tests.Shared.csproj" />
+    <ProjectReference Include="../../src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/Api/Axon.Api.csproj" />
   </ItemGroup>
 
 </Project>

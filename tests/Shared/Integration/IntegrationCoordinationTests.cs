@@ -1,4 +1,4 @@
-using Axon.Api.Configuration;
+// using Axon.Api.Configuration; // Commented out - API dependency not available in shared utilities
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shouldly;

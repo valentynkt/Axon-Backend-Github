@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Reflection;
 using Axon.ArchitectureTests.Framework.Contracts;
 using Axon.ArchitectureTests.Framework.Engine;
-using Axon.Tests.Shared.Utilities;
+// using Axon.Tests.Shared.Tests.Utilities; // Removed due to circular dependency
 
 namespace Axon.ArchitectureTests.Core.Utilities;
 
@@ -89,12 +89,13 @@ public static class ParallelArchitectureTestUtilities
         {
             var groupName = $"RuleGroup_{(i % targetGroups) + 1}";
             
-            if (!ruleGroups.ContainsKey(groupName))
+            if (!ruleGroups.TryGetValue(groupName, out List<IArchitectureRule>? value))
             {
-                ruleGroups[groupName] = new List<IArchitectureRule>();
+                value = new List<IArchitectureRule>();
+                ruleGroups[groupName] = value;
             }
-            
-            ruleGroups[groupName].AddRange(categorizedRules[i]);
+
+            value.AddRange(categorizedRules[i]);
         }
         
         // Balance groups by moving rules if needed
@@ -107,15 +108,14 @@ public static class ParallelArchitectureTestUtilities
     /// Analyzes architecture test performance and suggests optimizations.
     /// </summary>
     public static PerformanceAnalysisResult AnalyzeTestPerformance(
-        ParallelExecutionResults results,
-        IArchitectureContext context)
+        ParallelExecutionResults results)
     {
         var analysis = new PerformanceAnalysisResult
         {
             TotalRulesExecuted = results.Results.Values.Sum(r => r.RuleResults.Count),
             AverageRuleExecutionTime = CalculateAverageRuleExecutionTime(results),
             BottleneckCategories = IdentifyBottleneckCategories(results),
-            OptimizationSuggestions = GenerateOptimizationSuggestions(results, context),
+            OptimizationSuggestions = GenerateOptimizationSuggestions(results),
             ParallelizationBenefit = CalculateParallelizationBenefit(results),
             ResourceUtilization = CalculateResourceUtilization(results)
         };
@@ -146,18 +146,17 @@ public static class ParallelArchitectureTestUtilities
     /// Generates comprehensive architecture health dashboard data.
     /// </summary>
     public static ArchitectureHealthDashboard GenerateHealthDashboard(
-        ParallelExecutionResults results,
-        IArchitectureContext context)
+        ParallelExecutionResults results)
     {
         var dashboard = new ArchitectureHealthDashboard
         {
             GeneratedAt = DateTime.UtcNow,
             OverallHealthScore = CalculateOverallHealthScore(results),
             CategoryScores = CalculateCategoryScores(results),
-            TrendAnalysis = AnalyzeTrends(results),
+            TrendAnalysis = AnalyzeTrends(),
             RiskAssessment = AssessArchitectureRisks(results),
             ComplianceStatus = AssessComplianceStatus(results),
-            RecommendedActions = GenerateRecommendedActions(results, context)
+            RecommendedActions = GenerateRecommendedActions(results)
         };
         
         return dashboard;
@@ -174,9 +173,9 @@ public static class ParallelArchitectureTestUtilities
         {
             TotalRules = rules.Count,
             EstimatedDuration = EstimateExecutionDuration(rules, constraints),
-            ExecutionPhases = CreateExecutionPhases(rules, constraints),
+            ExecutionPhases = CreateExecutionPhases(rules),
             ResourceRequirements = CalculateResourceRequirements(rules),
-            RiskMitigation = CreateRiskMitigationStrategy(rules)
+            RiskMitigation = CreateRiskMitigationStrategy()
         };
         
         return plan;
@@ -241,7 +240,7 @@ public static class ParallelArchitectureTestUtilities
         return categoryTimes.Where(kvp => kvp.Value > averageTime * 1.5).Select(kvp => kvp.Key).ToList();
     }
 
-    private static List<string> GenerateOptimizationSuggestions(ParallelExecutionResults results, IArchitectureContext context)
+    private static List<string> GenerateOptimizationSuggestions(ParallelExecutionResults results)
     {
         var suggestions = new List<string>();
         
@@ -343,7 +342,7 @@ public static class ParallelArchitectureTestUtilities
         return categoryScores;
     }
 
-    private static TrendAnalysis AnalyzeTrends(ParallelExecutionResults results)
+    private static TrendAnalysis AnalyzeTrends()
     {
         // Simplified trend analysis - in practice, would compare with historical data
         return new TrendAnalysis
@@ -383,7 +382,7 @@ public static class ParallelArchitectureTestUtilities
         };
     }
 
-    private static List<string> GenerateRecommendedActions(ParallelExecutionResults results, IArchitectureContext context)
+    private static List<string> GenerateRecommendedActions(ParallelExecutionResults results)
     {
         var actions = new List<string>();
         var overallScore = CalculateOverallHealthScore(results);
@@ -438,7 +437,7 @@ public static class ParallelArchitectureTestUtilities
         return TimeSpan.FromMilliseconds(estimatedMs / parallelFactor);
     }
 
-    private static List<ExecutionPhase> CreateExecutionPhases(List<IArchitectureRule> rules, ExecutionConstraints constraints)
+    private static List<ExecutionPhase> CreateExecutionPhases(List<IArchitectureRule> rules)
     {
         var phases = new List<ExecutionPhase>();
         var criticalRules = rules.Where(r => r.Severity == RuleSeverity.Critical).ToList();
@@ -477,7 +476,7 @@ public static class ParallelArchitectureTestUtilities
         };
     }
 
-    private static RiskMitigationStrategy CreateRiskMitigationStrategy(List<IArchitectureRule> rules)
+    private static RiskMitigationStrategy CreateRiskMitigationStrategy()
     {
         return new RiskMitigationStrategy
         {

@@ -3,7 +3,7 @@ using Shouldly;
 using Axon.Shared.Common;
 using Axon.Tests.Shared.Fixtures;
 using Axon.Tests.Shared.Builders;
-using Axon.Tests.Shared.Extensions;
+using Axon.Tests.Shared.Tests.Extensions;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text.Json;

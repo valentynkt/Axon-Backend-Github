@@ -2,8 +2,7 @@ using System.Reflection;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Modules.Chat.Infrastructure.Ai;
-using Axon.Tests.Shared.Extensions;
+// using Axon.Tests.Shared.Tests.Extensions; // Removed to fix circular dependency
 using Axon.Tests.Shared.Mocks;
 using Axon.Tests.Shared.TestBase;
 using Axon.Tests.Shared.TestDoubles;

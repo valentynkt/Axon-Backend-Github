@@ -34,7 +34,7 @@ public sealed class SessionSecurityRule : ArchitectureRuleBase
         return violations;
     }
 
-    private async Task ValidateSessionConfiguration(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateSessionConfiguration(List<Type> types, List<RuleViolation> violations)
     {
         var configurationTypes = types.Where(t => 
             t.Name.Contains("Configuration") ||
@@ -59,10 +59,13 @@ public sealed class SessionSecurityRule : ArchitectureRuleBase
 
                 if (!hasSecureAttributes && property.Name.ToLower().Contains("cookie"))
                 {
-                    violations.Add(new RuleViolation(
-                        $"Session property '{property.Name}' in '{configType.Name}' lacks secure cookie attributes",
-                        configType.FullName!,
-                        property.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        Message = $"Session property '{property.Name}' in '{configType.Name}' lacks secure cookie attributes",
+                        TypeName = configType.FullName!,
+                        AssemblyName = configType.Assembly.GetName().Name ?? "Unknown",
+                        Severity = RuleSeverity.Error
+                    });
                 }
             }
         }
@@ -70,7 +73,7 @@ public sealed class SessionSecurityRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateSessionTimeouts(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateSessionTimeouts(List<Type> types, List<RuleViolation> violations)
     {
         var authenticationTypes = types.Where(t => 
             t.Name.Contains("Authentication") ||
@@ -89,15 +92,18 @@ public sealed class SessionSecurityRule : ArchitectureRuleBase
                 {
                     // Check for timeout validation
                     var hasTimeoutHandling = method.GetParameters()
-                        .Any(p => p.Name.ToLower().Contains("timeout") ||
-                                p.Name.ToLower().Contains("expiry"));
+                        .Any(p => p.Name?.ToLower().Contains("timeout") == true ||
+                                p.Name?.ToLower().Contains("expiry") == true);
 
                     if (!hasTimeoutHandling)
                     {
-                        violations.Add(new RuleViolation(
-                            $"Authentication method '{method.Name}' in '{authType.Name}' lacks timeout handling",
-                            authType.FullName!,
-                            method.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            Message = $"Authentication method '{method.Name}' in '{authType.Name}' lacks timeout handling",
+                            TypeName = authType.FullName!,
+                            AssemblyName = authType.Assembly.GetName().Name ?? "Unknown",
+                            Severity = RuleSeverity.Error
+                        });
                     }
                 }
             }
@@ -106,7 +112,7 @@ public sealed class SessionSecurityRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateSessionRegeneration(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateSessionRegeneration(List<Type> types, List<RuleViolation> violations)
     {
         var authenticationTypes = types.Where(t => 
             t.Name.Contains("Authentication") ||
@@ -132,10 +138,13 @@ public sealed class SessionSecurityRule : ArchitectureRuleBase
 
                 if (!hasSessionRegeneration)
                 {
-                    violations.Add(new RuleViolation(
-                        $"Privilege elevation method '{method.Name}' in '{authType.Name}' should regenerate session",
-                        authType.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        Message = $"Privilege elevation method '{method.Name}' in '{authType.Name}' should regenerate session",
+                        TypeName = authType.FullName!,
+                        AssemblyName = authType.Assembly.GetName().Name ?? "Unknown",
+                        Severity = RuleSeverity.Error
+                    });
                 }
             }
         }

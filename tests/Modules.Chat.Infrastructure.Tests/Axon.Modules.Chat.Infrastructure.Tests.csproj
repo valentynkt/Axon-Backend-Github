@@ -29,7 +29,6 @@
     <ProjectReference Include="../../src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="../../src/Modules/Chat/Domain/Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="../../src/Shared/Common/Axon.Shared.Common.csproj" />
-    <ProjectReference Include="../Shared/Axon.Tests.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,9 +36,6 @@
     <Using Include="Shouldly" />
     <Using Include="Moq" />
     <Using Include="Axon.Shared.Common" />
-    <Using Include="Axon.Tests.Shared.TestBase" />
-    <Using Include="Axon.Tests.Shared.Extensions" />  
-    <Using Include="Axon.Tests.Shared.Builders" />
     <Using Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 

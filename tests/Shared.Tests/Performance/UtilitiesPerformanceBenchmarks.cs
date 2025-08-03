@@ -2,7 +2,7 @@ using NUnit.Framework;
 using Shouldly;
 using Axon.Shared.Common;
 using Axon.Tests.Shared.Execution;
-using Axon.Tests.Shared.Utilities;
+using Axon.Tests.Shared.Tests.Utilities;
 using Axon.Tests.Shared.Generators;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
@@ -10,7 +10,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 
-namespace Axon.Tests.Shared.Performance;
+namespace Axon.Tests.Shared.Tests.Performance;
 
 /// <summary>
 /// Comprehensive performance benchmarks for shared utilities including Result Error,

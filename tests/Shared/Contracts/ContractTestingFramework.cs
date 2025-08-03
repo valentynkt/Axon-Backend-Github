@@ -1,7 +1,7 @@
 using System.Text.Json;
 using NUnit.Framework;
 using Axon.Tests.Shared.TestBase;
-using Axon.Shared.Abstractions;
+using Axon.Shared.Common.Abstractions;
 
 namespace Axon.Tests.Shared.Contracts;
 

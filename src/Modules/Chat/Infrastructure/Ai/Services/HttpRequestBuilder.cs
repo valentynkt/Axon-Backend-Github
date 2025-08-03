@@ -17,6 +17,13 @@ public sealed class HttpRequestBuilder : IHttpRequestBuilder
     private readonly OpenAiOptions _options;
     private readonly IPayloadSerializer _payloadSerializer;
     private readonly ILogger<HttpRequestBuilder> _logger;
+    
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, int, string, Exception?> LogRequestContentAction =
+        LoggerMessage.Define<int, string>(
+            LogLevel.Debug,
+            new EventId(8001, "LogRequestContent"),
+            "Sending request to OpenAI Responses API with payload size {PayloadSize} bytes. Payload: {Payload}");
 
     // Constants for configuration values
     private const string OpenAiResponsesApiUrl = "https://api.openai.com/v1/responses";
@@ -77,10 +84,7 @@ public sealed class HttpRequestBuilder : IHttpRequestBuilder
         // Build request payload
         var jsonPayload = BuildRequestPayload(request, tools);
         
-        _logger.LogDebug(
-            "Sending request to OpenAI Responses API with payload size {PayloadSize} bytes. Payload: {Payload}",
-            jsonPayload.Length,
-            jsonPayload);
+        LogRequestContentAction(_logger, jsonPayload.Length, jsonPayload, null);
 
         return new StringContent(jsonPayload, Encoding.UTF8, "application/json");
     }
@@ -115,7 +119,8 @@ public sealed class HttpRequestBuilder : IHttpRequestBuilder
             requestPayload["max_output_tokens"] = _options.MaxTokens;
         }
 
-        if (_options.Temperature >= 0.0 && _options.Temperature <= 2.0)
+        // Only include temperature for models that support it (not o1/o4 models)
+        if (_options.Temperature >= 0.0 && _options.Temperature <= 2.0 && !IsReasoningModel(_options.Model))
         {
             requestPayload["temperature"] = _options.Temperature;
         }
@@ -155,5 +160,16 @@ public sealed class HttpRequestBuilder : IHttpRequestBuilder
         // The timeout is typically handled at the HTTP client level
 
         return tool;
+    }
+
+    /// <summary>
+    /// Check if the model is a reasoning model (o1/o4 series) that doesn't support temperature parameter
+    /// </summary>
+    /// <param name="model">The model name</param>
+    /// <returns>True if it's a reasoning model</returns>
+    private static bool IsReasoningModel(string model)
+    {
+        return model.StartsWith("o1", StringComparison.OrdinalIgnoreCase) ||
+               model.StartsWith("o4", StringComparison.OrdinalIgnoreCase);
     }
 }

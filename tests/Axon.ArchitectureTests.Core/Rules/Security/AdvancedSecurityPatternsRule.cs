@@ -37,7 +37,7 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
         return violations;
     }
 
-    private async Task ValidateCsrfProtection(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateCsrfProtection(List<Type> types, List<RuleViolation> violations)
     {   
         var controllerTypes = types.Where(t => 
             t.Name.EndsWith("Controller") || 
@@ -65,10 +65,13 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
 
                 if (!hasAntiForgeryToken)
                 {   
-                    violations.Add(new RuleViolation(
-                        $"Method '{method.Name}' in '{controller.Name}' lacks anti-forgery token validation",
-                        controller.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        TypeName = controller.FullName!,
+                        AssemblyName = controller.Assembly.FullName!,
+                        Message = $"Method '{method.Name}' in '{controller.Name}' lacks anti-forgery token validation",
+                        Severity = RuleSeverity.Critical
+                    });
                 }
             }
         }
@@ -76,7 +79,7 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateXssProtection(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateXssProtection(List<Type> types, List<RuleViolation> violations)
     {   
         var viewModelTypes = types.Where(t => 
             t.Name.EndsWith("ViewModel") ||
@@ -106,10 +109,13 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
 
                 if (isUserInput && !hasHtmlEncoding)
                 {   
-                    violations.Add(new RuleViolation(
-                        $"Property '{property.Name}' in '{viewModel.Name}' may be vulnerable to XSS attacks",
-                        viewModel.FullName!,
-                        property.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        TypeName = viewModel.FullName!,
+                        AssemblyName = viewModel.Assembly.FullName!,
+                        Message = $"Property '{property.Name}' in '{viewModel.Name}' may be vulnerable to XSS attacks",
+                        Severity = RuleSeverity.Critical
+                    });
                 }
             }
         }
@@ -117,7 +123,7 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateSecureDataHandling(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateSecureDataHandling(List<Type> types, List<RuleViolation> violations)
     {   
         foreach (var type in types)
         {   
@@ -141,10 +147,13 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
 
                     if (!hasDataProtection && property.PropertyType == typeof(string))
                     {   
-                        violations.Add(new RuleViolation(
-                            $"Sensitive property '{property.Name}' in '{type.Name}' lacks data protection",
-                            type.FullName!,
-                            property.Name));
+                        violations.Add(new RuleViolation
+                        {
+                            TypeName = type.FullName!,
+                            AssemblyName = type.Assembly.FullName!,
+                            Message = $"Sensitive property '{property.Name}' in '{type.Name}' lacks data protection",
+                            Severity = RuleSeverity.Critical
+                        });
                     }
                 }
             }
@@ -153,7 +162,7 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateRateLimiting(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateRateLimiting(List<Type> types, List<RuleViolation> violations)
     {   
         var apiTypes = types.Where(t => 
             t.Name.EndsWith("Controller") ||
@@ -184,10 +193,13 @@ public sealed class AdvancedSecurityPatternsRule : ArchitectureRuleBase
                         
                 if (!hasMethodLevelRateLimit)
                 {   
-                    violations.Add(new RuleViolation(
-                        $"API type '{apiType.Name}' lacks rate limiting protection",
-                        apiType.FullName!,
-                        "Class"));
+                    violations.Add(new RuleViolation
+                    {
+                        TypeName = apiType.FullName!,
+                        AssemblyName = apiType.Assembly.FullName!,
+                        Message = $"API type '{apiType.Name}' lacks rate limiting protection",
+                        Severity = RuleSeverity.Critical
+                    });
                 }
             }
         }

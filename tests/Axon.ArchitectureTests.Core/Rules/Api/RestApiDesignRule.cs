@@ -49,7 +49,7 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
         return violations;
     }
 
-    private async Task ValidateHttpMethodUsage(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateHttpMethodUsage(List<Type> types, List<RuleViolation> violations)
     {
         var controllerTypes = types.Where(t => 
             t.Name.EndsWith("Controller") ||
@@ -81,10 +81,13 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
 
                         if (!methodNameMatches)
                         {
-                            violations.Add(new RuleViolation(
-                                $"Method '{method.Name}' uses HTTP {httpMethod} but doesn't follow naming convention (expected: {string.Join(", ", expectedPatterns)})",
-                                controller.FullName!,
-                                method.Name));
+                            violations.Add(new RuleViolation
+                            {
+                                Message = $"Method '{method.Name}' uses HTTP {httpMethod} but doesn't follow naming convention (expected: {string.Join(", ", expectedPatterns)})",
+                                TypeName = controller.FullName!,
+                                AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                                Severity = RuleSeverity.Warning
+                            });
                         }
                     }
                 }
@@ -92,10 +95,13 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
                 // Check for methods without HTTP attributes that should have them
                 if (!httpAttributes.Any() && method.IsPublic && !method.IsSpecialName)
                 {
-                    violations.Add(new RuleViolation(
-                        $"Public method '{method.Name}' in controller '{controller.Name}' lacks HTTP method attribute",
-                        controller.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        Message = $"Public method '{method.Name}' in controller '{controller.Name}' lacks HTTP method attribute",
+                        TypeName = controller.FullName!,
+                        AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                        Severity = RuleSeverity.Warning
+                    });
                 }
             }
         }
@@ -103,7 +109,7 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateResourceNaming(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateResourceNaming(List<Type> types, List<RuleViolation> violations)
     {
         var controllerTypes = types.Where(t => 
             t.Name.EndsWith("Controller") ||
@@ -133,19 +139,22 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
                         
                         foreach (var segment in segments)
                         {
-                            if (segment.StartsWith("{") && segment.EndsWith("}"))
+                            if (segment.StartsWith($"{{") && segment.EndsWith($"}}"))
                                 continue; // Skip parameter segments
                             
-                            if (segment.Contains("api") || segment.Contains("v"))
+                            if (segment.Contains("api") || segment.Contains('v'))
                                 continue; // Skip API version segments
                             
                             // Simple check for singular resource names (should be plural)
-                            if (!segment.EndsWith("s") && !segment.Contains("-"))
+                            if (!segment.EndsWith($"s") && !segment.Contains('-'))
                             {
-                                violations.Add(new RuleViolation(
-                                    $"Route segment '{segment}' in controller '{controller.Name}' should use plural resource naming",
-                                    controller.FullName!,
-                                    "Route"));
+                                violations.Add(new RuleViolation
+                                {
+                                    Message = $"Route segment '{segment}' in controller '{controller.Name}' should use plural resource naming",
+                                    TypeName = controller.FullName!,
+                                    AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                                    Severity = RuleSeverity.Warning
+                                });
                             }
                         }
                     }
@@ -156,7 +165,7 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateStatusCodeUsage(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateStatusCodeUsage(List<Type> types, List<RuleViolation> violations)
     {
         var controllerTypes = types.Where(t => 
             t.Name.EndsWith("Controller") ||
@@ -180,10 +189,13 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
 
                 if (!returnsActionResult && method.GetCustomAttributes().Any(a => a.GetType().Name.StartsWith("Http")))
                 {
-                    violations.Add(new RuleViolation(
-                        $"API method '{method.Name}' in '{controller.Name}' should return ActionResult or Result<T> for proper status code handling",
-                        controller.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        TypeName = controller.FullName!,
+                        AssemblyName = controller.Assembly.FullName!,
+                        Message = $"API method '{method.Name}' in '{controller.Name}' should return ActionResult or Result<T> for proper status code handling",
+                        Severity = RuleSeverity.Error
+                    });
                 }
 
                 // Check for explicit status code attributes
@@ -193,10 +205,13 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
 
                 if (!hasStatusCodeAttributes && method.GetCustomAttributes().Any(a => a.GetType().Name.StartsWith("Http")))
                 {
-                    violations.Add(new RuleViolation(
-                        $"API method '{method.Name}' in '{controller.Name}' lacks explicit status code documentation",
-                        controller.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        Message = $"API method '{method.Name}' in '{controller.Name}' lacks explicit status code documentation",
+                        TypeName = controller.FullName!,
+                        AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                        Severity = RuleSeverity.Warning
+                    });
                 }
             }
         }
@@ -204,7 +219,7 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
         await Task.CompletedTask;
     }
 
-    private async Task ValidateApiVersioning(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateApiVersioning(List<Type> types, List<RuleViolation> violations)
     {
         var controllerTypes = types.Where(t => 
             t.Name.EndsWith("Controller") ||
@@ -219,21 +234,24 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
 
             var hasRouteVersioning = controller.GetCustomAttributes()
                 .Any(a => a.GetType().Name.Contains("Route") && 
-                        a.ToString()?.Contains("v") == true);
+                        a.ToString()?.Contains('v') == true);
 
             if (!hasVersionAttribute && !hasRouteVersioning)
             {
-                violations.Add(new RuleViolation(
-                    $"Controller '{controller.Name}' lacks API versioning strategy",
-                    controller.FullName!,
-                    "Class"));
+                violations.Add(new RuleViolation
+                {
+                    Message = $"Controller '{controller.Name}' lacks API versioning strategy",
+                    TypeName = controller.FullName!,
+                    AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                    Severity = RuleSeverity.Warning
+                });
             }
         }
         
         await Task.CompletedTask;
     }
 
-    private async Task ValidateContentNegotiation(List<Type> types, List<RuleViolation> violations)
+    private static async Task ValidateContentNegotiation(List<Type> types, List<RuleViolation> violations)
     {
         var controllerTypes = types.Where(t => 
             t.Name.EndsWith("Controller") ||
@@ -260,10 +278,13 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
 
                 if (httpAttributes.Any() && !hasProducesAttribute)
                 {
-                    violations.Add(new RuleViolation(
-                        $"API method '{method.Name}' in '{controller.Name}' lacks Produces attribute for content negotiation",
-                        controller.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        Message = $"API method '{method.Name}' in '{controller.Name}' lacks Produces attribute for content negotiation",
+                        TypeName = controller.FullName!,
+                        AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                        Severity = RuleSeverity.Warning
+                    });
                 }
 
                 // Check for POST/PUT methods without Consumes attribute
@@ -274,10 +295,13 @@ public sealed class RestApiDesignRule : ArchitectureRuleBase
 
                 if (hasPostOrPut && !hasConsumesAttribute)
                 {
-                    violations.Add(new RuleViolation(
-                        $"API method '{method.Name}' in '{controller.Name}' lacks Consumes attribute for content negotiation",
-                        controller.FullName!,
-                        method.Name));
+                    violations.Add(new RuleViolation
+                    {
+                        Message = $"API method '{method.Name}' in '{controller.Name}' lacks Consumes attribute for content negotiation",
+                        TypeName = controller.FullName!,
+                        AssemblyName = controller.Assembly.GetName().Name ?? "Unknown",
+                        Severity = RuleSeverity.Warning
+                    });
                 }
             }
         }

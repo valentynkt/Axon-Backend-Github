@@ -2,9 +2,7 @@ using NUnit.Framework;
 using Shouldly;
 using Axon.Shared.Common;
 using Axon.Shared.Common.Abstractions;
-using Axon.Tests.Shared.Mocks;
-using Axon.Tests.Shared.Builders;
-using Axon.Tests.Shared.Utilities;
+using Axon.Tests.Shared.Tests.Utilities;
 using Moq;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -43,7 +41,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
     {
         private readonly ConcurrentDictionary<Guid, UserDto> _users = new();
 
-        public async Task<Result<CreateUserResponse>> Handle(CreateUserCommand request, CancellationToken cancellationToken)
+        public async Task<Result<CreateUserResponse>> HandleAsync(CreateUserCommand request, CancellationToken cancellationToken)
         {
             // Simulate validation
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -82,7 +80,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
 
         public GetUserHandler() { }
 
-        public async Task<Result<UserDto>> Handle(GetUserQuery request, CancellationToken cancellationToken)
+        public async Task<Result<UserDto>> HandleAsync(GetUserQuery request, CancellationToken cancellationToken)
         {
             // Simulate async operation
             await Task.Delay(5, cancellationToken);
@@ -98,7 +96,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
     {
         private readonly ConcurrentDictionary<Guid, UserDto> _users = new();
 
-        public async Task<Result> Handle(UpdateUserCommand request, CancellationToken cancellationToken)
+        public async Task<Result> HandleAsync(UpdateUserCommand request, CancellationToken cancellationToken)
         {
             // Validation
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -194,7 +192,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
         public record SlowRequest() : IRequest<Result>;
         public class SlowRequestHandler : IRequestHandler<SlowRequest, Result>
         {
-            public async Task<Result> Handle(SlowRequest request, CancellationToken cancellationToken)
+            public async Task<Result> HandleAsync(SlowRequest request, CancellationToken cancellationToken)
             {
                 await Task.Delay(1000, cancellationToken); // Will be cancelled
                 return Result.Success;
@@ -425,7 +423,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
             // Act & Assert
             var exception = await Should.ThrowAsync<InvalidOperationException>(async () =>
             {
-                await faultyHandler.Handle(request, CancellationToken.None);
+                await faultyHandler.HandleAsync(request, CancellationToken.None);
             });
 
             exception.Message.ShouldBe("Simulated error");
@@ -440,7 +438,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
             var request = new ErrorRequest();
 
             // Act
-            var result = await handler.Handle(request, CancellationToken.None);
+            var result = await handler.HandleAsync(request, CancellationToken.None);
 
             // Assert
             result.IsSuccess.ShouldBeFalse();
@@ -464,7 +462,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
             var request = new VariableErrorRequest(errorType);
 
             // Act
-            var result = await handler.Handle(request, CancellationToken.None);
+            var result = await handler.HandleAsync(request, CancellationToken.None);
 
             // Assert
             result.IsSuccess.ShouldBeFalse();
@@ -475,7 +473,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
         public record FaultyRequest() : IRequest<Result>;
         public class FaultyRequestHandler : IRequestHandler<FaultyRequest, Result>
         {
-            public Task<Result> Handle(FaultyRequest request, CancellationToken cancellationToken)
+            public Task<Result> HandleAsync(FaultyRequest request, CancellationToken cancellationToken)
             {
                 throw new InvalidOperationException("Simulated error");
             }
@@ -484,7 +482,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
         public record ErrorRequest() : IRequest<Result>;
         public class ErrorReturningHandler : IRequestHandler<ErrorRequest, Result>
         {
-            public Task<Result> Handle(ErrorRequest request, CancellationToken cancellationToken)
+            public Task<Result> HandleAsync(ErrorRequest request, CancellationToken cancellationToken)
             {
                 var result = Result.Failure(Error.InternalError("Something went wrong"));
                 return Task.FromResult(result);
@@ -494,7 +492,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
         public record VariableErrorRequest(ErrorType ErrorType) : IRequest<Result>;
         public class VariableErrorHandler : IRequestHandler<VariableErrorRequest, Result>
         {
-            public Task<Result> Handle(VariableErrorRequest request, CancellationToken cancellationToken)
+            public Task<Result> HandleAsync(VariableErrorRequest request, CancellationToken cancellationToken)
             {
                 var error = request.ErrorType switch
                 {
@@ -602,7 +600,7 @@ public sealed class CqrsAbstractionsComprehensiveTests
                 _validator = validator;
             }
 
-            public async Task<Result<CreateUserResponse>> Handle(CreateUserCommand request, CancellationToken cancellationToken)
+            public async Task<Result<CreateUserResponse>> HandleAsync(CreateUserCommand request, CancellationToken cancellationToken)
             {
                 // Validate
                 var validationResult = await _validator.ValidateAsync(request, cancellationToken);

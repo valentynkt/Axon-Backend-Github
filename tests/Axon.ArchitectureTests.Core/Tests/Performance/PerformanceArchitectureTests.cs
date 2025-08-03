@@ -1,6 +1,9 @@
 using Axon.ArchitectureTests.Core.Rules.Performance;
-using Axon.Tests.Shared.Extensions;
-using Axon.Tests.Shared.TestBase;
+using Axon.ArchitectureTests.Core.TestBase;
+using Axon.ArchitectureTests.Framework.Contracts;
+// Removed due to circular dependency
+// using Axon.Tests.Shared.Tests.Extensions;
+// using Axon.Tests.Shared.TestBase;
 
 namespace Axon.ArchitectureTests.Core.Tests.Performance;
 
@@ -54,8 +57,8 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
             new ResourceManagementRule()
         };
         
-        var result = await ExecuteRulesAndValidateAsync(rules, "All performance rules validation");
-        result.ShouldBeCompliant("All performance rules should pass");
+        var result = await ExecuteRulesAndValidateAsync(rules);
+        AssertAllRulesSuccess(result);
     }
 
     [Test]
@@ -64,8 +67,19 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
         var rule = new AsyncPatternsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "PERF001");
         
-        var ioViolations = FilterViolations(ruleResult, "I/O", "synchronous", "blocking");
-        LogViolations(ioViolations, "I/O Async Violations");
+        var ioViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("I/O", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("synchronous", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("blocking", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (ioViolations.Any())
+        {
+            Console.WriteLine("I/O Async Violations:");
+            foreach (var violation in ioViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         ioViolations.Count.ShouldBe(0, $"Synchronous I/O violations: {ioViolations.Count}");
     }
@@ -76,8 +90,17 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
         var rule = new DatabasePerformanceRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "PERF003");
         
-        var nPlusOneViolations = FilterViolations(ruleResult, "N+1", "multiple queries");
-        LogViolations(nPlusOneViolations, "N+1 Query Violations");
+        var nPlusOneViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("N+1", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("multiple queries", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        if (nPlusOneViolations.Any())
+        {
+            Console.WriteLine("N+1 Query Violations:");
+            foreach (var violation in nPlusOneViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         nPlusOneViolations.Count.ShouldBe(0, $"N+1 query violations: {nPlusOneViolations.Count}");
     }
@@ -88,11 +111,21 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
         var rule = new CachingPatternsRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "PERF002");
         
-        var cachingViolations = FilterViolations(ruleResult, "expensive", "repeated");
-        LogViolations(cachingViolations, "Missing Caching Violations");
+        var cachingViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("expensive", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("repeated", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (cachingViolations.Any())
+        {
+            Console.WriteLine("Missing Caching Violations:");
+            foreach (var violation in cachingViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - not all expensive operations need caching
-        TestContext.Out.WriteLine($"Expensive operations without caching: {cachingViolations.Count}");
+        Console.WriteLine($"Expensive operations without caching: {cachingViolations.Count}");
     }
 
     [Test]
@@ -101,8 +134,18 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
         var rule = new ResourceManagementRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "PERF004");
         
-        var disposalViolations = FilterViolations(ruleResult, "dispose", "using");
-        LogViolations(disposalViolations, "Resource Disposal Violations");
+        var disposalViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("dispose", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("using", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (disposalViolations.Any())
+        {
+            Console.WriteLine("Resource Disposal Violations:");
+            foreach (var violation in disposalViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         disposalViolations.Count.ShouldBe(0, $"Resource disposal violations: {disposalViolations.Count}");
     }
@@ -113,11 +156,21 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
         var rule = new ResourceManagementRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "PERF004");
         
-        var collectionViolations = FilterViolations(ruleResult, "collection", "enumerable");
-        LogViolations(collectionViolations, "Collection Type Violations");
+        var collectionViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("collection", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("enumerable", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (collectionViolations.Any())
+        {
+            Console.WriteLine("Collection Type Violations:");
+            foreach (var violation in collectionViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - collection choice might be appropriate in context
-        TestContext.Out.WriteLine($"Suboptimal collection usage: {collectionViolations.Count}");
+        Console.WriteLine($"Suboptimal collection usage: {collectionViolations.Count}");
     }
 
     [Test]
@@ -126,10 +179,20 @@ public sealed class PerformanceArchitectureTests : ArchitectureTestBase
         var rule = new ResourceManagementRule();
         var ruleResult = await ExecuteRuleAndValidateAsync(rule, "PERF004");
         
-        var memoryViolations = FilterViolations(ruleResult, "memory", "allocation");
-        LogViolations(memoryViolations, "Memory Allocation Violations");
+        var memoryViolations = ruleResult.Violations?.Where(v => 
+            v.Message.Contains("memory", StringComparison.OrdinalIgnoreCase) ||
+            v.Message.Contains("allocation", StringComparison.OrdinalIgnoreCase)).ToList() ?? new List<RuleViolation>();
+        
+        if (memoryViolations.Any())
+        {
+            Console.WriteLine("Memory Allocation Violations:");
+            foreach (var violation in memoryViolations)
+            {
+                Console.WriteLine($"  - {violation.Message}");
+            }
+        }
         
         // Log but don't fail - memory optimization might not be critical everywhere
-        TestContext.Out.WriteLine($"Potential memory optimization opportunities: {memoryViolations.Count}");
+        Console.WriteLine($"Potential memory optimization opportunities: {memoryViolations.Count}");
     }
 }

@@ -14,6 +14,19 @@ public sealed class ToolExecutionExtractor : IToolExecutionExtractor
 {
     private readonly ILogger<ToolExecutionExtractor> _logger;
     private const string UnknownToolName = "unknown_tool";
+    
+    // LoggerMessage delegates for CA1848 compliance
+    private static readonly Action<ILogger, string?, string, double, Exception?> LogToolExecutionAction =
+        LoggerMessage.Define<string?, string, double>(
+            LogLevel.Debug,
+            new EventId(6001, "LogToolExecution"),
+            "MCP tool execution: {ToolName} -> {Status} in ~{Duration}ms");
+            
+    private static readonly Action<ILogger, Exception?> LogMcpToolListFoundAction =
+        LoggerMessage.Define(
+            LogLevel.Debug,
+            new EventId(6002, "LogMcpToolListFound"),
+            "Found MCP tool list in response");
 
     public ToolExecutionExtractor(ILogger<ToolExecutionExtractor> logger)
     {
@@ -32,42 +45,31 @@ public sealed class ToolExecutionExtractor : IToolExecutionExtractor
         TimeSpan totalDuration, 
         Activity? activity)
     {
-        // Check if response contains MCP tool calls
-        if (response.McpCalls == null || response.McpCalls.Length == 0)
+        // Check if response contains output with tool calls
+        if (response.Output == null || response.Output.Length == 0)
         {
             return null;
         }
 
         var toolExecutions = new List<ToolExecution>();
-        var averageExecutionTime = TimeSpan.FromMilliseconds(totalDuration.TotalMilliseconds / response.McpCalls.Length);
         
-        foreach (var mcpCall in response.McpCalls)
+        // Look for MCP tool calls in the output - for now, we just log available tools
+        foreach (var outputItem in response.Output)
         {
-            var toolExecution = mcpCall.Error != null
-                ? ToolExecution.Failure(
-                    toolName: mcpCall.ToolName ?? UnknownToolName,
-                    arguments: JsonSerializer.Serialize(mcpCall.Arguments ?? new object()),
-                    errorMessage: mcpCall.Error,
-                    executionTime: averageExecutionTime)
-                : ToolExecution.Success(
-                    toolName: mcpCall.ToolName ?? UnknownToolName,
-                    arguments: JsonSerializer.Serialize(mcpCall.Arguments ?? new object()),
-                    result: JsonSerializer.Serialize(mcpCall.Output ?? ""),
-                    executionTime: averageExecutionTime);
-                
-            toolExecutions.Add(toolExecution);
-            
-            _logger.LogDebug(
-                "MCP tool execution: {ToolName} -> {Status} in ~{Duration}ms",
-                mcpCall.ToolName,
-                mcpCall.Error != null ? "Failed" : "Success",
-                averageExecutionTime.TotalMilliseconds);
+            if (outputItem.Type == "mcp_list_tools" && outputItem.Content != null)
+            {
+                LogMcpToolListFoundAction(_logger, null);
+                // TODO: Parse and process actual tool executions when the API provides them
+            }
+            // TODO: Add support for other MCP output types like tool call results
         }
         
+        // For now, return null as we're only seeing tool lists, not actual tool executions
+        // This will be expanded when we handle actual tool call results
         activity?.SetTag("tools.executed", toolExecutions.Count);
         activity?.SetTag("tools.successful", toolExecutions.Count(t => t.IsSuccess));
         activity?.SetTag("tools.failed", toolExecutions.Count(t => !t.IsSuccess));
         
-        return toolExecutions.ToArray();
+        return toolExecutions.Count > 0 ? toolExecutions.ToArray() : null;
     }
 }

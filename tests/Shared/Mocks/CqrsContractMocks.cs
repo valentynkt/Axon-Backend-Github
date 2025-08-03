@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using MediatRIMediator = MediatR.IMediator;
 using MediatRIRequest = MediatR.IRequest;
-using MediatRIRequestHandler = MediatR.IRequestHandler;
+// MediatR IRequestHandler is generic and cannot be aliased without type parameters
 using AxonIRequest = Axon.Shared.Common.Abstractions.IRequest;
-using AxonIRequestHandler = Axon.Shared.Common.Abstractions.IRequestHandler;
+// Axon IRequestHandler is also generic and cannot be aliased without type parameters
 
 namespace Axon.Tests.Shared.Mocks;
 
@@ -202,7 +202,7 @@ public static class CqrsContractMocks
     /// Creates a behavior verification scenario for command processing
     /// </summary>
     public static CommandBehaviorScenario<TCommand, TResponse> CreateCommandScenario<TCommand, TResponse>()
-        where TCommand : class
+        where TCommand : class, IRequest<Result<TResponse>>
     {
         return new CommandBehaviorScenario<TCommand, TResponse>();
     }
