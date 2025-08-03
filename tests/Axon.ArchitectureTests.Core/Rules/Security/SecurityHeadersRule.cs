@@ -22,12 +22,18 @@ public class SecurityHeadersRule : ArchitectureRuleBase
         var assemblies = context.Assemblies;
         foreach (var assembly in assemblies)
         {
+            // Skip system assemblies if they somehow got through
+            if (IsSystemAssembly(assembly))
+                continue;
             var types = assembly.GetTypes()
                 .Where(t => IsControllerOrEndpoint(t))
                 .ToList();
 
             foreach (var type in types)
             {
+                // Skip architecture test framework types
+                if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                    continue;
                 await CheckSecurityHeaders(type, violations);
             }
         }
@@ -167,5 +173,16 @@ public class SecurityHeadersRule : ArchitectureRuleBase
                typeName.Contains("key") ||
                typeName.Contains("secret") ||
                typeName.Contains("credential");
+    }
+
+    
+    private static bool IsSystemAssembly(Assembly assembly)
+    {
+        var name = assembly.FullName ?? "";
+        return name.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("mscorlib", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("NUnit", StringComparison.OrdinalIgnoreCase);
     }
 }

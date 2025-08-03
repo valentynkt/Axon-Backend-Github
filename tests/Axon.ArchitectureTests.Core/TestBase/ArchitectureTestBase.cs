@@ -12,7 +12,11 @@ public abstract class ArchitectureTestBase
 {
     protected static IArchitectureContext CreateArchitectureContext()
     {
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        // Filter to only Axon application assemblies to avoid scanning system assemblies
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.FullName?.StartsWith("Axon.", StringComparison.OrdinalIgnoreCase) == true)
+            .ToArray();
+        
         var settings = new ArchitectureSettings();
         return new ArchitectureContext(assemblies, settings);
     }

@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0", 
+  "workflow_id": "sparc-workflow-template",
+  "quality_gate_framework": {
+    "total_gates": 5,
+    "human_validation_required": true,
+    "automated_checks_enabled": true,
+    "gate_enforcement_level": "strict"
+  },
+  "quality_gates": {
+    "gate_1_specification": {
+      "gate_name": "Specification Quality Gate",
+      "phase": "specification",
+      "status": "pending",
+      "criteria": [
+        {
+          "criterion_id": "spec_req_complete",
+          "description": "All requirements documented and validated",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "document_completeness_check"
+        },
+        {
+          "criterion_id": "spec_human_review",
+          "description": "Human stakeholder review completed",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "human_approval"
+        },
+        {
+          "criterion_id": "spec_interactive_validation",
+          "description": "Interactive requirements validation session conducted", 
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "interactive_session"
+        },
+        {
+          "criterion_id": "spec_edge_cases",
+          "description": "Edge cases identified and addressed",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "edge_case_analysis"
+        },
+        {
+          "criterion_id": "spec_acceptance_criteria",
+          "description": "Acceptance criteria defined and agreed",
+          "type": "hybrid",
+          "status": "pending", 
+          "validation_method": "criteria_validation"
+        },
+        {
+          "criterion_id": "spec_human_approval",
+          "description": "Human approval obtained for specification phase",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "formal_approval"
+        }
+      ],
+      "human_validated": false,
+      "automated_passed": false,
+      "overall_status": "pending"
+    },
+    "gate_2_pseudocode": {
+      "gate_name": "Pseudocode Quality Gate",
+      "phase": "pseudocode",
+      "status": "pending",
+      "criteria": [
+        {
+          "criterion_id": "pseudo_algo_validated",
+          "description": "Algorithms validated and optimized",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "algorithm_analysis"
+        },
+        {
+          "criterion_id": "pseudo_human_review",
+          "description": "Human algorithm review completed",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "technical_review"
+        },
+        {
+          "criterion_id": "pseudo_complexity_validation",
+          "description": "Interactive complexity analysis validation",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "complexity_review"
+        },
+        {
+          "criterion_id": "pseudo_tdd_outlined",
+          "description": "TDD test cases outlined",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "test_case_check"
+        },
+        {
+          "criterion_id": "pseudo_human_approval",
+          "description": "Human approval for algorithm approach",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "algorithmic_approval"
+        }
+      ],
+      "human_validated": false,
+      "automated_passed": false,
+      "overall_status": "pending"
+    },
+    "gate_3_architecture": {
+      "gate_name": "Architecture Quality Gate",
+      "phase": "architecture",
+      "status": "pending",
+      "criteria": [
+        {
+          "criterion_id": "arch_reviewed_approved",
+          "description": "Architecture reviewed and approved",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "architecture_validation"
+        },
+        {
+          "criterion_id": "arch_human_review",
+          "description": "Human architecture review session completed",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "design_review"
+        },
+        {
+          "criterion_id": "arch_clean_principles",
+          "description": "Clean Architecture principles enforced",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "clean_arch_check"
+        },
+        {
+          "criterion_id": "arch_cqrs_patterns",
+          "description": "CQRS patterns correctly implemented",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "cqrs_validation"
+        },
+        {
+          "criterion_id": "arch_human_signoff",
+          "description": "Human sign-off on architecture decisions",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "architecture_signoff"
+        }
+      ],
+      "human_validated": false,
+      "automated_passed": false,
+      "overall_status": "pending"
+    },
+    "gate_4_refinement": {
+      "gate_name": "Refinement Quality Gate",
+      "phase": "refinement",
+      "status": "pending",
+      "criteria": [
+        {
+          "criterion_id": "refine_tests_coverage",
+          "description": "All tests pass with >95% coverage",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "test_coverage_analysis"
+        },
+        {
+          "criterion_id": "refine_human_code_review",
+          "description": "Human code review session completed",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "code_review"
+        },
+        {
+          "criterion_id": "refine_quality_metrics",
+          "description": "Code quality metrics met",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "quality_metrics_check"
+        },
+        {
+          "criterion_id": "refine_performance_benchmarks",
+          "description": "Performance benchmarks achieved",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "performance_testing"
+        },
+        {
+          "criterion_id": "refine_human_approval",
+          "description": "Human approval for code quality",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "quality_approval"
+        }
+      ],
+      "human_validated": false,
+      "automated_passed": false,
+      "overall_status": "pending"
+    },
+    "gate_5_completion": {
+      "gate_name": "Completion Quality Gate",
+      "phase": "completion",
+      "status": "pending",
+      "criteria": [
+        {
+          "criterion_id": "complete_integration_tests",
+          "description": "Integration tests pass completely",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "integration_testing"
+        },
+        {
+          "criterion_id": "complete_human_integration",
+          "description": "Human integration testing validation",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "integration_review"
+        },
+        {
+          "criterion_id": "complete_documentation",
+          "description": "Documentation complete and accurate",
+          "type": "automated",
+          "status": "pending",
+          "validation_method": "documentation_check"
+        },
+        {
+          "criterion_id": "complete_human_final_signoff",
+          "description": "Human final sign-off for production release",
+          "type": "human_validation",
+          "status": "pending",
+          "validation_method": "production_approval"
+        }
+      ],
+      "human_validated": false,
+      "automated_passed": false,
+      "overall_status": "pending"
+    }
+  },
+  "gate_execution_history": [],
+  "validation_results": [],
+  "human_approval_records": []
+}

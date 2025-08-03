@@ -29,6 +29,10 @@ public sealed class MetricsRule : ArchitectureRuleBase
 
                 foreach (var type in types)
                 {
+                    // Skip architecture test framework types - they don't need application metrics
+                    if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
+                        
                     ValidateMetricsUsage(type, violations);
                     ValidateCounterPatterns(type, violations);
                     ValidatePerformanceMetrics(type, violations);

@@ -23,10 +23,14 @@ public sealed class IntegrationEventsRule : ArchitectureRuleBase
         
         await Task.Run(() =>
         {
-            var integrationEventTypes = context.Types.Where(IsIntegrationEvent).ToList();
-            var eventHandlerTypes = context.Types.Where(IsIntegrationEventHandler).ToList();
-            var eventPublisherTypes = context.Types.Where(IsEventPublisher).ToList();
-            var applicationServiceTypes = context.Types.Where(IsApplicationService).ToList();
+            // Filter out architecture test framework types
+            var filteredTypes = context.Types.Where(t => 
+                t.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) != true);
+                
+            var integrationEventTypes = filteredTypes.Where(IsIntegrationEvent).ToList();
+            var eventHandlerTypes = filteredTypes.Where(IsIntegrationEventHandler).ToList();
+            var eventPublisherTypes = filteredTypes.Where(IsEventPublisher).ToList();
+            var applicationServiceTypes = filteredTypes.Where(IsApplicationService).ToList();
 
             // Validate integration event implementations
             foreach (var eventType in integrationEventTypes)

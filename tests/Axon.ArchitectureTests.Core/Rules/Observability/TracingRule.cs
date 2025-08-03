@@ -25,6 +25,10 @@ public sealed class TracingRule : ArchitectureRuleBase
         {
             foreach (var type in context.Types.Where(t => !t.IsAbstract && !t.IsInterface))
             {
+                // Skip architecture test framework types - they don't need application tracing
+                if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                    continue;
+                    
                 // Check for correlation ID handling in API controllers
                 ValidateCorrelationIdHandling(type, violations);
                 
@@ -138,6 +142,10 @@ public sealed class TracingRule : ArchitectureRuleBase
 
     private void ValidateTraceSampling(Type type, List<RuleViolation> violations)
     {
+        // Skip architecture test framework types - they don't need application tracing configuration
+        if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+            return;
+            
         // Check for trace configuration or sampling logic
         if (IsConfigurationType(type) || IsStartupType(type))
         {

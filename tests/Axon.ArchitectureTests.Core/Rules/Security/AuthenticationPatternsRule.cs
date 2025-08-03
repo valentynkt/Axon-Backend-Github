@@ -23,8 +23,20 @@ public sealed class AuthenticationPatternsRule : ArchitectureRuleBase
         
         await Task.Run(() =>
         {
-            foreach (var type in context.Types.Where(t => !t.IsAbstract && !t.IsInterface))
+            foreach (var assembly in context.Assemblies)
             {
+                // Skip system assemblies if they somehow got through
+                if (IsSystemAssembly(assembly))
+                    continue;
+                    
+                var types = assembly.GetTypes()
+                    .Where(t => !t.IsAbstract && !t.IsInterface);
+
+                foreach (var type in types)
+                {
+                    // Skip architecture test framework types
+                    if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
                 // Check for authentication endpoints without authorization
                 if (IsAuthenticationEndpoint(type))
                 {
@@ -45,6 +57,7 @@ public sealed class AuthenticationPatternsRule : ArchitectureRuleBase
 
                 // Check for authentication attributes
                 ValidateAuthenticationAttributes(type, violations);
+                }
             }
         }, cancellationToken);
 
@@ -215,5 +228,16 @@ public sealed class AuthenticationPatternsRule : ArchitectureRuleBase
                    attr.GetType().Name.Contains("Controller") ||
                    attr.GetType().Name.Contains("ApiController") ||
                    attr.GetType().Name.Contains("Route"));
+    }
+
+    
+    private static bool IsSystemAssembly(Assembly assembly)
+    {
+        var name = assembly.FullName ?? "";
+        return name.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("mscorlib", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("NUnit", StringComparison.OrdinalIgnoreCase);
     }
 }

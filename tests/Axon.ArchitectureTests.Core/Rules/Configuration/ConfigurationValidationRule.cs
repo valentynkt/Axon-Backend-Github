@@ -26,6 +26,10 @@ public sealed class ConfigurationValidationRule : ArchitectureRuleBase
         {
             foreach (var type in context.Types.Where(t => !t.IsAbstract && !t.IsInterface))
             {
+                // Skip architecture test framework types - they don't need application configuration validation
+                if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                    continue;
+                    
                 // Check configuration classes for validation
                 if (IsConfigurationClass(type))
                 {

@@ -1,0 +1,212 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "sparc-workflow-template",
+  "phase_tracking": {
+    "phase_1_specification": {
+      "phase_name": "Specification",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "human_approved_at": null,
+      "progress_percentage": 0,
+      "tasks": [
+        {
+          "task_id": "spec_01",
+          "description": "Requirements analysis and stakeholder mapping",
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "spec_02", 
+          "description": "Interactive human requirements validation session",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "spec_03",
+          "description": "Edge case identification with human input",
+          "status": "pending", 
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "spec_04",
+          "description": "Human approval request for specification completion",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        }
+      ],
+      "deliverables": [],
+      "human_feedback": [],
+      "quality_gate_results": null
+    },
+    "phase_2_pseudocode": {
+      "phase_name": "Pseudocode",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "human_approved_at": null,
+      "progress_percentage": 0,
+      "tasks": [
+        {
+          "task_id": "pseudo_01",
+          "description": "Algorithm design and complexity analysis",
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "pseudo_02",
+          "description": "Interactive human algorithm review session", 
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "pseudo_03",
+          "description": "Data structure selection with human technical review",
+          "status": "pending",
+          "priority": "high", 
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "pseudo_04",
+          "description": "Human approval for algorithm approach",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        }
+      ],
+      "deliverables": [],
+      "human_feedback": [],
+      "quality_gate_results": null
+    },
+    "phase_3_architecture": {
+      "phase_name": "Architecture",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "human_approved_at": null,
+      "progress_percentage": 0,
+      "tasks": [
+        {
+          "task_id": "arch_01",
+          "description": "System architecture design with Clean Architecture",
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "arch_02",
+          "description": "Interactive human architecture review session",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "arch_03",
+          "description": "CQRS pattern validation with human stakeholders", 
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "arch_04",
+          "description": "Human sign-off on architecture decisions",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        }
+      ],
+      "deliverables": [],
+      "human_feedback": [],
+      "quality_gate_results": null
+    },
+    "phase_4_refinement": {
+      "phase_name": "Refinement",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "human_approved_at": null,
+      "progress_percentage": 0,
+      "tasks": [
+        {
+          "task_id": "refine_01",
+          "description": "TDD implementation with comprehensive coverage",
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "refine_02",
+          "description": "Interactive human code review session",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "refine_03",
+          "description": "Performance optimization with human validation",
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "refine_04",
+          "description": "Human approval for code quality",
+          "status": "pending",
+          "priority": "critical", 
+          "human_interaction_required": true
+        }
+      ],
+      "deliverables": [],
+      "human_feedback": [],
+      "quality_gate_results": null
+    },
+    "phase_5_completion": {
+      "phase_name": "Completion",
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "human_approved_at": null,
+      "progress_percentage": 0,
+      "tasks": [
+        {
+          "task_id": "complete_01",
+          "description": "Integration testing with human validation",
+          "status": "pending",
+          "priority": "high",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "complete_02",
+          "description": "Interactive final system review with human",
+          "status": "pending",
+          "priority": "critical",
+          "human_interaction_required": true
+        },
+        {
+          "task_id": "complete_03",
+          "description": "Human final sign-off for production release",
+          "status": "pending", 
+          "priority": "critical",
+          "human_interaction_required": true
+        }
+      ],
+      "deliverables": [],
+      "human_feedback": [],
+      "quality_gate_results": null
+    }
+  },
+  "workflow_metrics": {
+    "total_phases": 5,
+    "completed_phases": 0,
+    "current_phase_index": 0,
+    "overall_progress_percentage": 0,
+    "estimated_completion_time": null,
+    "human_interaction_points": 20
+  }
+}

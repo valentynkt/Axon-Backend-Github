@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "sparc-workflow-template",
+  "human_interaction_framework": {
+    "interaction_mode": "active",
+    "notification_preferences": {
+      "phase_completion_summary": true,
+      "approval_requests": true,
+      "quality_gate_notifications": true,
+      "iterative_refinement_updates": true
+    },
+    "approval_workflow": {
+      "approval_format": "structured",
+      "required_approvers": [],
+      "approval_thresholds": {
+        "specification": "single_approver",
+        "pseudocode": "single_approver", 
+        "architecture": "single_approver",
+        "refinement": "single_approver",
+        "completion": "single_approver"
+      }
+    }
+  },
+  "interaction_history": [],
+  "feedback_sessions": [],
+  "approval_records": [],
+  "human_stakeholders": {
+    "primary_stakeholders": [],
+    "technical_reviewers": [],
+    "business_stakeholders": [],
+    "quality_assurance": []
+  },
+  "interaction_templates": {
+    "phase_summary_template": {
+      "format": "markdown",
+      "sections": [
+        "deliverables_overview",
+        "success_criteria_met", 
+        "quality_gate_assessment",
+        "human_review_required",
+        "specific_questions"
+      ]
+    },
+    "approval_request_template": {
+      "format": "structured",
+      "options": ["approve", "refine", "reject"],
+      "required_fields": ["decision", "feedback", "next_steps"]
+    },
+    "feedback_collection_template": {
+      "format": "interactive",
+      "feedback_categories": [
+        "technical_accuracy",
+        "business_alignment", 
+        "quality_standards",
+        "implementation_approach",
+        "risk_assessment"
+      ]
+    }
+  },
+  "refinement_coordination": {
+    "refinement_cycles": [],
+    "gap_analysis_results": [],
+    "improvement_suggestions": [],
+    "human_guided_iterations": []
+  },
+  "communication_logs": {
+    "phase_presentations": [],
+    "approval_discussions": [],
+    "feedback_sessions": [],
+    "decision_records": []
+  }
+}

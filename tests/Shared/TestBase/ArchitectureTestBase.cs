@@ -17,17 +17,13 @@ public abstract class ArchitectureTestBase
     protected ArchitectureContext Context { get; private set; } = null!;
     protected ArchitectureSettings Configuration { get; private set; } = null!;
 
-    [OneTimeSetUp]
-    public virtual void OneTimeSetUp()
-    {
-        var assemblies = AssemblyAnalyzer.LoadProductionAssemblies();
-        Configuration = new ArchitectureSettings();
-        Context = new ArchitectureContext(assemblies, Configuration);
-    }
-
     [SetUp]
     public virtual void SetUp()
     {
+        // Create fresh instances per test to ensure test isolation
+        var assemblies = AssemblyAnalyzer.LoadProductionAssemblies();
+        Configuration = new ArchitectureSettings();
+        Context = new ArchitectureContext(assemblies, Configuration);
         RuleEngine = new RuleEngine();
     }
 

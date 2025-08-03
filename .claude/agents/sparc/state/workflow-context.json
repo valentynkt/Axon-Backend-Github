@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "sparc-workflow-template",
+  "project_name": "Axon-Backend",
+  "current_phase": "initialization",
+  "phase_status": "pending",
+  "created_at": "2025-08-03T19:12:00.000Z",
+  "updated_at": "2025-08-03T19:12:00.000Z",
+  "human_context": {
+    "last_interaction": null,
+    "feedback_history": [],
+    "approval_status": {
+      "specification": "pending",
+      "pseudocode": "pending", 
+      "architecture": "pending",
+      "refinement": "pending",
+      "completion": "pending"
+    },
+    "stakeholder_contacts": [],
+    "interaction_preferences": {
+      "notification_style": "comprehensive",
+      "approval_format": "structured",
+      "feedback_collection": "interactive"
+    }
+  },
+  "deliverables": {
+    "specification": { 
+      "status": "pending", 
+      "files": [],
+      "human_approved": false,
+      "completion_percentage": 0
+    },
+    "pseudocode": { 
+      "status": "pending", 
+      "files": [],
+      "human_approved": false,
+      "completion_percentage": 0
+    },
+    "architecture": { 
+      "status": "pending", 
+      "files": [],
+      "human_approved": false,
+      "completion_percentage": 0
+    },
+    "refinement": { 
+      "status": "pending", 
+      "files": [],
+      "human_approved": false,
+      "completion_percentage": 0
+    },
+    "completion": { 
+      "status": "pending", 
+      "files": [],
+      "human_approved": false,
+      "completion_percentage": 0
+    }
+  },
+  "quality_gates": {
+    "gate_1_specification": { 
+      "status": "pending", 
+      "criteria": [
+        "All requirements documented and validated",
+        "Human stakeholder review completed",
+        "Interactive requirements validation session conducted",
+        "Edge cases identified and addressed",
+        "Acceptance criteria defined and agreed",
+        "Human approval obtained for specification phase"
+      ],
+      "human_validated": false
+    },
+    "gate_2_pseudocode": { 
+      "status": "pending", 
+      "criteria": [
+        "Algorithms validated and optimized",
+        "Human algorithm review completed",
+        "Interactive complexity analysis validation",
+        "TDD test cases outlined",
+        "Human approval for algorithm approach"
+      ],
+      "human_validated": false
+    },
+    "gate_3_architecture": { 
+      "status": "pending", 
+      "criteria": [
+        "Architecture reviewed and approved",
+        "Human architecture review session completed",
+        "Clean Architecture principles enforced",
+        "CQRS patterns correctly implemented",
+        "Human sign-off on architecture decisions"
+      ],
+      "human_validated": false
+    },
+    "gate_4_refinement": { 
+      "status": "pending", 
+      "criteria": [
+        "All tests pass with >95% coverage",
+        "Human code review session completed",
+        "Code quality metrics met",
+        "Performance benchmarks achieved",
+        "Human approval for code quality"
+      ],
+      "human_validated": false
+    },
+    "gate_5_completion": { 
+      "status": "pending", 
+      "criteria": [
+        "Integration tests pass completely",
+        "Human integration testing validation",
+        "Documentation complete and accurate",
+        "Human final sign-off for production release"
+      ],
+      "human_validated": false
+    }
+  },
+  "iterations": [],
+  "metrics": {
+    "phase_transition_times": {},
+    "human_approval_rates": {},
+    "quality_gate_pass_rates": {},
+    "total_iterations": 0,
+    "human_satisfaction_score": null
+  },
+  "phase_agents": {
+    "specification-agent": { "status": "inactive", "spawned_at": null },
+    "pseudocode-agent": { "status": "inactive", "spawned_at": null },
+    "architecture-agent": { "status": "inactive", "spawned_at": null },
+    "refinement-agent": { "status": "inactive", "spawned_at": null },
+    "completion-agent": { "status": "inactive", "spawned_at": null }
+  },
+  "workflow_orchestration": {
+    "state_management_enabled": true,
+    "human_interaction_enabled": true,
+    "phase_control_enabled": true,
+    "approval_gates_enabled": true,
+    "iterative_refinement_enabled": true
+  }
+}

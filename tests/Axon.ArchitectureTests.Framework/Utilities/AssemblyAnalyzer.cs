@@ -71,6 +71,13 @@ public static class AssemblyAnalyzer
             assemblies.AddRange(allAssemblies);
         }
         
+        // If still no assemblies found, try to force load assemblies from referenced paths
+        if (!assemblies.Any())
+        {
+            // Try to load from the bin directory or other known locations
+            assemblies.AddRange(TryLoadAssembliesFromPaths());
+        }
+        
         return assemblies;
     }
 
@@ -173,6 +180,70 @@ public static class AssemblyAnalyzer
                assemblyName.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) ||
                assemblyName.Contains("UnitTests", StringComparison.OrdinalIgnoreCase) ||
                assemblyName.Contains("IntegrationTests", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Attempts to load assemblies from known paths when they're not already loaded.
+    /// </summary>
+    private static IEnumerable<Assembly> TryLoadAssembliesFromPaths()
+    {
+        var assemblies = new List<Assembly>();
+        
+        try
+        {
+            // Get the directory where the test assembly is located
+            var testAssembly = Assembly.GetExecutingAssembly();
+            var testLocation = testAssembly.Location;
+            if (!string.IsNullOrEmpty(testLocation))
+            {
+                var baseDirectory = Path.GetDirectoryName(testLocation);
+                if (!string.IsNullOrEmpty(baseDirectory))
+                {
+                    // Look for Axon assemblies in the test directory and nearby directories
+                    var searchDirectories = new[]
+                    {
+                        baseDirectory,
+                        Path.Combine(baseDirectory, "..", "..", "..", "..", "src", "Api", "bin", "Debug", "net10.0"),
+                        Path.Combine(baseDirectory, "..", "..", "..", "..", "src", "Shared", "Common", "bin", "Debug", "net10.0"),
+                        Path.Combine(baseDirectory, "..", "..", "..", "..", "src", "Shared", "Domain", "bin", "Debug", "net10.0"),
+                        Path.Combine(baseDirectory, "..", "..", "..", "..", "src", "Modules", "Chat", "Domain", "bin", "Debug", "net10.0"),
+                        Path.Combine(baseDirectory, "..", "..", "..", "..", "src", "Modules", "Chat", "Application", "bin", "Debug", "net10.0"),
+                        Path.Combine(baseDirectory, "..", "..", "..", "..", "src", "Modules", "Chat", "Infrastructure", "bin", "Debug", "net10.0")
+                    };
+
+                    foreach (var directory in searchDirectories)
+                    {
+                        if (Directory.Exists(directory))
+                        {
+                            var dllFiles = Directory.GetFiles(directory, "Axon.*.dll")
+                                .Where(f => !Path.GetFileName(f).Contains("Test", StringComparison.OrdinalIgnoreCase));
+
+                            foreach (var dllFile in dllFiles)
+                            {
+                                try
+                                {
+                                    var assembly = Assembly.LoadFrom(dllFile);
+                                    if (IsProductionAssembly(assembly))
+                                    {
+                                        assemblies.Add(assembly);
+                                    }
+                                }
+                                catch
+                                {
+                                    // Ignore load failures - continue with other assemblies
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // If assembly loading fails, return empty collection
+        }
+        
+        return assemblies.Distinct();
     }
 
     /// <summary>

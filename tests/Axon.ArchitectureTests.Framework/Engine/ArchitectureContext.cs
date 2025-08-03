@@ -25,9 +25,11 @@ public sealed class ArchitectureContext : IArchitectureContext
         _types = new Lazy<IReadOnlyList<Type>>(() => 
             _assemblies.SelectMany(a => a.GetTypes()).ToList());
             
-        _typesByAssembly = _assemblies.ToDictionary(
-            a => a.GetName().Name ?? "Unknown",
-            a => (IReadOnlyList<Type>)a.GetTypes().ToList());
+        _typesByAssembly = _assemblies
+            .GroupBy(a => a.GetName().Name ?? "Unknown")
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<Type>)g.SelectMany(a => a.GetTypes()).ToList());
     }
 
     /// <inheritdoc />

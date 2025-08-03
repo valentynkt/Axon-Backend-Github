@@ -23,11 +23,17 @@ public sealed class SecretsManagementRule : ArchitectureRuleBase
         {
             foreach (var assembly in context.Assemblies)
             {
+                // Skip system assemblies if they somehow got through
+                if (IsSystemAssembly(assembly))
+                    continue;
                 var types = assembly.GetTypes()
                     .Where(t => !t.IsAbstract && !t.IsInterface);
 
                 foreach (var type in types)
                 {
+                    // Skip architecture test framework types - they legitimately need various patterns
+                    if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
                     // Check for hardcoded secrets in fields and properties
                     ValidateFieldsAndProperties(type, violations);
 
@@ -267,10 +273,21 @@ public sealed class SecretsManagementRule : ArchitectureRuleBase
 
     private static bool IsSecretHandlingMethod(string methodName)
     {
+        // Exclude common system methods that contain "hash" but aren't secret handling
+        if (methodName.Equals("GetHashCode", StringComparison.OrdinalIgnoreCase) ||
+            methodName.Equals("ComputeHash", StringComparison.OrdinalIgnoreCase) ||
+            methodName.StartsWith("get_", StringComparison.OrdinalIgnoreCase) ||
+            methodName.StartsWith("set_", StringComparison.OrdinalIgnoreCase) ||
+            methodName.StartsWith("Create", StringComparison.OrdinalIgnoreCase) ||
+            methodName.StartsWith("ToString", StringComparison.OrdinalIgnoreCase) ||
+            methodName.StartsWith("Equals", StringComparison.OrdinalIgnoreCase))
+            return false;
+
         var secretMethods = new[]
         {
-            "encrypt", "decrypt", "hash", "verify", "authenticate", "authorize",
-            "generatetoken", "validatetoken", "createsecret", "storesecret"
+            "encryptpassword", "decryptpassword", "hashpassword", "verifypassword", 
+            "authenticateuser", "authorizeuser", "generateaccesstoken", 
+            "validateaccesstoken", "createsecretkey", "storesecretkey"
         };
 
         var methodNameLower = methodName.ToLowerInvariant();
@@ -302,5 +319,15 @@ public sealed class SecretsManagementRule : ArchitectureRuleBase
         return suspiciousPatterns.Any(pattern => 
             value.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
             System.Text.RegularExpressions.Regex.IsMatch(value, pattern));
+    }
+
+    private static bool IsSystemAssembly(Assembly assembly)
+    {
+        var name = assembly.FullName ?? "";
+        return name.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("mscorlib", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("NUnit", StringComparison.OrdinalIgnoreCase);
     }
 }

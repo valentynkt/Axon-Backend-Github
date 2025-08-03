@@ -23,11 +23,17 @@ public sealed class AuthorizationPatternsRule : ArchitectureRuleBase
         {
             foreach (var assembly in context.Assemblies)
             {
+                // Skip system assemblies if they somehow got through
+                if (IsSystemAssembly(assembly))
+                    continue;
                 var types = assembly.GetTypes()
                     .Where(t => !t.IsAbstract && !t.IsInterface);
 
                 foreach (var type in types)
                 {
+                    // Skip architecture test framework types
+                    if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
                     // Check authorization attributes on endpoints
                     if (IsApiEndpoint(type))
                     {
@@ -281,5 +287,16 @@ public sealed class AuthorizationPatternsRule : ArchitectureRuleBase
         {
             return null;
         }
+    }
+
+    
+    private static bool IsSystemAssembly(Assembly assembly)
+    {
+        var name = assembly.FullName ?? "";
+        return name.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("mscorlib", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("NUnit", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -23,10 +23,14 @@ public sealed class EventStoreRule : ArchitectureRuleBase
         
         await Task.Run(() =>
         {
-            var eventStoreTypes = context.Types.Where(IsEventStore).ToList();
-            var eventRepositoryTypes = context.Types.Where(IsEventRepository).ToList();
-            var eventTypes = context.Types.Where(IsStorableEvent).ToList();
-            var aggregateTypes = context.Types.Where(IsAggregateRoot).ToList();
+            // Filter out architecture test framework types
+            var filteredTypes = context.Types.Where(t => 
+                t.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) != true);
+                
+            var eventStoreTypes = filteredTypes.Where(IsEventStore).ToList();
+            var eventRepositoryTypes = filteredTypes.Where(IsEventRepository).ToList();
+            var eventTypes = filteredTypes.Where(IsStorableEvent).ToList();
+            var aggregateTypes = filteredTypes.Where(IsAggregateRoot).ToList();
 
             // Validate event store implementations
             foreach (var storeType in eventStoreTypes)

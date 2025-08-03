@@ -29,6 +29,10 @@ public sealed class AppSettingsRule : ArchitectureRuleBase
 
                 foreach (var type in types)
                 {
+                    // Skip architecture test framework types - they don't need application configuration
+                    if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
+                        
                     ValidateOptionsUsage(type, violations);
                     ValidateConfigurationBinding(type, violations);
                     ValidateSettingsClasses(type, violations);

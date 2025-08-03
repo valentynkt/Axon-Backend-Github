@@ -8,7 +8,8 @@ using System.Text.Json;
 namespace Axon.Tests.Shared.TestBase;
 
 /// <summary>
-/// Base class for Integration tests providing WebApplicationFactory setup
+/// Base class for Integration tests providing WebApplicationFactory setup.
+/// Each test gets its own factory and client instance to ensure test isolation.
 /// </summary>
 [TestFixture]
 public abstract class IntegrationTestBase
@@ -16,15 +17,15 @@ public abstract class IntegrationTestBase
     protected AxonWebApplicationFactory Factory { get; private set; } = null!;
     protected HttpClient Client { get; private set; } = null!;
 
-    [OneTimeSetUp]
-    public void OneTimeSetUp()
+    [SetUp]
+    public virtual void SetUp()
     {
         Factory = new AxonWebApplicationFactory();
         Client = Factory.CreateClient();
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown()
+    [TearDown]
+    public virtual void TearDown()
     {
         Client?.Dispose();
         Factory?.Dispose();

@@ -24,7 +24,8 @@ public sealed class EnvironmentConfigRule : ArchitectureRuleBase
         
         await Task.Run(() =>
         {
-            foreach (var type in context.Types.Where(t => !t.IsAbstract && !t.IsInterface))
+            foreach (var type in context.Types.Where(t => !t.IsAbstract && !t.IsInterface &&
+                t.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) != true))
             {
                 // Check for hardcoded environment values
                 ValidateHardcodedValues(type, violations);

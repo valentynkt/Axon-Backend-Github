@@ -23,8 +23,20 @@ public sealed class InputValidationRule : ArchitectureRuleBase
         
         await Task.Run(() =>
         {
-            foreach (var type in context.Types.Where(t => !t.IsAbstract && !t.IsInterface))
+            foreach (var assembly in context.Assemblies)
             {
+                // Skip system assemblies if they somehow got through
+                if (IsSystemAssembly(assembly))
+                    continue;
+                    
+                var types = assembly.GetTypes()
+                    .Where(t => !t.IsAbstract && !t.IsInterface);
+
+                foreach (var type in types)
+                {
+                    // Skip architecture test framework types
+                    if (type.Namespace?.Contains("ArchitectureTests", StringComparison.OrdinalIgnoreCase) == true)
+                        continue;
                 // Check DTOs and request models
                 if (IsInputModel(type))
                 {
@@ -42,6 +54,7 @@ public sealed class InputValidationRule : ArchitectureRuleBase
 
                 // Check for XSS vulnerabilities
                 ValidateXssPrevention(type, violations);
+                }
             }
         }, cancellationToken);
 
@@ -324,4 +337,15 @@ public sealed class InputValidationRule : ArchitectureRuleBase
           type.GetGenericTypeDefinition() == typeof(IList<>) ||
           type.GetGenericTypeDefinition() == typeof(ICollection<>) ||
           type.GetGenericTypeDefinition() == typeof(IEnumerable<>)));
+
+    
+    private static bool IsSystemAssembly(Assembly assembly)
+    {
+        var name = assembly.FullName ?? "";
+        return name.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("mscorlib", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("NUnit", StringComparison.OrdinalIgnoreCase);
+    }
 }
