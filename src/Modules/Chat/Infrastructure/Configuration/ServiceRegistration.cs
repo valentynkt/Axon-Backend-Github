@@ -43,6 +43,11 @@ public static class ServiceRegistration
         services.AddScoped<IMessageRequestBuilder, MessageRequestBuilder>();
         services.AddScoped<IResponseMappingService, ResponseMappingService>();
         
+        // Register extracted SRP-compliant services
+        services.AddScoped<Ai.Abstractions.IHttpRequestBuilder, Axon.Modules.Chat.Infrastructure.Ai.Services.HttpRequestBuilder>();
+        services.AddScoped<Ai.Abstractions.IResponseParser, Axon.Modules.Chat.Infrastructure.Ai.Services.ResponseParser>();
+        services.AddScoped<Ai.Abstractions.IPayloadSerializer, Axon.Modules.Chat.Infrastructure.Ai.Services.PayloadSerializer>();
+        
         // Register Infrastructure services
         services.AddHttpClient<IAiClient, OpenAiClient>(client =>
         {

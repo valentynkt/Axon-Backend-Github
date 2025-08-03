@@ -46,12 +46,12 @@ public static class ServiceRegistration
         // Add MediatR
         services.AddMediatR(config =>
         {
-            config.RegisterServicesFromAssembly(typeof(Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageCommand).Assembly);
+            config.RegisterServicesFromAssembly(typeof(Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageCommand).Assembly);
         });
         
         // Add FluentValidation
         services.AddValidatorsFromAssembly(
-            typeof(Axon.Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageValidator).Assembly);
+            typeof(Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageValidator).Assembly);
         
         // Add error handling services
         services.AddScoped<IErrorMapper, ErrorMapper>();

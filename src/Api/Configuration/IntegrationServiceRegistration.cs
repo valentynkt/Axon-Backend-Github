@@ -1,4 +1,3 @@
-using Axon.Modules.Chat.Application.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

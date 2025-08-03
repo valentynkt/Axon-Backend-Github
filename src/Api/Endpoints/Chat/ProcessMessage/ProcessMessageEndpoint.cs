@@ -71,7 +71,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
             Response: response.Response,
             ConversationId: response.ConversationId ?? Guid.NewGuid().ToString(),
             ToolExecutions: response.ToolExecutions?.Select(tool =>
-                new Contracts.Chat.ToolExecutionResponse(
+                new ToolExecutionResponse(
                     ToolName: tool.ToolName,
                     Success: tool.Success,
                     DurationMs: (int)tool.Duration.TotalMilliseconds)).ToArray());

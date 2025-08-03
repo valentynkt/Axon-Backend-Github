@@ -1,212 +1,68 @@
 {
-  "schema_version": "1.0",
-  "workflow_id": "sparc-workflow-template",
-  "phase_tracking": {
-    "phase_1_specification": {
-      "phase_name": "Specification",
-      "status": "pending",
-      "started_at": null,
-      "completed_at": null,
-      "human_approved_at": null,
-      "progress_percentage": 0,
-      "tasks": [
-        {
-          "task_id": "spec_01",
-          "description": "Requirements analysis and stakeholder mapping",
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "spec_02", 
-          "description": "Interactive human requirements validation session",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "spec_03",
-          "description": "Edge case identification with human input",
-          "status": "pending", 
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "spec_04",
-          "description": "Human approval request for specification completion",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        }
-      ],
-      "deliverables": [],
-      "human_feedback": [],
-      "quality_gate_results": null
+  "workflow_id": "conversation-persistence-sparc-20250803",
+  "current_phase": "specification",
+  "phase_details": {
+    "specification": {
+      "status": "in_progress",
+      "agent_assigned": "specification-agent",
+      "agent_expertise": "9.6/10",
+      "started_at": "2025-08-03T21:23:24.111Z",
+      "estimated_completion": "2025-08-03T21:40:00.000Z",
+      "deliverables": {
+        "requirements_document": "pending",
+        "event_sourcing_specification": "pending",
+        "auditing_requirements": "pending",
+        "base_abstractions_design": "pending",
+        "postgresql_integration_plan": "pending"
+      },
+      "human_checkpoint": {
+        "scheduled": true,
+        "validation_criteria": [
+          "requirements_completeness",
+          "event_sourcing_clarity",
+          "auditing_comprehensiveness",
+          "technical_feasibility"
+        ]
+      }
     },
-    "phase_2_pseudocode": {
-      "phase_name": "Pseudocode",
+    "pseudocode": {
       "status": "pending",
-      "started_at": null,
-      "completed_at": null,
-      "human_approved_at": null,
-      "progress_percentage": 0,
-      "tasks": [
-        {
-          "task_id": "pseudo_01",
-          "description": "Algorithm design and complexity analysis",
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "pseudo_02",
-          "description": "Interactive human algorithm review session", 
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "pseudo_03",
-          "description": "Data structure selection with human technical review",
-          "status": "pending",
-          "priority": "high", 
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "pseudo_04",
-          "description": "Human approval for algorithm approach",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        }
-      ],
-      "deliverables": [],
-      "human_feedback": [],
-      "quality_gate_results": null
+      "dependencies": ["specification_approved"],
+      "agent_ready": "pseudocode-agent"
     },
-    "phase_3_architecture": {
-      "phase_name": "Architecture",
+    "architecture": {
       "status": "pending",
-      "started_at": null,
-      "completed_at": null,
-      "human_approved_at": null,
-      "progress_percentage": 0,
-      "tasks": [
-        {
-          "task_id": "arch_01",
-          "description": "System architecture design with Clean Architecture",
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "arch_02",
-          "description": "Interactive human architecture review session",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "arch_03",
-          "description": "CQRS pattern validation with human stakeholders", 
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "arch_04",
-          "description": "Human sign-off on architecture decisions",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        }
-      ],
-      "deliverables": [],
-      "human_feedback": [],
-      "quality_gate_results": null
+      "dependencies": ["pseudocode_approved"],
+      "agent_ready": "architecture-agent"
     },
-    "phase_4_refinement": {
-      "phase_name": "Refinement",
+    "refinement": {
       "status": "pending",
-      "started_at": null,
-      "completed_at": null,
-      "human_approved_at": null,
-      "progress_percentage": 0,
-      "tasks": [
-        {
-          "task_id": "refine_01",
-          "description": "TDD implementation with comprehensive coverage",
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "refine_02",
-          "description": "Interactive human code review session",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "refine_03",
-          "description": "Performance optimization with human validation",
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "refine_04",
-          "description": "Human approval for code quality",
-          "status": "pending",
-          "priority": "critical", 
-          "human_interaction_required": true
-        }
-      ],
-      "deliverables": [],
-      "human_feedback": [],
-      "quality_gate_results": null
+      "dependencies": ["architecture_approved"],
+      "agent_ready": "refinement-agent"
     },
-    "phase_5_completion": {
-      "phase_name": "Completion",
+    "completion": {
       "status": "pending",
-      "started_at": null,
-      "completed_at": null,
-      "human_approved_at": null,
-      "progress_percentage": 0,
-      "tasks": [
-        {
-          "task_id": "complete_01",
-          "description": "Integration testing with human validation",
-          "status": "pending",
-          "priority": "high",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "complete_02",
-          "description": "Interactive final system review with human",
-          "status": "pending",
-          "priority": "critical",
-          "human_interaction_required": true
-        },
-        {
-          "task_id": "complete_03",
-          "description": "Human final sign-off for production release",
-          "status": "pending", 
-          "priority": "critical",
-          "human_interaction_required": true
-        }
-      ],
-      "deliverables": [],
-      "human_feedback": [],
-      "quality_gate_results": null
+      "dependencies": ["refinement_approved"],
+      "agent_ready": "completion-agent"
     }
   },
-  "workflow_metrics": {
-    "total_phases": 5,
-    "completed_phases": 0,
-    "current_phase_index": 0,
-    "overall_progress_percentage": 0,
-    "estimated_completion_time": null,
-    "human_interaction_points": 20
+  "context_analysis": {
+    "existing_domain_structure": {
+      "base_classes": ["Entity<TId>", "AggregateRoot<TId>"],
+      "domain_events": ["IDomainEvent", "DomainEvent"],
+      "chat_domain": {
+        "aggregates": ["Conversation"],
+        "entities": ["Message"],
+        "value_objects": ["ConversationId", "MessageId", "MessageRole"],
+        "events": ["MessageAddedDomainEvent", "ConversationCompletedDomainEvent", "ToolExecutedDomainEvent"]
+      },
+      "missing_elements": [
+        "IAuditable interface",
+        "Event sourcing infrastructure",
+        "Persistence-specific domain events",
+        "Audit trail entities",
+        "Event store abstractions"
+      ]
+    }
   }
 }
