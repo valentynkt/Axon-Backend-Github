@@ -32,8 +32,6 @@
   <ItemGroup>
     <ProjectReference Include="../Application/Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
-    <ProjectReference Include="../../../Shared/Common/Axon.Shared.Common.csproj" />
-    <ProjectReference Include="../../../Shared/Domain/Axon.Shared.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

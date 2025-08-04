@@ -1,5 +1,4 @@
 using Axon.Modules.Chat.Application.Repositories;
-using Axon.Shared.Common;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
 

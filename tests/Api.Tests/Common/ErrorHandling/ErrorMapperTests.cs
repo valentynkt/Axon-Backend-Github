@@ -1,5 +1,4 @@
 using Axon.Api.Common.ErrorHandling;
-using Axon.Shared.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NUnit.Framework;

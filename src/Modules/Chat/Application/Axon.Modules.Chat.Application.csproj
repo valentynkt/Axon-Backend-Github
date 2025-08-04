@@ -14,8 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
-    <ProjectReference Include="../../../Shared/Common/Axon.Shared.Common.csproj" />
-    <ProjectReference Include="../../../Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

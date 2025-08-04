@@ -1,7 +1,6 @@
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Infrastructure.Configuration;
 using Axon.Modules.Chat.Infrastructure.Services;
-using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;

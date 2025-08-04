@@ -1,5 +1,3 @@
-using Axon.Shared.Common;
-
 namespace Axon.Modules.Chat.Domain.ValueObjects;
 
 /// <summary>

@@ -4,7 +4,6 @@ using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Infrastructure.Ai;
 using Axon.Modules.Chat.Infrastructure.Ai.Abstractions;
 using Axon.Modules.Chat.Infrastructure.Ai.Models;
-using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;

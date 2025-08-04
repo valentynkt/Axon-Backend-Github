@@ -10,9 +10,4 @@
     <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../../../Shared/Common/Axon.Shared.Common.csproj" />
-    <ProjectReference Include="../../../Shared/Domain/Axon.Shared.Domain.csproj" />
-  </ItemGroup>
-
 </Project>

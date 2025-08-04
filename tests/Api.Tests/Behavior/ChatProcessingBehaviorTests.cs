@@ -4,7 +4,6 @@ using Axon.Api.Contracts.Chat;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Types;
-using Axon.Shared.Common;
 using Shouldly;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;

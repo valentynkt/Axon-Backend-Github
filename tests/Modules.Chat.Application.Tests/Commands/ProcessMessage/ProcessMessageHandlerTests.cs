@@ -1,7 +1,6 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;

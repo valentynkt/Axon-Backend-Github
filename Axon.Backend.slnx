@@ -8,7 +8,13 @@
   <Folder Name="/src/Api/">
     <Project Path="src/Api/Axon.Api.csproj" />
   </Folder>
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/BuildingBlocks.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Booking/">
+    <Project Path="src/Modules/Booking/src/Booking.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Chat/" />
   <Folder Name="/src/Modules/Chat/Application/">
     <Project Path="src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
@@ -19,15 +25,8 @@
   <Folder Name="/src/Modules/Chat/Infrastructure/">
     <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/src/Shared/" />
-  <Folder Name="/src/Shared/Common.Abstractions/">
-    <Project Path="src/Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
-  </Folder>
-  <Folder Name="/src/Shared/Common/">
-    <Project Path="src/Shared/Common/Axon.Shared.Common.csproj" />
-  </Folder>
-  <Folder Name="/src/Shared/Domain/">
-    <Project Path="src/Shared/Domain/Axon.Shared.Domain.csproj" />
+  <Folder Name="/src/Modules/Identity/">
+    <Project Path="src/Modules/Identity/src/Identity.csproj" />
   </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Api.Tests/">
@@ -39,6 +38,9 @@
   <Folder Name="/tests/Axon.ArchitectureTests.Framework/">
     <Project Path="tests/Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
   </Folder>
+  <Folder Name="/tests/Modules.Booking.Integration.Test/">
+    <Project Path="src/Modules/Booking/tests/Integration.Test/Integration.Test.csproj" />
+  </Folder>
   <Folder Name="/tests/Modules.Chat.Application.Tests/">
     <Project Path="tests/Modules.Chat.Application.Tests/Axon.Modules.Chat.Application.Tests.csproj" />
   </Folder>
@@ -47,5 +49,8 @@
   </Folder>
   <Folder Name="/tests/Modules.Chat.Infrastructure.Tests/">
     <Project Path="tests/Modules.Chat.Infrastructure.Tests/Axon.Modules.Chat.Infrastructure.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules.Identity.Integration.Test/">
+    <Project Path="src/Modules/Identity/tests/Integration.Test/Integration.Test.csproj" />
   </Folder>
 </Solution>
