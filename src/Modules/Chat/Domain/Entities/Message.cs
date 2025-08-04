@@ -90,8 +90,6 @@ public sealed class Message : AuditableEntity<MessageId>
             return Error.Validation("Message content cannot exceed 100,000 characters");
 
         Content = newContent.Trim();
-        MarkAsModified();
-
         return Result.Success();
     }
 }

@@ -19,9 +19,7 @@ public static class ServiceRegistration
     /// <param name="services">Service collection</param>
     /// <param name="configuration">Application configuration</param>
     /// <returns>Service collection for chaining</returns>
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access", Justification = "Configuration binding is acceptable for this use case")]
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:Members annotated with 'RequiresDynamicCodeAttribute' require dynamic access", Justification = "Configuration binding is acceptable for this use case")]
-    public static IServiceCollection AddChatInfrastructure(
+    public static IServiceCollection AddChatApplicationServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {

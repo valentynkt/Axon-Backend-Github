@@ -39,6 +39,9 @@ public sealed record Error
     public static Error Forbidden(string message, string code = "FORBIDDEN") =>
         new(code, message, ErrorType.Forbidden);
 
+    public static Error Persistence(string message, string code = "PERSISTENCE_ERROR") =>
+        new(code, message, ErrorType.Persistence);
+
     public override string ToString() => $"[{Type}] {Code}: {Message}";
 }
 
@@ -53,5 +56,6 @@ public enum ErrorType
     InternalError,
     ExternalService,
     Unauthorized,
-    Forbidden
+    Forbidden,
+    Persistence
 }

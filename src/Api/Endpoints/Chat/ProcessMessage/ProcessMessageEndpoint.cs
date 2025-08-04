@@ -51,9 +51,12 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
             req.ConversationId);
 
         // Map API request to application command
+        var conversationId = string.IsNullOrEmpty(req.ConversationId) ? (Guid?)null : Guid.Parse(req.ConversationId);
         var command = new ProcessMessageCommand(
             Message: req.Message,
-            PreviousResponseId: req.ConversationId);
+            ConversationId: conversationId,
+            UserId: null, // Will use current user from service
+            PreviousResponseId: null);
 
         // Execute command via MediatR
         var result = await _mediator.Send(command, ct);
@@ -69,7 +72,7 @@ public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, Con
         // Map application response to API response
         var apiResponse = new Contracts.Chat.ProcessMessageResponse(
             Response: response.Response,
-            ConversationId: response.ConversationId ?? Guid.NewGuid().ToString(),
+            ConversationId: response.ConversationId?.ToString() ?? Guid.NewGuid().ToString(),
             ToolExecutions: response.ToolExecutions?.Select(tool =>
                 new ToolExecutionResponse(
                     ToolName: tool.ToolName,

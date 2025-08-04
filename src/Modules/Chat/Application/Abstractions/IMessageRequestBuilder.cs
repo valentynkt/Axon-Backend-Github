@@ -13,6 +13,7 @@ public interface IMessageRequestBuilder
     /// Builds an AI request with integrated MCP configuration
     /// </summary>
     /// <param name="command">Process message command</param>
+    /// <param name="conversationContext">Optional conversation context for continuity</param>
     /// <returns>Result containing AI request and MCP server count</returns>
-    Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand command);
+    Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand command, string? conversationContext = null);
 }

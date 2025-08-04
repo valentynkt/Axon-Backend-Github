@@ -19,8 +19,8 @@ public sealed class ResponseMappingService : IResponseMappingService
     {
         ArgumentNullException.ThrowIfNull(aiResponse);
 
-        // Generate conversation ID if not provided in response
-        var conversationId = aiResponse.ResponseId ?? ConversationId.New().ToString();
+        // Generate conversation ID if not provided in response  
+        var conversationId = string.IsNullOrEmpty(aiResponse.ResponseId) ? ConversationId.New().Value : Guid.Parse(aiResponse.ResponseId);
         
         // Map tool executions to summaries
         var toolSummaries = aiResponse.ToolExecutions?.Select(tool =>
@@ -32,6 +32,7 @@ public sealed class ResponseMappingService : IResponseMappingService
         return new ProcessMessageResponse(
             Response: aiResponse.Content,
             ConversationId: conversationId,
+            MessageCount: 0,
             ToolExecutions: toolSummaries);
     }
 }

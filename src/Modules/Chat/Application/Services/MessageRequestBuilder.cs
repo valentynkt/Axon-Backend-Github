@@ -39,8 +39,9 @@ public sealed class MessageRequestBuilder : IMessageRequestBuilder
     /// Builds an AI request with integrated MCP configuration
     /// </summary>
     /// <param name="command">Process message command</param>
+    /// <param name="conversationContext">Optional conversation context for continuity</param>
     /// <returns>Result containing AI request and MCP server count</returns>
-    public Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand command)
+    public Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand command, string? conversationContext = null)
     {
         if (command is null)
             return Error.Validation("ProcessMessageCommand cannot be null");
@@ -56,9 +57,13 @@ public sealed class MessageRequestBuilder : IMessageRequestBuilder
         var enabledMcpServers = mcpServersResult.Value;
         UsingEnabledMcpServers(_logger, enabledMcpServers.Count, null);
 
-        // Create AI request with all enabled MCP servers
+        // Create AI request with all enabled MCP servers and conversation context
+        var messageWithContext = string.IsNullOrEmpty(conversationContext) 
+            ? command.Message 
+            : $"Previous conversation:\n{conversationContext}\n\nUser: {command.Message}";
+
         var aiRequest = new AiRequest(
-            Message: command.Message,
+            Message: messageWithContext,
             McpConfigs: enabledMcpServers.Count > 0 ? enabledMcpServers : null,
             PreviousResponseId: command.PreviousResponseId);
 

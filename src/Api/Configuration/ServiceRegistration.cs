@@ -1,5 +1,6 @@
 using Axon.Api.Common.ErrorHandling;
 using Axon.Modules.Chat.Infrastructure.Configuration;
+using Axon.Modules.Chat.Infrastructure.Extensions;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using FluentValidation;

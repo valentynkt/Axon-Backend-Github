@@ -5,7 +5,8 @@ namespace Axon.Modules.Chat.Application.Commands.ProcessMessage;
 /// </summary>
 public sealed record ProcessMessageResponse(
     string Response,
-    string? ConversationId = null,
+    Guid? ConversationId = null,
+    int MessageCount = 0,
     ToolExecutionSummary[]? ToolExecutions = null);
 
 /// <summary>

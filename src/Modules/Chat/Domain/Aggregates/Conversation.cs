@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Aggregates;
 /// Conversation aggregate root following SPARC architecture patterns
 /// Manages messages with proper domain invariants and event sourcing capability
 /// </summary>
-public sealed class Conversation : AggregateRoot<ConversationId>
+public sealed class Conversation : AuditableAggregateRoot<ConversationId>
 {
     private readonly List<Message> _messages = new();
 
@@ -21,9 +21,20 @@ public sealed class Conversation : AggregateRoot<ConversationId>
         _messages.OrderBy(m => m.Sequence).ToList();
 
     /// <summary>
+    /// EF Core navigation property for messages (mapped to _messages backing field)
+    /// This is public to support EF Core queries but should not be used directly in domain logic
+    /// </summary>
+    public ICollection<Message> Messages => _messages;
+
+    /// <summary>
     /// The conversation title
     /// </summary>
     public string Title { get; private set; }
+
+    /// <summary>
+    /// The user ID who owns this conversation
+    /// </summary>
+    public string UserId { get; private set; }
 
     /// <summary>
     /// The conversation status following SPARC enum pattern
@@ -49,19 +60,21 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     private Conversation() : base(default!)
     {
         Title = string.Empty;
+        UserId = string.Empty;
         Status = ConversationStatus.Active;
     }
 
-    private Conversation(ConversationId id, string title) : base(id)
+    private Conversation(ConversationId id, string title, string userId) : base(id)
     {
         Title = title;
+        UserId = userId;
         Status = ConversationStatus.Active;
     }
 
     /// <summary>
     /// Creates a new conversation following SPARC factory pattern
     /// </summary>
-    public static Result<Conversation> Create(string title)
+    public static Result<Conversation> Create(string title, string userId)
     {
         if (string.IsNullOrWhiteSpace(title))
             return Error.Validation("Conversation title cannot be null or empty");
@@ -69,8 +82,11 @@ public sealed class Conversation : AggregateRoot<ConversationId>
         if (title.Length > 200)
             return Error.Validation("Conversation title cannot exceed 200 characters");
 
+        if (string.IsNullOrWhiteSpace(userId))
+            return Error.Validation("User ID cannot be null or empty");
+
         var conversationId = ConversationId.New();
-        return new Conversation(conversationId, title.Trim());
+        return new Conversation(conversationId, title.Trim(), userId);
     }
 
     /// <summary>
@@ -137,6 +153,90 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     }
 
     /// <summary>
+    /// Archives the conversation following SPARC pattern
+    /// </summary>
+    public Result ArchiveConversation()
+    {
+        if (Status == ConversationStatus.Archived)
+            return Error.Validation("Conversation is already archived");
+
+        if (Status == ConversationStatus.Active)
+        {
+            // Complete conversation first if active
+            var completeResult = CompleteConversation();
+            if (completeResult.IsFailure)
+                return completeResult;
+        }
+
+        Status = ConversationStatus.Archived;
+        
+        // Raise domain event
+        RaiseDomainEvent(new ConversationArchivedDomainEvent(
+            Id,
+            MessageCount,
+            CompletedAt,
+            DateTime.UtcNow));
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Builds conversation context for AI processing using domain logic
+    /// </summary>
+    public string BuildConversationContext(int? maxMessages = null)
+    {
+        var messagesToInclude = maxMessages.HasValue 
+            ? MessagesOrdered.TakeLast(maxMessages.Value).ToList()
+            : MessagesOrdered.ToList();
+
+        if (messagesToInclude.Count == 0)
+            return string.Empty;
+
+        var context = string.Join("\n", 
+            messagesToInclude.Select(m => $"{m.Role.Value}: {m.Content}"));
+
+        return context;
+    }
+
+    /// <summary>
+    /// Gets conversation summary for AI context
+    /// </summary>
+    public ConversationSummary GetSummary()
+    {
+        return ConversationSummary.Create(
+            Id,
+            Title,
+            Status.ToString(),
+            MessageCount,
+            MessagesOrdered.Count > 0 ? MessagesOrdered[0].Content : string.Empty,
+            MessagesOrdered.Count > 0 ? MessagesOrdered[^1].Content : string.Empty,
+            GetCreatedAt(),
+            CompletedAt);
+    }
+
+    /// <summary>
+    /// Checks if conversation can accept new messages
+    /// </summary>
+    public bool CanAcceptMessages() => Status == ConversationStatus.Active;
+
+    /// <summary>
+    /// Gets the last message in the conversation
+    /// </summary>
+    public Message? GetLastMessage() => 
+        MessagesOrdered.Count > 0 ? MessagesOrdered[^1] : null;
+
+    /// <summary>
+    /// Gets messages by role
+    /// </summary>
+    public IReadOnlyList<Message> GetMessagesByRole(MessageRole role) =>
+        MessagesOrdered.Where(m => m.Role == role).ToList();
+
+    /// <summary>
+    /// Checks if the conversation belongs to the specified user
+    /// </summary>
+    public bool BelongsToUser(string userId) => UserId.Equals(userId, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Applies a domain event to this aggregate for event sourcing replay scenarios.
     /// Handles state reconstruction from event stream.
     /// </summary>
@@ -150,6 +250,9 @@ public sealed class Conversation : AggregateRoot<ConversationId>
                 break;
             case ConversationCompletedDomainEvent conversationCompleted:
                 ApplyConversationCompletedEvent(conversationCompleted);
+                break;
+            case ConversationArchivedDomainEvent conversationArchived:
+                ApplyConversationArchivedEvent(conversationArchived);
                 break;
             default:
                 // Unknown event type - ignore for forward compatibility
@@ -167,6 +270,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
         {
             Id = Id,
             Title = Title,
+            UserId = UserId,
             Status = Status,
             CompletedAt = CompletedAt,
             Messages = _messages.ToList(),
@@ -186,6 +290,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 
         // Restore aggregate state from snapshot
         Title = conversationSnapshot.Title;
+        UserId = conversationSnapshot.UserId;
         Status = conversationSnapshot.Status;
         CompletedAt = conversationSnapshot.CompletedAt;
         
@@ -211,6 +316,11 @@ public sealed class Conversation : AggregateRoot<ConversationId>
         Status = ConversationStatus.Completed;
         CompletedAt = conversationCompleted.CompletedAt;
     }
+
+    private void ApplyConversationArchivedEvent(ConversationArchivedDomainEvent _)
+    {
+        Status = ConversationStatus.Archived;
+    }
 }
 
 /// <summary>
@@ -221,6 +331,7 @@ public sealed class ConversationSnapshot
 {
     public required ConversationId Id { get; init; }
     public required string Title { get; init; }
+    public required string UserId { get; init; }
     public required ConversationStatus Status { get; init; }
     public DateTime? CompletedAt { get; init; }
     public required List<Message> Messages { get; init; }
