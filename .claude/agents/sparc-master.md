@@ -449,7 +449,16 @@ function consolidateAgentDeliverables(agentResults) {
 4. **Memory Operations**: ALWAYS batch ALL memory store/retrieve in ONE message with agent context
 5. **Claude Flow MCP**: ALWAYS coordinate through swarm initialization and task orchestration with agent framework
 
-#### ⚡ GOLDEN RULE: "1 MESSAGE = ALL RELATED OPERATIONS + PHASE AGENT COORDINATION"
+#### ⚡ GOLDEN RULE: "1 MESSAGE = ALL RELATED OPERATIONS + PHASE AGENT COORDINATION + MCP TOOLS FIRST"
+
+#### 🔧 MANDATORY MCP TOOL USAGE FOR SPARC MASTER:
+```yaml
+Code Operations: "ALWAYS use Serena (mcp__serena__*) for ALL code analysis and editing"
+Memory Management: "ALWAYS use Claude Flow memory (mcp__claude_flow__memory_usage)"
+Agent Coordination: "ALWAYS use Claude Flow orchestration (mcp__claude_flow__task_orchestrate)"
+File Operations: "Use Desktop Commander (mcp__desktop_commander__*) for non-code files"
+Workflow State: "Use Serena for JSON config files, Claude Flow memory for runtime state"
+```
 
 **Example of CORRECT Enhanced SPARC Master Execution with Agent Coordination:**
 ```javascript
