@@ -93,10 +93,10 @@ public sealed class ProcessMessageHandler : IRequestHandler<ProcessMessageComman
             return assistantMessageResult.Error;
 
         // Save conversation changes
-        var saveResult = await _conversationRepository.UpdateAsync(conversation, cancellationToken);
-        if (saveResult.IsFailure)
-            return saveResult.Error;
-
+        // NOTE: No UpdateAsync call needed - EF Core automatically tracks changes for loaded entities
+        // For new conversations, AddAsync already marked them for INSERT
+        // For existing conversations, GetAggregateAsync already loaded them with change tracking
+        
         var commitResult = await _unitOfWork.SaveChangesAsync(cancellationToken);
         if (commitResult == 0)
             return Error.Persistence("Failed to save changes");

@@ -38,16 +38,22 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
+    <Folder Include="Migrations\ChatDb\" />
     <Folder Include="Persistence\Configurations\" />
     <Folder Include="Persistence\Entities\" />
     <Folder Include="Persistence\Interceptors\" />
+    <Folder Include="Persistence\Migrations\" />
     <Folder Include="Persistence\Repositories\" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Persistence\Configurations\OutboxMessageConfiguration.cs" />
-    <Compile Remove="Persistence\Configurations\MessageConfiguration.cs" />
+    <Compile Remove="Persistence\Configurations\ConversationReadModelConfiguration.cs" />
     <Compile Remove="Migrations\20250804192135_InitialCreate.Designer.cs" />
+    <Compile Remove="Migrations\20250804201352_CleanInitialCreate.cs" />
+    <Compile Remove="Migrations\20250804201352_CleanInitialCreate.Designer.cs" />
+    <Compile Remove="Migrations\ChatDbContextModelSnapshot.cs" />
+    <Compile Remove="Persistence\Migrations\20250804205008_InitDB.Designer.cs" />
   </ItemGroup>
 
 </Project>

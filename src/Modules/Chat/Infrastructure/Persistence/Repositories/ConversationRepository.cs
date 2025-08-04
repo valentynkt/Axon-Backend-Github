@@ -19,9 +19,14 @@ public sealed class ConversationRepository : Repository<Conversation, Conversati
     {
         try
         {
+            // Load conversation - messages will be loaded separately when needed
+            // This approach maintains aggregate boundaries and prevents EF Core navigation issues
             var conversation = await Context.Conversations
-                .Include(c => c.Messages)
                 .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+            // Note: Messages are not pre-loaded here to maintain clean aggregate boundaries
+            // The conversation aggregate will load messages through domain methods as needed
+            // This prevents EF Core navigation property complications and shadow property issues
 
             return Result<Conversation?>.Success(conversation);
         }

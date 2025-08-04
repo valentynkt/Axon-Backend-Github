@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Axon.Modules.Chat.Domain.Aggregates;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
@@ -57,20 +58,33 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasColumnName("sequence")
             .HasColumnType("integer");
 
-        // Metadata as JSONB with Dictionary<string, JsonElement> mapping as specified in SPARC lines 293-299
+        // Metadata as JSONB with Dictionary<string, object> mapping as specified in SPARC lines 293-299
         builder.Property(m => m.Metadata)
             .HasColumnName("metadata")
             .HasColumnType("jsonb")
             .HasConversion(
                 v => v == null ? null : JsonSerializer.Serialize(v, CreateJsonSerializerOptions()),
-                v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, object>>(v, CreateJsonSerializerOptions()));
+                v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, object>>(v, CreateJsonSerializerOptions()))
+            .Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<Dictionary<string, object>>(
+                (c1, c2) => JsonSerializer.Serialize(c1, CreateJsonSerializerOptions()) == JsonSerializer.Serialize(c2, CreateJsonSerializerOptions()),
+                c => c == null ? 0 : JsonSerializer.Serialize(c, CreateJsonSerializerOptions()).GetHashCode(),
+                c => c == null ? null : JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(c, CreateJsonSerializerOptions()), CreateJsonSerializerOptions())));
+
+        // Configure explicit foreign key relationship to prevent EF Core shadow property auto-detection
+        // This is the ONLY relationship configuration - no duplicates to avoid confusion
+        builder.HasOne<Conversation>()
+            .WithMany() // Explicitly empty WithMany() prevents navigation property creation on Conversation
+            .HasForeignKey(m => m.ConversationId)
+            .HasConstraintName("fk_messages_conversations_conversation_id")
+            .OnDelete(DeleteBehavior.Cascade)
+            .IsRequired();
 
         // Performance indexes and check constraints as specified in SPARC
         ConfigureIndexes(builder);
         ConfigureCheckConstraints(builder);
 
-        // Full-text search configuration for message content
-        ConfigureFullTextSearch(builder);
+        // Full-text search configuration for message content (commented out for now due to EF Core tsvector limitations)
+        // ConfigureFullTextSearch(builder);
 
         // Audit fields are configured automatically via backing fields pattern in ChatDbContext
         // No need to configure them here as the global configuration handles IAuditable entities
@@ -131,7 +145,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasDatabaseName("ix_messages_created_by_created_at_utc");
 
         // Index for sequence-based ordering within conversations
-        builder.HasIndex(m => new { m.ConversationId, "_createdAtUtc" })
+        builder.HasIndex("ConversationId", "_createdAtUtc")
             .HasDatabaseName("ix_messages_conversation_id_created_at_utc");
     }
 
@@ -158,7 +172,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         // Check constraint for audit fields
         builder.HasCheckConstraint("ck_messages_audit_valid",
-            "_created_at_utc IS NOT NULL AND _updated_at_utc IS NOT NULL AND _updated_at_utc >= _created_at_utc");
+            "created_at_utc IS NOT NULL AND updated_at_utc IS NOT NULL AND updated_at_utc >= created_at_utc");
     }
 
     /// <summary>
@@ -168,10 +182,12 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
     private static void ConfigureFullTextSearch(EntityTypeBuilder<Message> builder)
     {
         // Add computed tsvector column for full-text search
+        // Note: We use raw SQL to create the computed column as EF Core doesn't directly support tsvector mapping
         builder.Property<string>("SearchVector")
             .HasColumnName("search_vector")
             .HasColumnType("tsvector")
-            .HasComputedColumnSql("to_tsvector('english', content)", stored: true);
+            .HasComputedColumnSql("to_tsvector('english', content)", stored: true)
+            .ValueGeneratedOnAddOrUpdate();
 
         // GIN index for full-text search performance
         builder.HasIndex("SearchVector")
@@ -179,7 +195,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasMethod("gin");
 
         // Composite index for conversation-scoped full-text search
-        builder.HasIndex(m => m.ConversationId, "SearchVector")
+        builder.HasIndex("ConversationId", "SearchVector")
             .HasDatabaseName("ix_messages_conversation_search_gin")
             .HasMethod("gin");
     }

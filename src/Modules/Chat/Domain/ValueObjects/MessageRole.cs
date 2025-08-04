@@ -15,7 +15,11 @@ public readonly record struct MessageRole
     /// Creates a MessageRole directly from a valid value (for EF Core use only)
     /// WARNING: This bypasses validation and should only be used by infrastructure code
     /// </summary>
-    internal static MessageRole FromValue(string value) => new(value);
+    /// <summary>
+    /// Creates a MessageRole directly from a valid value (for EF Core use only)
+    /// WARNING: This bypasses validation and should only be used by infrastructure code
+    /// </summary>
+    public static MessageRole FromValue(string value) => new(value);
 
     public static readonly MessageRole User = new("user");
     public static readonly MessageRole Assistant = new("assistant");

@@ -12,6 +12,7 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Design;
 /// <summary>
 /// Design-time factory for ChatDbContext to support EF Core migrations
 /// Provides minimal dependencies required for design-time operations
+/// This factory is used during application startup for automatic migrations
 /// </summary>
 public sealed class ChatDbContextDesignTimeFactory : IDesignTimeDbContextFactory<ChatDbContext>
 {

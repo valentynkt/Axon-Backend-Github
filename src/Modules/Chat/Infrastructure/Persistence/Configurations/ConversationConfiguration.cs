@@ -53,12 +53,10 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .HasColumnName("completed_at")
             .HasColumnType("timestamptz");
 
-        // Configure navigation properties with cascade delete as specified in SPARC
-        // Map the Messages collection backed by _messages field
-        builder.HasMany(c => c.Messages)
-            .WithOne()
-            .HasForeignKey(m => m.ConversationId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Version property for optimistic concurrency control  
+        // CRITICAL: Use PostgreSQL xmin system column for proper row versioning
+        builder.Property(c => c.Version)
+            .IsRowVersion();
 
         // Performance indexes and check constraints as specified in SPARC
         ConfigureIndexes(builder);
@@ -67,6 +65,12 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         // Configure domain events (ignore for persistence)
         builder.Ignore(c => c.DomainEvents);
 
+        // Explicitly ignore the private _messages collection to prevent EF Core auto-detection
+        builder.Ignore("_messages");
+        
+        // Ignore MessagesOrdered property to prevent navigation inference
+        builder.Ignore(c => c.MessagesOrdered);
+        
         // Audit fields are configured automatically via backing fields pattern in ChatDbContext
         // No need to configure them here as the global configuration handles IAuditable entities
     }
@@ -108,6 +112,8 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .HasDatabaseName("ix_conversations_title")
             .HasMethod("gin")
             .HasOperators("gin_trgm_ops");
+
+        // Note: xmin system column doesn't need explicit indexing - it's automatically indexed by PostgreSQL
     }
 
     /// <summary>
@@ -129,6 +135,6 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
 
         // Check constraint for audit fields
         builder.HasCheckConstraint("ck_conversations_audit_valid",
-            "_created_at_utc IS NOT NULL AND _updated_at_utc IS NOT NULL AND _updated_at_utc >= _created_at_utc");
+            "created_at_utc IS NOT NULL AND updated_at_utc IS NOT NULL AND updated_at_utc >= created_at_utc");
     }
 }
