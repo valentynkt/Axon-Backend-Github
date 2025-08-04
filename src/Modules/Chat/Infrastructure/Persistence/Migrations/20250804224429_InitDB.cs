@@ -34,8 +34,7 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
                     created_at_utc = table.Column<DateTime>(type: "timestamptz", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     created_by = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, defaultValue: "system"),
                     updated_at_utc = table.Column<DateTime>(type: "timestamptz", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    updated_by = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, defaultValue: "system"),
-                    version = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
+                    updated_by = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, defaultValue: "system")
                 },
                 constraints: table =>
                 {

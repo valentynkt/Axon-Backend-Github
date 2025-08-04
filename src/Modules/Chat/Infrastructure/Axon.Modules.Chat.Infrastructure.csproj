@@ -37,7 +37,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Migrations\" />
     <Folder Include="Persistence\Configurations\" />
     <Folder Include="Persistence\Entities\" />
     <Folder Include="Persistence\Interceptors\" />

@@ -52,13 +52,8 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.Property(c => c.CompletedAt)
             .HasColumnName("completed_at")
             .HasColumnType("timestamptz");
-
-        // Version property for optimistic concurrency control  
-        // CRITICAL: Use PostgreSQL built-in xmin system column for proper row versioning
-        // This avoids the need for a separate version column and automatically manages concurrency
-        builder.Property(c => c.Version)
-            .IsRowVersion();
-
+        
+        
         // Performance indexes and check constraints as specified in SPARC
         ConfigureIndexes(builder);
         ConfigureCheckConstraints(builder);

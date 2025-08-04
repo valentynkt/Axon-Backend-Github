@@ -19,8 +19,10 @@ public sealed class ResponseMappingService : IResponseMappingService
     {
         ArgumentNullException.ThrowIfNull(aiResponse);
 
-        // Generate conversation ID if not provided in response  
-        var conversationId = string.IsNullOrEmpty(aiResponse.ResponseId) ? ConversationId.New().Value : Guid.Parse(aiResponse.ResponseId);
+        // Generate conversation ID if not provided in response or if provided value is not a valid GUID
+        var conversationId = string.IsNullOrEmpty(aiResponse.ResponseId) || !Guid.TryParse(aiResponse.ResponseId, out var parsedGuid) 
+            ? ConversationId.New().Value 
+            : parsedGuid;
         
         // Map tool executions to summaries
         var toolSummaries = aiResponse.ToolExecutions?.Select(tool =>

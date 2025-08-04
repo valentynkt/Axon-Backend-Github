@@ -56,12 +56,6 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
                         .HasColumnType("varchar(100)")
                         .HasColumnName("user_id");
 
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("version");
-
                     b.Property<DateTime>("_createdAtUtc")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamptz")

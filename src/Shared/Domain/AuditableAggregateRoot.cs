@@ -13,12 +13,6 @@ public abstract class AuditableAggregateRoot<TId> : AuditableEntity<TId>, IAggre
     private readonly List<IDomainEvent> _domainEvents = new();
 
     /// <summary>
-    /// Row version for optimistic concurrency control using PostgreSQL xmin system column
-    /// This property is automatically managed by EF Core for concurrency conflict detection
-    /// </summary>
-    public uint Version { get; set; }
-
-    /// <summary>
     /// Gets the read-only collection of domain events raised by this aggregate
     /// </summary>
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();

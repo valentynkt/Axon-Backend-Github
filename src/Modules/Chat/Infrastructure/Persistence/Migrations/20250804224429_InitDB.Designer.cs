@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
-    [Migration("20250804215145_InitDB")]
+    [Migration("20250804224429_InitDB")]
     partial class InitDB
     {
         /// <inheritdoc />
@@ -58,12 +58,6 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)")
                         .HasColumnName("user_id");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("version");
 
                     b.Property<DateTime>("_createdAtUtc")
                         .ValueGeneratedOnAdd()
