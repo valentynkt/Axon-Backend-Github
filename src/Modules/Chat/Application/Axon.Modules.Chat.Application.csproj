@@ -16,4 +16,8 @@
     <ProjectReference Include="../../../Shared/Common.Abstractions/Axon.Shared.Common.Abstractions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Common\Interfaces\" />
+  </ItemGroup>
+
 </Project>

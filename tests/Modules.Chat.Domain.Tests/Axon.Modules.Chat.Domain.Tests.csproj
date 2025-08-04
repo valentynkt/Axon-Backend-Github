@@ -28,4 +28,8 @@
     <Using Include="Axon.Shared.Common" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Types\" />
+  </ItemGroup>
+
 </Project>

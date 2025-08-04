@@ -24,19 +24,9 @@ public sealed record ConversationCompletedDomainEvent : DomainEvent
     public int ToolExecutionCount { get; }
 
     /// <summary>
-    /// The duration of the conversation from first to last message
-    /// </summary>
-    public TimeSpan ConversationDuration { get; }
-
-    /// <summary>
     /// The reason the conversation was completed
     /// </summary>
     public string CompletionReason { get; }
-
-    /// <summary>
-    /// When the conversation was started
-    /// </summary>
-    public DateTime StartedAt { get; }
 
     /// <summary>
     /// When the conversation was completed
@@ -47,17 +37,17 @@ public sealed record ConversationCompletedDomainEvent : DomainEvent
         ConversationId conversationId,
         int messageCount,
         int toolExecutionCount,
-        TimeSpan conversationDuration,
         string completionReason,
-        DateTime startedAt,
-        DateTime completedAt)
+        DateTime completedAt,
+        string? correlationId = null,
+        string? causationId = null,
+        IReadOnlyDictionary<string, object>? metadata = null)
+        : base(correlationId: correlationId, causationId: causationId, metadata: metadata)
     {
         ConversationId = conversationId;
         MessageCount = messageCount;
         ToolExecutionCount = toolExecutionCount;
-        ConversationDuration = conversationDuration;
         CompletionReason = completionReason;
-        StartedAt = startedAt;
         CompletedAt = completedAt;
     }
 }

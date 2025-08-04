@@ -38,7 +38,11 @@ public sealed record MessageAddedDomainEvent : DomainEvent
         MessageId messageId,
         string content,
         string role,
-        bool isFirstMessage)
+        bool isFirstMessage,
+        string? correlationId = null,
+        string? causationId = null,
+        IReadOnlyDictionary<string, object>? metadata = null) 
+        : base(correlationId: correlationId, causationId: causationId, metadata: metadata)
     {
         ConversationId = conversationId;
         MessageId = messageId;
