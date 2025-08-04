@@ -54,7 +54,8 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .HasColumnType("timestamptz");
 
         // Version property for optimistic concurrency control  
-        // CRITICAL: Use PostgreSQL xmin system column for proper row versioning
+        // CRITICAL: Use PostgreSQL built-in xmin system column for proper row versioning
+        // This avoids the need for a separate version column and automatically manages concurrency
         builder.Property(c => c.Version)
             .IsRowVersion();
 

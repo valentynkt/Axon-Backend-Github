@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Axon.Modules.Chat.Infrastructure.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCleanMigration : Migration
+    public partial class InitDB : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

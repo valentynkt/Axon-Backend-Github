@@ -38,7 +38,6 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
-    <Folder Include="Migrations\ChatDb\" />
     <Folder Include="Persistence\Configurations\" />
     <Folder Include="Persistence\Entities\" />
     <Folder Include="Persistence\Interceptors\" />
@@ -54,6 +53,7 @@
     <Compile Remove="Migrations\20250804201352_CleanInitialCreate.Designer.cs" />
     <Compile Remove="Migrations\ChatDbContextModelSnapshot.cs" />
     <Compile Remove="Persistence\Migrations\20250804205008_InitDB.Designer.cs" />
+    <Compile Remove="Persistence\Migrations\20250804212744_InitDB.Designer.cs" />
   </ItemGroup>
 
 </Project>
