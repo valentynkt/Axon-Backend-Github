@@ -8,14 +8,14 @@ namespace BuildingBlocks.EFCore
     {
         public TContext CreateDbContext(string[] args)
         {
-            return Create(Directory.GetCurrentDirectory(), Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
+            return Create(Directory.GetCurrentDirectory(), Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development");
         }
 
         protected abstract TContext CreateNewInstance(DbContextOptions<TContext> options);
 
         public TContext Create()
         {
-            var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
             var basePath = AppContext.BaseDirectory;
             return Create(basePath, environmentName);
         }

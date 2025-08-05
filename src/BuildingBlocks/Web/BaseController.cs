@@ -13,12 +13,12 @@ using MapsterMapper;
 public abstract class BaseController : ControllerBase
 {
     protected const string BaseApiPath = "api/v{version:apiVersion}";
-    private IMapper _mapper;
+    private IMapper? _mapper;
 
-    private IMediator _mediator;
+    private IMediator? _mediator;
 
     protected IMediator Mediator =>
-        _mediator ??= HttpContext.RequestServices.GetService<IMediator>();
+        _mediator ??= HttpContext.RequestServices.GetService<IMediator>() ?? throw new InvalidOperationException("IMediator service not registered");
 
-    protected IMapper Mapper => _mapper ??= HttpContext.RequestServices.GetService<IMapper>();
+    protected IMapper Mapper => _mapper ??= HttpContext.RequestServices.GetService<IMapper>() ?? throw new InvalidOperationException("IMapper service not registered");
 }

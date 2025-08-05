@@ -152,7 +152,7 @@ public interface IWriteRepository<T, in TId> : IDisposable where T : class
     /// <summary>
     /// Execute bulk update with predicate
     /// </summary>
-    Task<int> BulkUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<T, T>> updateExpression, CancellationToken cancellationToken = default);
+    Task<int> BulkUpdateAsync(Expression<Func<T, bool>> predicate, Expression<Func<Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<T>, Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<T>>> updateExpression, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Execute bulk delete with predicate

@@ -14,7 +14,7 @@ public class CommandHandlerMetrics
     private readonly Counter<long> _failedCommandsNumber;
     private readonly Histogram<double> _handlerDuration;
 
-    private Stopwatch _timer;
+    private Stopwatch _timer = new();
 
     public CommandHandlerMetrics(IDiagnosticsProvider diagnosticsProvider)
     {

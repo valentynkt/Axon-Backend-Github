@@ -56,14 +56,20 @@ public static class ServiceCollectionExtensions
     public static void Unregister<TService>(this IServiceCollection services)
     {
         var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(TService));
-        services.Remove(descriptor);
+        if (descriptor is not null)
+        {
+            services.Remove(descriptor);
+        }
     }
 
     public static IServiceCollection ReplaceServiceWithSingletonMock<TService>(this IServiceCollection services)
         where TService : class
     {
         var service = services.FirstOrDefault(d => d.ServiceType == typeof(TService));
-        services.Remove(service);
+        if (service is not null)
+        {
+            services.Remove(service);
+        }
 
         services.AddSingleton(_ => Substitute.For<TService>());
         return services;

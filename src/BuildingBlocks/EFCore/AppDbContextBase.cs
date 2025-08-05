@@ -13,11 +13,12 @@ public abstract class AppDbContextBase : DbContext, IDbContext
 {
     private readonly ICurrentUserProvider? _currentUserProvider;
     private readonly ILogger<AppDbContextBase>? _logger;
-    private IDbContextTransaction _currentTransaction;
+    private IDbContextTransaction? _currentTransaction;
 
-    protected AppDbContextBase(DbContextOptions options, ICurrentUserProvider? currentUserProvider = null, ILogger<AppDbContextBase>? logger = null) :
+    protected AppDbContextBase(DbContextOptions options, IDbContextTransaction? currentTransaction = null, ICurrentUserProvider? currentUserProvider = null, ILogger<AppDbContextBase>? logger = null) :
         base(options)
     {
+        _currentTransaction = currentTransaction;
         _currentUserProvider = currentUserProvider;
         _logger = logger;
     }
@@ -42,7 +43,8 @@ public abstract class AppDbContextBase : DbContext, IDbContext
         try
         {
             await SaveChangesAsync(cancellationToken);
-            await _currentTransaction?.CommitAsync(cancellationToken)!;
+            if (_currentTransaction != null)
+                await _currentTransaction.CommitAsync(cancellationToken);
         }
         catch
         {
@@ -107,7 +109,7 @@ public abstract class AppDbContextBase : DbContext, IDbContext
 
                 if (databaseValues == null)
                 {
-                    _logger.LogError("The record no longer exists in the database, The record has been deleted by another user.");
+                    _logger?.LogError("The record no longer exists in the database, The record has been deleted by another user.");
                     throw;
                 }
 
@@ -133,7 +135,7 @@ public abstract class AppDbContextBase : DbContext, IDbContext
 
         domainEntities.ForEach(entity => entity.ClearDomainEvents());
 
-        return domainEvents.ToImmutableList();
+        return domainEvents;
     }
 
     // ref: https://www.meziantou.net/entity-framework-core-generate-tracking-columns.htm
@@ -175,7 +177,7 @@ public abstract class AppDbContextBase : DbContext, IDbContext
         }
         catch (System.Exception ex)
         {
-            throw new System.Exception("try for find IAggregate", ex);
+            throw new InvalidOperationException("try for find IAggregate", ex);
         }
     }
 }

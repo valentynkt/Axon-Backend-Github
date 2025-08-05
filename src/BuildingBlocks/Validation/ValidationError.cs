@@ -8,7 +8,7 @@ namespace BuildingBlocks.Validation
 
         public ValidationError(string field, string message)
         {
-            Field = field != string.Empty ? field : null;
+            Field = !string.IsNullOrEmpty(field) ? field : string.Empty;
             Message = message;
         }
     }

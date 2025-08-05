@@ -1,3 +1,4 @@
+using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Model;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +20,7 @@ public class PostgresUnitOfWork : IUnitOfWork
         IPostgresDbContext context,
         ILogger<PostgresUnitOfWork>? logger = null)
     {
-        Context = context ?? throw new ArgumentNullException(nameof(context));
+        Context = Guard.Against.Null(context, nameof(context));
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgresUnitOfWork>.Instance;
     }
 
@@ -51,7 +52,7 @@ public class PostgresUnitOfWork : IUnitOfWork
             _logger.LogDebug("Successfully saved {Count} changes", result);
             return result;
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             _logger.LogError(ex, "Failed to save changes to PostgreSQL database");
             throw;
@@ -79,7 +80,7 @@ public class PostgresUnitOfWork : IUnitOfWork
             await Context.CommitTransactionAsync(cancellationToken);
             _logger.LogDebug("PostgreSQL transaction committed successfully");
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             _logger.LogError(ex, "Failed to commit PostgreSQL transaction");
             await RollbackTransactionAsync(cancellationToken);
@@ -99,7 +100,7 @@ public class PostgresUnitOfWork : IUnitOfWork
             await Context.RollbackTransaction(cancellationToken);
             _logger.LogDebug("PostgreSQL transaction rolled back successfully");
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             _logger.LogError(ex, "Failed to rollback PostgreSQL transaction");
             throw;
@@ -113,7 +114,7 @@ public class PostgresUnitOfWork : IUnitOfWork
         Func<Task<T>> operation,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(operation);
+        Guard.Against.Null(operation, nameof(operation));
         
         var wasTransactionActive = Context.HasActiveTransaction;
         
@@ -150,7 +151,7 @@ public class PostgresUnitOfWork : IUnitOfWork
         Func<Task> operation,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(operation);
+        Guard.Against.Null(operation, nameof(operation));
         
         var wasTransactionActive = Context.HasActiveTransaction;
         
@@ -213,8 +214,8 @@ public class PostgresUnitOfWork<TContext> : PostgresUnitOfWork, IUnitOfWork<TCon
         ILogger<PostgresUnitOfWork<TContext>>? logger = null)
         : base(context, logger)
     {
-        Context = context ?? throw new ArgumentNullException(nameof(context));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        Context = Guard.Against.Null(context, nameof(context));
+        _serviceProvider = Guard.Against.Null(serviceProvider, nameof(serviceProvider));
     }
 }
 
@@ -259,7 +260,7 @@ public class PostgresRepositoryUnitOfWork<TContext> : PostgresUnitOfWork<TContex
     /// </summary>
     public virtual IRepository<T> GetRepository<T>() where T : class, IEntity<Guid>
     {
-        return GetRepository<T, Guid>();
+        return (IRepository<T>)GetRepository<T, Guid>();
     }
 
     /// <summary>

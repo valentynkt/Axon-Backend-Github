@@ -2,6 +2,7 @@ using BuildingBlocks.EFCore;
 using BuildingBlocks.EventStoreDB;
 using BuildingBlocks.MassTransit;
 using BuildingBlocks.Mongo;
+using BuildingBlocks.Postgres;
 using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;

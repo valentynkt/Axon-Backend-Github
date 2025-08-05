@@ -20,7 +20,7 @@ public class ConsumeFilter<T> : IFilter<ConsumeContext<T>>
         var id = await _persistMessageProcessor.AddReceivedMessageAsync(
             new MessageEnvelope(
                 context.Message,
-                context.Headers.ToDictionary(x => x.Key, x => x.Value))
+                context.Headers.ToDictionary(x => x.Key, x => (object?)x.Value))
         );
 
         var message = await _persistMessageProcessor.ExistMessageAsync(id);

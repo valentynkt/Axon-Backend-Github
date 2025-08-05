@@ -84,7 +84,7 @@ public class CachedRepository<TEntity, TId> : ICachedRepository<TEntity, TId>
         if (_cache.TryGetValue(cacheKey, out IReadOnlyList<TEntity>? cachedEntities))
         {
             _logger.LogDebug("Cache hit for all {EntityType} entities", typeof(TEntity).Name);
-            return cachedEntities;
+            return cachedEntities!;
         }
 
         var entities = await _repository.GetAllAsync(cancellationToken);
@@ -108,7 +108,8 @@ public class CachedRepository<TEntity, TId> : ICachedRepository<TEntity, TId>
         var result = await _repository.AddAsync(entity, cancellationToken);
         
         // Invalidate related cache entries
-        await InvalidateRelatedCacheAsync(entity.Id);
+        if (entity.Id != null)
+            await InvalidateRelatedCacheAsync(entity.Id);
         
         return result;
     }
@@ -118,7 +119,8 @@ public class CachedRepository<TEntity, TId> : ICachedRepository<TEntity, TId>
         var result = await _repository.UpdateAsync(entity, cancellationToken);
         
         // Invalidate cache for this entity
-        await InvalidateCacheAsync(entity.Id);
+        if (entity.Id != null)
+            await InvalidateCacheAsync(entity.Id);
         
         return result;
     }
@@ -130,6 +132,7 @@ public class CachedRepository<TEntity, TId> : ICachedRepository<TEntity, TId>
         // Invalidate cache for all affected entities
         foreach (var entity in entities)
         {
+            if (entity.Id != null)
             await InvalidateCacheAsync(entity.Id);
         }
     }
@@ -147,7 +150,8 @@ public class CachedRepository<TEntity, TId> : ICachedRepository<TEntity, TId>
     public async Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAsync(entity, cancellationToken);
-        await InvalidateCacheAsync(entity.Id);
+        if (entity.Id != null)
+            await InvalidateCacheAsync(entity.Id);
     }
 
     public async Task DeleteByIdAsync(TId id, CancellationToken cancellationToken = default)
@@ -184,6 +188,7 @@ public class CachedRepository<TEntity, TId> : ICachedRepository<TEntity, TId>
     public void Dispose()
     {
         _repository?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
 

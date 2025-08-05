@@ -8,5 +8,5 @@ public class CreateActivityInfo
     public IDictionary<string, object?> Tags { get; set; } = new Dictionary<string, object?>();
     public string? ParentId { get; set; }
     public ActivityContext? Parent { get; set; }
-    public required ActivityKind ActivityKind = ActivityKind.Internal;
+    public required ActivityKind ActivityKind { get; set; } = ActivityKind.Internal;
 }

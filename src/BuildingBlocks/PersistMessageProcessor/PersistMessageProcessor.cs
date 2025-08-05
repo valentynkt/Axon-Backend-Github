@@ -23,10 +23,10 @@ public class PersistMessageProcessor : IPersistMessageProcessor
         IPersistMessageDbContext persistMessageDbContext,
         IPublishEndpoint publishEndpoint)
     {
-        _logger = logger;
-        _mediator = mediator;
-        _persistMessageDbContext = persistMessageDbContext;
-        _publishEndpoint = publishEndpoint;
+        _logger = Guard.Against.Null(logger, nameof(logger));
+        _mediator = Guard.Against.Null(mediator, nameof(mediator));
+        _persistMessageDbContext = Guard.Against.Null(persistMessageDbContext, nameof(persistMessageDbContext));
+        _publishEndpoint = Guard.Against.Null(publishEndpoint, nameof(publishEndpoint));
     }
 
     public async Task PublishMessageAsync<TMessageEnvelope>(
@@ -34,18 +34,21 @@ public class PersistMessageProcessor : IPersistMessageProcessor
         CancellationToken cancellationToken = default)
         where TMessageEnvelope : MessageEnvelope
     {
+        Guard.Against.Null(messageEnvelope, nameof(messageEnvelope));
         await SavePersistMessageAsync(messageEnvelope, MessageDeliveryType.Outbox, cancellationToken);
     }
 
     public Task<Guid> AddReceivedMessageAsync<TMessageEnvelope>(TMessageEnvelope messageEnvelope,
         CancellationToken cancellationToken = default) where TMessageEnvelope : MessageEnvelope
     {
+        Guard.Against.Null(messageEnvelope, nameof(messageEnvelope));
         return SavePersistMessageAsync(messageEnvelope, MessageDeliveryType.Inbox, cancellationToken);
     }
 
     public async Task AddInternalMessageAsync<TCommand>(TCommand internalCommand,
         CancellationToken cancellationToken = default) where TCommand : class, IInternalCommand
     {
+        Guard.Against.Null(internalCommand, nameof(internalCommand));
         await SavePersistMessageAsync(new MessageEnvelope(internalCommand), MessageDeliveryType.Internal,
             cancellationToken);
     }
@@ -53,11 +56,12 @@ public class PersistMessageProcessor : IPersistMessageProcessor
     public async Task<IReadOnlyList<PersistMessage>> GetByFilterAsync(Expression<Func<PersistMessage, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
+        Guard.Against.Null(predicate, nameof(predicate));
         return (await _persistMessageDbContext.PersistMessage.Where(predicate).ToListAsync(cancellationToken))
             .AsReadOnly();
     }
 
-    public Task<PersistMessage> ExistMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
+    public Task<PersistMessage?> ExistMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
     {
         return _persistMessageDbContext.PersistMessage.FirstOrDefaultAsync(x =>
                 x.Id == messageId &&
@@ -210,8 +214,11 @@ public class PersistMessageProcessor : IPersistMessageProcessor
         return id;
     }
 
-    private async Task ChangeMessageStatusAsync(PersistMessage message, CancellationToken cancellationToken)
+    private async Task ChangeMessageStatusAsync(PersistMessage? message, CancellationToken cancellationToken)
     {
+        if (message is null)
+            return;
+
         message.ChangeState(MessageStatus.Processed);
 
         _persistMessageDbContext.PersistMessage.Update(message);

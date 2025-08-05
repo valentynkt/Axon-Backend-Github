@@ -11,7 +11,7 @@ namespace BuildingBlocks.Validation
         public int StatusCode { get; set; } = (int)HttpStatusCode.BadRequest;
         public string Message { get; set; } = "Validation Failed.";
 
-        public List<ValidationFailure> Errors { get; set; }
+        public List<ValidationFailure> Errors { get; set; } = new();
 
         public override string ToString()
         {

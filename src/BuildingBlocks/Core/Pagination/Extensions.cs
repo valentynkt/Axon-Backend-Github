@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace BuildingBlocks.Core.Pagination;
 
 using Sieve.Models;
@@ -27,10 +29,8 @@ public static class Extensions
         result = sieveProcessor.Apply(sieveModel, queryable, applyFiltering: false,
             applySorting: false); // Only applies pagination
 
-        var items = await result
-            .ToAsyncEnumerable()
-            .ToListAsync(cancellationToken: cancellationToken);
+        var items = await result.ToListAsync(cancellationToken);
 
-        return PageList<TEntity>.Create(items.AsReadOnly(), pageRequest.PageNumber, pageRequest.PageSize, total);
+        return PageList.Create(items.AsReadOnly(), pageRequest.PageNumber, pageRequest.PageSize, total);
     }
 }

@@ -63,7 +63,7 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
 
                 if (databaseValues == null)
                 {
-                    _logger.LogError("The record no longer exists in the database, The record has been deleted by another user.");
+                    _logger?.LogError("The record no longer exists in the database, The record has been deleted by another user.");
                     throw;
                 }
 
@@ -113,7 +113,7 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
         }
         catch (System.Exception ex)
         {
-            throw new System.Exception("try for find IVersion", ex);
+            throw new InvalidOperationException("Error occurred while processing IVersion entities", ex);
         }
     }
 }

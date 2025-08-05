@@ -79,8 +79,8 @@ public static class Extensions
                                 "/",
                                 h =>
                                 {
-                                    h.Username(rabbitMqOptions.UserName);
-                                    h.Password(rabbitMqOptions.Password);
+                                    h.Username(rabbitMqOptions?.UserName ?? "guest");
+                                    h.Password(rabbitMqOptions?.Password ?? "guest");
                                 });
                         }
 

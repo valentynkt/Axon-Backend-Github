@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
 using BuildingBlocks.Web;
@@ -54,7 +55,7 @@ public abstract class PostgresDbContext : DbContext, IPostgresDbContext
     {
         var domainEvents = new List<IDomainEvent>();
 
-        var aggregateRoots = ChangeTracker.Entries<IAggregateRoot>()
+        var aggregateRoots = ChangeTracker.Entries<IAggregate>()
             .Where(e => e.Entity.DomainEvents.Any())
             .Select(e => e.Entity)
             .ToList();
@@ -180,7 +181,7 @@ public abstract class PostgresDbContext : DbContext, IPostgresDbContext
     /// </summary>
     public virtual void AddCommand(Func<Task> func)
     {
-        ArgumentNullException.ThrowIfNull(func);
+        Guard.Against.Null(func, nameof(func));
         _commands.Enqueue(func);
         _logger.LogDebug("Command added to queue. Total queued: {Count}", _commands.Count);
     }
@@ -286,7 +287,7 @@ public abstract class PostgresDbContext : DbContext, IPostgresDbContext
     /// </summary>
     protected virtual void ApplyAuditInformation()
     {
-        var currentUser = _currentUserProvider?.UserId ?? "system";
+        var currentUser = _currentUserProvider?.GetCurrentUserId()?.ToString() ?? "system";
         var now = DateTime.UtcNow;
 
         foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
@@ -315,6 +316,7 @@ public abstract class PostgresDbContext : DbContext, IPostgresDbContext
     {
         _currentTransaction?.Dispose();
         base.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -327,6 +329,7 @@ public abstract class PostgresDbContext : DbContext, IPostgresDbContext
             await _currentTransaction.DisposeAsync();
         }
         await base.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
 }
 

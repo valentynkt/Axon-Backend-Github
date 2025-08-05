@@ -7,12 +7,13 @@ namespace BuildingBlocks.Validation;
 public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IRequest<TResponse>
 {
-    private IValidator<TRequest> _validator;
+    private IValidator<TRequest>? _validator;
     private readonly IServiceProvider _serviceProvider;
 
-    public ValidationBehavior(IServiceProvider serviceProvider)
+    public ValidationBehavior(IServiceProvider serviceProvider, IValidator<TRequest> validator)
     {
         _serviceProvider = serviceProvider;
+        _validator = validator;
     }
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,

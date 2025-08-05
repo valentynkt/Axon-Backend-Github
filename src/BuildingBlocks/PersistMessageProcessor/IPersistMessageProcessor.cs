@@ -29,7 +29,7 @@ public interface IPersistMessageProcessor
         Expression<Func<PersistMessage, bool>> predicate,
         CancellationToken cancellationToken = default);
 
-    Task<PersistMessage> ExistMessageAsync(
+    Task<PersistMessage?> ExistMessageAsync(
         Guid messageId,
         CancellationToken cancellationToken = default);
 

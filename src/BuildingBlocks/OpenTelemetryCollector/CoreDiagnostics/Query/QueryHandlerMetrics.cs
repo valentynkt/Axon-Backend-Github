@@ -13,7 +13,7 @@ public class QueryHandlerMetrics
     private readonly Counter<long> _failedQueriesNumber;
     private readonly Histogram<double> _handlerDuration;
 
-    private Stopwatch _timer;
+    private Stopwatch _timer = new();
 
     public QueryHandlerMetrics(IDiagnosticsProvider diagnosticsProvider)
     {

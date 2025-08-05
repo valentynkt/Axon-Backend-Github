@@ -9,10 +9,16 @@ public record PageList<T>(IReadOnlyList<T> Items, int PageNumber, int PageSize, 
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     public bool HasPrevious => PageNumber > 1;
     public bool HasNext => PageNumber < TotalPages;
+}
 
-    public static PageList<T> Empty => new(Enumerable.Empty<T>().ToList(), 0, 0, 0);
+/// <summary>
+/// Non-generic helper class for PageList creation
+/// </summary>
+public static class PageList
+{
+    public static PageList<T> Empty<T>() where T : class => new(Enumerable.Empty<T>().ToList(), 0, 0, 0);
 
-    public static PageList<T> Create(IReadOnlyList<T> items, int pageNumber, int pageSize, int totalItems)
+    public static PageList<T> Create<T>(IReadOnlyList<T> items, int pageNumber, int pageSize, int totalItems) where T : class
     {
         return new PageList<T>(items, pageNumber, pageSize, totalItems);
     }

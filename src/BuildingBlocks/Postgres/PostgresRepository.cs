@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Model;
 using BuildingBlocks.Core.Pagination;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         IPostgresDbContext context,
         ILogger<PostgresRepository<TEntity, TId>>? logger = null)
     {
-        Context = context ?? throw new ArgumentNullException(nameof(context));
+        Context = Ardalis.GuardClauses.Guard.Against.Null(context, nameof(context));
         DbSet = Context.GetCollection<TEntity>();
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostgresRepository<TEntity, TId>>.Instance;
     }
@@ -41,6 +42,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(predicate, nameof(predicate));
         _logger.LogDebug("Finding single entity with predicate");
         return await DbSet
             .AsNoTracking()
@@ -51,6 +53,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(predicate, nameof(predicate));
         _logger.LogDebug("Finding entities with predicate");
         return await DbSet
             .AsNoTracking()
@@ -70,6 +73,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(predicate, nameof(predicate));
         _logger.LogDebug("Checking if entity exists with predicate");
         return await DbSet.AnyAsync(predicate, cancellationToken);
     }
@@ -102,6 +106,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         IReadOnlyList<TId> ids,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(ids, nameof(ids));
         _logger.LogDebug("Getting entities by IDs: {Count}", ids.Count);
         return await DbSet
             .AsNoTracking()
@@ -113,6 +118,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         IPageRequest pageRequest,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(pageRequest, nameof(pageRequest));
         _logger.LogDebug("Getting paginated entities: Page {Page}, Size {PageSize}", pageRequest.PageNumber, pageRequest.PageSize);
         var skip = (pageRequest.PageNumber - 1) * pageRequest.PageSize;
         return await DbSet
@@ -127,6 +133,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         CancellationToken cancellationToken = default)
         where TPageRequest : IPageRequest
     {
+        Ardalis.GuardClauses.Guard.Against.Null(request, nameof(request));
         _logger.LogDebug("Getting filtered paged entities");
         var skip = (request.PageNumber - 1) * request.PageSize;
         
@@ -145,6 +152,8 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         CancellationToken cancellationToken = default,
         params object[] queryParams)
     {
+        Ardalis.GuardClauses.Guard.Against.NullOrWhiteSpace(query, nameof(query));
+        Ardalis.GuardClauses.Guard.Against.Null(queryParams, nameof(queryParams));
         _logger.LogDebug("Executing raw query: {Query}", query);
         return await DbSet
             .FromSqlRaw(query, queryParams)
@@ -158,7 +167,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
 
     public virtual async Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entity);
+        Ardalis.GuardClauses.Guard.Against.Null(entity, nameof(entity));
         _logger.LogDebug("Adding entity");
         
         var entry = await DbSet.AddAsync(entity, cancellationToken);
@@ -169,7 +178,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         IReadOnlyList<TEntity> entities,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entities);
+        Ardalis.GuardClauses.Guard.Against.Null(entities, nameof(entities));
         _logger.LogDebug("Adding {Count} entities", entities.Count);
         
         await DbSet.AddRangeAsync(entities, cancellationToken);
@@ -178,7 +187,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
 
     public virtual Task<TEntity> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entity);
+        Ardalis.GuardClauses.Guard.Against.Null(entity, nameof(entity));
         _logger.LogDebug("Updating entity");
         
         var entry = DbSet.Update(entity);
@@ -189,7 +198,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         IReadOnlyList<TEntity> entities,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entities);
+        Ardalis.GuardClauses.Guard.Against.Null(entities, nameof(entities));
         _logger.LogDebug("Updating {Count} entities", entities.Count);
         
         DbSet.UpdateRange(entities);
@@ -200,13 +209,14 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(predicate, nameof(predicate));
         _logger.LogDebug("Deleting entities with predicate");
         await DbSet.Where(predicate).ExecuteDeleteAsync(cancellationToken);
     }
 
     public virtual Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entity);
+        Ardalis.GuardClauses.Guard.Against.Null(entity, nameof(entity));
         _logger.LogDebug("Deleting entity");
         
         DbSet.Remove(entity);
@@ -215,6 +225,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
 
     public virtual async Task DeleteByIdAsync(TId id, CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(id, nameof(id));
         _logger.LogDebug("Deleting entity by ID: {Id}", id);
         await DbSet
             .Where(e => e.Id!.Equals(id))
@@ -225,7 +236,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         IReadOnlyList<TEntity> entities,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entities);
+        Ardalis.GuardClauses.Guard.Against.Null(entities, nameof(entities));
         _logger.LogDebug("Deleting {Count} entities", entities.Count);
         
         DbSet.RemoveRange(entities);
@@ -234,9 +245,11 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
 
     public virtual async Task<int> BulkUpdateAsync(
         Expression<Func<TEntity, bool>> predicate,
-        Expression<Func<TEntity, TEntity>> updateExpression,
+        Expression<Func<Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<TEntity>, Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<TEntity>>> updateExpression,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(predicate, nameof(predicate));
+        Ardalis.GuardClauses.Guard.Against.Null(updateExpression, nameof(updateExpression));
         _logger.LogDebug("Performing bulk update with predicate");
         return await DbSet
             .Where(predicate)
@@ -247,6 +260,7 @@ public class PostgresRepository<TEntity, TId> : IRepository<TEntity, TId>
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
+        Ardalis.GuardClauses.Guard.Against.Null(predicate, nameof(predicate));
         _logger.LogDebug("Performing bulk delete with predicate");
         return await DbSet
             .Where(predicate)

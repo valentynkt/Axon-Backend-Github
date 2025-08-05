@@ -118,7 +118,7 @@ public static class Extensions
         // Register Postgres-style Unit of Work
         services.AddScoped<IUnitOfWork, PostgresUnitOfWork>();
         services.AddScoped<IUnitOfWork<TContext>, PostgresUnitOfWork<TContext>>();
-        services.AddScoped<IPostgresUnitOfWork<TContext>, PostgresUnitOfWork<TContext>>();
+        services.AddScoped<IPostgresUnitOfWork<TContext>, PostgresRepositoryUnitOfWork<TContext>>();
         
         // REMOVED: Incorrect IEfUnitOfWork registrations
         // PostgresUnitOfWork does NOT implement IEfUnitOfWork interfaces
@@ -134,6 +134,8 @@ public static class Extensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        _ = configuration; // Parameter reserved for future use
+        
         services.Configure<PostgresOptions>(options =>
         {
             options.EnableSensitiveDataLogging = true;
@@ -154,6 +156,8 @@ public static class Extensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        _ = configuration; // Parameter reserved for future use
+        
         services.Configure<PostgresOptions>(options =>
         {
             options.EnableSensitiveDataLogging = false;
@@ -190,7 +194,7 @@ public static class Extensions
         }
 
         // Query splitting for better performance with includes
-        options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+        // options.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery); // TODO: Configure in DbContext
         
         // Configure command timeout
         if (postgresOptions.CommandTimeout > 0)
@@ -258,8 +262,8 @@ public static class Extensions
         });
 
         // Register interfaces for dependency injection
-        services.AddScoped(typeof(TContextService), typeof(TContextImplementation));
-        services.AddScoped(typeof(TContextImplementation));
+        services.AddScoped<TContextService, TContextImplementation>();
+        services.AddScoped<TContextImplementation>();
 
         // Register pure PostgreSQL interfaces
         services.AddScoped<IDbContext>(sp => sp.GetRequiredService<TContextImplementation>());
@@ -305,12 +309,12 @@ public class PostgresOptions
     /// <summary>
     /// Enable sensitive data logging (development only)
     /// </summary>
-    public bool EnableSensitiveDataLogging { get; set; } = false;
+    public bool EnableSensitiveDataLogging { get; set; }
 
     /// <summary>
     /// Enable detailed errors (development only)
     /// </summary>
-    public bool EnableDetailedErrors { get; set; } = false;
+    public bool EnableDetailedErrors { get; set; }
 
     /// <summary>
     /// Enable service provider caching
@@ -330,7 +334,7 @@ public class PostgresOptions
     /// <summary>
     /// Enable automatic migrations (development only)
     /// </summary>
-    public bool EnableAutomaticMigrations { get; set; } = false;
+    public bool EnableAutomaticMigrations { get; set; }
 }
 
 /// <summary>

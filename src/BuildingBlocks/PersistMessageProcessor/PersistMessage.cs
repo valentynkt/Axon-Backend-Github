@@ -1,3 +1,4 @@
+using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Model;
 namespace BuildingBlocks.PersistMessageProcessor;
 
@@ -7,8 +8,8 @@ public class PersistMessage : IVersion
     public PersistMessage(Guid id, string dataType, string data, MessageDeliveryType deliveryType)
     {
         Id = id;
-        DataType = dataType;
-        Data = data;
+        DataType = Guard.Against.NullOrWhiteSpace(dataType, nameof(dataType));
+        Data = Guard.Against.NullOrWhiteSpace(data, nameof(data));
         DeliveryType = deliveryType;
         Created = DateTime.Now;
         MessageStatus = MessageStatus.InProgress;

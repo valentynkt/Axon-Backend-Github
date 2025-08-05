@@ -11,6 +11,8 @@ public static class Extensions
 
     public static T RetryOnFailure<T>(this object retrySource, Func<T> action, int retryCount = 3)
     {
+        _ = retrySource; // Extension method parameter
+        
         var retryPolicy = Policy
             .Handle<Exception>()
             .Retry(retryCount, (exception, retryAttempt, context) =>

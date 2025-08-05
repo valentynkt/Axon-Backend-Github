@@ -37,19 +37,20 @@ using Testcontainers.EventStoreDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 
-public class TestFixture<TEntryPoint> : IAsyncLifetime
+public class TestFixture<TEntryPoint> : IAsyncLifetime, IDisposable
 where TEntryPoint : class
 {
     private readonly WebApplicationFactory<TEntryPoint> _factory;
-    private int Timeout => 120; // Second
-    private ITestHarness TestHarness => ServiceProvider?.GetTestHarness();
-    private Action<IServiceCollection> TestRegistrationServices { get; set; }
-    private PostgreSqlContainer PostgresTestcontainer;
-    private PostgreSqlContainer PostgresPersistTestContainer;
-    public RabbitMqContainer RabbitMqTestContainer;
+    private static int Timeout => 120; // Second // Second
+    private ITestHarness? TestHarness => ServiceProvider?.GetTestHarness();
+    private Action<IServiceCollection>? TestRegistrationServices { get; set; }
+    private PostgreSqlContainer? PostgresTestcontainer;
+    private PostgreSqlContainer? PostgresPersistTestContainer;
+    public RabbitMqContainer? RabbitMqTestContainer;
     // public MongoDbContainer MongoDbTestContainer;
-    public EventStoreDbContainer EventStoreDbTestContainer;
-    public CancellationTokenSource CancellationTokenSource;
+    public EventStoreDbContainer? EventStoreDbTestContainer;
+    public CancellationTokenSource? CancellationTokenSource;
+    private bool _disposed;
 
     public PersistMessageBackgroundService PersistMessageBackgroundService =>
         ServiceProvider.GetRequiredService<PersistMessageBackgroundService>();
@@ -76,9 +77,9 @@ where TEntryPoint : class
             HttpClient.BaseAddress!,
             new GrpcChannelOptions { HttpClient = HttpClient });
 
-    public IServiceProvider ServiceProvider => _factory?.Services;
-    public IConfiguration Configuration => _factory?.Services.GetRequiredService<IConfiguration>();
-    public ILogger Logger { get; set; }
+    public IServiceProvider ServiceProvider => _factory?.Services ?? throw new InvalidOperationException("Factory not initialized");
+    public IConfiguration Configuration => _factory?.Services.GetRequiredService<IConfiguration>() ?? throw new InvalidOperationException("Factory not initialized");
+    public ILogger? Logger { get; set; }
 
     protected TestFixture()
     {
@@ -142,7 +143,28 @@ where TEntryPoint : class
     {
         await StopTestContainerAsync();
         await _factory.DisposeAsync();
-        await CancellationTokenSource.CancelAsync();
+        if (CancellationTokenSource != null)
+        {
+            await CancellationTokenSource.CancelAsync();
+        }
+        Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed && disposing)
+        {
+            CancellationTokenSource?.Dispose();
+            _factory?.Dispose();
+            _disposed = true;
+        }
     }
 
     public virtual void RegisterServices(Action<IServiceCollection> services)
@@ -151,12 +173,12 @@ where TEntryPoint : class
     }
 
     // ref: https://github.com/trbenning/serilog-sinks-xunit
-    public ILogger CreateLogger(ITestOutputHelper output)
+    public ILogger? CreateLogger(ITestOutputHelper? output)
     {
         if (output == null)
             return null;
 
-        var loggerFactory = LoggerFactory.Create(builder =>
+        using var loggerFactory = LoggerFactory.Create(builder =>
                                                  {
                                                      builder.AddXunit(output);
                                                      builder.SetMinimumLevel(LogLevel.Debug);
@@ -207,7 +229,10 @@ where TEntryPoint : class
     )
     where TMessage : class, IEvent
     {
-        await TestHarness.Bus.Publish(message, cancellationToken);
+        if (TestHarness?.Bus != null)
+        {
+            await TestHarness.Bus.Publish(message, cancellationToken);
+        }
     }
 
     public async Task<bool> WaitForPublishing<TMessage>(
@@ -218,10 +243,14 @@ where TEntryPoint : class
         var result = await WaitUntilConditionMet(
                          async () =>
                          {
-                             var published =
-                                 await TestHarness.Published.Any<TMessage>(cancellationToken);
+                             if (TestHarness?.Published != null)
+                             {
+                                 var published =
+                                     await TestHarness.Published.Any<TMessage>(cancellationToken);
 
-                             return published;
+                                 return published;
+                             }
+                             return false;
                          });
 
         return result;
@@ -235,10 +264,14 @@ where TEntryPoint : class
         var result = await WaitUntilConditionMet(
                          async () =>
                          {
-                             var consumed =
-                                 await TestHarness.Consumed.Any<TMessage>(cancellationToken);
+                             if (TestHarness?.Consumed != null)
+                             {
+                                 var consumed =
+                                     await TestHarness.Consumed.Any<TMessage>(cancellationToken);
 
-                             return consumed;
+                                 return consumed;
+                             }
+                             return false;
                          });
 
         return result;
@@ -249,6 +282,8 @@ where TEntryPoint : class
     )
     where TInternalCommand : class, IInternalCommand
     {
+        _ = cancellationToken; // Parameter reserved for future use
+        
         var result = await WaitUntilConditionMet(
                          async () =>
                          {
@@ -281,7 +316,7 @@ where TEntryPoint : class
     }
 
     // Ref: https://tech.energyhelpline.com/in-memory-testing-with-masstransit/
-    private async Task<bool> WaitUntilConditionMet(
+    private static async Task<bool> WaitUntilConditionMet(
         Func<Task<bool>> conditionToMet,
         int? timeoutSecond = null
     )
@@ -316,19 +351,27 @@ where TEntryPoint : class
         EventStoreDbTestContainer = TestContainers.EventStoreTestContainer();
 
         // await MongoDbTestContainer.StartAsync();
-        await PostgresTestcontainer.StartAsync();
-        await PostgresPersistTestContainer.StartAsync();
-        await RabbitMqTestContainer.StartAsync();
-        await EventStoreDbTestContainer.StartAsync();
+        if (PostgresTestcontainer != null)
+            await PostgresTestcontainer.StartAsync();
+        if (PostgresPersistTestContainer != null)
+            await PostgresPersistTestContainer.StartAsync();
+        if (RabbitMqTestContainer != null)
+            await RabbitMqTestContainer.StartAsync();
+        if (EventStoreDbTestContainer != null)
+            await EventStoreDbTestContainer.StartAsync();
     }
 
     private async Task StopTestContainerAsync()
     {
-        await PostgresTestcontainer.StopAsync();
-        await PostgresPersistTestContainer.StopAsync();
-        await RabbitMqTestContainer.StopAsync();
+        if (PostgresTestcontainer != null)
+            await PostgresTestcontainer.StopAsync();
+        if (PostgresPersistTestContainer != null)
+            await PostgresPersistTestContainer.StopAsync();
+        if (RabbitMqTestContainer != null)
+            await RabbitMqTestContainer.StopAsync();
         // await MongoDbTestContainer.StopAsync();
-        await EventStoreDbTestContainer.StopAsync();
+        if (EventStoreDbTestContainer != null)
+            await EventStoreDbTestContainer.StopAsync();
     }
 
     private void AddCustomAppSettings(IConfigurationBuilder configuration)
@@ -339,20 +382,20 @@ where TEntryPoint : class
             {
                 new(
                     "PostgresOptions:ConnectionString",
-                    PostgresTestcontainer.GetConnectionString()),
+                    PostgresTestcontainer?.GetConnectionString() ?? string.Empty),
                 new(
                     "PostgresOptions:ConnectionString:Flight",
-                    PostgresTestcontainer.GetConnectionString()),
+                    PostgresTestcontainer?.GetConnectionString() ?? string.Empty),
                  new(
                     "PostgresOptions:ConnectionString:Identity",
-                    PostgresTestcontainer.GetConnectionString()),
+                    PostgresTestcontainer?.GetConnectionString() ?? string.Empty),
                  new(
                     "PostgresOptions:ConnectionString:Passenger",
-                    PostgresTestcontainer.GetConnectionString()),
+                    PostgresTestcontainer?.GetConnectionString() ?? string.Empty),
                 new(
                     "PersistMessageOptions:ConnectionString",
-                    PostgresPersistTestContainer.GetConnectionString()),
-                new("RabbitMqOptions:HostName", RabbitMqTestContainer.Hostname),
+                    PostgresPersistTestContainer?.GetConnectionString() ?? string.Empty),
+                new("RabbitMqOptions:HostName", RabbitMqTestContainer?.Hostname ?? "localhost"),
                 new(
                     "RabbitMqOptions:UserName",
                     TestContainers.RabbitMqContainerConfiguration.UserName),
@@ -361,18 +404,18 @@ where TEntryPoint : class
                     TestContainers.RabbitMqContainerConfiguration.Password),
                 new(
                     "RabbitMqOptions:Port",
-                    RabbitMqTestContainer.GetMappedPublicPort(
-                            TestContainers.RabbitMqContainerConfiguration.Port)
+                    (RabbitMqTestContainer?.GetMappedPublicPort(
+                            TestContainers.RabbitMqContainerConfiguration.Port) ?? TestContainers.RabbitMqContainerConfiguration.Port)
                         .ToString(NumberFormatInfo.InvariantInfo)),
                 // new("MongoOptions:ConnectionString", MongoDbTestContainer.GetConnectionString()),
                 new("MongoOptions:DatabaseName", TestContainers.MongoContainerConfiguration.Name),
                 new(
                     "EventStoreOptions:ConnectionString",
-                    EventStoreDbTestContainer.GetConnectionString())
+                    EventStoreDbTestContainer?.GetConnectionString() ?? string.Empty)
             });
     }
 
-    private IHttpContextAccessor AddHttpContextAccessorMock(IServiceProvider serviceProvider)
+    private static IHttpContextAccessor AddHttpContextAccessorMock(IServiceProvider serviceProvider)
     {
         var httpContextAccessorMock = Substitute.For<IHttpContextAccessor>();
         using var scope = serviceProvider.CreateScope();
@@ -393,34 +436,34 @@ where TWContext : DbContext
 {
     public Task ExecuteDbContextAsync(Func<TWContext, Task> action)
     {
-        return ExecuteScopeAsync(sp => action(sp.GetService<TWContext>()));
+        return ExecuteScopeAsync(sp => action(sp.GetRequiredService<TWContext>()));
     }
 
     public Task ExecuteDbContextAsync(Func<TWContext, ValueTask> action)
     {
-        return ExecuteScopeAsync(sp => action(sp.GetService<TWContext>()).AsTask());
+        return ExecuteScopeAsync(sp => action(sp.GetRequiredService<TWContext>()).AsTask());
     }
 
     public Task ExecuteDbContextAsync(Func<TWContext, IMediator, Task> action)
     {
         return ExecuteScopeAsync(
-            sp => action(sp.GetService<TWContext>(), sp.GetService<IMediator>()));
+            sp => action(sp.GetRequiredService<TWContext>(), sp.GetRequiredService<IMediator>()));
     }
 
     public Task<T> ExecuteDbContextAsync<T>(Func<TWContext, Task<T>> action)
     {
-        return ExecuteScopeAsync(sp => action(sp.GetService<TWContext>()));
+        return ExecuteScopeAsync(sp => action(sp.GetRequiredService<TWContext>()));
     }
 
     public Task<T> ExecuteDbContextAsync<T>(Func<TWContext, ValueTask<T>> action)
     {
-        return ExecuteScopeAsync(sp => action(sp.GetService<TWContext>()).AsTask());
+        return ExecuteScopeAsync(sp => action(sp.GetRequiredService<TWContext>()).AsTask());
     }
 
     public Task<T> ExecuteDbContextAsync<T>(Func<TWContext, IMediator, Task<T>> action)
     {
         return ExecuteScopeAsync(
-            sp => action(sp.GetService<TWContext>(), sp.GetService<IMediator>()));
+            sp => action(sp.GetRequiredService<TWContext>(), sp.GetRequiredService<IMediator>()));
     }
 
     public Task InsertAsync<T>(params T[] entities)
@@ -575,15 +618,15 @@ where TRContext : MongoDbContext
 public class TestFixtureCore<TEntryPoint> : IAsyncLifetime
 where TEntryPoint : class
 {
-    private Respawner _reSpawnerDefaultDb;
-    private Respawner _reSpawnerPersistDb;
-    private NpgsqlConnection DefaultDbConnection { get; set; }
-    private NpgsqlConnection PersistDbConnection { get; set; }
+    private Respawner? _reSpawnerDefaultDb;
+    private Respawner? _reSpawnerPersistDb;
+    private NpgsqlConnection? DefaultDbConnection { get; set; }
+    private NpgsqlConnection? PersistDbConnection { get; set; }
 
 
     public TestFixtureCore(
         TestFixture<TEntryPoint> integrationTestFixture,
-        ITestOutputHelper outputHelper
+        ITestOutputHelper? outputHelper
     )
     {
         Fixture = integrationTestFixture;
@@ -614,7 +657,7 @@ where TEntryPoint : class
         if (!string.IsNullOrEmpty(persistOptions?.ConnectionString))
         {
             await Fixture.PersistMessageBackgroundService.StartAsync(
-                Fixture.CancellationTokenSource.Token);
+                Fixture.CancellationTokenSource?.Token ?? CancellationToken.None);
 
             PersistDbConnection = new NpgsqlConnection(persistOptions.ConnectionString);
             await PersistDbConnection.OpenAsync();
@@ -639,22 +682,24 @@ where TEntryPoint : class
 
     private async Task ResetPostgresAsync()
     {
-        if (PersistDbConnection is not null)
+        if (PersistDbConnection is not null && _reSpawnerPersistDb is not null)
         {
             await _reSpawnerPersistDb.ResetAsync(PersistDbConnection);
 
             await Fixture.PersistMessageBackgroundService.StopAsync(
-                Fixture.CancellationTokenSource.Token);
+                Fixture.CancellationTokenSource?.Token ?? CancellationToken.None);
         }
 
-        if (DefaultDbConnection is not null)
+        if (DefaultDbConnection is not null && _reSpawnerDefaultDb is not null)
         {
             await _reSpawnerDefaultDb.ResetAsync(DefaultDbConnection);
         }
     }
 
-    private async Task ResetMongoAsync(CancellationToken cancellationToken = default)
+    private static async Task ResetMongoAsync(CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken; // Parameter reserved for future use
+        
         //https://stackoverflow.com/questions/3366397/delete-everything-in-a-mongodb-database
         // var dbClient = new MongoClient(Fixture.MongoDbTestContainer?.GetConnectionString());
 
@@ -678,9 +723,11 @@ where TEntryPoint : class
                            .ApiPort) ??
                    TestContainers.RabbitMqContainerConfiguration.ApiPort;
 
-        var managementClient = new ManagementClient(Fixture.RabbitMqTestContainer?.Hostname,
-            TestContainers.RabbitMqContainerConfiguration?.UserName,
-            TestContainers.RabbitMqContainerConfiguration?.Password, port);
+        using var managementClient = new ManagementClient(
+            Fixture.RabbitMqTestContainer?.Hostname ?? "localhost",
+            TestContainers.RabbitMqContainerConfiguration?.UserName ?? "guest",
+            TestContainers.RabbitMqContainerConfiguration?.Password ?? "guest", 
+            port);
 
         var bd = await managementClient.GetBindingsAsync(cancellationToken);
 
@@ -709,7 +756,10 @@ where TEntryPoint : class
         using var scope = Fixture.ServiceProvider.CreateScope();
 
         var seedManager = scope.ServiceProvider.GetService<ISeedManager>();
-        await seedManager.ExecuteTestSeedAsync();
+        if (seedManager != null)
+        {
+            await seedManager.ExecuteTestSeedAsync();
+        }
     }
 }
 
@@ -720,7 +770,7 @@ where TRContext : MongoDbContext
 {
     protected TestReadBase(
         TestReadFixture<TEntryPoint, TRContext> integrationTestFixture,
-        ITestOutputHelper outputHelper = null
+        ITestOutputHelper? outputHelper = null
     ) : base(integrationTestFixture, outputHelper)
     {
         Fixture = integrationTestFixture;
@@ -736,7 +786,7 @@ where TWContext : DbContext
 {
     protected TestWriteBase(
         TestWriteFixture<TEntryPoint, TWContext> integrationTestFixture,
-        ITestOutputHelper outputHelper = null
+        ITestOutputHelper? outputHelper = null
     ) : base(integrationTestFixture, outputHelper)
     {
         Fixture = integrationTestFixture;
@@ -753,7 +803,7 @@ where TRContext : MongoDbContext
 {
     protected TestBase(
         TestFixture<TEntryPoint, TWContext, TRContext> integrationTestFixture,
-        ITestOutputHelper outputHelper = null
+        ITestOutputHelper? outputHelper = null
     ) :
         base(integrationTestFixture, outputHelper)
     {

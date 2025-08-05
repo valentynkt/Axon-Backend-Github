@@ -56,7 +56,10 @@ public sealed class EventDispatcher(
 
             if (type != null && eventType == EventType.InternalCommand)
             {
-                var internalMessages = await MapDomainEventToInternalCommandAsync(events as IReadOnlyList<IDomainEvent>)
+                var domainEvents = events as IReadOnlyList<IDomainEvent>;
+                if (domainEvents is null) return;
+                
+                var internalMessages = await MapDomainEventToInternalCommandAsync(domainEvents)
                     .ConfigureAwait(false);
 
                 foreach (var internalMessage in internalMessages)
@@ -137,18 +140,33 @@ public sealed class EventDispatcher(
                 .MakeGenericType(domainEvent.GetType());
 
             var domainNotificationEvent = (IIntegrationEvent)Activator
-                .CreateInstance(genericType, domainEvent);
+                .CreateInstance(genericType, domainEvent)!;
 
             yield return domainNotificationEvent;
         }
     }
 
-    private IDictionary<string, object> SetHeaders()
+    private IDictionary<string, object?> SetHeaders()
     {
-        var headers = new Dictionary<string, object>();
-        headers.Add("CorrelationId", httpContextAccessor?.HttpContext?.GetCorrelationId());
-        headers.Add("UserId", httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier));
-        headers.Add("UserName", httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.Name));
+        var headers = new Dictionary<string, object?>();
+        
+        var correlationId = httpContextAccessor?.HttpContext?.GetCorrelationId();
+        if (correlationId is not null)
+        {
+            headers.Add("CorrelationId", correlationId);
+        }
+        
+        var userId = httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is not null)
+        {
+            headers.Add("UserId", userId);
+        }
+        
+        var userName = httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.Name);
+        if (userName is not null)
+        {
+            headers.Add("UserName", userName);
+        }
 
         return headers;
     }

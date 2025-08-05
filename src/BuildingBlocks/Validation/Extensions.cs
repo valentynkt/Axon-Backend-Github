@@ -13,7 +13,8 @@ namespace BuildingBlocks.Validation
             var validationResult = await validator.ValidateAsync(request);
             if (!validationResult.IsValid)
             {
-                throw new Exception.ValidationException(validationResult.Errors?.First()?.ErrorMessage);
+                var errorMessage = validationResult.Errors?.First()?.ErrorMessage ?? "Validation failed";
+                throw new Exception.ValidationException(errorMessage);
             }
         }
     }
