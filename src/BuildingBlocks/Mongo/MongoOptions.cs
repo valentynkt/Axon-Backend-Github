@@ -1,8 +1,9 @@
 namespace BuildingBlocks.Mongo;
 
+/// <summary>
+/// MongoDB configuration options for compatibility during PostgreSQL migration
+/// </summary>
 public class MongoOptions
 {
-    public string ConnectionString { get; set; } = null!;
-    public string DatabaseName { get; set; } = null!;
-    public static Guid UniqueId { get; set; } = Guid.NewGuid();
+    public string ConnectionString { get; set; } = string.Empty;
 }

@@ -1,4 +1,4 @@
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Postgres;
 using BuildingBlocks.Mapster;
 using BuildingBlocks.Web;
 using FluentValidation;

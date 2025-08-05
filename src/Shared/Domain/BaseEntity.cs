@@ -11,7 +11,7 @@ public abstract class BaseEntity<TId> : IIdentifiable<TId>, IEquatable<BaseEntit
     /// <summary>
     /// Gets the unique identifier for this entity
     /// </summary>
-    public TId Id { get; protected set; }
+    public TId Id { get; set; }
 
     protected BaseEntity(TId id)
     {

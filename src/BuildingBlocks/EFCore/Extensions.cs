@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Model;
+using BuildingBlocks.Postgres;
 using BuildingBlocks.Web;
 using Humanizer;
 using Microsoft.AspNetCore.Builder;
@@ -45,6 +46,16 @@ public static class Extensions
 
         builder.Services.AddScoped<ISeedManager, SeedManager>();
         builder.Services.AddScoped<IDbContext>(sp => sp.GetRequiredService<TContext>());
+
+        // REMOVED: Incorrect IEfRepository registrations
+        // PostgresRepository does NOT implement IEfRepository interfaces
+        // IEfRepository requires IAggregate<TId>, but PostgresRepository works with IEntity<TId>
+        
+        // Register Unit of Work patterns
+        builder.Services.AddScoped<PostgresUnitOfWork>();
+        
+        // REMOVED: Incorrect IEfUnitOfWork registration
+        // PostgresUnitOfWork does NOT implement IEfUnitOfWork interfaces
 
         return builder.Services;
     }

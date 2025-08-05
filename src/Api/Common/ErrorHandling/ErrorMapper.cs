@@ -8,6 +8,7 @@ namespace Axon.Api.Common.ErrorHandling;
 /// </summary>
 public sealed class ErrorMapper : IErrorMapper
 {
+
     /// <inheritdoc />
     public int MapToStatusCode(Error error)
     {

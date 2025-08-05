@@ -1,21 +1,30 @@
 using System.Collections.ObjectModel;
+using BuildingBlocks.Core.Model;
+using BuildingBlocks.Core.Event;
 
 namespace Axon.Shared.Domain;
 
 /// <summary>
 /// Base class for auditable domain aggregate roots following DDD principles
 /// Combines audit capabilities with domain event management
+/// Compatible with both Shared.Domain and BuildingBlocks.Core patterns
 /// </summary>
 /// <typeparam name="TId">The type of the aggregate's identifier</typeparam>
-public abstract class AuditableAggregateRoot<TId> : AuditableEntity<TId>, IAggregateRoot
+public abstract class AuditableAggregateRoot<TId> : AuditableEntity<TId>, IAggregateRoot, IAggregate<TId>
     where TId : notnull
 {
     private readonly List<IDomainEvent> _domainEvents = new();
 
     /// <summary>
     /// Gets the read-only collection of domain events raised by this aggregate
+    /// Compatible with both IAggregateRoot and IAggregate interfaces
     /// </summary>
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+    
+    /// <summary>
+    /// Gets domain events as IReadOnlyList for BuildingBlocks.Core.IAggregate compatibility
+    /// </summary>
+    IReadOnlyList<IDomainEvent> IAggregate.DomainEvents => _domainEvents.AsReadOnly().ToList();
 
     protected AuditableAggregateRoot(TId id) : base(id)
     {
@@ -37,6 +46,16 @@ public abstract class AuditableAggregateRoot<TId> : AuditableEntity<TId>, IAggre
     public void ClearDomainEvents()
     {
         _domainEvents.Clear();
+    }
+    
+    /// <summary>
+    /// Clears domain events and returns them as IEvent array for BuildingBlocks.Core.IAggregate compatibility
+    /// </summary>
+    IEvent[] IAggregate.ClearDomainEvents()
+    {
+        var events = _domainEvents.Cast<IEvent>().ToArray();
+        _domainEvents.Clear();
+        return events;
     }
 
     /// <summary>

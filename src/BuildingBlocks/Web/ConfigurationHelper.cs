@@ -4,7 +4,7 @@ namespace BuildingBlocks.Web
 {
     public static class ConfigurationHelper
     {
-        public static IConfiguration GetConfiguration(string basePath = null)
+        public static IConfiguration GetConfiguration(string? basePath = null)
         {
             basePath ??= Directory.GetCurrentDirectory();
             var environmentVariable = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");

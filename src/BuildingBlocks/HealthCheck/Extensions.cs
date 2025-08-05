@@ -43,14 +43,15 @@ public static class Extensions
                         return factory.CreateConnectionAsync();
                     });
 
-            if (!string.IsNullOrEmpty(mongoOptions.ConnectionString))
-            {
-                healthChecksBuilder.AddMongoDb(
-                    clientFactory: _ => new MongoClient(mongoOptions.ConnectionString),
-                    name: "MongoDB-Health",
-                    failureStatus: HealthStatus.Unhealthy,
-                    timeout: TimeSpan.FromSeconds(10));
-            }
+            // MongoDB health check temporarily disabled during PostgreSQL migration
+            // if (!string.IsNullOrEmpty(mongoOptions.ConnectionString))
+            // {
+            //     healthChecksBuilder.AddMongoDb(
+            //         clientFactory: _ => new MongoClient(mongoOptions.ConnectionString),
+            //         name: "MongoDB-Health",
+            //         failureStatus: HealthStatus.Unhealthy,
+            //         timeout: TimeSpan.FromSeconds(10));
+            // }
 
             if (!string.IsNullOrEmpty(postgresOptions.ConnectionString))
                 healthChecksBuilder.AddNpgSql(postgresOptions.ConnectionString);

@@ -3,7 +3,7 @@ using System.Security.Claims;
 using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Postgres;
 using BuildingBlocks.Mongo;
 using BuildingBlocks.PersistMessageProcessor;
 using BuildingBlocks.Web;
@@ -33,7 +33,7 @@ namespace BuildingBlocks.TestBase;
 using System.Globalization;
 using Npgsql;
 using Testcontainers.EventStoreDb;
-using Testcontainers.MongoDb;
+// using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 
@@ -47,7 +47,7 @@ where TEntryPoint : class
     private PostgreSqlContainer PostgresTestcontainer;
     private PostgreSqlContainer PostgresPersistTestContainer;
     public RabbitMqContainer RabbitMqTestContainer;
-    public MongoDbContainer MongoDbTestContainer;
+    // public MongoDbContainer MongoDbTestContainer;
     public EventStoreDbContainer EventStoreDbTestContainer;
     public CancellationTokenSource CancellationTokenSource;
 
@@ -312,10 +312,10 @@ where TEntryPoint : class
         PostgresTestcontainer = TestContainers.PostgresTestContainer();
         PostgresPersistTestContainer = TestContainers.PostgresPersistTestContainer();
         RabbitMqTestContainer = TestContainers.RabbitMqTestContainer();
-        MongoDbTestContainer = TestContainers.MongoTestContainer();
+        // MongoDbTestContainer = TestContainers.MongoTestContainer();
         EventStoreDbTestContainer = TestContainers.EventStoreTestContainer();
 
-        await MongoDbTestContainer.StartAsync();
+        // await MongoDbTestContainer.StartAsync();
         await PostgresTestcontainer.StartAsync();
         await PostgresPersistTestContainer.StartAsync();
         await RabbitMqTestContainer.StartAsync();
@@ -327,7 +327,7 @@ where TEntryPoint : class
         await PostgresTestcontainer.StopAsync();
         await PostgresPersistTestContainer.StopAsync();
         await RabbitMqTestContainer.StopAsync();
-        await MongoDbTestContainer.StopAsync();
+        // await MongoDbTestContainer.StopAsync();
         await EventStoreDbTestContainer.StopAsync();
     }
 
@@ -364,7 +364,7 @@ where TEntryPoint : class
                     RabbitMqTestContainer.GetMappedPublicPort(
                             TestContainers.RabbitMqContainerConfiguration.Port)
                         .ToString(NumberFormatInfo.InvariantInfo)),
-                new("MongoOptions:ConnectionString", MongoDbTestContainer.GetConnectionString()),
+                // new("MongoOptions:ConnectionString", MongoDbTestContainer.GetConnectionString()),
                 new("MongoOptions:DatabaseName", TestContainers.MongoContainerConfiguration.Name),
                 new(
                     "EventStoreOptions:ConnectionString",
@@ -656,17 +656,19 @@ where TEntryPoint : class
     private async Task ResetMongoAsync(CancellationToken cancellationToken = default)
     {
         //https://stackoverflow.com/questions/3366397/delete-everything-in-a-mongodb-database
-        var dbClient = new MongoClient(Fixture.MongoDbTestContainer?.GetConnectionString());
+        // var dbClient = new MongoClient(Fixture.MongoDbTestContainer?.GetConnectionString());
 
-        var collections = await dbClient
-                              .GetDatabase(TestContainers.MongoContainerConfiguration.Name)
-                              .ListCollectionsAsync(cancellationToken: cancellationToken);
+        // var collections = await dbClient
+        //                       .GetDatabase(TestContainers.MongoContainerConfiguration.Name)
+        //                       .ListCollectionsAsync(cancellationToken: cancellationToken);
 
-        foreach (var collection in collections.ToList())
-        {
-            await dbClient.GetDatabase(TestContainers.MongoContainerConfiguration.Name)
-                .DropCollectionAsync(collection["name"].AsString, cancellationToken);
-        }
+        // foreach (var collection in collections.ToList())
+        // {
+        //     await dbClient.GetDatabase(TestContainers.MongoContainerConfiguration.Name)
+        //         .DropCollectionAsync(collection["name"].AsString, cancellationToken);
+        // }
+        
+        await Task.CompletedTask; // No-op for now - MongoDB functionality disabled
     }
 
     private async Task ResetRabbitMqAsync(CancellationToken cancellationToken = default)

@@ -49,7 +49,7 @@ namespace BuildingBlocks.Jwt
                         {
                             policy.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
                             policy.RequireAuthenticatedUser();
-                            policy.RequireClaim("scope", jwtOptions.Audience);
+                            policy.RequireClaim("scope", jwtOptions.Audience ?? string.Empty);
                         });
 
                     // Role-based policies

@@ -1,7 +1,7 @@
 namespace BuildingBlocks.TestBase;
 
 using Testcontainers.EventStoreDb;
-using Testcontainers.MongoDb;
+// using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Web;
@@ -63,21 +63,21 @@ public static class TestContainers
         return builder;
     }
 
-    public static MongoDbContainer MongoTestContainer()
-    {
-        var baseBuilder = new MongoDbBuilder()
-            .WithUsername(MongoContainerConfiguration.UserName)
-            .WithPassword(MongoContainerConfiguration.Password)
-            .WithLabel("Key", "Value");
+    // public static MongoDbContainer MongoTestContainer()
+    // {
+    //     var baseBuilder = new MongoDbBuilder()
+    //         .WithUsername(MongoContainerConfiguration.UserName)
+    //         .WithPassword(MongoContainerConfiguration.Password)
+    //         .WithLabel("Key", "Value");
 
-        var builder = baseBuilder
-            .WithImage(MongoContainerConfiguration.ImageName)
-            .WithName(MongoContainerConfiguration.Name)
-            .WithPortBinding(MongoContainerConfiguration.Port, true)
-            .Build();
+    //     var builder = baseBuilder
+    //         .WithImage(MongoContainerConfiguration.ImageName)
+    //         .WithName(MongoContainerConfiguration.Name)
+    //         .WithPortBinding(MongoContainerConfiguration.Port, true)
+    //         .Build();
 
-        return builder;
-    }
+    //     return builder;
+    // }
 
     public static RabbitMqContainer RabbitMqTestContainer()
     {

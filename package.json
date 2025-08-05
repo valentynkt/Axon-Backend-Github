@@ -1,0 +1,19 @@
+{
+  "name": "Axon-Backend",
+  "version": "1.0.0",
+  "description": "Axon-Backend",
+  "author": "Valentyn Kit",
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": {
+    "prepare": "husky && dotnet tool restore",
+    "format": "dotnet format Axon.Backend.slnx --severity error --verbosity detailed",
+    "ci-format": "dotnet format Axon.Backend.slnx --verify-no-changes --severity error --verbosity detailed",
+    "upgrade-packages": "dotnet outdated --upgrade"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "husky": "^9.1.6"
+  }
+}

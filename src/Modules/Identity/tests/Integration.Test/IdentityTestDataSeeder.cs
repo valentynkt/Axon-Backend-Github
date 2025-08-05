@@ -1,7 +1,7 @@
 using BuildingBlocks.Constants;
 using BuildingBlocks.Contracts.EventBus.Messages;
 using BuildingBlocks.Core;
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Postgres;
 using Identity.Data.Seed;
 using Identity.Identity.Constants;
 using Identity.Identity.Models;

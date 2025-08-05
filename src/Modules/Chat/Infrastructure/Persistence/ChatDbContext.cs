@@ -366,6 +366,61 @@ public sealed class ChatDbContext : DbContext
         return result.ToString();
     }
 
+    #region Transaction Management
+
+    private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? _currentTransaction;
+
+    /// <summary>
+    /// Begin a new database transaction
+    /// </summary>
+    public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        if (_currentTransaction != null)
+            return;
+
+        _currentTransaction = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+    }
+
+    /// <summary>
+    /// Commit the current transaction
+    /// </summary>
+    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await SaveChangesAsync(cancellationToken);
+            await _currentTransaction?.CommitAsync(cancellationToken)!;
+        }
+        catch
+        {
+            await RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            _currentTransaction?.Dispose();
+            _currentTransaction = null;
+        }
+    }
+
+    /// <summary>
+    /// Rollback the current transaction
+    /// </summary>
+    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _currentTransaction?.RollbackAsync(cancellationToken)!;
+        }
+        finally
+        {
+            _currentTransaction?.Dispose();
+            _currentTransaction = null;
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// Compiled queries for high-performance data access
     /// Implements query optimization patterns for CQRS read operations

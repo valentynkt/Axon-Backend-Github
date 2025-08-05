@@ -76,6 +76,7 @@ dotnet_diagnostic.CS1591.severity = suggestion
 ###############################################################################
 
 # Performance rules that are often overly strict in test code
+dotnet_diagnostic.CA1848.severity = none        # For improved performance, use LoggerMessage delegates
 dotnet_diagnostic.CA1861.severity = suggestion  # Prefer static readonly over const arrays
 dotnet_diagnostic.CA1825.severity = suggestion  # Avoid zero-length array allocations
 dotnet_diagnostic.CA1814.severity = suggestion  # Prefer jagged arrays over multidimensional

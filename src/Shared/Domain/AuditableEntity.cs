@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Model;
+
 namespace Axon.Shared.Domain;
 
 /// <summary>
@@ -9,9 +11,10 @@ public interface IAuditable { }
 /// Base class for auditable domain entities using backing fields pattern from SPARC architecture
 /// Audit properties are managed through backing fields accessed directly by audit interceptor
 /// EF Core uses .HasField() configuration to map backing fields for optimal performance
+/// Compatible with both Shared.Domain and BuildingBlocks.Core patterns
 /// </summary>
 /// <typeparam name="TId">The type of the entity's identifier</typeparam>
-public abstract class AuditableEntity<TId> : BaseEntity<TId>, IAuditable
+public abstract class AuditableEntity<TId> : BaseEntity<TId>, IAuditable, IEntity<TId>
     where TId : notnull
 {
     // Backing fields for EF Core direct access via audit interceptor (SPARC performance optimization)
@@ -21,6 +24,8 @@ public abstract class AuditableEntity<TId> : BaseEntity<TId>, IAuditable
     private string _createdBy = default!;
     private DateTime _updatedAtUtc;
     private string _updatedBy = default!;
+    private long _version;
+    private bool _isDeleted;
 #pragma warning restore CS0649
 
     // Public read-only properties - no setters as audit interceptor accesses backing fields directly
@@ -32,6 +37,43 @@ public abstract class AuditableEntity<TId> : BaseEntity<TId>, IAuditable
     // Backward compatibility properties for application layer
     public DateTime CreatedAt => _createdAtUtc;
     public DateTime UpdatedAt => _updatedAtUtc;
+    
+    // IEntity interface compatibility (BuildingBlocks.Core.Model)
+    DateTime? IEntity.CreatedAt 
+    { 
+        get => _createdAtUtc == default ? null : _createdAtUtc;
+        set => _createdAtUtc = value ?? DateTime.UtcNow;
+    }
+    
+    long? IEntity.CreatedBy 
+    { 
+        get => long.TryParse(_createdBy, out var id) ? id : null;
+        set => _createdBy = value?.ToString() ?? string.Empty;
+    }
+    
+    DateTime? IEntity.LastModified 
+    { 
+        get => _updatedAtUtc == default ? null : _updatedAtUtc;
+        set => _updatedAtUtc = value ?? DateTime.UtcNow;
+    }
+    
+    long? IEntity.LastModifiedBy 
+    { 
+        get => long.TryParse(_updatedBy, out var id) ? id : null;
+        set => _updatedBy = value?.ToString() ?? string.Empty;
+    }
+    
+    bool IEntity.IsDeleted 
+    { 
+        get => _isDeleted;
+        set => _isDeleted = value;
+    }
+    
+    long IVersion.Version 
+    { 
+        get => _version;
+        set => _version = value;
+    }
 
     protected AuditableEntity(TId id) : base(id)
     {
