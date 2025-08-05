@@ -8,6 +8,9 @@ using Axon.Modules.Chat.Infrastructure.Services.EventSourcing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Axon.BuildingBlocks.Persistence.Interfaces;
+using Axon.BuildingBlocks.Postgres;
+using Axon.Modules.Chat.Application.Repositories;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Infrastructure.Configuration;
@@ -21,14 +24,14 @@ public static class DataAccessServiceRegistration
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Register database context
-        services.AddChatDbContext(configuration);
+        // Register CQRS persistence with separate read and write contexts
+        services.AddChatCqrsPersistence(configuration);
 
-        // Register repositories
-        services.AddRepositoryImplementations();
+        // Register repositories with CQRS separation
+        services.AddChatRepositories();
 
-        // Register Unit of Work pattern
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        // Register Unit of Work pattern for write operations
+        services.AddScoped<IWriteUnitOfWork, PostgresWriteUnitOfWork<ChatWriteDbContext>>();
 
         // Register Event Sourcing components
         services.AddEventSourcingComponents();
@@ -39,18 +42,50 @@ public static class DataAccessServiceRegistration
         return services;
     }
 
-    private static IServiceCollection AddChatDbContext(
+    private static IServiceCollection AddChatCqrsPersistence(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("DefaultConnection string is not configured");
 
-        services.AddDbContext<ChatDbContext>(options =>
+        // Register write context with interceptors
+        services.AddDbContext<ChatWriteDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+                npgsqlOptions.CommandTimeout(30);
+            });
+            
 #if DEBUG
-            options.EnableSensitiveDataLogging();
+            options.EnableSensitiveDataLogging(false); // Security: disabled even in debug
+            options.EnableDetailedErrors();
+            options.LogTo(Console.WriteLine, LogLevel.Information);
+#endif
+        });
+
+        // Register read context optimized for queries
+        services.AddDbContext<ChatReadDbContext>(options =>
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+                npgsqlOptions.CommandTimeout(30);
+            });
+            
+            // Optimize for read operations
+            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+            
+#if DEBUG
+            options.EnableSensitiveDataLogging(false);
+            options.EnableDetailedErrors();
             options.LogTo(Console.WriteLine, LogLevel.Information);
 #endif
         });
@@ -58,10 +93,16 @@ public static class DataAccessServiceRegistration
         return services;
     }
 
-    private static IServiceCollection AddRepositoryImplementations(this IServiceCollection services)
+    private static IServiceCollection AddChatRepositories(this IServiceCollection services)
     {
-        services.AddScoped<IConversationRepository, ConversationRepository>();
-        services.AddScoped<IMessageRepository, MessageRepository>();
+        // Register write repositories
+        services.AddScoped<IConversationWriteRepository, ConversationWriteRepository>();
+        services.AddScoped<IMessageWriteRepository, MessageWriteRepository>();
+        
+        // Register read repositories
+        services.AddScoped<IConversationReadRepository, ConversationReadRepository>();
+        services.AddScoped<IMessageReadRepository, MessageReadRepository>();
+        
         return services;
     }
 

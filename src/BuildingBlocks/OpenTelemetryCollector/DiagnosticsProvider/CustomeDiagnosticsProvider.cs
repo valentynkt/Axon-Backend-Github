@@ -79,7 +79,17 @@ public class CustomeDiagnosticsProvider(IMeterFactory meterFactory, IOptions<Obs
             await action(activity!, cancellationToken);
             activity?.SetOkStatus();
         }
-        catch (System.Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            activity?.SetErrorStatus(ex);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            activity?.SetErrorStatus(ex);
+            throw;
+        }
+        catch (TimeoutException ex)
         {
             activity?.SetErrorStatus(ex);
             throw;
@@ -116,7 +126,17 @@ public class CustomeDiagnosticsProvider(IMeterFactory meterFactory, IOptions<Obs
 
             return result;
         }
-        catch (System.Exception ex)
+        catch (InvalidOperationException ex)
+        {
+            activity?.SetErrorStatus(ex);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            activity?.SetErrorStatus(ex);
+            throw;
+        }
+        catch (TimeoutException ex)
         {
             activity?.SetErrorStatus(ex);
             throw;
@@ -128,5 +148,6 @@ public class CustomeDiagnosticsProvider(IMeterFactory meterFactory, IOptions<Obs
         _listener?.Dispose();
         _meter?.Dispose();
         _activitySource?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

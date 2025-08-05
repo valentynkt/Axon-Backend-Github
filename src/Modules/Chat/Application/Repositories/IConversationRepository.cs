@@ -1,24 +1,61 @@
-using Axon.Modules.Chat.Domain.Aggregates;
-using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Shared.Common;
+using Axon.BuildingBlocks.Core.Pagination;
+using Axon.BuildingBlocks.Core.Results;
+using Axon.BuildingBlocks.Persistence.Interfaces;
+using Axon.Modules.Chat.Domain.Conversations;
+using Axon.Modules.Chat.Domain.Conversations.Enums;
+using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
 
 namespace Axon.Modules.Chat.Application.Repositories;
 
 /// <summary>
 /// Simple repository interface for Conversation aggregate
 /// </summary>
-public interface IConversationRepository
+/// <summary>
+/// Write repository interface for Conversation aggregate for command operations
+/// </summary>
+public interface IConversationWriteRepository : IWriteRepository<Conversation, ConversationId>
 {
-    Task<Result> AddAsync(Conversation conversation, CancellationToken cancellationToken = default);
-    Task<Result> UpdateAsync(Conversation conversation, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Gets an aggregate with all its related entities for domain event processing
+    /// </summary>
     Task<Result<Conversation?>> GetAggregateAsync(ConversationId id, CancellationToken cancellationToken = default);
-    Task<Result<PagedResult<Conversation>>> GetByStatusAsync(
-        ConversationStatus status,
-        int pageNumber = 1,
-        int pageSize = 20,
+    
+    /// <summary>
+    /// Gets conversation by ID with all messages for domain operations
+    /// </summary>
+    Task<Result<Conversation?>> GetByIdWithMessagesAsync(ConversationId id, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Gets aggregates that have pending domain events
+    /// </summary>
+    Task<Result<IReadOnlyList<Conversation>>> GetAggregatesWithEventsAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Read repository interface for Conversation aggregate for query operations
+/// </summary>
+public interface IConversationReadRepository : IReadRepository<Conversation, ConversationId>
+{
+    /// <summary>
+    /// Gets conversation by ID with all messages for read operations
+    /// </summary>
+    Task<Result<Conversation?>> GetByIdWithMessagesAsync(ConversationId id, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Gets conversations by user with pagination
+    /// </summary>
+    Task<Result<PagedResult<Conversation>>> GetByUserAsync(
+        string userId, 
+        int pageNumber, 
+        int pageSize, 
         CancellationToken cancellationToken = default);
-    Task<Result<PagedResult<Conversation>>> GetRecentAsync(
-        int pageNumber = 1,
-        int pageSize = 20,
+    
+    /// <summary>
+    /// Gets conversations by status with pagination
+    /// </summary>
+    Task<Result<PagedResult<Conversation>>> GetByStatusAsync(
+        ConversationStatus status, 
+        int pageNumber, 
+        int pageSize, 
         CancellationToken cancellationToken = default);
 }

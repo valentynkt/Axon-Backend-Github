@@ -14,7 +14,7 @@ public class CurrentUserProvider : ICurrentUserProvider
 
     public CurrentUserProvider(IHttpContextAccessor httpContextAccessor)
     {
-        _httpContextAccessor = httpContextAccessor;
+        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
     }
 
 
@@ -22,8 +22,11 @@ public class CurrentUserProvider : ICurrentUserProvider
     {
         var nameIdentifier = _httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        long.TryParse(nameIdentifier, out var userId);
+        if (long.TryParse(nameIdentifier, out var userId))
+        {
+            return userId;
+        }
 
-        return userId;
+        return null;
     }
 }

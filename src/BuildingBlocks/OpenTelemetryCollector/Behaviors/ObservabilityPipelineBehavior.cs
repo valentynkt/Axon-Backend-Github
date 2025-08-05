@@ -65,7 +65,15 @@ public class ObservabilityPipelineBehavior<TRequest, TResponse>(
                 return queryResult;
             }
         }
-        catch (System.Exception)
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (TimeoutException)
         {
             if (isQuery)
             {

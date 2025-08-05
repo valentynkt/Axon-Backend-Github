@@ -2,6 +2,7 @@ using BuildingBlocks.Core.Event;
 using BuildingBlocks.EventStoreDB.Events;
 using BuildingBlocks.EventStoreDB.Serialization;
 using EventStore.Client;
+using System.Linq;
 
 namespace BuildingBlocks.EventStoreDB.Subscriptions;
 
@@ -29,7 +30,12 @@ public class EventStoreDBSubscriptionCheckpointRepository : ISubscriptionCheckpo
             return null;
         }
 
-        ResolvedEvent? @event = await result.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        ResolvedEvent? @event = null;
+        await foreach (var evt in result.WithCancellation(ct))
+        {
+            @event = evt;
+            break;
+        }
 
         return @event?.Deserialize<CheckpointStored>()?.Position;
     }

@@ -3,8 +3,9 @@ using System.Security.Claims;
 using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
-using BuildingBlocks.Postgres;
-using BuildingBlocks.Mongo;
+using BuildingBlocks.Persistence;
+using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Persistence.Infrastructure;
 using BuildingBlocks.PersistMessageProcessor;
 using BuildingBlocks.Web;
 using Duende.IdentityServer.EntityFramework.Entities;
@@ -21,7 +22,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using MongoDB.Driver;
 using NSubstitute;
 using Respawn;
 using WebMotions.Fake.Authentication.JwtBearer;
@@ -46,10 +46,10 @@ where TEntryPoint : class
     private Action<IServiceCollection>? TestRegistrationServices { get; set; }
     private PostgreSqlContainer? PostgresTestcontainer;
     private PostgreSqlContainer? PostgresPersistTestContainer;
-    public RabbitMqContainer? RabbitMqTestContainer;
+    public RabbitMqContainer? RabbitMqTestContainer { get; private set; }
     // public MongoDbContainer MongoDbTestContainer;
-    public EventStoreDbContainer? EventStoreDbTestContainer;
-    public CancellationTokenSource? CancellationTokenSource;
+    public EventStoreDbContainer? EventStoreDbTestContainer { get; private set; }
+    public CancellationTokenSource? CancellationTokenSource { get; private set; }
     private bool _disposed;
 
     public PersistMessageBackgroundService PersistMessageBackgroundService =>
@@ -83,54 +83,63 @@ where TEntryPoint : class
 
     protected TestFixture()
     {
-        _factory = new WebApplicationFactory<TEntryPoint>()
-            .WithWebHostBuilder(
-                builder =>
-                {
-                    builder.ConfigureAppConfiguration(AddCustomAppSettings);
+        try
+        {
+#pragma warning disable CA2000 // Dispose objects before losing scope - WebApplicationFactory is properly disposed in Dispose() and DisposeAsync() methods
+            _factory = new WebApplicationFactory<TEntryPoint>()
+                .WithWebHostBuilder(
+                    builder =>
+                    {
+                        builder.ConfigureAppConfiguration(AddCustomAppSettings);
 
-                    builder.UseEnvironment("test");
+                        builder.UseEnvironment("test");
 
-                    builder.ConfigureServices(
-                        services =>
-                        {
-                            TestRegistrationServices?.Invoke(services);
-                            services.ReplaceSingleton(AddHttpContextAccessorMock);
+                        builder.ConfigureServices(
+                            services =>
+                            {
+                                TestRegistrationServices?.Invoke(services);
+                                services.ReplaceSingleton(AddHttpContextAccessorMock);
 
-                            services.AddSingleton<PersistMessageBackgroundService>();
-                            services.RemoveHostedService<PersistMessageBackgroundService>();
+                                services.AddSingleton<PersistMessageBackgroundService>();
+                                services.RemoveHostedService<PersistMessageBackgroundService>();
 
-                            // Register all ITestDataSeeder implementations dynamically
-                            services.Scan(scan => scan
-                                              .FromApplicationDependencies() // Scan the current app and its dependencies
-                                              .AddClasses(classes => classes.AssignableTo<ITestDataSeeder>()) // Find classes that implement ITestDataSeeder
-                                              .AsImplementedInterfaces()
-                                              .WithScopedLifetime());
+                                // Register all ITestDataSeeder implementations dynamically
+                                services.Scan(scan => scan
+                                                  .FromApplicationDependencies() // Scan the current app and its dependencies
+                                                  .AddClasses(classes => classes.AssignableTo<ITestDataSeeder>()) // Find classes that implement ITestDataSeeder
+                                                  .AsImplementedInterfaces()
+                                                  .WithScopedLifetime());
 
-                            // Add Fake JWT Authentication - we can use SetAdminUser method to set authenticate user to existing HttContextAccessor
-                            // https://github.com/webmotions/fake-authentication-jwtbearer
-                            // https://github.com/webmotions/fake-authentication-jwtbearer/issues/14
-                            services.AddAuthentication(
-                                    options =>
+                                // Add Fake JWT Authentication - we can use SetAdminUser method to set authenticate user to existing HttContextAccessor
+                                // https://github.com/webmotions/fake-authentication-jwtbearer
+                                // https://github.com/webmotions/fake-authentication-jwtbearer/issues/14
+                                services.AddAuthentication(
+                                        options =>
+                                        {
+                                            options.DefaultAuthenticateScheme = FakeJwtBearerDefaults.AuthenticationScheme;
+
+                                            options.DefaultChallengeScheme = FakeJwtBearerDefaults.AuthenticationScheme;
+                                        })
+                                    .AddFakeJwtBearer();
+
+                                // Mock Authorization Policies
+                                services.AddAuthorizationBuilder()
+                                    .AddPolicy(nameof(ApiScope), policy =>
                                     {
-                                        options.DefaultAuthenticateScheme = FakeJwtBearerDefaults.AuthenticationScheme;
-
-                                        options.DefaultChallengeScheme = FakeJwtBearerDefaults.AuthenticationScheme;
-                                    })
-                                .AddFakeJwtBearer();
-
-                            // Mock Authorization Policies
-                            services.AddAuthorization(options =>
-                                   {
-                                       options.AddPolicy(nameof(ApiScope), policy =>
-                                       {
-                                           policy.AddAuthenticationSchemes(FakeJwtBearerDefaults.AuthenticationScheme);
-                                           policy.RequireAuthenticatedUser();
-                                           policy.RequireClaim("scope", "flight-api"); // Test-specific scope
-                                       });
-                                   });
-                        });
-                });
+                                        policy.AddAuthenticationSchemes(FakeJwtBearerDefaults.AuthenticationScheme);
+                                        policy.RequireAuthenticatedUser();
+                                        policy.RequireClaim("scope", "flight-api"); // Test-specific scope
+                                    });
+                            });
+                    });
+#pragma warning restore CA2000 // Dispose objects before losing scope
+        }
+        catch
+        {
+            // CA2000: Ensure factory is disposed if constructor fails
+            _factory?.Dispose();
+            throw;
+        }
     }
 
     public async Task InitializeAsync()
@@ -148,7 +157,7 @@ where TEntryPoint : class
             await CancellationTokenSource.CancelAsync();
         }
         Dispose();
-        GC.SuppressFinalize(this);
+        // CA1816: Do not call GC.SuppressFinalize in DisposeAsync - only in Dispose()
     }
 
     public void Dispose()
@@ -378,7 +387,7 @@ where TEntryPoint : class
     {
         //todo: provide better approach for reading `PostgresOptions`
         configuration.AddInMemoryCollection(
-            new KeyValuePair<string, string>[]
+            new KeyValuePair<string, string?>[]
             {
                 new(
                     "PostgresOptions:ConnectionString",
@@ -550,13 +559,13 @@ where TWContext : DbContext
             });
     }
 
-    public Task<T> FindAsync<T, TKey>(TKey id)
+    public Task<T?> FindAsync<T, TKey>(TKey id)
     where T : class, IEntity
     {
         return ExecuteDbContextAsync(db => db.Set<T>().FindAsync(id).AsTask());
     }
 
-    public Task<T> FirstOrDefaultAsync<T>()
+    public Task<T?> FirstOrDefaultAsync<T>()
     where T : class, IEntity
     {
         return ExecuteDbContextAsync(db => db.Set<T>().FirstOrDefaultAsync());
@@ -565,7 +574,7 @@ where TWContext : DbContext
 
 public class TestReadFixture<TEntryPoint, TRContext> : TestFixture<TEntryPoint>
 where TEntryPoint : class
-where TRContext : MongoDbContext
+where TRContext : DbContext, IDbContext
 {
     public Task ExecuteReadContextAsync(Func<TRContext, Task> action)
     {
@@ -577,14 +586,11 @@ where TRContext : MongoDbContext
         return ExecuteScopeAsync(sp => action(sp.GetRequiredService<TRContext>()));
     }
 
-    public async Task InsertMongoDbContextAsync<T>(string collectionName, params T[] entities)
-    where T : class
+    [Obsolete("MongoDB support has been removed. Use PostgreSQL-based testing instead.")]
+    public Task InsertMongoDbContextAsync<T>(string collectionName, params T[] entities)
+        where T : class
     {
-        await ExecuteReadContextAsync(
-            async db =>
-            {
-                await db.GetCollection<T>(collectionName).InsertManyAsync(entities.ToList());
-            });
+        throw new NotSupportedException("MongoDB support has been removed from the test framework. Use PostgreSQL-based testing instead.");
     }
 }
 
@@ -592,7 +598,7 @@ public class TestFixture<TEntryPoint, TWContext, TRContext>
     : TestWriteFixture<TEntryPoint, TWContext>
 where TEntryPoint : class
 where TWContext : DbContext
-where TRContext : MongoDbContext
+where TRContext : DbContext, IDbContext
 {
     public Task ExecuteReadContextAsync(Func<TRContext, Task> action)
     {
@@ -604,14 +610,11 @@ where TRContext : MongoDbContext
         return ExecuteScopeAsync(sp => action(sp.GetRequiredService<TRContext>()));
     }
 
-    public async Task InsertMongoDbContextAsync<T>(string collectionName, params T[] entities)
-    where T : class
+    [Obsolete("MongoDB support has been removed. Use PostgreSQL-based testing instead.")]
+    public Task InsertMongoDbContextAsync<T>(string collectionName, params T[] entities)
+        where T : class
     {
-        await ExecuteReadContextAsync(
-            async db =>
-            {
-                await db.GetCollection<T>(collectionName).InsertManyAsync(entities.ToList());
-            });
+        throw new NotSupportedException("MongoDB support has been removed from the test framework. Use PostgreSQL-based testing instead.");
     }
 }
 
@@ -647,6 +650,19 @@ where TEntryPoint : class
         await ResetPostgresAsync();
         await ResetMongoAsync();
         await ResetRabbitMqAsync();
+        
+        // CA2000: Dispose database connections
+        if (DefaultDbConnection != null)
+        {
+            await DefaultDbConnection.DisposeAsync();
+            DefaultDbConnection = null;
+        }
+        
+        if (PersistDbConnection != null)
+        {
+            await PersistDbConnection.DisposeAsync();
+            PersistDbConnection = null;
+        }
     }
 
     private async Task InitPostgresAsync()
@@ -766,7 +782,7 @@ where TEntryPoint : class
 public abstract class TestReadBase<TEntryPoint, TRContext> : TestFixtureCore<TEntryPoint>
 // ,IClassFixture<IntegrationTestFactory<TEntryPoint, TWContext>>
 where TEntryPoint : class
-where TRContext : MongoDbContext
+where TRContext : DbContext, IDbContext
 {
     protected TestReadBase(
         TestReadFixture<TEntryPoint, TRContext> integrationTestFixture,
@@ -799,7 +815,7 @@ public abstract class TestBase<TEntryPoint, TWContext, TRContext> : TestFixtureC
 //,IClassFixture<IntegrationTestFactory<TEntryPoint, TWContext, TRContext>>
 where TEntryPoint : class
 where TWContext : DbContext
-where TRContext : MongoDbContext
+where TRContext : DbContext, IDbContext
 {
     protected TestBase(
         TestFixture<TEntryPoint, TWContext, TRContext> integrationTestFixture,

@@ -1,0 +1,4 @@
+{
+  "name": "Axon Backend - .NET 10 Clean Architecture",
+  "image":"mcr.microsoft.com/devcontainers/base:ubuntu",
+}

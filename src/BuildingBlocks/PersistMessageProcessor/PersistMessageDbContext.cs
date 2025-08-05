@@ -1,5 +1,7 @@
+using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Model;
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using IsolationLevel = System.Data.IsolationLevel;
@@ -21,8 +23,51 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        Guard.Against.Null(builder, nameof(builder));
+        
         base.OnModelCreating(builder);
         builder.ToSnakeCaseTables();
+        
+        // Configure PersistMessage entity
+        builder.Entity<PersistMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            entity.Property(e => e.DataType)
+                .IsRequired()
+                .HasMaxLength(500);
+            
+            entity.Property(e => e.Data)
+                .IsRequired();
+            
+            entity.Property(e => e.Created)
+                .IsRequired();
+            
+            entity.Property(e => e.RetryCount)
+                .IsRequired()
+                .HasDefaultValue(0);
+            
+            entity.Property(e => e.MessageStatus)
+                .IsRequired()
+                .HasConversion<string>()
+                .HasDefaultValue(MessageStatus.InProgress);
+            
+            entity.Property(e => e.DeliveryType)
+                .IsRequired()
+                .HasConversion<string>()
+                .HasDefaultValue(MessageDeliveryType.Outbox);
+            
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsConcurrencyToken();
+            
+            // Index for better query performance
+            entity.HasIndex(e => new { e.MessageStatus, e.DeliveryType })
+                .HasDatabaseName("ix_persist_message_status_delivery");
+            
+            entity.HasIndex(e => e.Created)
+                .HasDatabaseName("ix_persist_message_created");
+        });
     }
 
     //ref: https://learn.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency#execution-strategies-and-transactions
@@ -38,7 +83,12 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
                 await SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+            catch (InvalidOperationException)
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw;

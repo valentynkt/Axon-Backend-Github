@@ -27,7 +27,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
             return await next();
 
         var cacheKey = cacheRequest.CacheKey;
-        var cachedResponse = await _cachingProvider.GetAsync<TResponse>(cacheKey);
+        var cachedResponse = await _cachingProvider.GetAsync<TResponse>(cacheKey, cancellationToken);
         if (cachedResponse.Value != null)
         {
             _logger.LogDebug("Response retrieved {TRequest} from cache. CacheKey: {CacheKey}",
@@ -40,7 +40,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         var expirationTime = cacheRequest.AbsoluteExpirationRelativeToNow ??
                              DateTime.Now.AddHours(defaultCacheExpirationInHours);
 
-        await _cachingProvider.SetAsync(cacheKey, response, expirationTime.TimeOfDay);
+        await _cachingProvider.SetAsync(cacheKey, response, expirationTime.TimeOfDay, cancellationToken);
 
         _logger.LogDebug("Caching response for {TRequest} with cache key: {CacheKey}", typeof(TRequest).FullName,
             cacheKey);

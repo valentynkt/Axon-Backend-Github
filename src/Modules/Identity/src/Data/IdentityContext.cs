@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Persistence.Infrastructure;
 using Identity.Identity.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +24,9 @@ public sealed class IdentityContext : IdentityDbContext<User, Role, Guid,
     private readonly ILogger<IdentityContext>? _logger;
     private IDbContextTransaction _currentTransaction;
 
-    public IdentityContext(DbContextOptions<IdentityContext> options, ILogger<IdentityContext>? logger = null) : base(options)
+    public IdentityContext(DbContextOptions<IdentityContext> options, IDbContextTransaction currentTransaction, ILogger<IdentityContext>? logger = null) : base(options)
     {
+        _currentTransaction = currentTransaction;
         _logger = logger;
     }
 
@@ -116,7 +117,7 @@ public sealed class IdentityContext : IdentityDbContext<User, Role, Guid,
 
                 if (databaseValues == null)
                 {
-                    _logger.LogError("The record no longer exists in the database, The record has been deleted by another user.");
+                    _logger?.LogError("The record no longer exists in the database, The record has been deleted by another user.");
                     throw;
                 }
 
@@ -142,7 +143,7 @@ public sealed class IdentityContext : IdentityDbContext<User, Role, Guid,
 
         domainEntities.ForEach(entity => entity.ClearDomainEvents());
 
-        return domainEvents.ToImmutableList();
+        return domainEvents;
     }
 
     private void OnBeforeSaving()

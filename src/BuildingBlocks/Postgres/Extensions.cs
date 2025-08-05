@@ -1,10 +1,12 @@
-using BuildingBlocks.EFCore;
+using System;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+
 
 namespace BuildingBlocks.Postgres;
 
@@ -20,7 +22,7 @@ public static class Extensions
     public static IServiceCollection AddPostgresDbContext<TContext>(
         this WebApplicationBuilder builder,
         Action<PostgresOptions>? configurator = null)
-        where TContext : PostgresDbContext
+        where TContext : DbContext, IDbContext
     {
         return builder.Services.AddPostgresDbContext<TContext>(builder.Configuration, configurator);
     }
@@ -32,7 +34,7 @@ public static class Extensions
         this IServiceCollection services,
         IConfiguration configuration,
         Action<PostgresOptions>? configurator = null)
-        where TContext : PostgresDbContext
+        where TContext : DbContext, IDbContext
     {
         // Configure PostgreSQL options
         services.AddOptions<PostgresOptions>()
@@ -78,7 +80,7 @@ public static class Extensions
         });
 
         // Register context interfaces
-        services.AddScoped<IPostgresDbContext>(provider => provider.GetRequiredService<TContext>());
+        services.AddScoped<IDbContext>(provider => provider.GetRequiredService<TContext>());
         
         // Register repositories
         services.AddPostgresRepositories();
@@ -90,41 +92,29 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Add PostgreSQL repositories
+    /// Add PostgreSQL repositories - DEPRECATED
+    /// Use BuildingBlocks.Persistence registrations instead
     /// </summary>
+    [Obsolete("Use BuildingBlocks.Persistence repository registrations instead. This method will be removed in a future version.")]
     public static IServiceCollection AddPostgresRepositories(this IServiceCollection services)
     {
-        // Register generic repositories (Postgres-style)
-        services.AddScoped(typeof(IRepository<,>), typeof(PostgresRepository<,>));
-        services.AddScoped(typeof(IRepository<>), typeof(PostgresRepository<>));
-        
-        // Register read/write specific repositories
-        services.AddScoped(typeof(IReadRepository<,>), typeof(PostgresRepository<,>));
-        services.AddScoped(typeof(IWriteRepository<,>), typeof(PostgresRepository<,>));
-        
-        // REMOVED: Incorrect IEfRepository registrations
-        // PostgresRepository does NOT implement IEfRepository interfaces
-        // IEfRepository requires IAggregate<TId>, but PostgresRepository works with IEntity<TId>
-        
-        return services;
+        // REMOVED: PostgreSQL repository classes have been deleted
+        // Use BuildingBlocks.Persistence.Read.PostgresReadRepository and 
+        // BuildingBlocks.Persistence.Write.PostgresWriteRepository instead
+        throw new NotSupportedException("PostgreSQL repository registrations removed. Use BuildingBlocks.Persistence instead.");
     }
 
     /// <summary>
-    /// Add PostgreSQL Unit of Work services
+    /// Add PostgreSQL Unit of Work services - DEPRECATED
+    /// Use BuildingBlocks.Persistence Unit of Work registrations instead
     /// </summary>
+    [Obsolete("Use BuildingBlocks.Persistence.Write.PostgresWriteUnitOfWork registrations instead. This method will be removed in a future version.")]
     public static IServiceCollection AddPostgresUnitOfWork<TContext>(this IServiceCollection services)
-        where TContext : class, IPostgresDbContext
+        where TContext : class, IDbContext
     {
-        // Register Postgres-style Unit of Work
-        services.AddScoped<IUnitOfWork, PostgresUnitOfWork>();
-        services.AddScoped<IUnitOfWork<TContext>, PostgresUnitOfWork<TContext>>();
-        services.AddScoped<IPostgresUnitOfWork<TContext>, PostgresRepositoryUnitOfWork<TContext>>();
-        
-        // REMOVED: Incorrect IEfUnitOfWork registrations
-        // PostgresUnitOfWork does NOT implement IEfUnitOfWork interfaces
-        // Method signatures are incompatible: CommitAsync() vs CommitTransactionAsync()
-        
-        return services;
+        // REMOVED: PostgreSQL Unit of Work classes have been deleted
+        // Use BuildingBlocks.Persistence.Write.PostgresWriteUnitOfWork instead
+        throw new NotSupportedException("PostgreSQL Unit of Work registrations removed. Use BuildingBlocks.Persistence instead.");
     }
 
     /// <summary>
@@ -225,7 +215,7 @@ public static class Extensions
         IConfiguration configuration, 
         Action<PostgresOptions>? configurator = null)
         where TContextService : class, IDbContext
-        where TContextImplementation : PostgresDbContext, TContextService
+        where TContextImplementation : DbContext, IDbContext, TContextService
     {
         // Configure PostgresOptions with Aspire-aware defaults
         services.AddOptions<PostgresOptions>()
@@ -248,7 +238,7 @@ public static class Extensions
         // Register Entity Framework DbContext
         services.AddDbContext<TContextImplementation>((serviceProvider, options) =>
         {
-            var postgresOptions = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<PostgresOptions>>().Value;
+            var postgresOptions = serviceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
             
             options.UseNpgsql(postgresOptions.ConnectionString, npgsqlOptions =>
             {
@@ -272,7 +262,7 @@ public static class Extensions
         services.AddPostgresRepositories();
         
         // Register Unit of Work services with proper constraint handling
-        services.AddScoped<IUnitOfWork, PostgresUnitOfWork>();
+        // PostgresUnitOfWork removed - use BuildingBlocks.Persistence instead
         
         // REMOVED: Incorrect IEfUnitOfWork registrations
         // PostgresUnitOfWork does NOT implement IEfUnitOfWork interfaces

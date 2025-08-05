@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using NpgsqlTypes;
 using System.Reflection;
+using Axon.BuildingBlocks.Persistence.Common;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
 
@@ -18,11 +19,12 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence;
 /// Features: outbox pattern, audit interceptor, domain event interceptor, backing fields mapping
 /// Configured for high-performance concurrent operations with optimistic locking
 /// </summary>
-public sealed class ChatDbContext : DbContext
+/// <summary>
+/// Chat Write DbContext - Handles command operations (Create, Update, Delete)
+/// Implements Event Sourcing and CQRS patterns with PostgreSQL optimizations
+/// </summary>
+public sealed class ChatWriteDbContext : WriteDbContextBase<ChatWriteDbContext>
 {
-    private readonly AuditSaveChangesInterceptor _auditInterceptor;
-    private readonly DomainEventInterceptor _domainEventInterceptor;
-
     /// <summary>
     /// Conversations aggregate root with domain events
     /// </summary>
@@ -48,20 +50,158 @@ public sealed class ChatDbContext : DbContext
     /// </summary>
     public DbSet<EventCorrelation> EventCorrelations { get; set; } = default!;
 
+    public ChatWriteDbContext(
+        DbContextOptions<ChatWriteDbContext> options,
+        AuditSaveChangesInterceptor auditInterceptor,
+        DomainEventInterceptor domainEventInterceptor) : base(options, auditInterceptor, domainEventInterceptor)
+    {
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Set default schema for Chat module
+        modelBuilder.HasDefaultSchema("chat");
+
+        // Apply all entity configurations from assembly
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+        // Explicitly ignore ConversationSnapshot to prevent EF Core from treating it as an entity
+        modelBuilder.Ignore<ConversationSnapshot>();
+        
+        // Configure PostgreSQL extensions and optimizations
+        ConfigurePostgreSqlExtensions(modelBuilder);
+    }
+
+    /// <summary>
+    /// Configures PostgreSQL extensions required for advanced features
+    /// </summary>
+    private static void ConfigurePostgreSqlExtensions(ModelBuilder modelBuilder)
+    {
+        // Enable UUID generation extension
+        modelBuilder.HasPostgresExtension("uuid-ossp");
+        
+        // Enable full-text search extension
+        modelBuilder.HasPostgresExtension("pg_trgm");
+        
+        // Enable unaccent extension for better text search
+        modelBuilder.HasPostgresExtension("unaccent");
+        
+        // Enable btree_gin extension for composite indexes
+        modelBuilder.HasPostgresExtension("btree_gin");
+        
+        // Enable pg_stat_statements for query performance monitoring
+        modelBuilder.HasPostgresExtension("pg_stat_statements");
+    }
+}
+
+/// <summary>
+/// Chat Read DbContext - Handles query operations (Read)
+/// Optimized for read performance with compiled queries
+/// </summary>
+public sealed class ChatReadDbContext : ReadDbContextBase<ChatReadDbContext>
+{
+    /// <summary>
+    /// Conversations aggregate root - read-only
+    /// </summary>
+    public DbSet<Conversation> Conversations { get; set; } = default!;
+
+    /// <summary>
+    /// Messages entity - read-only
+    /// </summary>
+    public DbSet<Message> Messages { get; set; } = default!;
+
     /// <summary>
     /// Conversation read models for CQRS query optimization
     /// Note: Temporarily commented out due to SearchVector tsvector mapping issues
     /// </summary>
     // public DbSet<ConversationReadModel> ConversationReadModels { get; set; } = default!;
 
-    public ChatDbContext(
-        DbContextOptions<ChatDbContext> options,
-        AuditSaveChangesInterceptor auditInterceptor,
-        DomainEventInterceptor domainEventInterceptor) : base(options)
+    public ChatReadDbContext(DbContextOptions<ChatReadDbContext> options) : base(options)
     {
-        _auditInterceptor = auditInterceptor;
-        _domainEventInterceptor = domainEventInterceptor;
     }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Set default schema for Chat module
+        modelBuilder.HasDefaultSchema("chat");
+
+        // Apply all entity configurations from assembly
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+        // Explicitly ignore ConversationSnapshot to prevent EF Core from treating it as an entity
+        modelBuilder.Ignore<ConversationSnapshot>();
+        
+        // Configure full-text search for conversation content
+        ConfigureFullTextSearch(modelBuilder);
+    }
+
+    /// <summary>
+    /// Configures full-text search capabilities for conversation content
+    /// Note: Temporarily disabled due to EF Core tsvector mapping limitations
+    /// </summary>
+    private static void ConfigureFullTextSearch(ModelBuilder modelBuilder)
+    {
+        // Configure full-text search for conversation read models (commented out for now)
+        // modelBuilder.Entity<ConversationReadModel>(entity =>
+        // {
+        //     // Create GIN index for full-text search
+        //     entity.HasIndex(e => e.SearchVector)
+        //         .HasMethod("GIN")
+        //         .HasDatabaseName("ix_conversation_read_models_search_vector");
+        //
+        //     // Configure search vector as computed column
+        //     entity.Property(e => e.SearchVector)
+        //         .HasColumnType("text")
+        //         .HasComputedColumnSql("to_tsvector('english', title || ' ' || context)", stored: true);
+        // });
+        
+        // Suppress unused parameter warning
+        _ = modelBuilder;
+    }
+
+    /// <summary>
+    /// Compiled queries for high-performance data access
+    /// Implements query optimization patterns for CQRS read operations
+    /// </summary>
+    public static class CompiledQueries
+    {
+        /// <summary>
+        /// Get conversation by ID with messages - compiled for performance
+        /// </summary>
+        public static readonly Func<ChatReadDbContext, ConversationId, IAsyncEnumerable<Conversation>> GetConversationById =
+            EF.CompileAsyncQuery((ChatReadDbContext context, ConversationId id) =>
+                context.Conversations
+                    .AsSplitQuery()
+                    .Where(c => c.Id == id));
+
+        /// <summary>
+        /// Get conversations by user with pagination - compiled for performance
+        /// </summary>
+        public static readonly Func<ChatReadDbContext, string, int, int, IAsyncEnumerable<Conversation>> GetConversationsByUser =
+            EF.CompileAsyncQuery((ChatReadDbContext context, string userId, int skip, int take) =>
+                context.Conversations
+                    .Where(c => c.UserId == userId)
+                    .OrderByDescending(c => EF.Property<DateTime>(c, "_updatedAtUtc"))
+                    .Skip(skip)
+                    .Take(take));
+
+        /// <summary>
+        /// Full-text search conversations - compiled for performance
+        /// Note: Temporarily commented out due to ConversationReadModel SearchVector issues
+        /// </summary>
+        // public static readonly Func<ChatReadDbContext, string, int, IAsyncEnumerable<ConversationReadModel>> SearchConversations =
+        //     EF.CompileAsyncQuery((ChatReadDbContext context, string searchTerm, int take) =>
+        //         context.ConversationReadModels
+        //             .Where(c => c.IsActive)
+        //             .Where(c => EF.Functions.ToTsVector("english", c.Title + " " + c.Context).Matches(EF.Functions.ToTsQuery("english", searchTerm)))
+        //             .OrderByDescending(c => c.LastMessageAt)
+        //             .Take(take));
+    }
+}
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

@@ -1,3 +1,4 @@
+using System;
 using Axon.Modules.Chat.Application.Repositories;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
@@ -6,11 +7,12 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence;
 /// Unit of Work implementation with transaction management capabilities
 /// Follows SPARC architecture patterns with enhanced transaction support
 /// </summary>
+[Obsolete("Use IWriteUnitOfWork from BuildingBlocks.Persistence instead. This will be removed in a future version.")]
 public sealed class UnitOfWork : IUnitOfWork
 {
-    private readonly ChatDbContext _context;
+    private readonly ChatWriteDbContext _context;
 
-    public UnitOfWork(ChatDbContext context)
+    public UnitOfWork(ChatWriteDbContext context)
     {
         _context = context;
     }

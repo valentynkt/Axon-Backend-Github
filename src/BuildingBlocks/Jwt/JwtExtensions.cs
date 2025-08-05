@@ -40,36 +40,32 @@ namespace BuildingBlocks.Jwt
             });
 
 
-            services.AddAuthorization(
-                options =>
-                {
-                    options.AddPolicy(
-                        nameof(ApiScope),
-                        policy =>
-                        {
-                            policy.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
-                            policy.RequireAuthenticatedUser();
-                            policy.RequireClaim("scope", jwtOptions.Audience ?? string.Empty);
-                        });
-
-                    // Role-based policies
-                    options.AddPolicy(
-                        IdentityConstant.Role.Admin,
-                        x =>
-                        {
-                            x.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
-                            x.RequireRole(IdentityConstant.Role.Admin);
-                        }
-                    );
-                    options.AddPolicy(
-                        IdentityConstant.Role.User,
-                        x =>
-                        {
-                            x.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
-                            x.RequireRole(IdentityConstant.Role.User);
-                        }
-                    );
-                });
+            services.AddAuthorizationBuilder()
+                .AddPolicy(
+                    nameof(ApiScope),
+                    policy =>
+                    {
+                        policy.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
+                        policy.RequireAuthenticatedUser();
+                        policy.RequireClaim("scope", jwtOptions.Audience ?? string.Empty);
+                    })
+                // Role-based policies
+                .AddPolicy(
+                    IdentityConstant.Role.Admin,
+                    x =>
+                    {
+                        x.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
+                        x.RequireRole(IdentityConstant.Role.Admin);
+                    }
+                )
+                .AddPolicy(
+                    IdentityConstant.Role.User,
+                    x =>
+                    {
+                        x.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
+                        x.RequireRole(IdentityConstant.Role.User);
+                    }
+                );
 
             return services;
         }

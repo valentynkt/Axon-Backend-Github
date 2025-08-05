@@ -16,7 +16,7 @@ public static class MinimalApiExtensions
         params Assembly[] assemblies)
     {
 
-        var scanAssemblies = assemblies.Any()
+        var scanAssemblies = assemblies.Length > 0
             ? assemblies
             : TypeProvider.GetReferencedAssemblies(Assembly.GetCallingAssembly())
                 .Concat(TypeProvider.GetApplicationPartAssemblies(Assembly.GetCallingAssembly()))
@@ -25,7 +25,7 @@ public static class MinimalApiExtensions
 
         applicationBuilder.Services.Scan(scan => scan
             .FromAssemblies(scanAssemblies)
-            .AddClasses(classes => classes.AssignableTo(typeof(IMinimalEndpoint)))
+            .AddClasses(classes => classes.AssignableTo<IMinimalEndpoint>())
             .UsingRegistrationStrategy(RegistrationStrategy.Append)
             .As<IMinimalEndpoint>()
             .WithLifetime(lifetime));
@@ -40,7 +40,7 @@ public static class MinimalApiExtensions
     /// <returns>IEndpointRouteBuilder.</returns>
     public static IEndpointRouteBuilder MapMinimalEndpoints(this IEndpointRouteBuilder builder)
     {
-        var scope = builder.ServiceProvider.CreateScope();
+        using var scope = builder.ServiceProvider.CreateScope();
 
         var endpoints = scope.ServiceProvider.GetServices<IMinimalEndpoint>();
 

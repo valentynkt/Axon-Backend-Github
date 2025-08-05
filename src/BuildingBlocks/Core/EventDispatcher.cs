@@ -90,7 +90,7 @@ public sealed class EventDispatcher(
         foreach (var @event in events)
         {
             var eventType = @event.GetType();
-            logger.LogTrace($"Handling domain event: {eventType.Name}");
+            logger.LogTrace("Handling domain event: {EventTypeName}", eventType.Name);
 
             var integrationEvent = eventMapper.MapToIntegrationEvent(@event);
 
@@ -116,7 +116,7 @@ public sealed class EventDispatcher(
         foreach (var @event in events)
         {
             var eventType = @event.GetType();
-            logger.LogTrace($"Handling domain event: {eventType.Name}");
+            logger.LogTrace("Handling domain event: {EventTypeName}", eventType.Name);
 
             var integrationEvent = eventMapper.MapToInternalCommand(@event);
 
@@ -131,7 +131,7 @@ public sealed class EventDispatcher(
         return Task.FromResult<IReadOnlyList<IInternalCommand>>(internalCommands);
     }
 
-    private IEnumerable<IIntegrationEvent> GetWrappedIntegrationEvents(IReadOnlyList<IDomainEvent> domainEvents)
+    private static IEnumerable<IIntegrationEvent> GetWrappedIntegrationEvents(IReadOnlyList<IDomainEvent> domainEvents)
     {
         foreach (var domainEvent in domainEvents.Where(x =>
                      x is IHaveIntegrationEvent))
@@ -146,7 +146,7 @@ public sealed class EventDispatcher(
         }
     }
 
-    private IDictionary<string, object?> SetHeaders()
+    private Dictionary<string, object?> SetHeaders()
     {
         var headers = new Dictionary<string, object?>();
         

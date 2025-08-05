@@ -1,10 +1,17 @@
 using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Model;
-namespace BuildingBlocks.PersistMessageProcessor;
 
+namespace BuildingBlocks.PersistMessageProcessor;
 
 public class PersistMessage : IVersion
 {
+    // Private constructor for EF Core
+    private PersistMessage()
+    {
+        DataType = string.Empty;
+        Data = string.Empty;
+    }
+
     public PersistMessage(Guid id, string dataType, string data, MessageDeliveryType deliveryType)
     {
         Id = id;
@@ -17,8 +24,8 @@ public class PersistMessage : IVersion
     }
 
     public Guid Id { get; private set; }
-    public string DataType { get; private set; }
-    public string Data { get; private set; }
+    public string DataType { get; private set; } = string.Empty;
+    public string Data { get; private set; } = string.Empty;
     public DateTime Created { get; private set; }
     public int RetryCount { get; private set; }
     public MessageStatus MessageStatus { get; private set; }

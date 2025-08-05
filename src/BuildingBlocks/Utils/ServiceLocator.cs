@@ -10,7 +10,7 @@ public class ServiceLocator
 
     public ServiceLocator(IServiceProvider currentServiceProvider)
     {
-        _currentServiceProvider = currentServiceProvider;
+        _currentServiceProvider = currentServiceProvider ?? throw new ArgumentNullException(nameof(currentServiceProvider));
     }
 
     public static ServiceLocator Current

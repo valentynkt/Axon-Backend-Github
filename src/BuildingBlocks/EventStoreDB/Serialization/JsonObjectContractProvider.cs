@@ -39,7 +39,7 @@ public static class JsonObjectContractProvider
         if (c == null)
             return a => method.Invoke(null, a)!;
 
-        if (!c.GetParameters().Any())
+        if (c.GetParameters().Length == 0)
             return _ => c.Invoke(Array.Empty<object?>());
 
         return a => c.Invoke(a);

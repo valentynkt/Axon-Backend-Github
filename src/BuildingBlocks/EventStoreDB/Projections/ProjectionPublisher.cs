@@ -30,7 +30,7 @@ public class ProjectionPublisher : IProjectionPublisher
 
         var method = typeof(IProjectionPublisher)
             .GetMethods()
-            .Single(m => m.Name == nameof(PublishAsync) && m.GetGenericArguments().Any())
+            .Single(m => m.Name == nameof(PublishAsync) && m.GetGenericArguments().Length > 0)
             .MakeGenericMethod(streamData);
 
         return (Task)method

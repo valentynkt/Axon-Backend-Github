@@ -22,11 +22,17 @@ public static class Extensions
         builder.Services.AddDbContext<PersistMessageDbContext>(
             (sp, options) =>
             {
-                var aspireConnectionString = builder.Configuration.GetConnectionString(connectionName.Kebaberize());
+                var aspireConnectionString = builder.Configuration.GetConnectionString(connectionName?.Kebaberize() ?? "persist-message");
+                var persistMessageOptions = sp.GetService<PersistMessageOptions>();
+                
+                var connectionString = aspireConnectionString ?? persistMessageOptions?.ConnectionString;
 
-                var connectionString = aspireConnectionString ?? sp.GetRequiredService<PersistMessageOptions>().ConnectionString;
-
-                ArgumentException.ThrowIfNullOrEmpty(connectionString);
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    throw new ArgumentException(
+                        $"Connection string not found. Please provide either a connection string named '{connectionName?.Kebaberize()}' " +
+                        "in configuration or set PersistMessageOptions.ConnectionString");
+                }
 
                 options.UseNpgsql(
                         connectionString,
@@ -38,7 +44,7 @@ public static class Extensions
                     // https://github.com/efcore/EFCore.NamingConventions
                     .UseSnakeCaseNamingConvention();
 
-                // Todo: follow up the issues of .net 9 to use better approach taht will provide by .net!
+                // Todo: follow up the issues of .net 9 to use better approach that will provided by .net!
                 options.ConfigureWarnings(
                     w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
             });

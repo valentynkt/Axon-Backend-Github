@@ -15,9 +15,30 @@ public class GrpcExceptionInterceptor : Interceptor
         {
             return await continuation(request, context);
         }
-        catch (System.Exception exception)
+        catch (RpcException)
         {
-            throw new RpcException(new Status(StatusCode.Internal, exception.Message));
+            // Re-throw gRPC exceptions as-is to preserve status codes
+            throw;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, exception.Message));
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, exception.Message));
+        }
+        catch (TimeoutException exception)
+        {
+            throw new RpcException(new Status(StatusCode.DeadlineExceeded, exception.Message));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, exception.Message));
+        }
+        catch (NotImplementedException exception)
+        {
+            throw new RpcException(new Status(StatusCode.Unimplemented, exception.Message));
         }
     }
 }

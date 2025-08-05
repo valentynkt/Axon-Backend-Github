@@ -17,8 +17,8 @@ public static class Extensions
             .Handle<Exception>()
             .Retry(retryCount, (exception, retryAttempt, context) =>
                                {
-                                   Logger.LogInformation($"Retry attempt: {retryAttempt}");
-                                   Logger.LogError($"Exception: {exception.Message}");
+                                   Logger.LogInformation("Retry attempt: {RetryAttempt}", retryAttempt);
+                                   Logger.LogError("Exception: {ExceptionMessage}", exception.Message);
                                });
 
         return retryPolicy.Execute(action);

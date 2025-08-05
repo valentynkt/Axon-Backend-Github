@@ -1,5 +1,10 @@
 using BuildingBlocks.Constants;
+using BuildingBlocks.Persistence.Common;
+using BuildingBlocks.Persistence.Write;
 using Duende.IdentityServer.EntityFramework.Entities;
+using Identity.Data;
+using Identity.Repositories;
+using Microsoft.AspNetCore.Identity;
 
 namespace Identity.Identity.Features.RegisteringNewUser.V1;
 
@@ -90,12 +95,19 @@ public class RegisterNewUserValidator : AbstractValidator<RegisterNewUser>
 internal class RegisterNewUserHandler : ICommandHandler<RegisterNewUser, RegisterNewUserResult>
 {
     private readonly IEventDispatcher _eventDispatcher;
-    private readonly UserManager<User> _userManager;
+    private readonly IUserWriteRepository _userWriteRepository;
+    private readonly IWriteUnitOfWork<IdentityWriteContext> _unitOfWork;
+    private readonly IPasswordHasher<User> _passwordHasher;
 
-    public RegisterNewUserHandler(UserManager<User> userManager,
+    public RegisterNewUserHandler(
+        IUserWriteRepository userWriteRepository,
+        IWriteUnitOfWork<IdentityWriteContext> unitOfWork,
+        IPasswordHasher<User> passwordHasher,
         IEventDispatcher eventDispatcher)
     {
-        _userManager = userManager;
+        _userWriteRepository = userWriteRepository;
+        _unitOfWork = unitOfWork;
+        _passwordHasher = passwordHasher;
         _eventDispatcher = eventDispatcher;
     }
 
@@ -104,34 +116,40 @@ internal class RegisterNewUserHandler : ICommandHandler<RegisterNewUser, Registe
     {
         Guard.Against.Null(request, nameof(request));
 
-        var applicationUser = new User()
+        // Check if user already exists
+        if (await _userWriteRepository.ExistsByEmailAsync(request.Email, cancellationToken))
         {
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            UserName = request.Username,
-            Email = request.Email,
-            PasswordHash = request.Password,
-            PassPortNumber = request.PassportNumber
-        };
-
-        var identityResult = await _userManager.CreateAsync(applicationUser, request.Password);
-        var roleResult = await _userManager.AddToRoleAsync(applicationUser, IdentityConstant.Role.User);
-
-        if (identityResult.Succeeded == false)
-        {
-            throw new RegisterIdentityUserException(string.Join(',', identityResult.Errors.Select(e => e.Description)));
+            throw new RegisterIdentityUserException($"User with email {request.Email} already exists.");
         }
 
-        if (roleResult.Succeeded == false)
+        if (await _userWriteRepository.ExistsByUserNameAsync(request.Username, cancellationToken))
         {
-            throw new RegisterIdentityUserException(string.Join(',', roleResult.Errors.Select(e => e.Description)));
+            throw new RegisterIdentityUserException($"User with username {request.Username} already exists.");
         }
 
-        await _eventDispatcher.SendAsync(new UserCreated(applicationUser.Id,
-            applicationUser.FirstName + " " + applicationUser.LastName,
-            applicationUser.PassPortNumber), cancellationToken: cancellationToken);
+        // Create user aggregate using factory method
+        var user = User.Create(
+            request.FirstName,
+            request.LastName,
+            request.Username,
+            request.Email,
+            request.PassportNumber);
 
-        return new RegisterNewUserResult(applicationUser.Id, applicationUser.FirstName, applicationUser.LastName,
-            applicationUser.UserName, applicationUser.PassPortNumber);
+        // Hash the password
+        user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
+
+        // Add to repository
+        await _userWriteRepository.AddAsync(user, cancellationToken);
+
+        // Save changes and dispatch domain events
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Dispatch integration event
+        await _eventDispatcher.SendAsync(new UserCreated(user.Id,
+            user.FirstName + " " + user.LastName,
+            user.PassPortNumber), cancellationToken: cancellationToken);
+
+        return new RegisterNewUserResult(user.Id, user.FirstName, user.LastName,
+            user.UserName!, user.PassPortNumber);
     }
 }

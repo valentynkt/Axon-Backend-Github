@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using BuildingBlocks.Constants;
 using BuildingBlocks.Contracts.EventBus.Messages;
 using BuildingBlocks.Core;
-using BuildingBlocks.Postgres;
+using BuildingBlocks.Persistence.Infrastructure;
 using Identity.Identity.Constants;
 using Identity.Identity.Models;
 using Microsoft.AspNetCore.Identity;

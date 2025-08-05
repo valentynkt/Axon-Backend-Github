@@ -1,15 +1,13 @@
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.EventStoreDB;
 using BuildingBlocks.MassTransit;
-using BuildingBlocks.Mongo;
-using BuildingBlocks.Postgres;
+using BuildingBlocks.Persistence;
 using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
-using MongoDB.Driver;
 using RabbitMQ.Client;
 
 namespace BuildingBlocks.HealthCheck;
@@ -29,7 +27,6 @@ public static class Extensions
             var postgresOptions = services.GetOptions<PostgresOptions>(nameof(PostgresOptions));
             var rabbitMqOptions = services.GetOptions<RabbitMqOptions>(nameof(RabbitMqOptions));
             var eventStoreOptions = services.GetOptions<EventStoreOptions>(nameof(EventStoreOptions));
-            var mongoOptions = services.GetOptions<MongoOptions>(nameof(MongoOptions));
 
             var healthChecksBuilder = services.AddHealthChecks()
                 // Add a default liveness check to ensure app is responsive

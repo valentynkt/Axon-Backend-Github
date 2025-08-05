@@ -4,13 +4,16 @@ using Microsoft.AspNetCore.Routing;
 
 namespace BuildingBlocks.Web;
 
-public class SlugifyParameterTransformer : IOutboundParameterTransformer
+public sealed partial class SlugifyParameterTransformer : IOutboundParameterTransformer
 {
+    [GeneratedRegex("([a-z])([A-Z])", RegexOptions.None, "en-US")]
+    private static partial Regex SlugifyRegex();
+
     public string? TransformOutbound(object? value)
     {
         // Slugify value
         return value == null
             ? null
-            : Regex.Replace(value.ToString() ?? string.Empty, "([a-z])([A-Z])", "$1-$2").ToLower(CultureInfo.CurrentCulture);
+            : SlugifyRegex().Replace(value.ToString() ?? string.Empty, "$1-$2").ToLower(CultureInfo.CurrentCulture);
     }
 }

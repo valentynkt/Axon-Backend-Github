@@ -1,6 +1,8 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Model;
-using BuildingBlocks.Postgres;
+using BuildingBlocks.Persistence.Common;
+using BuildingBlocks.Persistence;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.Web;
 using Humanizer;
 using Microsoft.AspNetCore.Builder;
@@ -51,11 +53,7 @@ public static class Extensions
         // PostgresRepository does NOT implement IEfRepository interfaces
         // IEfRepository requires IAggregate<TId>, but PostgresRepository works with IEntity<TId>
         
-        // Register Unit of Work patterns
-        builder.Services.AddScoped<PostgresUnitOfWork>();
-        
-        // REMOVED: Incorrect IEfUnitOfWork registration
-        // PostgresUnitOfWork does NOT implement IEfUnitOfWork interfaces
+        // PostgresUnitOfWork was removed as part of the restructuring - use Persistence layer instead
 
         return builder.Services;
     }

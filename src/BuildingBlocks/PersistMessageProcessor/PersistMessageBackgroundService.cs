@@ -32,17 +32,40 @@ public class PersistMessageBackgroundService(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await using (var scope = serviceProvider.CreateAsyncScope())
+            try
             {
-                var service = scope.ServiceProvider.GetRequiredService<IPersistMessageProcessor>();
-                await service.ProcessAllAsync(stoppingToken);
+                await using (var scope = serviceProvider.CreateAsyncScope())
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<IPersistMessageProcessor>();
+                    await service.ProcessAllAsync(stoppingToken);
+                }
+            }
+            catch (InvalidOperationException ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Error occurred while processing messages in background service");
+            }
+            catch (TimeoutException ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Error occurred while processing messages in background service");
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Database error occurred while processing messages in background service");
             }
 
             var delay = _options.Interval is { }
                             ? TimeSpan.FromSeconds((int)_options.Interval)
                             : TimeSpan.FromSeconds(30);
 
-            await Task.Delay(delay, stoppingToken);
+            try
+            {
+                await Task.Delay(delay, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Expected when service is stopping
+                break;
+            }
         }
     }
 }

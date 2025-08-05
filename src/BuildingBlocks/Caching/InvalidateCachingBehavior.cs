@@ -29,7 +29,7 @@ namespace BuildingBlocks.Caching
             var cacheKey = invalidateCacheRequest.CacheKey;
             var response = await next();
 
-            await _cachingProvider.RemoveAsync(cacheKey);
+            await _cachingProvider.RemoveAsync(cacheKey, cancellationToken);
 
             _logger.LogDebug("Cache data with cache key: {CacheKey} removed.", cacheKey);
 

@@ -105,12 +105,24 @@ public class EventStoreDBSubscriptionToAll
 
             await checkpointRepository.Store(SubscriptionId, resolvedEvent.Event.Position.CommitPosition, ct);
         }
-        catch (System.Exception e)
+        catch (InvalidOperationException e)
         {
             logger.LogError("Error consuming message: {ExceptionMessage}{ExceptionStackTrace}", e.Message,
                 e.StackTrace);
             // if you're fine with dropping some events instead of stopping subscription
             // then you can add some logic if error should be ignored
+            throw;
+        }
+        catch (ArgumentException e)
+        {
+            logger.LogError("Error consuming message: {ExceptionMessage}{ExceptionStackTrace}", e.Message,
+                e.StackTrace);
+            throw;
+        }
+        catch (TimeoutException e)
+        {
+            logger.LogError("Error consuming message: {ExceptionMessage}{ExceptionStackTrace}", e.Message,
+                e.StackTrace);
             throw;
         }
     }
@@ -151,11 +163,22 @@ public class EventStoreDBSubscriptionToAll
 
                 resubscribed = true;
             }
-            catch (System.Exception exception)
+            catch (RpcException exception)
             {
                 logger.LogWarning(exception,
                     "Failed to resubscribe to all '{SubscriptionId}' dropped with '{ExceptionMessage}{ExceptionStackTrace}'",
                     SubscriptionId, exception.Message, exception.StackTrace);
+            }
+            catch (InvalidOperationException exception)
+            {
+                logger.LogWarning(exception,
+                    "Failed to resubscribe to all '{SubscriptionId}' dropped with '{ExceptionMessage}{ExceptionStackTrace}'",
+                    SubscriptionId, exception.Message, exception.StackTrace);
+            }
+            catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+            {
+                logger.LogInformation("Resubscription cancelled for '{SubscriptionId}'", SubscriptionId);
+                break; // Exit the retry loop when cancellation is requested
             }
             finally
             {

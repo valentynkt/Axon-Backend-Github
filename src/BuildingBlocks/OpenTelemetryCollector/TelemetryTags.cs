@@ -185,32 +185,32 @@ public static class TelemetryTags
 
         public static class Application
         {
-            public static string AppService = $"{ObservabilityConstant.InstrumentationName}.appservice";
-            public static string Consumer = $"{ObservabilityConstant.InstrumentationName}.consumer";
-            public static string Producer = $"{ObservabilityConstant.InstrumentationName}.producer";
+            public static readonly string AppService = $"{ObservabilityConstant.InstrumentationName}.appservice";
+            public static readonly string Consumer = $"{ObservabilityConstant.InstrumentationName}.consumer";
+            public static readonly string Producer = $"{ObservabilityConstant.InstrumentationName}.producer";
 
             public static class Commands
             {
-                public static string Command = $"{ObservabilityConstant.InstrumentationName}.command";
-                public static string CommandType = $"{Command}.type";
-                public static string CommandHandler = $"{Command}.handler";
-                public static string CommandHandlerType = $"{CommandHandler}.type";
+                public static readonly string Command = $"{ObservabilityConstant.InstrumentationName}.command";
+                public static readonly string CommandType = $"{Command}.type";
+                public static readonly string CommandHandler = $"{Command}.handler";
+                public static readonly string CommandHandlerType = $"{CommandHandler}.type";
             }
 
             public static class Queries
             {
-                public static string Query = $"{ObservabilityConstant.InstrumentationName}.query";
-                public static string QueryType = $"{Query}.type";
-                public static string QueryHandler = $"{Query}.handler";
-                public static string QueryHandlerType = $"{QueryHandler}.type";
+                public static readonly string Query = $"{ObservabilityConstant.InstrumentationName}.query";
+                public static readonly string QueryType = $"{Query}.type";
+                public static readonly string QueryHandler = $"{Query}.handler";
+                public static readonly string QueryHandlerType = $"{QueryHandler}.type";
             }
 
             public static class Events
             {
-                public static string Event = $"{ObservabilityConstant.InstrumentationName}.event";
-                public static string EventType = $"{Event}.type";
-                public static string EventHandler = $"{Event}.handler";
-                public static string EventHandlerType = $"{EventHandler}.type";
+                public static readonly string Event = $"{ObservabilityConstant.InstrumentationName}.event";
+                public static readonly string EventType = $"{Event}.type";
+                public static readonly string EventHandler = $"{Event}.handler";
+                public static readonly string EventHandlerType = $"{EventHandler}.type";
             }
         }
     }
@@ -221,44 +221,44 @@ public static class TelemetryTags
     {
         public static class Application
         {
-            public static string AppService = $"{ObservabilityConstant.InstrumentationName}.appservice";
-            public static string Consumer = $"{ObservabilityConstant.InstrumentationName}.consumer";
-            public static string Producer = $"{ObservabilityConstant.InstrumentationName}.producer";
+            public static readonly string AppService = $"{ObservabilityConstant.InstrumentationName}.appservice";
+            public static readonly string Consumer = $"{ObservabilityConstant.InstrumentationName}.consumer";
+            public static readonly string Producer = $"{ObservabilityConstant.InstrumentationName}.producer";
 
             public static class Commands
             {
-                public static string Command = $"{ObservabilityConstant.InstrumentationName}.command";
-                public static string CommandType = $"{Command}.type";
-                public static string CommandHandler = $"{Command}.handler";
-                public static string SuccessCount = $"{CommandHandler}.success.count";
-                public static string FaildCount = $"{CommandHandler}.failed.count";
-                public static string ActiveCount = $"{CommandHandler}.active.count";
-                public static string TotalExecutedCount = $"{CommandHandler}.total.count";
-                public static string HandlerDuration = $"{CommandHandler}.duration";
+                public static readonly string Command = $"{ObservabilityConstant.InstrumentationName}.command";
+                public static readonly string CommandType = $"{Command}.type";
+                public static readonly string CommandHandler = $"{Command}.handler";
+                public static readonly string SuccessCount = $"{CommandHandler}.success.count";
+                public static readonly string FaildCount = $"{CommandHandler}.failed.count";
+                public static readonly string ActiveCount = $"{CommandHandler}.active.count";
+                public static readonly string TotalExecutedCount = $"{CommandHandler}.total.count";
+                public static readonly string HandlerDuration = $"{CommandHandler}.duration";
             }
 
             public static class Queries
             {
-                public static string Query = $"{ObservabilityConstant.InstrumentationName}.query";
-                public static string QueryType = $"{Query}.type";
-                public static string QueryHandler = $"{Query}.handler";
-                public static string SuccessCount = $"{QueryHandler}.success.count";
-                public static string FaildCount = $"{QueryHandler}.failed.count";
-                public static string ActiveCount = $"{QueryHandler}.active.count";
-                public static string TotalExecutedCount = $"{QueryHandler}.total.count";
-                public static string HandlerDuration = $"{QueryHandler}.duration";
+                public static readonly string Query = $"{ObservabilityConstant.InstrumentationName}.query";
+                public static readonly string QueryType = $"{Query}.type";
+                public static readonly string QueryHandler = $"{Query}.handler";
+                public static readonly string SuccessCount = $"{QueryHandler}.success.count";
+                public static readonly string FaildCount = $"{QueryHandler}.failed.count";
+                public static readonly string ActiveCount = $"{QueryHandler}.active.count";
+                public static readonly string TotalExecutedCount = $"{QueryHandler}.total.count";
+                public static readonly string HandlerDuration = $"{QueryHandler}.duration";
             }
 
             public static class Events
             {
-                public static string Event = $"{ObservabilityConstant.InstrumentationName}.event";
-                public static string EventType = $"{Event}.type";
-                public static string EventHandler = $"{Event}.handler";
-                public static string SuccessCount = $"{EventHandler}.success.count";
-                public static string FaildCount = $"{EventHandler}.failed.count";
-                public static string ActiveCount = $"{EventHandler}.active.count";
-                public static string TotalExecutedCount = $"{EventHandler}.total.count";
-                public static string HandlerDuration = $"{EventHandler}.duration";
+                public static readonly string Event = $"{ObservabilityConstant.InstrumentationName}.event";
+                public static readonly string EventType = $"{Event}.type";
+                public static readonly string EventHandler = $"{Event}.handler";
+                public static readonly string SuccessCount = $"{EventHandler}.success.count";
+                public static readonly string FaildCount = $"{EventHandler}.failed.count";
+                public static readonly string ActiveCount = $"{EventHandler}.active.count";
+                public static readonly string TotalExecutedCount = $"{EventHandler}.total.count";
+                public static readonly string HandlerDuration = $"{EventHandler}.duration";
             }
         }
     }

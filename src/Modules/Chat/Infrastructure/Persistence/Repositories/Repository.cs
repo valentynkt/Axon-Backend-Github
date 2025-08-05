@@ -1,3 +1,4 @@
+using System;
 using Axon.Shared.Common;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,13 +7,14 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 /// <summary>
 /// Simple base repository implementation
 /// </summary>
+[Obsolete("Use PostgresWriteRepository or PostgresReadRepository from BuildingBlocks.Postgres instead. This will be removed in a future version.")]
 public abstract class Repository<TEntity, TId> 
     where TEntity : class
     where TId : notnull
 {
-    protected ChatDbContext Context { get; }
+    protected ChatWriteDbContext Context { get; }
 
-    protected Repository(ChatDbContext context)
+    protected Repository(ChatWriteDbContext context)
     {
         Context = context;
     }
