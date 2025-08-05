@@ -18,8 +18,8 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     where TAggregate : class, IAggregate<TId>
     where TId : notnull
 {
-    protected readonly DbContext Context;
-    protected readonly DbSet<TAggregate> DbSet;
+    protected DbContext Context { get; }
+    protected DbSet<TAggregate> DbSet { get; }
 
     public EfWriteRepository(DbContext context)
     {
@@ -65,15 +65,15 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
         return aggregatesList.AsReadOnly();
     }
 
-    public virtual async Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
+    public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
         
         var entry = DbSet.Update(aggregate);
-        return entry.Entity;
+        return Task.FromResult(entry.Entity);
     }
 
-    public virtual async Task<IReadOnlyList<TAggregate>> UpdateRangeAsync(
+    public virtual Task<IReadOnlyList<TAggregate>> UpdateRangeAsync(
         IReadOnlyList<TAggregate> aggregates,
         CancellationToken cancellationToken = default)
     {
@@ -81,7 +81,7 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
         
         var aggregatesList = aggregates.ToList();
         DbSet.UpdateRange(aggregatesList);
-        return aggregatesList.AsReadOnly();
+        return Task.FromResult<IReadOnlyList<TAggregate>>(aggregatesList.AsReadOnly());
     }
 
     public virtual async Task DeleteAsync(TId id, CancellationToken cancellationToken = default)
@@ -93,18 +93,20 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
         }
     }
 
-    public virtual async Task DeleteAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
+    public virtual Task DeleteAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
         DbSet.Remove(aggregate);
+        return Task.CompletedTask;
     }
 
-    public virtual async Task DeleteRangeAsync(
+    public virtual Task DeleteRangeAsync(
         IReadOnlyList<TAggregate> aggregates,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
         DbSet.RemoveRange(aggregates);
+        return Task.CompletedTask;
     }
 
     public virtual async Task<bool> ExistsAsync(TId id, CancellationToken cancellationToken = default)

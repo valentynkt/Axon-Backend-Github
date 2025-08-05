@@ -32,13 +32,3 @@ public abstract record BaseAuditableEntity<T> : BaseEntity<T>, IAuditableEntity<
     public DateTime? LastModified { get; set; }
     public long? LastModifiedBy { get; set; }
 }
-
-/// <summary>
-/// Legacy alias for backward compatibility.
-/// Use BaseEntity<T> or BaseAuditableEntity<T> in new code.
-/// </summary>
-/// <typeparam name="T">The type of the entity identifier</typeparam>
-[Obsolete("Use BaseEntity<T> or BaseAuditableEntity<T> instead")]
-public abstract record Entity<T> : BaseAuditableEntity<T>
-{
-}

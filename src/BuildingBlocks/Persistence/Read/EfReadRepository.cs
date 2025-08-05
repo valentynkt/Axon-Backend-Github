@@ -18,8 +18,8 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     where TReadModel : class
     where TId : notnull
 {
-    protected readonly DbContext Context;
-    protected readonly DbSet<TReadModel> DbSet;
+    protected DbContext Context { get; }
+    protected DbSet<TReadModel> DbSet { get; }
 
     public EfReadRepository(DbContext context)
     {

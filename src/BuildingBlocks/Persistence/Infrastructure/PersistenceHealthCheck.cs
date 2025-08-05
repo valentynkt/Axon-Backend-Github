@@ -48,7 +48,8 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
                 detailedResult.Exception,
                 detailedResult.Data);
         }
-        catch (Exception ex)
+#pragma warning disable CA1031 // Do not catch general exception types - Health checks need to catch all exceptions
+        catch (System.Exception ex)
         {
             _logger.LogError(ex, "Health check failed for context {ContextName}", typeof(TContext).Name);
             
@@ -57,6 +58,7 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
                 $"Health check failed for {typeof(TContext).Name}",
                 ex);
         }
+#pragma warning restore CA1031
     }
 
     public async Task<DetailedHealthCheckResult> GetDetailedHealthAsync(CancellationToken cancellationToken = default)
@@ -145,7 +147,8 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
             _logger.LogWarning("Database health check was cancelled for {ContextName}", contextName);
             return result;
         }
-        catch (Exception ex)
+#pragma warning disable CA1031 // Do not catch general exception types - Health checks need to catch all exceptions
+        catch (System.Exception ex)
         {
             stopwatch.Stop();
             result.ResponseTimeMs = stopwatch.ElapsedMilliseconds;
@@ -156,6 +159,7 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
             _logger.LogError(ex, "Database health check failed with unexpected error for {ContextName}", contextName);
             return result;
         }
+#pragma warning restore CA1031
     }
 
     private async Task TestConnectivityAsync(DetailedHealthCheckResult result, CancellationToken cancellationToken)
@@ -170,7 +174,7 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
             result.Data["connectivity"] = "healthy";
             result.Data["provider"] = result.DatabaseProvider ?? "unknown";
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             result.CanConnect = false;
             result.Data["connectivity"] = "failed";
@@ -194,11 +198,13 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
                 ? (double)metrics.SuccessfulOperations / metrics.TotalOperations * 100 
                 : 100.0;
         }
-        catch (Exception ex)
+#pragma warning disable CA1031 // Do not catch general exception types - Health checks need to catch all exceptions
+        catch (System.Exception ex)
         {
             result.Data["performance_error"] = ex.Message;
             _logger.LogWarning(ex, "Failed to retrieve performance metrics during health check");
         }
+#pragma warning restore CA1031
     }
 
     private async Task TestBasicOperationsAsync(DetailedHealthCheckResult result, CancellationToken cancellationToken)
@@ -214,7 +220,7 @@ public class PersistenceHealthCheck<TContext> : IPersistenceHealthCheck<TContext
                 throw new InvalidOperationException("Cannot perform basic database operations");
             }
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             result.Data["operations_error"] = ex.Message;
             throw;

@@ -36,7 +36,7 @@ public class ObservabilityPipelineBehavior<TRequest, TResponse>(
                 var commandResult = await commandActivity.Execute<TRequest, TResponse>(
                                         async (activity, ct) =>
                                         {
-                                            var response = await next();
+                                            var response = await next(ct);
 
                                             return response;
                                         },
@@ -53,7 +53,7 @@ public class ObservabilityPipelineBehavior<TRequest, TResponse>(
                 var queryResult = await queryActivity.Execute<TRequest, TResponse>(
                                       async (activity, ct) =>
                                       {
-                                          var response = await next();
+                                          var response = await next(ct);
 
                                           return response;
                                       },
@@ -88,6 +88,6 @@ public class ObservabilityPipelineBehavior<TRequest, TResponse>(
             throw;
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }

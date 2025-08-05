@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,7 @@ namespace BuildingBlocks.Persistence.Infrastructure;
 /// Database-agnostic performance tracker for persistence operations
 /// Tracks execution time, success/failure rates, and provides detailed metrics
 /// </summary>
-public class PersistencePerformanceTracker<TContext> : IPerformanceTracker<TContext>
+public sealed class PersistencePerformanceTracker<TContext> : IPerformanceTracker<TContext>
     where TContext : DbContext
 {
     private readonly ILogger<PersistencePerformanceTracker<TContext>> _logger;
@@ -90,7 +91,7 @@ public class PersistencePerformanceTracker<TContext> : IPerformanceTracker<TCont
                 stopwatch.ElapsedMilliseconds);
             throw;
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             stopwatch.Stop();
             RecordOperation(operationName, stopwatch.ElapsedMilliseconds, false, startTime);
@@ -136,7 +137,7 @@ public class PersistencePerformanceTracker<TContext> : IPerformanceTracker<TCont
                 
             return result;
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             stopwatch.Stop();
             RecordOperation(operationName, stopwatch.ElapsedMilliseconds, false, startTime);
@@ -180,7 +181,7 @@ public class PersistencePerformanceTracker<TContext> : IPerformanceTracker<TCont
             LastOperationTime = allOperations.LastOrDefault()?.ExecutedAt ?? DateTime.MinValue
         };
 
-        if (allOperations.Any())
+        if (allOperations.Count > 0)
         {
             metrics.AverageExecutionTimeMs = (long)allOperations.Average(o => o.ExecutionTimeMs);
             metrics.TotalExecutionTimeMs = allOperations.Sum(o => o.ExecutionTimeMs);
@@ -235,7 +236,7 @@ public class PersistencePerformanceTracker<TContext> : IPerformanceTracker<TCont
             });
     }
 
-    private class OperationResult
+    private sealed class OperationResult
     {
         public string OperationName { get; set; } = string.Empty;
         public long ExecutionTimeMs { get; set; }

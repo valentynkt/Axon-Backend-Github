@@ -3,12 +3,12 @@ using BuildingBlocks.Core.Event;
 namespace BuildingBlocks.Core.Model;
 
 /// <summary>
-/// Base implementation for domain aggregates following DDD patterns.
-/// Inherits from BaseEntity for core entity capabilities and adds domain event management.
-/// Use BaseAuditableAggregate if audit tracking is needed.
+/// Base implementation for aggregate roots with identity, versioning, and soft deletion.
+/// Provides domain event management and basic lifecycle support.
+/// Use this for aggregates that don't need audit trail capabilities.
 /// </summary>
 /// <typeparam name="TId">The type of the aggregate identifier</typeparam>
-public abstract record BaseAggregate<TId> : BaseEntity<TId>, IAggregate<TId>
+public abstract record BaseAggregate<TId> : BaseAuditableEntity<TId>, IAggregate<TId>
 {
     private readonly List<IDomainEvent> _domainEvents = new();
     
@@ -42,12 +42,12 @@ public abstract record BaseAggregate<TId> : BaseEntity<TId>, IAggregate<TId>
 }
 
 /// <summary>
-/// Base implementation for auditable domain aggregates.
-/// Inherits from BaseAuditableEntity and adds domain event management.
-/// Use this for aggregates that require creation/modification tracking.
+/// Base implementation for aggregate roots with full audit trail capabilities.
+/// Provides domain event management, audit tracking, versioning, and soft deletion.
+/// Use this for aggregates that need to track who created/modified them.
 /// </summary>
 /// <typeparam name="TId">The type of the aggregate identifier</typeparam>
-public abstract record BaseAuditableAggregate<TId> : BaseAuditableEntity<TId>, IAggregate<TId>
+public abstract record BaseAuditableAggregate<TId> : BaseAuditableEntity<TId>, IAuditableAggregate<TId>
 {
     private readonly List<IDomainEvent> _domainEvents = new();
     
@@ -82,7 +82,7 @@ public abstract record BaseAuditableAggregate<TId> : BaseAuditableEntity<TId>, I
 
 /// <summary>
 /// Legacy alias for backward compatibility.
-/// Use BaseAggregate<TId> or BaseAuditableAggregate<TId> in new code.
+/// Use BaseAggregate&lt;TId&gt; or BaseAuditableAggregate&lt;TId&gt; in new code.
 /// </summary>
 /// <typeparam name="TId">The type of the aggregate identifier</typeparam>
 [Obsolete("Use BaseAggregate<TId> or BaseAuditableAggregate<TId> instead")]

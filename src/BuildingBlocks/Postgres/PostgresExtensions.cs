@@ -19,6 +19,10 @@ public static class PostgresExtensions
     /// Configure PostgreSQL with Clean Architecture patterns (backward compatible)
     /// This method maintains compatibility with existing PostgresOptions usage patterns
     /// </summary>
+    /// <summary>
+    /// Configure PostgreSQL with Clean Architecture patterns (backward compatible)
+    /// This method maintains compatibility with existing PostgresOptions usage patterns
+    /// </summary>
     public static WebApplicationBuilder AddPostgresWithCleanArchitecture<TContext>(
         this WebApplicationBuilder builder,
         string? connectionName = "DefaultConnection",
@@ -40,16 +44,30 @@ public static class PostgresExtensions
         builder.Services.Configure<PostgresOptions>(postgresSection);
         builder.Services.AddSingleton<IValidateOptions<PostgresOptions>, ValidatePostgresOptions>();
 
-        // Use our enhanced persistence configuration
-        builder.AddPersistenceWithCleanArchitecture<TContext>(connectionName, persistenceOptions =>
+        // Use our enhanced persistence configuration - FIX: Remove connectionName parameter
+        builder.AddPersistenceWithCleanArchitecture<TContext>(persistenceOptions =>
         {
             // Copy PostgresOptions to PersistenceConfigurationOptions
             CopyPostgresOptionsToPersistenceOptions(options, persistenceOptions);
+            
+            // Set connection string if provided
+            if (!string.IsNullOrEmpty(connectionName))
+            {
+                var connectionString = builder.Configuration.GetConnectionString(connectionName);
+                if (!string.IsNullOrEmpty(connectionString))
+                {
+                    persistenceOptions.ConnectionString = connectionString;
+                }
+            }
         });
 
         return builder;
     }
 
+    /// <summary>
+    /// Add PostgreSQL DbContext with enterprise features
+    /// Maintains backward compatibility with existing patterns
+    /// </summary>
     /// <summary>
     /// Add PostgreSQL DbContext with enterprise features
     /// Maintains backward compatibility with existing patterns
@@ -77,10 +95,10 @@ public static class PostgresExtensions
             services.Configure(configureOptions);
         }
 
-        // Use the enhanced persistence layer
-        return services.AddDbContext<TContext>(configuration, persistenceOptions =>
+        // Use the enhanced persistence layer - FIX: Use DatabaseOptions instead of PersistenceConfigurationOptions
+        return services.AddDbContext<TContext>(configuration, databaseOptions =>
         {
-            CopyPostgresOptionsToPersistenceOptions(options, persistenceOptions);
+            CopyPostgresOptionsToDatabaseOptions(options, databaseOptions);
         });
     }
 
@@ -186,6 +204,26 @@ public static class PostgresExtensions
         persistenceOptions.CacheExpiration = postgresOptions.CacheExpiration;
         persistenceOptions.HealthCheckOptions = postgresOptions.HealthCheckOptions;
         persistenceOptions.EnableRepositoryCompatibilityLayer = postgresOptions.EnableRepositoryCompatibilityLayer;
+    }
+
+    /// <summary>
+    /// Copy PostgresOptions to DatabaseOptions for basic database configuration
+    /// </summary>
+    private static void CopyPostgresOptionsToDatabaseOptions(
+        PostgresOptions postgresOptions,
+        DatabaseOptions databaseOptions)
+    {
+        // Basic database options
+        databaseOptions.ConnectionString = postgresOptions.ConnectionString;
+        databaseOptions.MaxRetryCount = postgresOptions.MaxRetryCount;
+        databaseOptions.MaxRetryDelaySeconds = postgresOptions.MaxRetryDelaySeconds;
+        databaseOptions.CommandTimeout = postgresOptions.CommandTimeout;
+        databaseOptions.EnableSensitiveDataLogging = postgresOptions.EnableSensitiveDataLogging;
+        databaseOptions.EnableDetailedErrors = postgresOptions.EnableDetailedErrors;
+        databaseOptions.EnableServiceProviderCaching = postgresOptions.EnableServiceProviderCaching;
+        databaseOptions.MigrationsAssembly = postgresOptions.MigrationsAssembly;
+        databaseOptions.DefaultSchema = postgresOptions.DefaultSchema;
+        databaseOptions.EnableAutomaticMigrations = postgresOptions.EnableAutomaticMigrations;
     }
 }
 

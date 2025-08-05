@@ -163,6 +163,7 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
         }
         catch (System.Exception ex)
         {
+            _logger?.LogError(ex, "Error occurred while processing IVersioned entities");
             throw new InvalidOperationException("Error occurred while processing IVersioned entities", ex);
         }
     }

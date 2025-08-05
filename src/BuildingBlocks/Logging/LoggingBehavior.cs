@@ -26,7 +26,7 @@ public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         var timer = new Stopwatch();
         timer.Start();
 
-        var response = await next();
+        var response = await next(cancellationToken);
 
         timer.Stop();
         var timeTaken = timer.Elapsed;

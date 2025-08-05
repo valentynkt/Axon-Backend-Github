@@ -6,6 +6,7 @@ using BuildingBlocks.Core.Model;
 using BuildingBlocks.Persistence;
 using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.Persistence.Infrastructure;
+using BuildingBlocks.Postgres;
 using BuildingBlocks.PersistMessageProcessor;
 using BuildingBlocks.Web;
 using Duende.IdentityServer.EntityFramework.Entities;
@@ -560,13 +561,13 @@ where TWContext : DbContext
     }
 
     public Task<T?> FindAsync<T, TKey>(TKey id)
-    where T : class, IEntity
+    where T : class, IEntity<object>
     {
         return ExecuteDbContextAsync(db => db.Set<T>().FindAsync(id).AsTask());
     }
 
     public Task<T?> FirstOrDefaultAsync<T>()
-    where T : class, IEntity
+    where T : class, IEntity<object>
     {
         return ExecuteDbContextAsync(db => db.Set<T>().FirstOrDefaultAsync());
     }

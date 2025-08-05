@@ -9,6 +9,7 @@ using MassTransit.Logging;
 using MassTransit.Monitoring;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -166,8 +167,9 @@ public static class Extensions
                     {
                         instrumentationOptions.SetDbStatementForText = true;
                     })
-                    .AddSource(DiagnosticHeaders.DefaultListenerName)
-                    .AddNpgsql()
+                    .AddSource(DiagnosticHeaders.DefaultListenerName);
+                    
+                tracing
                     // `AddSource` for adding custom activity sources
                     .AddSource(observabilityOptions.InstrumentationName)
                     // metrics provides by ASP.NET Core in .NET 8

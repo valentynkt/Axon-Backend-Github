@@ -53,9 +53,6 @@ public static class Extensions
             if (!string.IsNullOrEmpty(postgresOptions.ConnectionString))
                 healthChecksBuilder.AddNpgSql(postgresOptions.ConnectionString);
 
-            if (!string.IsNullOrEmpty(eventStoreOptions.ConnectionString))
-                healthChecksBuilder.AddEventStore(eventStoreOptions.ConnectionString);
-
             services.AddHealthChecksUI(setup =>
                                        {
                                            setup.SetEvaluationTimeInSeconds(60); // time in seconds between check

@@ -167,7 +167,6 @@ public static class Extensions
     /// </summary>
     public static WebApplicationBuilder AddPersistenceWithCleanArchitecture<TContext>(
         this WebApplicationBuilder builder,
-        string? connectionName = "DefaultConnection",
         Action<PersistenceConfigurationOptions>? configureOptions = null)
         where TContext : DbContext, IDbContext
     {
@@ -427,7 +426,7 @@ public static class Extensions
     /// <summary>
     /// Configure snake_case table and column names
     /// </summary>
-    public static void ToSnakeCaseTables(ModelBuilder modelBuilder)
+    public static void ToSnakeCaseTables(this ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
 

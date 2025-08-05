@@ -138,10 +138,10 @@ public class PostgresPoolingOptions
     /// <summary>
     /// Enable connection multiplexing
     /// </summary>
-    public bool EnableMultiplexing { get; set; } = false;
+    public bool EnableMultiplexing { get; set; }
 
     /// <summary>
     /// Maximum commands per multiplexed connection
     /// </summary>
-    public int MaxAutoPrepare { get; set; } = 0;
+    public int MaxAutoPrepare { get; set; }
 }
