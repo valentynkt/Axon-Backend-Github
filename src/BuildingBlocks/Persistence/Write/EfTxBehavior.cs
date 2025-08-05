@@ -44,7 +44,7 @@ where TResponse : notnull
             new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
             TransactionScopeAsyncFlowOption.Enabled);
 
-        var response = await next();
+        var response = await next(cancellationToken);
 
         logger.LogInformation(
             "{Prefix} Executed the {MediatrRequest} request",

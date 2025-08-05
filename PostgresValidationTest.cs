@@ -9,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 using BuildingBlocks.Core.Model;
 using BuildingBlocks.Core.Pagination;
 using BuildingBlocks.Postgres;
-using BuildingBlocks.EFCore;
+using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Persistence.Write; 
+using BuildingBlocks.Persistence.Read;
 
 namespace AxonBackend.Tests;
 
@@ -58,11 +60,13 @@ public class PostgresValidationTest
     /// <summary>
     /// Test DbContext for validation
     /// </summary>
-    public class TestDbContext : PostgresDbContext
+    public class TestDbContext : WriteDbContextBase<object>
     {
         public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
         {
         }
+
+        public override string ModuleName => "Test";
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -92,35 +96,38 @@ public class PostgresValidationTest
             var services = new ServiceCollection();
             services.AddDbContext<TestDbContext>(options =>
                 options.UseInMemoryDatabase("TestDb"));
-            services.AddScoped<IPostgresDbContext>(provider => provider.GetRequiredService<TestDbContext>());
-            services.AddScoped<IRepository<TestEntity, Guid>, EfRepository<TestEntity, Guid>>();
-            services.AddScoped<IUnitOfWork, PostgresUnitOfWork>();
+            services.AddScoped<IWriteDbContext<object>>(provider => provider.GetRequiredService<TestDbContext>());
+            services.AddScoped<IReadDbContext<object>>(provider => provider.GetRequiredService<TestDbContext>());
+            services.AddScoped<IWriteRepository<TestEntity, Guid>, PostgresWriteRepository<TestEntity, Guid>>();
+            services.AddScoped<IReadRepository<TestEntity, Guid>, PostgresReadRepository<TestEntity, Guid>>();
+            services.AddScoped<IWriteUnitOfWork<TestDbContext>, PostgresWriteUnitOfWork<TestDbContext>>();
             services.AddLogging();
 
             using var serviceProvider = services.BuildServiceProvider();
             using var scope = serviceProvider.CreateScope();
 
             var context = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            var repository = scope.ServiceProvider.GetRequiredService<IRepository<TestEntity, Guid>>();
-            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var writeRepository = scope.ServiceProvider.GetRequiredService<IWriteRepository<TestEntity, Guid>>();
+            var readRepository = scope.ServiceProvider.GetRequiredService<IReadRepository<TestEntity, Guid>>();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IWriteUnitOfWork<TestDbContext>>();
 
             // Ensure database is created
             await context.Database.EnsureCreatedAsync();
 
             Console.WriteLine("✅ Test 1: Repository Interface Validation");
-            await ValidateRepositoryInterfaces(repository);
+            await ValidateRepositoryInterfaces(writeRepository, readRepository);
 
             Console.WriteLine("✅ Test 2: CRUD Operations Validation");
-            await ValidateCrudOperations(repository, unitOfWork);
+            await ValidateCrudOperations(writeRepository, readRepository, unitOfWork);
 
             Console.WriteLine("✅ Test 3: Pagination Validation");
-            await ValidatePaginationOperations(repository, unitOfWork);
+            await ValidatePaginationOperations(writeRepository, readRepository, unitOfWork);
 
             Console.WriteLine("✅ Test 4: Bulk Operations Validation");
-            await ValidateBulkOperations(repository, unitOfWork);
+            await ValidateBulkOperations(writeRepository, readRepository, unitOfWork);
 
             Console.WriteLine("✅ Test 5: Unit of Work Validation");
-            await ValidateUnitOfWorkOperations(repository, unitOfWork);
+            await ValidateUnitOfWorkOperations(writeRepository, readRepository, unitOfWork);
 
             Console.WriteLine("✅ Test 6: Command Queuing Validation");
             await ValidateCommandQueuing(context);
@@ -136,25 +143,25 @@ public class PostgresValidationTest
         }
     }
 
-    private static async Task ValidateRepositoryInterfaces(IRepository<TestEntity, Guid> repository)
+    private static async Task ValidateRepositoryInterfaces(IWriteRepository<TestEntity, Guid> writeRepository, IReadRepository<TestEntity, Guid> readRepository)
     {
-        // Validate that repository implements all required interfaces
-        if (repository is not IReadRepository<TestEntity, Guid> readRepo)
-            throw new InvalidOperationException("Repository does not implement IReadRepository");
+        // Validate that repositories implement required interfaces
+        if (writeRepository == null)
+            throw new InvalidOperationException("WriteRepository is null");
 
-        if (repository is not IWriteRepository<TestEntity, Guid> writeRepo)
-            throw new InvalidOperationException("Repository does not implement IWriteRepository");
+        if (readRepository == null)
+            throw new InvalidOperationException("ReadRepository is null");
 
-        Console.WriteLine("  - Repository implements IReadRepository ✓");
-        Console.WriteLine("  - Repository implements IWriteRepository ✓");
-        Console.WriteLine("  - Repository implements full IRepository interface ✓");
+        Console.WriteLine("  - WriteRepository implements IWriteRepository ✓");
+        Console.WriteLine("  - ReadRepository implements IReadRepository ✓");
+        Console.WriteLine("  - CQRS repository separation ✓");
     }
 
-    private static async Task ValidateCrudOperations(IRepository<TestEntity, Guid> repository, IUnitOfWork unitOfWork)
+    private static async Task ValidateCrudOperations(IWriteRepository<TestEntity, Guid> writeRepository, IReadRepository<TestEntity, Guid> readRepository, IWriteUnitOfWork<TestDbContext> unitOfWork)
     {
         // Create
         var entity = new TestEntity { Name = "Test Entity", Description = "Test Description" };
-        var createdEntity = await repository.AddAsync(entity);
+        var createdEntity = await writeRepository.AddAsync(entity);
         await unitOfWork.SaveChangesAsync();
 
         if (createdEntity.Id == Guid.Empty)
@@ -163,7 +170,7 @@ public class PostgresValidationTest
         Console.WriteLine("  - Create operation ✓");
 
         // Read
-        var foundEntity = await repository.FindByIdAsync(createdEntity.Id);
+        var foundEntity = await readRepository.FindByIdAsync(createdEntity.Id);
         if (foundEntity == null || foundEntity.Name != "Test Entity")
             throw new InvalidOperationException("Entity retrieval failed");
 
@@ -171,27 +178,27 @@ public class PostgresValidationTest
 
         // Update
         foundEntity.Description = "Updated Description";
-        await repository.UpdateAsync(foundEntity);
+        await writeRepository.UpdateAsync(foundEntity);
         await unitOfWork.SaveChangesAsync();
 
-        var updatedEntity = await repository.FindByIdAsync(createdEntity.Id);
+        var updatedEntity = await readRepository.FindByIdAsync(createdEntity.Id);
         if (updatedEntity?.Description != "Updated Description")
             throw new InvalidOperationException("Entity update failed");
 
         Console.WriteLine("  - Update operation ✓");
 
         // Delete
-        await repository.DeleteByIdAsync(createdEntity.Id);
+        await writeRepository.DeleteByIdAsync(createdEntity.Id);
         await unitOfWork.SaveChangesAsync();
 
-        var deletedEntity = await repository.FindByIdAsync(createdEntity.Id);
+        var deletedEntity = await readRepository.FindByIdAsync(createdEntity.Id);
         if (deletedEntity != null)
             throw new InvalidOperationException("Entity deletion failed");
 
         Console.WriteLine("  - Delete operation ✓");
     }
 
-    private static async Task ValidatePaginationOperations(IRepository<TestEntity, Guid> repository, IUnitOfWork unitOfWork)
+    private static async Task ValidatePaginationOperations(IWriteRepository<TestEntity, Guid> writeRepository, IReadRepository<TestEntity, Guid> readRepository, IWriteUnitOfWork<TestDbContext> unitOfWork)
     {
         // Create test data
         var entities = new List<TestEntity>();
@@ -200,12 +207,12 @@ public class PostgresValidationTest
             entities.Add(new TestEntity { Name = $"Entity {i}", Description = $"Description {i}" });
         }
 
-        await repository.AddRangeAsync(entities);
+        await writeRepository.AddRangeAsync(entities);
         await unitOfWork.SaveChangesAsync();
 
         // Test pagination
         var pageRequest = new PageRequest(1, 10);
-        var pagedResult = await repository.GetByPageFilter(pageRequest);
+        var pagedResult = await readRepository.GetByPageAsync(pageRequest);
 
         if (pagedResult.Items.Count != 10)
             throw new InvalidOperationException($"Expected 10 items in first page, got {pagedResult.Items.Count}");
@@ -221,11 +228,11 @@ public class PostgresValidationTest
         Console.WriteLine($"    - Total: {pagedResult.TotalCount} items in {pagedResult.TotalPages} pages");
 
         // Clean up
-        await repository.BulkDeleteAsync(e => e.Name.StartsWith("Entity"));
+        await writeRepository.BulkDeleteAsync(e => e.Name.StartsWith("Entity"));
         await unitOfWork.SaveChangesAsync();
     }
 
-    private static async Task ValidateBulkOperations(IRepository<TestEntity, Guid> repository, IUnitOfWork unitOfWork)
+    private static async Task ValidateBulkOperations(IWriteRepository<TestEntity, Guid> writeRepository, IReadRepository<TestEntity, Guid> readRepository, IWriteUnitOfWork<TestDbContext> unitOfWork)
     {
         // Create test data
         var entities = new List<TestEntity>();
@@ -235,17 +242,17 @@ public class PostgresValidationTest
         }
 
         // Bulk insert
-        await repository.AddRangeAsync(entities);
+        await writeRepository.AddRangeAsync(entities);
         await unitOfWork.SaveChangesAsync();
 
-        var count = await repository.CountAsync(e => e.Name.StartsWith("Bulk Entity"));
+        var count = await readRepository.CountAsync(e => e.Name.StartsWith("Bulk Entity"));
         if (count != 15)
             throw new InvalidOperationException($"Expected 15 bulk entities, found {count}");
 
         Console.WriteLine("  - Bulk insert operation ✓");
 
         // Bulk update
-        var updatedCount = await repository.BulkUpdateAsync(
+        var updatedCount = await writeRepository.BulkUpdateAsync(
             e => e.Name.StartsWith("Bulk Entity"),
             e => e.SetProperty(p => p.Description, "Bulk Updated"));
 
@@ -255,32 +262,32 @@ public class PostgresValidationTest
         Console.WriteLine("  - Bulk update operation ✓");
 
         // Bulk delete
-        var deletedCount = await repository.BulkDeleteAsync(e => e.Name.StartsWith("Bulk Entity"));
+        var deletedCount = await writeRepository.BulkDeleteAsync(e => e.Name.StartsWith("Bulk Entity"));
         if (deletedCount != 15)
             throw new InvalidOperationException($"Expected to delete 15 entities, deleted {deletedCount}");
 
         Console.WriteLine("  - Bulk delete operation ✓");
     }
 
-    private static async Task ValidateUnitOfWorkOperations(IRepository<TestEntity, Guid> repository, IUnitOfWork unitOfWork)
+    private static async Task ValidateUnitOfWorkOperations(IWriteRepository<TestEntity, Guid> writeRepository, IReadRepository<TestEntity, Guid> readRepository, IWriteUnitOfWork<TestDbContext> unitOfWork)
     {
         // Test transaction management
         var entity1 = new TestEntity { Name = "Transaction Test 1", Description = "Test 1" };
         var entity2 = new TestEntity { Name = "Transaction Test 2", Description = "Test 2" };
 
         // Add entities within unit of work
-        await repository.AddAsync(entity1);
-        await repository.AddAsync(entity2);
+        await writeRepository.AddAsync(entity1);
+        await writeRepository.AddAsync(entity2);
         await unitOfWork.SaveChangesAsync();
 
-        var count = await repository.CountAsync(e => e.Name.StartsWith("Transaction Test"));
+        var count = await readRepository.CountAsync(e => e.Name.StartsWith("Transaction Test"));
         if (count != 2)
             throw new InvalidOperationException($"Expected 2 transaction test entities, found {count}");
 
         Console.WriteLine("  - Unit of Work save operation ✓");
 
         // Clean up
-        await repository.BulkDeleteAsync(e => e.Name.StartsWith("Transaction Test"));
+        await writeRepository.BulkDeleteAsync(e => e.Name.StartsWith("Transaction Test"));
         await unitOfWork.SaveChangesAsync();
     }
 

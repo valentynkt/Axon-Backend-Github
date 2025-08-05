@@ -133,16 +133,27 @@ public sealed class EventDispatcher(
 
     private static IEnumerable<IIntegrationEvent> GetWrappedIntegrationEvents(IReadOnlyList<IDomainEvent> domainEvents)
     {
-        foreach (var domainEvent in domainEvents.Where(x =>
-                     x is IHaveIntegrationEvent))
+        foreach (var domainEvent in domainEvents.Where(x => x is IHaveIntegrationEvent))
         {
-            var genericType = typeof(IntegrationEventWrapper<>)
-                .MakeGenericType(domainEvent.GetType());
+            if (domainEvent is IHaveIntegrationEvent haveIntegrationEvent)
+            {
+                // Use the new GetIntegrationEvents method
+                foreach (var integrationEvent in haveIntegrationEvent.GetIntegrationEvents())
+                {
+                    yield return integrationEvent;
+                }
+            }
+            else
+            {
+                // Fallback to the wrapper approach for backward compatibility
+                var genericType = typeof(IntegrationEventWrapper<>)
+                    .MakeGenericType(domainEvent.GetType());
 
-            var domainNotificationEvent = (IIntegrationEvent)Activator
-                .CreateInstance(genericType, domainEvent)!;
+                var domainNotificationEvent = (IIntegrationEvent)Activator
+                    .CreateInstance(genericType, domainEvent)!;
 
-            yield return domainNotificationEvent;
+                yield return domainNotificationEvent;
+            }
         }
     }
 

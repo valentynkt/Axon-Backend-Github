@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Identity.Repositories;
 
-public class UserWriteRepository : PostgresWriteRepository<User, Guid>, IUserWriteRepository
+public class UserWriteRepository : EfWriteRepository<User, Guid>, IUserWriteRepository
 {
     public UserWriteRepository(IdentityWriteContext context) : base(context)
     {

@@ -147,7 +147,7 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
     {
         try
         {
-            foreach (var entry in ChangeTracker.Entries<IVersion>())
+            foreach (var entry in ChangeTracker.Entries<IVersioned>())
             {
                 switch (entry.State)
                 {
@@ -163,7 +163,7 @@ public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
         }
         catch (System.Exception ex)
         {
-            throw new InvalidOperationException("Error occurred while processing IVersion entities", ex);
+            throw new InvalidOperationException("Error occurred while processing IVersioned entities", ex);
         }
     }
 }

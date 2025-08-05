@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Aggregates;
 /// Conversation aggregate root following SPARC architecture patterns
 /// Manages messages with proper domain invariants and event sourcing capability
 /// </summary>
-public sealed class Conversation : AuditableAggregateRoot<ConversationId>
+public sealed class Conversation : AggregateRoot<ConversationId>
 {
     private readonly List<Message> _messages = new();
 

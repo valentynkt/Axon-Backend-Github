@@ -17,7 +17,7 @@ public interface IWriteDbContext<TModule> : IDbContext where TModule : class
     /// <summary>
     /// Get domain events from all aggregate roots for event sourcing
     /// </summary>
-    IReadOnlyList<IDomainEvent> GetDomainEvents();
+    new IReadOnlyList<IDomainEvent> GetDomainEvents();
     
     /// <summary>
     /// Clear all domain events after processing

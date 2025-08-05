@@ -24,7 +24,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
     {
         if (request is not ICacheRequest cacheRequest)
             // No cache request found, so just continue through the pipeline
-            return await next();
+            return await next(cancellationToken);
 
         var cacheKey = cacheRequest.CacheKey;
         var cachedResponse = await _cachingProvider.GetAsync<TResponse>(cacheKey, cancellationToken);
@@ -35,7 +35,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
             return cachedResponse.Value;
         }
 
-        var response = await next();
+        var response = await next(cancellationToken);
 
         var expirationTime = cacheRequest.AbsoluteExpirationRelativeToNow ??
                              DateTime.Now.AddHours(defaultCacheExpirationInHours);

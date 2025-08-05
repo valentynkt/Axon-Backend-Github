@@ -15,7 +15,7 @@ public static class Extensions
     {
         Guard.Against.Null(builder, nameof(builder));
         
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        // Database provider configuration removed
 
         builder.Services.AddValidateOptions<PersistMessageOptions>();
 
@@ -34,15 +34,8 @@ public static class Extensions
                         "in configuration or set PersistMessageOptions.ConnectionString");
                 }
 
-                options.UseNpgsql(
-                        connectionString,
-                        dbOptions =>
-                        {
-                            dbOptions.MigrationsAssembly(
-                                typeof(PersistMessageDbContext).Assembly.GetName().Name);
-                        })
-                    // https://github.com/efcore/EFCore.NamingConventions
-                    .UseSnakeCaseNamingConvention();
+                // Database provider configuration to be implemented
+                // options.UseInMemoryDatabase("PersistMessages");
 
                 // Todo: follow up the issues of .net 9 to use better approach that will provided by .net!
                 options.ConfigureWarnings(

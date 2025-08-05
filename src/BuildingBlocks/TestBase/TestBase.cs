@@ -792,7 +792,7 @@ where TRContext : DbContext, IDbContext
         Fixture = integrationTestFixture;
     }
 
-    public TestReadFixture<TEntryPoint, TRContext> Fixture { get; }
+    public new TestReadFixture<TEntryPoint, TRContext> Fixture { get; }
 }
 
 public abstract class TestWriteBase<TEntryPoint, TWContext> : TestFixtureCore<TEntryPoint>
@@ -808,7 +808,7 @@ where TWContext : DbContext
         Fixture = integrationTestFixture;
     }
 
-    public TestWriteFixture<TEntryPoint, TWContext> Fixture { get; }
+    public new TestWriteFixture<TEntryPoint, TWContext> Fixture { get; }
 }
 
 public abstract class TestBase<TEntryPoint, TWContext, TRContext> : TestFixtureCore<TEntryPoint>
@@ -826,5 +826,5 @@ where TRContext : DbContext, IDbContext
         Fixture = integrationTestFixture;
     }
 
-    public TestFixture<TEntryPoint, TWContext, TRContext> Fixture { get; }
+    public new TestFixture<TEntryPoint, TWContext, TRContext> Fixture { get; }
 }

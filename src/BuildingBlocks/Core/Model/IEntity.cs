@@ -1,15 +1,28 @@
 namespace BuildingBlocks.Core.Model;
 
-public interface IEntity<T> : IEntity
+/// <summary>
+/// Base interface for all entities with strongly-typed identifier.
+/// Minimal interface following ISP - only identity concern.
+/// </summary>
+/// <typeparam name="T">The type of the entity identifier</typeparam>
+public interface IBaseEntity<T> : IIdentifiable<T>
 {
-    public T? Id { get; set; }
 }
 
-public interface IEntity : IVersion
+/// <summary>
+/// Interface for entities that support versioning and soft deletion.
+/// Extends base entity with concurrency and deletion concerns.
+/// </summary>
+/// <typeparam name="T">The type of the entity identifier</typeparam>
+public interface IEntity<T> : IBaseEntity<T>, IVersioned, ISoftDeletable
 {
-    public DateTime? CreatedAt { get; set; }
-    public long? CreatedBy { get; set; }
-    public DateTime? LastModified { get; set; }
-    public long? LastModifiedBy { get; set; }
-    public bool IsDeleted { get; set; }
+}
+
+/// <summary>
+/// Interface for entities that support audit tracking.
+/// Composes base entity with audit trail concerns following ISP.
+/// </summary>
+/// <typeparam name="T">The type of the entity identifier</typeparam>
+public interface IAuditableEntity<T> : IBaseEntity<T>, IAuditable
+{
 }

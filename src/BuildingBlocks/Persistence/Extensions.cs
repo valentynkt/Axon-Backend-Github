@@ -1,6 +1,8 @@
 using System;
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Model;
+using BuildingBlocks.Persistence.Caching;
+using BuildingBlocks.Persistence.Common;
 using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.Persistence.Infrastructure;
 using BuildingBlocks.Persistence.Read;
@@ -21,42 +23,33 @@ namespace BuildingBlocks.Persistence;
 
 /// <summary>
 /// Persistence layer dependency injection extensions
-/// Provides unified PostgreSQL configuration and repository registrations
+/// Database provider agnostic configuration and repository registrations
 /// </summary>
 public static class Extensions
 {
     /// <summary>
-    /// Add PostgreSQL DbContext with modern CQRS architecture
+    /// Add DbContext with modern CQRS architecture
     /// </summary>
-    public static IServiceCollection AddPostgresDbContext<TContext>(
+    public static IServiceCollection AddDbContext<TContext>(
         this WebApplicationBuilder builder,
-        Action<PostgresOptions>? configurator = null)
+        Action<DatabaseOptions>? configurator = null)
         where TContext : DbContext, IDbContext
     {
-        return builder.Services.AddPostgresDbContext<TContext>(builder.Configuration, configurator);
+        return builder.Services.AddDbContext<TContext>(builder.Configuration, configurator);
     }
 
     /// <summary>
-    /// Add PostgreSQL DbContext with configuration and modern architecture
+    /// Add DbContext with configuration and modern architecture
     /// </summary>
-    public static IServiceCollection AddPostgresDbContext<TContext>(
+    public static IServiceCollection AddDbContext<TContext>(
         this IServiceCollection services,
         IConfiguration configuration,
-        Action<PostgresOptions>? configurator = null)
+        Action<DatabaseOptions>? configurator = null)
         where TContext : DbContext, IDbContext
     {
-        // Configure PostgreSQL options with Aspire support
-        services.AddOptions<PostgresOptions>()
-            .Bind(configuration.GetSection(nameof(PostgresOptions)))
-            .PostConfigure(options =>
-            {
-                // Support Aspire connection strings
-                var aspireConnectionString = configuration.GetConnectionString("postgres");
-                if (!string.IsNullOrEmpty(aspireConnectionString))
-                {
-                    options.ConnectionString = aspireConnectionString;
-                }
-            });
+        // Configure database options
+        services.AddOptions<DatabaseOptions>()
+            .Bind(configuration.GetSection(nameof(DatabaseOptions)));
 
         if (configurator != null)
         {
@@ -64,14 +57,14 @@ public static class Extensions
         }
         else
         {
-            services.AddValidateOptions<PostgresOptions>();
+            services.AddValidateOptions<DatabaseOptions>();
         }
 
-        // Register DbContext with PostgreSQL
+        // Register DbContext with in-memory database (for now)
         services.AddDbContext<TContext>((serviceProvider, options) =>
         {
-            var postgresOptions = serviceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
-            ConfigurePostgresDbContext(options, postgresOptions, typeof(TContext));
+            var databaseOptions = serviceProvider.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+            ConfigureDbContext(options, databaseOptions, typeof(TContext));
         });
 
         // Register context interfaces
@@ -91,22 +84,12 @@ public static class Extensions
         string? connectionName = "")
         where TContext : DbContext, IDbContext
     {
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
-        builder.Services.AddValidateOptions<PostgresOptions>();
+        builder.Services.AddValidateOptions<DatabaseOptions>();
 
         builder.Services.AddDbContext<TContext>((sp, options) =>
         {
-            var aspireConnectionString = builder.Configuration.GetConnectionString(connectionName.Kebaberize());
-            var connectionString = aspireConnectionString ?? sp.GetRequiredService<PostgresOptions>().ConnectionString;
-
-            ArgumentException.ThrowIfNullOrEmpty(connectionString);
-
-            options.UseNpgsql(connectionString, dbOptions =>
-            {
-                dbOptions.MigrationsAssembly(typeof(TContext).Assembly.GetName().Name);
-            })
-            .UseSnakeCaseNamingConvention();
+            // Use in-memory database for now
+            options.UseInMemoryDatabase($"{typeof(TContext).Name}_{connectionName.Kebaberize()}");
 
             // Suppress warnings for pending model changes
             options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
@@ -122,21 +105,13 @@ public static class Extensions
     public static IServiceCollection AddCqrsDbContext<TWriteContext, TReadContext>(
         this IServiceCollection services,
         IConfiguration configuration,
-        Action<PostgresOptions>? configurator = null)
+        Action<DatabaseOptions>? configurator = null)
         where TWriteContext : DbContext, IWriteDbContext<object>
         where TReadContext : DbContext, IReadDbContext<object>
     {
-        // Configure shared PostgreSQL options
-        services.AddOptions<PostgresOptions>()
-            .Bind(configuration.GetSection(nameof(PostgresOptions)))
-            .PostConfigure(options =>
-            {
-                var aspireConnectionString = configuration.GetConnectionString("postgres");
-                if (!string.IsNullOrEmpty(aspireConnectionString))
-                {
-                    options.ConnectionString = aspireConnectionString;
-                }
-            });
+        // Configure shared database options
+        services.AddOptions<DatabaseOptions>()
+            .Bind(configuration.GetSection(nameof(DatabaseOptions)));
 
         if (configurator != null)
         {
@@ -146,15 +121,15 @@ public static class Extensions
         // Register Write Context
         services.AddDbContext<TWriteContext>((serviceProvider, options) =>
         {
-            var postgresOptions = serviceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
-            ConfigurePostgresDbContext(options, postgresOptions, typeof(TWriteContext));
+            var databaseOptions = serviceProvider.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+            ConfigureDbContext(options, databaseOptions, typeof(TWriteContext));
         });
 
         // Register Read Context (optimized for queries)
         services.AddDbContext<TReadContext>((serviceProvider, options) =>
         {
-            var postgresOptions = serviceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
-            ConfigurePostgresDbContext(options, postgresOptions, typeof(TReadContext));
+            var databaseOptions = serviceProvider.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+            ConfigureDbContext(options, databaseOptions, typeof(TReadContext));
             
             // Read context optimizations
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
@@ -174,12 +149,12 @@ public static class Extensions
     /// </summary>
     public static IServiceCollection AddPersistenceServices(this IServiceCollection services)
     {
-        // Register repositories
-        services.AddScoped(typeof(IReadRepository<,>), typeof(PostgresReadRepository<,>));
-        services.AddScoped(typeof(IWriteRepository<,>), typeof(PostgresWriteRepository<,>));
+        // Register repositories (using generic EF implementations for now)
+        services.AddScoped(typeof(IReadRepository<,>), typeof(EfReadRepository<,>));
+        services.AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>));
         
         // Register Unit of Work
-        services.AddScoped(typeof(IWriteUnitOfWork<>), typeof(PostgresWriteUnitOfWork<>));
+        services.AddScoped(typeof(IWriteUnitOfWork<>), typeof(EfWriteUnitOfWork<>));
         
         // Register infrastructure services
         services.AddScoped<ISeedManager, SeedManager>();
@@ -188,29 +163,214 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Use database migrations
+    /// Add persistence layer with Clean Architecture patterns and enterprise features
     /// </summary>
-    public static IApplicationBuilder UseMigration<TContext>(this IApplicationBuilder app)
-        where TContext : DbContext
+    public static WebApplicationBuilder AddPersistenceWithCleanArchitecture<TContext>(
+        this WebApplicationBuilder builder,
+        string? connectionName = "DefaultConnection",
+        Action<PersistenceConfigurationOptions>? configureOptions = null)
+        where TContext : DbContext, IDbContext
     {
-        ArgumentNullException.ThrowIfNull(app);
-        
-        using var scope = app.ApplicationServices.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<TContext>();
-        context.Database.Migrate();
-        return app;
+        var options = new PersistenceConfigurationOptions();
+        configureOptions?.Invoke(options);
+
+        // Core database configuration
+        builder.Services.AddDbContext<TContext>(builder.Configuration, opts =>
+        {
+            opts.ConnectionString = options.ConnectionString;
+            opts.MaxRetryCount = options.MaxRetryCount;
+            opts.MaxRetryDelaySeconds = options.MaxRetryDelaySeconds;
+            opts.CommandTimeout = options.CommandTimeout;
+            opts.EnableSensitiveDataLogging = options.EnableSensitiveDataLogging;
+            opts.EnableDetailedErrors = options.EnableDetailedErrors;
+            opts.EnableServiceProviderCaching = options.EnableServiceProviderCaching;
+            opts.MigrationsAssembly = options.MigrationsAssembly;
+            opts.DefaultSchema = options.DefaultSchema;
+            opts.EnableAutomaticMigrations = options.EnableAutomaticMigrations;
+        });
+
+        // Add repository patterns and transaction behavior
+        builder.Services.ConfigureRepositoryPatterns(options);
+
+        // Add performance monitoring
+        if (options.EnablePerformanceMonitoring)
+        {
+            builder.Services.AddPerformanceMonitoring<TContext>();
+        }
+
+        // Add health checks
+        if (options.EnableHealthChecks)
+        {
+            builder.Services.AddPersistenceHealthChecks<TContext>(options.HealthCheckOptions);
+        }
+
+        return builder;
     }
 
     /// <summary>
-    /// Configure PostgreSQL for development environment
+    /// Configure repository patterns with Clean Architecture compliance
     /// </summary>
-    public static IServiceCollection ConfigurePostgresDevelopment(
+    public static IServiceCollection ConfigureRepositoryPatterns(
+        this IServiceCollection services,
+        PersistenceConfigurationOptions options)
+    {
+        // Configure transaction behavior
+        if (options.DefaultTransactionBehavior != TransactionBehavior.None)
+        {
+            services.ConfigureTransactionBehavior(options.DefaultTransactionBehavior);
+        }
+
+        // Configure caching if enabled
+        if (options.EnableRepositoryCaching)
+        {
+            services.AddPersistenceRepositoryCaching(options.CacheExpiration);
+        }
+
+        // Configure repository compatibility layer if enabled
+        if (options.EnableRepositoryCompatibilityLayer)
+        {
+            services.AddRepositoryCompatibilityLayer();
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Add performance monitoring for database operations
+    /// </summary>
+    public static IServiceCollection AddPerformanceMonitoring<TContext>(this IServiceCollection services)
+        where TContext : DbContext, IDbContext
+    {
+        services.AddScoped<IPerformanceTracker<TContext>, PersistencePerformanceTracker<TContext>>();
+        return services;
+    }
+
+    /// <summary>
+    /// Add comprehensive health checks for persistence layer
+    /// </summary>
+    public static IServiceCollection AddPersistenceHealthChecks<TContext>(
+        this IServiceCollection services,
+        PersistenceHealthCheckOptions? options = null)
+        where TContext : DbContext, IDbContext
+    {
+        services.AddHealthChecks()
+            .AddCheck<PersistenceHealthCheck<TContext>>(
+                $"persistence-{typeof(TContext).Name.ToLowerInvariant()}",
+                tags: new[] { "persistence", "database", typeof(TContext).Name.ToLowerInvariant() });
+
+        // Register the health check service
+        services.AddScoped<IPersistenceHealthCheck<TContext>, PersistenceHealthCheck<TContext>>();
+        
+        // Register options if provided
+        if (options != null)
+        {
+            services.AddSingleton(options);
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Configure transaction behavior patterns
+    /// </summary>
+    public static IServiceCollection ConfigureTransactionBehavior(
+        this IServiceCollection services,
+        TransactionBehavior behavior)
+    {
+        switch (behavior)
+        {
+            case TransactionBehavior.PerRequest:
+                services.AddScoped<ITransactionBehaviorHandler, PerRequestTransactionHandler>();
+                break;
+            case TransactionBehavior.PerOperation:
+                services.AddScoped<ITransactionBehaviorHandler, PerOperationTransactionHandler>();
+                break;
+            case TransactionBehavior.Explicit:
+                services.AddScoped<ITransactionBehaviorHandler, ExplicitTransactionHandler>();
+                break;
+            case TransactionBehavior.None:
+                // No transaction behavior handler registered
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(behavior), behavior, "Unknown transaction behavior");
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Add repository-level caching using the decorator-based approach
+    /// </summary>
+    public static IServiceCollection AddPersistenceRepositoryCaching(
+        this IServiceCollection services,
+        TimeSpan? cacheExpiration = null)
+    {
+        // Use the existing caching extensions from the Caching folder
+        return services.AddRepositoryCaching(cacheExpiration);
+    }
+
+    /// <summary>
+    /// Add repository compatibility layer for legacy support
+    /// TODO: Implement this extension method based on specific legacy requirements
+    /// </summary>
+    public static IServiceCollection AddRepositoryCompatibilityLayer(this IServiceCollection services)
+    {
+        // This is a placeholder for future compatibility layer implementation
+        // Implementation depends on specific legacy repository patterns that need support
+        return services;
+    }
+
+    /// <summary>
+    /// Use database migrations
+    /// </summary>
+    public static IApplicationBuilder UseMigration<TContext>(this IApplicationBuilder app)
+        where TContext : DbContext, IDbContext
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        
+        MigrateAsync<TContext>(app.ApplicationServices).GetAwaiter().GetResult();
+        SeedAsync(app.ApplicationServices).GetAwaiter().GetResult();
+        
+        return app;
+    }
+
+    private static async Task MigrateAsync<TContext>(IServiceProvider serviceProvider)
+        where TContext : DbContext, IDbContext
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<TContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<TContext>>();
+
+        var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+
+        if (pendingMigrations.Any())
+        {
+            logger.LogInformation("Applying {Count} pending migrations...", pendingMigrations.Count());
+
+            await context.Database.MigrateAsync();
+            logger.LogInformation("Migrations applied successfully.");
+        }
+    }
+
+    private static async Task SeedAsync(IServiceProvider serviceProvider)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+
+        var seedersManager = scope.ServiceProvider.GetRequiredService<ISeedManager>();
+
+        await seedersManager.ExecuteSeedAsync();
+    }
+
+    /// <summary>
+    /// Configure database for development environment
+    /// </summary>
+    public static IServiceCollection ConfigureDatabaseDevelopment(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         _ = configuration; // Parameter reserved for future use
         
-        services.Configure<PostgresOptions>(options =>
+        services.Configure<DatabaseOptions>(options =>
         {
             options.EnableSensitiveDataLogging = true;
             options.EnableDetailedErrors = true;
@@ -224,15 +384,15 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Configure PostgreSQL for production environment
+    /// Configure database for production environment
     /// </summary>
-    public static IServiceCollection ConfigurePostgresProduction(
+    public static IServiceCollection ConfigureDatabaseProduction(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         _ = configuration; // Parameter reserved for future use
         
-        services.Configure<PostgresOptions>(options =>
+        services.Configure<DatabaseOptions>(options =>
         {
             options.EnableSensitiveDataLogging = false;
             options.EnableDetailedErrors = false;
@@ -298,74 +458,52 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Configure PostgreSQL DbContext options
+    /// Configure DbContext options
     /// </summary>
-    private static void ConfigurePostgresDbContext(
+    private static void ConfigureDbContext(
         DbContextOptionsBuilder options, 
-        PostgresOptions postgresOptions, 
+        DatabaseOptions databaseOptions, 
         Type contextType)
     {
-        options.UseNpgsql(postgresOptions.ConnectionString, npgsqlOptions =>
-        {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: postgresOptions.MaxRetryCount,
-                maxRetryDelay: TimeSpan.FromSeconds(postgresOptions.MaxRetryDelaySeconds),
-                errorCodesToAdd: null);
-            
-            if (!string.IsNullOrEmpty(postgresOptions.MigrationsAssembly))
-            {
-                npgsqlOptions.MigrationsAssembly(postgresOptions.MigrationsAssembly);
-            }
-            else
-            {
-                npgsqlOptions.MigrationsAssembly(contextType.Assembly.GetName().Name);
-            }
-
-            if (postgresOptions.CommandTimeout > 0)
-            {
-                npgsqlOptions.CommandTimeout(postgresOptions.CommandTimeout);
-            }
-        });
+        // Use in-memory database for now (can be replaced with other providers)
+        options.UseInMemoryDatabase(contextType.Name);
 
         // Development settings
-        if (postgresOptions.EnableSensitiveDataLogging)
+        if (databaseOptions.EnableSensitiveDataLogging)
         {
             options.EnableSensitiveDataLogging();
         }
 
-        if (postgresOptions.EnableDetailedErrors)
+        if (databaseOptions.EnableDetailedErrors)
         {
             options.EnableDetailedErrors();
         }
 
         // Performance settings
-        if (postgresOptions.EnableServiceProviderCaching)
+        if (databaseOptions.EnableServiceProviderCaching)
         {
             options.EnableServiceProviderCaching();
         }
-
-        // Use snake_case naming convention
-        options.UseSnakeCaseNamingConvention();
     }
 
     /// <summary>
-    /// Add validation for PostgresOptions
+    /// Add validation for DatabaseOptions
     /// </summary>
     private static IServiceCollection AddValidateOptions<T>(this IServiceCollection services)
         where T : class
     {
-        services.AddSingleton<IValidateOptions<T>, ValidatePostgresOptions<T>>();
+        services.AddSingleton<IValidateOptions<T>, ValidateDatabaseOptions<T>>();
         return services;
     }
 }
 
 /// <summary>
-/// PostgreSQL configuration options
+/// Database configuration options (provider agnostic)
 /// </summary>
-public class PostgresOptions
+public class DatabaseOptions
 {
     /// <summary>
-    /// PostgreSQL connection string
+    /// Database connection string
     /// </summary>
     public string ConnectionString { get; set; } = string.Empty;
 
@@ -407,7 +545,7 @@ public class PostgresOptions
     /// <summary>
     /// Database schema name
     /// </summary>
-    public string DefaultSchema { get; set; } = "public";
+    public string DefaultSchema { get; set; } = "dbo";
 
     /// <summary>
     /// Enable automatic migrations (development only)
@@ -416,30 +554,66 @@ public class PostgresOptions
 }
 
 /// <summary>
-/// Validator for PostgresOptions
+/// Enhanced persistence configuration options with enterprise features
 /// </summary>
-public class ValidatePostgresOptions<T> : IValidateOptions<T> where T : class
+public class PersistenceConfigurationOptions : DatabaseOptions
+{
+    /// <summary>
+    /// Enable performance monitoring for database operations
+    /// </summary>
+    public bool EnablePerformanceMonitoring { get; set; } = true;
+
+    /// <summary>
+    /// Enable health checks for database connectivity and performance
+    /// </summary>
+    public bool EnableHealthChecks { get; set; } = true;
+
+    /// <summary>
+    /// Enable repository-level caching with decorators
+    /// </summary>
+    public bool EnableRepositoryCaching { get; set; }
+
+    /// <summary>
+    /// Default transaction behavior for operations
+    /// </summary>
+    public TransactionBehavior DefaultTransactionBehavior { get; set; } = TransactionBehavior.PerOperation;
+
+    /// <summary>
+    /// Cache expiration time for repository caching
+    /// </summary>
+    public TimeSpan CacheExpiration { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Health check options
+    /// </summary>
+    public PersistenceHealthCheckOptions HealthCheckOptions { get; set; } = new();
+
+    /// <summary>
+    /// Enable repository compatibility layer for legacy support
+    /// </summary>
+    public bool EnableRepositoryCompatibilityLayer { get; set; }
+}
+
+/// <summary>
+/// Validator for DatabaseOptions
+/// </summary>
+public class ValidateDatabaseOptions<T> : IValidateOptions<T> where T : class
 {
     public ValidateOptionsResult Validate(string? name, T options)
     {
-        if (options is PostgresOptions postgresOptions)
+        if (options is DatabaseOptions databaseOptions)
         {
-            if (string.IsNullOrEmpty(postgresOptions.ConnectionString))
-            {
-                return ValidateOptionsResult.Fail("PostgreSQL connection string is required");
-            }
-
-            if (postgresOptions.MaxRetryCount < 0)
+            if (databaseOptions.MaxRetryCount < 0)
             {
                 return ValidateOptionsResult.Fail("MaxRetryCount must be non-negative");
             }
 
-            if (postgresOptions.MaxRetryDelaySeconds < 0)
+            if (databaseOptions.MaxRetryDelaySeconds < 0)
             {
                 return ValidateOptionsResult.Fail("MaxRetryDelaySeconds must be non-negative");
             }
 
-            if (postgresOptions.CommandTimeout < 0)
+            if (databaseOptions.CommandTimeout < 0)
             {
                 return ValidateOptionsResult.Fail("CommandTimeout must be non-negative");
             }

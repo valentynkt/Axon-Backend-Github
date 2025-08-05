@@ -3,7 +3,7 @@ using BuildingBlocks.Core.Model;
 
 namespace BuildingBlocks.PersistMessageProcessor;
 
-public class PersistMessage : IVersion
+public class PersistMessage : IVersioned
 {
     // Private constructor for EF Core
     private PersistMessage()

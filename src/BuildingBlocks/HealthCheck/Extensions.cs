@@ -1,7 +1,7 @@
 using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.EventStoreDB;
 using BuildingBlocks.MassTransit;
 using BuildingBlocks.Persistence;
+using BuildingBlocks.Postgres;
 using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -26,7 +26,6 @@ public static class Extensions
             var appOptions = services.GetOptions<AppOptions>(nameof(AppOptions));
             var postgresOptions = services.GetOptions<PostgresOptions>(nameof(PostgresOptions));
             var rabbitMqOptions = services.GetOptions<RabbitMqOptions>(nameof(RabbitMqOptions));
-            var eventStoreOptions = services.GetOptions<EventStoreOptions>(nameof(EventStoreOptions));
 
             var healthChecksBuilder = services.AddHealthChecks()
                 // Add a default liveness check to ensure app is responsive

@@ -23,11 +23,11 @@ namespace BuildingBlocks.Caching
             if (request is not IInvalidateCacheRequest invalidateCacheRequest)
             {
                 // No cache request found, so just continue through the pipeline
-                return await next();
+                return await next(cancellationToken);
             }
 
             var cacheKey = invalidateCacheRequest.CacheKey;
-            var response = await next();
+            var response = await next(cancellationToken);
 
             await _cachingProvider.RemoveAsync(cacheKey, cancellationToken);
 

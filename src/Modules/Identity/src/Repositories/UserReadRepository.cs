@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 
 namespace Identity.Repositories;
 
-public class UserReadRepository : PostgresReadRepository<User, Guid>, IUserReadRepository
+public class UserReadRepository : EfReadRepository<User, Guid>, IUserReadRepository
 {
     public UserReadRepository(IdentityReadContext context) : base(context)
     {
@@ -15,24 +15,24 @@ public class UserReadRepository : PostgresReadRepository<User, Guid>, IUserReadR
 
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
-        return await GetQueryable()
+        return await AsQueryable()
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
     }
 
     public async Task<User?> GetByUserNameAsync(string userName, CancellationToken cancellationToken = default)
     {
-        return await GetQueryable()
+        return await AsQueryable()
             .FirstOrDefaultAsync(u => u.UserName == userName, cancellationToken);
     }
 
     public async Task<IReadOnlyList<User>> GetUsersByRoleAsync(string roleName, CancellationToken cancellationToken = default)
     {
-        return await GetQueryable()
-            .Join(Context.Set<UserRole>(),
+        return await AsQueryable()
+            .Join(((IdentityReadContext)Context).Set<UserRole>(),
                 user => user.Id,
                 userRole => userRole.UserId,
                 (user, userRole) => new { User = user, UserRole = userRole })
-            .Join(Context.Set<Role>(),
+            .Join(((IdentityReadContext)Context).Set<Role>(),
                 ur => ur.UserRole.RoleId,
                 role => role.Id,
                 (ur, role) => new { ur.User, Role = role })
@@ -43,6 +43,6 @@ public class UserReadRepository : PostgresReadRepository<User, Guid>, IUserReadR
 
     public async Task<int> GetTotalUsersCountAsync(CancellationToken cancellationToken = default)
     {
-        return await GetQueryable().CountAsync(cancellationToken);
+        return await AsQueryable().CountAsync(cancellationToken);
     }
 }

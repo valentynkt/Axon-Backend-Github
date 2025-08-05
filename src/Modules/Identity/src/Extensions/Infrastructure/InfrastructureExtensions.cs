@@ -32,7 +32,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IUserReadRepository, UserReadRepository>();
         
         // Register Unit of Work for write operations
-        builder.Services.AddScoped<IWriteUnitOfWork<IdentityWriteContext>, PostgresWriteUnitOfWork<IdentityWriteContext>>();
+        builder.Services.AddScoped<IWriteUnitOfWork<IdentityWriteContext>, EfWriteUnitOfWork<IdentityWriteContext>>();
         
         builder.Services.AddScoped<IDataSeeder, IdentityDataSeeder>();
         builder.AddCustomIdentityServer();

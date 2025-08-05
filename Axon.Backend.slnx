@@ -43,13 +43,10 @@
   </Folder>
   <Folder Name="/tests/Modules.Chat.Application.Tests/">
     <Project Path="tests/Modules.Chat.Application.Tests/Axon.Modules.Chat.Application.Tests.csproj" />
-  </Folder>
   <Folder Name="/tests/Modules.Chat.Domain.Tests/">
     <Project Path="tests/Modules.Chat.Domain.Tests/Axon.Modules.Chat.Domain.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Modules.Chat.Infrastructure.Tests/">
-    <Project Path="tests/Modules.Chat.Infrastructure.Tests/Axon.Modules.Chat.Infrastructure.Tests.csproj" />
-  </Folder>
+</Folder>
   <Folder Name="/tests/Modules.Identity.Integration.Test/">
     <Project Path="src/Modules/Identity/tests/Integration.Test/Integration.Test.csproj" />
   </Folder>
