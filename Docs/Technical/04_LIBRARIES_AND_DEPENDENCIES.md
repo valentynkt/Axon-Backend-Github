@@ -1,7 +1,8 @@
-# 📦 Axon Backend - Libraries & Dependencies Reference# 📦 Axon Backend - Libraries & Dependencies Reference
+# 📦 Axon Backend - Libraries & Dependencies Reference
 
 ## Table of Contents
 - [Overview](#overview)
+- [Technology Stack](#technology-stack)
 - [Core Framework](#core-framework)
 - [Web & API](#web--api)
 - [Data Access](#data-access)
@@ -11,85 +12,148 @@
 - [Validation](#validation)
 - [Mapping & Serialization](#mapping--serialization)
 - [Testing](#testing)
-- [Observability](#observability)
+- [Observability & Logging](#observability--logging)
 - [Resilience & Fault Tolerance](#resilience--fault-tolerance)
+- [Background Processing](#background-processing)
 - [Development Tools](#development-tools)
+- [Build & Deployment](#build--deployment)
 - [Dependency Management](#dependency-management)
 - [Version Strategy](#version-strategy)
+- [Security Compliance](#security-compliance)
+- [Performance Optimization](#performance-optimization)
 
 ## Overview
 
-This document provides comprehensive information about all libraries and dependencies used in the Axon Backend system, including version numbers, usage patterns, and implementation guidelines.
-### Technology Stack
-- **.NET 10**: Latest LTS framework
-- **C# 13**: Modern language features
-- **PostgreSQL 16**: Primary database
-- **Redis**: Distributed caching
-- **RabbitMQ**: Message broker
-- **EventStore**: Event sourcing
-- **Docker**: Containerization
-- **Kubernetes**: Orchestration
+This document provides comprehensive information about all libraries and dependencies used in the Axon Backend system, including version numbers, usage patterns, implementation guidelines, and architectural decisions. It serves as the single source of truth for dependency management and library integration patterns.
+
+### Document Purpose
+- **Reference Guide**: Complete catalog of all dependencies
+- **Integration Patterns**: Best practices for library usage
+- **Version Control**: Centralized version management strategy
+- **Security Tracking**: Vulnerability monitoring and patching
+- **Performance Guidelines**: Optimization techniques per library
+- **Migration Path**: Upgrade strategies and breaking changes
+
+## Technology Stack
+
+### Core Technologies
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| **.NET** | 10.0.0 | Core runtime framework | LTS |
+| **C#** | 13.0 | Programming language | Current |
+| **PostgreSQL** | 16.x | Primary database | Production |
+| **Redis** | 7.x | Distributed caching | Production |
+| **RabbitMQ** | 3.13.x | Message broker | Production |
+| **EventStore** | 23.x | Event sourcing | Production |
+| **Docker** | Latest | Containerization | Production |
+| **Kubernetes** | 1.28+ | Container orchestration | Production |
+
+### Architecture Patterns
+- **Clean Architecture**: Domain-driven design with clear boundaries
+- **CQRS**: Command Query Responsibility Segregation
+- **Event Sourcing**: Audit trail and event replay capabilities
+- **Microservices Ready**: Modular monolith with service boundaries
+- **API-First**: RESTful APIs with OpenAPI documentation
 
 ## Core Framework
 
 ### .NET 10 & ASP.NET Core
-**Version**: 10.0.0
-**Purpose**: Core runtime and web framework
-**Key Packages**:
+**Version**: 10.0.0  
+**License**: MIT  
+**Purpose**: Core runtime and web framework  
+**Update Policy**: Track LTS releases, update within 3 months
+
+#### Key Packages
 ```xml
 <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
 <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
 <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
 <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
 <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
-```**Usage Patterns**:
+<PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.DependencyModel" Version="9.0.0" />
+```
+
+#### Configuration Patterns
 ```csharp
-// Program.cs configuration
+// Program.cs - Minimal API configuration
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddProblemDetails();
 
+// Configure host
 builder.Host.UseDefaultServiceProvider(options =>
 {
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
 
+// Build application
 var app = builder.Build();
 
+// Configure middleware pipeline
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseExceptionHandler();
 app.MapControllers();
+app.MapHealthChecks("/health");
 ```
 
 ## Web & API
 
 ### FastEndpoints
-**Version**: Latest compatible with .NET 10
-**Purpose**: High-performance minimal API framework
-**Implementation**:
+**Version**: 7.0.1  
+**License**: MIT  
+**Purpose**: High-performance minimal API framework  
+**Update Policy**: Minor version updates monthly
+
+#### Packages
+```xml
+<PackageReference Include="FastEndpoints" Version="7.0.1" />
+<PackageReference Include="FastEndpoints.Swagger" Version="7.0.0" />
+```
+
+#### Implementation Pattern
 ```csharp
 // Endpoint configuration
 app.UseFastEndpoints(config =>
 {
+    config.Endpoints.RoutePrefix = "api";
+    config.Versioning.Prefix = "v";
+    config.Serializer.Options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    
     config.Errors.ResponseBuilder = (failures, ctx, statusCode) =>
     {
         return new ProblemDetails
         {
-            Type = "https://httpstatuses.com/" + statusCode,
+            Type = $"https://httpstatuses.com/{statusCode}",
             Title = "Validation Error",
             Status = statusCode,
-            Detail = string.Join(", ", failures.Select(f => f.ErrorMessage))
+            Detail = string.Join(", ", failures.Select(f => f.ErrorMessage)),
+            Instance = ctx.Request.Path
         };
     };
+    
+    config.Throttle.HeaderName = "X-Rate-Limit";
+    config.Throttle.Message = "Rate limit exceeded";
 });
-```### Swashbuckle (OpenAPI/Swagger)
-**Version**: 7.1.0
-**Purpose**: API documentation and testing
-**Packages**:
+```
+
+### Swashbuckle (OpenAPI/Swagger)
+**Version**: 7.1.0 / 7.2.0  
+**License**: MIT  
+**Purpose**: API documentation and testing  
+**Security Note**: Disable in production environments
+
+#### Packages
 ```xml
 <PackageReference Include="Swashbuckle.AspNetCore" Version="7.1.0" />
 <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="7.1.0" />
@@ -97,7 +161,7 @@ app.UseFastEndpoints(config =>
 <PackageReference Include="Unchase.Swashbuckle.AspNetCore.Extensions" Version="2.7.1" />
 ```
 
-**Configuration**:
+#### Advanced Configuration
 ```csharp
 services.AddSwaggerGen(options =>
 {
@@ -105,44 +169,77 @@ services.AddSwaggerGen(options =>
     {
         Title = "Axon Backend API",
         Version = "v1",
-        Description = "AI-powered chat system with MCP integration"
+        Description = "AI-powered chat system with MCP integration",
+        Contact = new OpenApiContact
+        {
+            Name = "API Support",
+            Email = "api@axon.com"
+        },
+        License = new OpenApiLicense
+        {
+            Name = "Proprietary",
+            Url = new Uri("https://axon.com/license")
+        }
     });
     
+    // Security definitions
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
-        Description = "Please enter JWT token",
+        Description = "JWT Bearer token",
         Name = "Authorization",
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT"
     });
     
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+    
+    // Enable annotations
     options.EnableAnnotations();
-    options.CustomSchemaIds(type => type.FullName);
+    
+    // Custom schema IDs
+    options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+    
+    // XML documentation
+    var xmlFiles = Directory.GetFiles(AppContext.BaseDirectory, "*.xml");
+    foreach (var xmlFile in xmlFiles)
+    {
+        options.IncludeXmlComments(xmlFile);
+    }
 });
-```### Scalar (API Documentation)
-**Version**: 1.2.64
-**Purpose**: Modern API documentation UI
-**Package**:
+```
+
+### Scalar (Modern API Documentation)
+**Version**: 1.2.64  
+**License**: MIT  
+**Purpose**: Modern, interactive API documentation UI  
+**Features**: Dark mode, request builder, code generation
+
 ```xml
 <PackageReference Include="Scalar.AspNetCore" Version="1.2.64" />
 ```
 
-**Usage**:
-```csharp
-app.UseScalar(options =>
-{
-    options.Title = "Axon API Reference";
-    options.Theme = ScalarTheme.Modern;
-    options.ShowSidebar = true;
-});
-```
-
 ### API Versioning
-**Version**: 8.1.0
-**Purpose**: RESTful API versioning
-**Packages**:
+**Version**: 8.1.0  
+**License**: MIT  
+**Purpose**: RESTful API versioning support  
+**Strategy**: URL path versioning (v1, v2)
+
+#### Packages
 ```xml
 <PackageReference Include="Asp.Versioning.Abstractions" Version="8.1.0" />
 <PackageReference Include="Asp.Versioning.Http" Version="8.1.0" />
@@ -153,153 +250,230 @@ app.UseScalar(options =>
 ## Data Access
 
 ### Entity Framework Core
-**Version**: 9.0.0
-**Purpose**: Object-Relational Mapping (ORM)
-**Packages**:
+**Version**: 9.0.0  
+**License**: MIT  
+**Purpose**: Object-Relational Mapping (ORM)  
+**Performance**: Query compilation caching, connection pooling
+
+#### Packages
 ```xml
 <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.0" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
 <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
-```**Implementation Patterns**:
+<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.0" />
+```
+
+#### Advanced Configuration
 ```csharp
-// DbContext configuration
 public class ChatDbContext : DbContext
 {
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder
-            .UseNpgsql(connectionString, options =>
+            .UseNpgsql(connectionString, npgsqlOptions =>
             {
-                options.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-                options.EnableRetryOnFailure(3);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+                npgsqlOptions.CommandTimeout(30);
+                npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
             })
             .UseSnakeCaseNamingConvention()
             .EnableSensitiveDataLogging(isDevelopment)
-            .EnableDetailedErrors(isDevelopment);
+            .EnableDetailedErrors(isDevelopment)
+            .UseLoggerFactory(loggerFactory)
+            .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
     }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Schema configuration
         modelBuilder.HasDefaultSchema("chat");
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         
         // Global query filters
         modelBuilder.Entity<Conversation>()
             .HasQueryFilter(c => !c.IsDeleted);
+        
+        // Value conversions
+        modelBuilder.Entity<Message>()
+            .Property(m => m.Status)
+            .HasConversion<string>();
+        
+        // Indexes
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => c.UserId)
+            .HasDatabaseName("ix_conversations_user_id")
+            .IncludeProperties(c => new { c.Title, c.CreatedAt });
     }
 }
 ```
 
 ### PostgreSQL Driver (Npgsql)
-**Version**: 9.0.0
-**Purpose**: PostgreSQL database driver
-**Packages**:
+**Version**: 9.0.0  
+**License**: PostgreSQL License  
+**Purpose**: PostgreSQL database driver  
+**Features**: JSONB, arrays, full-text search, COPY operations
+
+#### Packages
 ```xml
 <PackageReference Include="Npgsql" Version="9.0.0" />
 <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
 ```
 
-**Advanced Features Used**:
+#### Advanced PostgreSQL Features
 ```csharp
-// JSONB support for complex data
+// JSONB column for flexible schema
 modelBuilder.Entity<Message>()
     .Property(m => m.ToolExecutions)
-    .HasColumnType("jsonb");
+    .HasColumnType("jsonb")
+    .HasConversion(
+        v => JsonSerializer.Serialize(v, jsonOptions),
+        v => JsonSerializer.Deserialize<List<ToolExecution>>(v, jsonOptions));
 
-// Array types
+// Array column types
 modelBuilder.Entity<User>()
     .Property(u => u.Roles)
     .HasColumnType("text[]");
 
-// Full-text search
+// Full-text search configuration
 modelBuilder.Entity<Conversation>()
     .HasIndex(c => c.Title)
     .HasMethod("gin")
     .HasOperators("gin_trgm_ops");
-```### Sieve (Filtering, Sorting, Pagination)
-**Version**: 2.5.5
-**Purpose**: Dynamic filtering and sorting
-**Package**:
+
+// Generated columns
+modelBuilder.Entity<Message>()
+    .Property(m => m.SearchVector)
+    .HasComputedColumnSql(
+        "to_tsvector('english', content)", 
+        stored: true);
+```
+
+### Sieve (Dynamic Filtering & Sorting)
+**Version**: 2.5.5  
+**License**: Apache 2.0  
+**Purpose**: Dynamic filtering, sorting, and pagination  
+**Security**: Input validation and SQL injection prevention
+
 ```xml
 <PackageReference Include="Sieve" Version="2.5.5" />
 ```
 
-**Usage Pattern**:
+#### Configuration
 ```csharp
-// Apply Sieve processing
-public async Task<PagedResult<ConversationDto>> GetConversations(SieveModel sieveModel)
+// Sieve configuration
+public class ApplicationSieveProcessor : SieveProcessor
 {
-    var query = _context.Conversations.AsQueryable();
+    protected override SievePropertyMapper MapProperties(SievePropertyMapper mapper)
+    {
+        mapper.Property<Conversation>(c => c.Title)
+            .CanFilter()
+            .CanSort();
+            
+        mapper.Property<Conversation>(c => c.CreatedAt)
+            .CanFilter()
+            .CanSort()
+            .HasName("created");
+            
+        return mapper;
+    }
+}
+
+// Usage in repository
+public async Task<PagedResult<T>> GetPagedAsync(SieveModel sieveModel)
+{
+    var query = _context.Set<T>().AsQueryable();
     
-    // Apply filtering, sorting, and pagination
+    // Apply Sieve processing
     query = _sieveProcessor.Apply(sieveModel, query);
     
     var total = await query.CountAsync();
     var items = await query.ToListAsync();
     
-    return new PagedResult<ConversationDto>(items, total);
+    return new PagedResult<T>
+    {
+        Items = items,
+        TotalCount = total,
+        PageNumber = sieveModel.Page ?? 1,
+        PageSize = sieveModel.PageSize ?? 10
+    };
 }
 ```
 
 ## Messaging & Events
 
 ### MediatR
-**Version**: 13.0.0
-**Purpose**: Mediator pattern implementation for CQRS
-**Package**:
+**Version**: 12.4.1 / 13.0.0  
+**License**: Apache 2.0  
+**Purpose**: Mediator pattern for CQRS  
+**Pattern**: In-process message bus
+
 ```xml
 <PackageReference Include="MediatR" Version="13.0.0" />
-```**Implementation**:
+```
+
+#### Pipeline Configuration
 ```csharp
-// Registration
 services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
-    cfg.AddBehavior<IPipelineBehavior<,>, ValidationBehavior<,>>();
+    
+    // Pipeline behaviors (order matters!)
     cfg.AddBehavior<IPipelineBehavior<,>, LoggingBehavior<,>>();
+    cfg.AddBehavior<IPipelineBehavior<,>, ValidationBehavior<,>>();
+    cfg.AddBehavior<IPipelineBehavior<,>, CachingBehavior<,>>();
     cfg.AddBehavior<IPipelineBehavior<,>, TransactionBehavior<,>>();
     cfg.AddBehavior<IPipelineBehavior<,>, MetricsBehavior<,>>();
+    cfg.AddBehavior<IPipelineBehavior<,>, RetryBehavior<,>>();
+    
+    // Notification behaviors
+    cfg.NotificationPublisher = new TaskWhenAllPublisher();
+    cfg.NotificationPublisherType = typeof(TaskWhenAllPublisher);
 });
-
-// Command/Query handling
-public class ProcessMessageHandler : IRequestHandler<ProcessMessageCommand, Result<ProcessMessageResponse>>
-{
-    public async Task<Result<ProcessMessageResponse>> Handle(
-        ProcessMessageCommand request,
-        CancellationToken cancellationToken)
-    {
-        // Implementation
-    }
-}
 ```
 
 ### MassTransit
-**Version**: 8.3.6
-**Purpose**: Distributed application framework with message broker support
-**Packages**:
+**Version**: 8.3.6  
+**License**: Apache 2.0  
+**Purpose**: Distributed application framework  
+**Transports**: RabbitMQ, Azure Service Bus, Amazon SQS
+
+#### Packages
 ```xml
 <PackageReference Include="MassTransit" Version="8.3.6" />
 <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.6" />
-```**Configuration**:
+```
+
+#### Advanced Configuration
 ```csharp
 services.AddMassTransit(x =>
 {
-    x.AddConsumer<ConversationCreatedConsumer>();
+    // Consumer registration
+    x.AddConsumer<ConversationCreatedConsumer>()
+        .Endpoint(e => e.Name = "conversation-created");
     x.AddConsumer<MessageProcessedConsumer>();
     
+    // Saga registration
+    x.AddSagaStateMachine<ConversationStateMachine, ConversationState>()
+        .InMemoryRepository();
+    
+    // Transport configuration
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host("rabbitmq://localhost", h =>
         {
             h.Username("guest");
             h.Password("guest");
+            h.PublisherConfirmation = true;
         });
         
-        cfg.ConfigureEndpoints(context);
-        
-        // Retry policy
+        // Retry policies
         cfg.UseMessageRetry(r => r.Exponential(5, 
             TimeSpan.FromSeconds(1), 
             TimeSpan.FromSeconds(30), 
@@ -313,98 +487,154 @@ services.AddMassTransit(x =>
             cb.ActiveThreshold = 10;
             cb.ResetInterval = TimeSpan.FromMinutes(5);
         });
+        
+        // Rate limiting
+        cfg.UseRateLimit(100, TimeSpan.FromMinutes(1));
+        
+        // Outbox pattern
+        cfg.UseInMemoryOutbox();
+        
+        cfg.ConfigureEndpoints(context);
     });
 });
-```### EventStore Client
-**Version**: 23.3.7
-**Purpose**: Event sourcing and event streaming
-**Package**:
+```
+
+### EventStore Client
+**Version**: 23.3.7  
+**License**: Apache 2.0  
+**Purpose**: Event sourcing and event streaming  
+**Features**: Event streams, projections, subscriptions
+
 ```xml
 <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.3.7" />
 ```
 
-**Usage**:
+#### Event Store Integration
 ```csharp
-// Event store client setup
+// Client configuration
 services.AddSingleton(provider =>
 {
     var settings = EventStoreClientSettings.Create("esdb://localhost:2113?tls=false");
+    settings.ConnectionName = "axon-backend";
+    settings.DefaultCredentials = new UserCredentials("admin", "changeit");
     return new EventStoreClient(settings);
 });
 
-// Append events
-public async Task SaveEvents(Guid aggregateId, IEnumerable<object> events)
+// Event sourcing implementation
+public class EventStoreRepository : IEventStore
 {
-    var streamName = $"conversation-{aggregateId}";
-    var eventData = events.Select(e => new EventData(
-        Uuid.NewUuid(),
-        e.GetType().Name,
-        JsonSerializer.SerializeToUtf8Bytes(e)
-    ));
+    public async Task SaveEventsAsync(
+        Guid aggregateId, 
+        IEnumerable<object> events,
+        int expectedVersion)
+    {
+        var streamName = $"conversation-{aggregateId}";
+        var eventData = events.Select(e => new EventData(
+            Uuid.NewUuid(),
+            e.GetType().Name,
+            JsonSerializer.SerializeToUtf8Bytes(e),
+            metadata: CreateMetadata(e)
+        ));
+        
+        await _client.AppendToStreamAsync(
+            streamName,
+            expectedVersion == -1 ? StreamState.Any : StreamRevision.FromInt64(expectedVersion),
+            eventData);
+    }
     
-    await _client.AppendToStreamAsync(
-        streamName,
-        StreamState.Any,
-        eventData);
+    public async Task<List<object>> GetEventsAsync(Guid aggregateId)
+    {
+        var streamName = $"conversation-{aggregateId}";
+        var events = new List<object>();
+        
+        await foreach (var @event in _client.ReadStreamAsync(
+            Direction.Forwards,
+            streamName,
+            StreamPosition.Start))
+        {
+            var eventType = Type.GetType(@event.Event.EventType);
+            var eventData = JsonSerializer.Deserialize(
+                @event.Event.Data.Span, 
+                eventType!);
+            events.Add(eventData!);
+        }
+        
+        return events;
+    }
 }
-```## Caching
+```
+
+## Caching
 
 ### EasyCaching
-**Version**: 1.9.2
-**Purpose**: Caching abstraction with multiple providers
-**Packages**:
+**Version**: 1.9.2  
+**License**: MIT  
+**Purpose**: Caching abstraction with multiple providers  
+**Providers**: Memory, Redis, SQLite, Memcached
+
+#### Packages
 ```xml
 <PackageReference Include="EasyCaching.Core" Version="1.9.2" />
 <PackageReference Include="EasyCaching.InMemory" Version="1.9.2" />
 ```
 
-**Configuration**:
+#### Hybrid Caching Configuration
 ```csharp
 services.AddEasyCaching(options =>
 {
-    // In-memory cache
+    // L1 Cache - In-memory
     options.UseInMemory(config =>
     {
         config.DBConfig = new InMemoryCachingOptions
         {
             ExpirationScanFrequency = 60,
-            SizeLimit = 100,
-            EnableReadDeepClone = false,
+            SizeLimit = 1000,
+            EnableReadDeepClone = true,
             EnableWriteDeepClone = false
         };
         config.MaxRdSecond = 120;
         config.EnableLogging = true;
-    });
+    }, "l1cache");
     
-    // Redis cache
+    // L2 Cache - Redis
     options.UseRedis(config =>
     {
         config.DBConfig.Endpoints.Add(new ServerEndPoint("localhost", 6379));
         config.DBConfig.Password = "";
         config.DBConfig.Database = 0;
         config.DBConfig.AllowAdmin = true;
-    }, "redis");
+        config.DBConfig.ConnectionTimeout = 5000;
+        config.DBConfig.SyncTimeout = 5000;
+        config.SerializerName = "msgpack";
+    }, "l2cache");
     
-    // Hybrid cache (L1 + L2)
+    // Hybrid cache combining L1 and L2
     options.UseHybrid(config =>
     {
         config.TopicName = "cache-sync";
         config.EnableLogging = true;
-        config.LocalCacheProviderName = "memory";
-        config.DistributedCacheProviderName = "redis";
+        config.LocalCacheProviderName = "l1cache";
+        config.DistributedCacheProviderName = "l2cache";
     });
+    
+    // Message pack serialization
+    options.WithMessagePack();
 });
-```## Authentication & Security
+```
+
+## Authentication & Security
 
 ### JWT Bearer Authentication
-**Version**: 9.0.0
-**Purpose**: JWT token-based authentication
-**Package**:
+**Version**: 9.0.0  
+**License**: MIT  
+**Purpose**: JWT token-based authentication  
+**Algorithm**: RS256 (recommended) or HS256
+
 ```xml
 <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
 ```
 
-**Configuration**:
+#### JWT Configuration
 ```csharp
 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -416,29 +646,58 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             ValidIssuer = configuration["Jwt:Issuer"],
-            ValidAudience = configuration["Jwt:Audience"],
+            ValidAudiences = configuration.GetSection("Jwt:Audiences").Get<string[]>(),
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!))
+                Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!)),
+            ClockSkew = TimeSpan.Zero,
+            RequireExpirationTime = true,
+            RequireSignedTokens = true
         };
         
         options.Events = new JwtBearerEvents
         {
+            OnAuthenticationFailed = context =>
+            {
+                if (context.Exception is SecurityTokenExpiredException)
+                {
+                    context.Response.Headers.Append("Token-Expired", "true");
+                }
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var telemetry = context.HttpContext.RequestServices
+                    .GetRequiredService<ITelemetryService>();
+                telemetry.RecordAuthentication(context.Principal);
+                return Task.CompletedTask;
+            },
             OnMessageReceived = context =>
             {
-                // Support token from query string for SignalR
+                // Support token from query string for SignalR/SSE
                 var accessToken = context.Request.Query["access_token"];
-                if (!string.IsNullOrEmpty(accessToken))
+                var path = context.HttpContext.Request.Path;
+                
+                if (!string.IsNullOrEmpty(accessToken) && 
+                    path.StartsWithSegments("/hubs"))
                 {
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
             }
         };
+        
+        options.SaveToken = true;
+        options.RequireHttpsMetadata = !isDevelopment;
     });
-```### Duende IdentityServer
-**Version**: 7.0.8
-**Purpose**: OpenID Connect and OAuth 2.0 framework
-**Packages**:
+```
+
+### Duende IdentityServer
+**Version**: 7.0.8  
+**License**: Reciprocal Public License (RPL)  
+**Purpose**: OpenID Connect and OAuth 2.0 server  
+**Note**: Commercial license required for production
+
+#### Packages
 ```xml
 <PackageReference Include="Duende.IdentityServer" Version="7.0.8" />
 <PackageReference Include="Duende.IdentityServer.AspNetIdentity" Version="7.0.8" />
@@ -446,339 +705,408 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 <PackageReference Include="Duende.IdentityServer.EntityFramework.Storage" Version="7.0.8" />
 ```
 
-**Setup**:
-```csharp
-services.AddIdentityServer(options =>
-    {
-        options.Events.RaiseErrorEvents = true;
-        options.Events.RaiseInformationEvents = true;
-        options.Events.RaiseFailureEvents = true;
-        options.Events.RaiseSuccessEvents = true;
-    })
-    .AddInMemoryIdentityResources(Config.IdentityResources)
-    .AddInMemoryApiScopes(Config.ApiScopes)
-    .AddInMemoryClients(Config.Clients)
-    .AddAspNetIdentity<ApplicationUser>()
-    .AddDeveloperSigningCredential(); // For development only
-```
-
 ### ASP.NET Core Identity
-**Version**: 9.0.0
-**Purpose**: User management and authentication
-**Package**:
+**Version**: 9.0.0  
+**License**: MIT  
+**Purpose**: User management and authentication  
+**Features**: Password hashing, 2FA, account lockout
+
 ```xml
 <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
-```## Validation
+```
+
+## Validation
 
 ### FluentValidation
-**Version**: 11.11.0
-**Purpose**: Fluent validation rules
-**Packages**:
+**Version**: 11.11.0  
+**License**: Apache 2.0  
+**Purpose**: Fluent validation rules  
+**Integration**: MediatR pipeline, ASP.NET Core
+
+#### Packages
 ```xml
 <PackageReference Include="FluentValidation" Version="11.11.0" />
 <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
 ```
 
-**Usage Pattern**:
+#### Advanced Validation Patterns
 ```csharp
 public class ProcessMessageValidator : AbstractValidator<ProcessMessageCommand>
 {
-    public ProcessMessageValidator()
+    public ProcessMessageValidator(IUserService userService)
     {
+        // Basic validations
         RuleFor(x => x.Message)
             .NotEmpty().WithMessage("Message is required")
-            .MaximumLength(4000).WithMessage("Message too long");
-            
+            .MaximumLength(4000).WithMessage("Message exceeds maximum length")
+            .Must(NotContainMaliciousContent).WithMessage("Invalid content detected");
+        
+        // Conditional validation
         RuleFor(x => x.ConversationId)
-            .NotEqual(Guid.Empty).When(x => x.ConversationId.HasValue)
+            .NotEqual(Guid.Empty)
+            .When(x => x.ConversationId.HasValue)
             .WithMessage("Invalid conversation ID");
-            
+        
+        // Async validation with dependency
         RuleFor(x => x.UserId)
-            .MustAsync(BeActiveUser)
-            .WithMessage("User must be active");
+            .MustAsync(async (userId, ct) => await userService.IsActiveAsync(userId, ct))
+            .WithMessage("User must be active")
+            .WithErrorCode("USER_INACTIVE");
+        
+        // Complex nested validation
+        RuleForEach(x => x.Attachments)
+            .SetValidator(new AttachmentValidator());
+        
+        // Custom severity levels
+        RuleFor(x => x.Priority)
+            .InclusiveBetween(1, 5)
+            .WithSeverity(Severity.Warning);
     }
     
-    private async Task<bool> BeActiveUser(long? userId, CancellationToken ct)
+    private bool NotContainMaliciousContent(string content)
     {
-        if (!userId.HasValue) return false;
-        return await _userService.IsActiveAsync(userId.Value, ct);
+        // Security validation logic
+        return !content.Contains("<script>", StringComparison.OrdinalIgnoreCase);
     }
 }
-```### Ardalis.GuardClauses
-**Version**: 5.0.0
-**Purpose**: Guard clause extensions for validation
-**Package**:
+```
+
+### Ardalis.GuardClauses
+**Version**: 5.0.0  
+**License**: MIT  
+**Purpose**: Guard clause extensions  
+**Pattern**: Fail-fast validation
+
 ```xml
 <PackageReference Include="Ardalis.GuardClauses" Version="5.0.0" />
 ```
 
-**Usage**:
-```csharp
-public class ConversationService
-{
-    public async Task<Conversation> GetConversationAsync(Guid id)
-    {
-        Guard.Against.Default(id, nameof(id));
-        
-        var conversation = await _repository.GetByIdAsync(id);
-        Guard.Against.NotFound(id, conversation, nameof(conversation));
-        
-        return conversation;
-    }
-    
-    public void UpdateTitle(string title)
-    {
-        Guard.Against.NullOrWhiteSpace(title, nameof(title));
-        Guard.Against.OutOfRange(title.Length, nameof(title), 1, 200);
-        
-        Title = title;
-    }
-}
-```## Mapping & Serialization
+## Mapping & Serialization
 
 ### Mapster
-**Version**: 7.4.0
-**Purpose**: High-performance object mapping
-**Packages**:
+**Version**: 7.4.0  
+**License**: MIT  
+**Purpose**: High-performance object mapping  
+**Performance**: 4x faster than AutoMapper
+
+#### Packages
 ```xml
 <PackageReference Include="Mapster" Version="7.4.0" />
 <PackageReference Include="Mapster.DependencyInjection" Version="1.0.1" />
 ```
 
-**Configuration**:
+#### Configuration
 ```csharp
 // Global configuration
 TypeAdapterConfig.GlobalSettings.Scan(Assembly.GetExecutingAssembly());
+TypeAdapterConfig.GlobalSettings.RequireExplicitMapping = true;
+TypeAdapterConfig.GlobalSettings.RequireDestinationMemberSource = true;
 
-// Custom mappings
+// Custom type mappings
 TypeAdapterConfig<Conversation, ConversationDto>
     .NewConfig()
     .Map(dest => dest.MessageCount, src => src.Messages.Count)
     .Map(dest => dest.LastActivity, src => src.Messages.Max(m => m.CreatedAt))
+    .Map(dest => dest.Tags, src => src.Tags.Select(t => t.Name).ToList())
+    .PreserveReference(true)
     .AfterMapping((src, dest) =>
     {
         dest.Status = src.State.ToString();
+        dest.IsActive = src.State == ConversationState.Active;
     });
-
-// Usage
-var dto = conversation.Adapt<ConversationDto>();
-var dtos = conversations.Adapt<List<ConversationDto>>();
-```### Newtonsoft.Json
-**Version**: 13.0.3
-**Purpose**: JSON serialization (legacy support)
-**Package**:
-```xml
-<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 ```
 
-**Note**: Used for legacy compatibility. New code should use System.Text.Json.
-
 ### System.Text.Json
-**Version**: Built-in with .NET 10
-**Purpose**: High-performance JSON serialization
-**Usage**:
+**Version**: Built-in (.NET 10)  
+**License**: MIT  
+**Purpose**: High-performance JSON serialization  
+**Performance**: 2x faster than Newtonsoft.Json
+
+#### Configuration
 ```csharp
-// Configure options
 var jsonOptions = new JsonSerializerOptions
 {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    ReferenceHandler = ReferenceHandler.IgnoreCycles,
+    NumberHandling = JsonNumberHandling.AllowReadingFromString,
     Converters =
     {
-        new JsonStringEnumConverter(),
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
+        new DateOnlyJsonConverter(),
+        new TimeOnlyJsonConverter(),
         new StrongIdJsonConverterFactory()
-    }
+    },
+    TypeInfoResolver = new DefaultJsonTypeInfoResolver()
 };
+```
 
-// Serialization
-var json = JsonSerializer.Serialize(obj, jsonOptions);
-var obj = JsonSerializer.Deserialize<T>(json, jsonOptions);
-```## Testing
+### Newtonsoft.Json
+**Version**: 13.0.3  
+**License**: MIT  
+**Purpose**: JSON serialization (legacy support)  
+**Note**: Use only for backward compatibility
 
-### xUnit
-**Version**: 2.9.2
-**Purpose**: Unit testing framework
-**Packages**:
+```xml
+<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+```
+
+## Testing
+
+### Testing Frameworks
+
+#### NUnit
+**Version**: 4.x  
+**License**: MIT  
+**Purpose**: Primary unit testing framework  
+**Features**: Parallel execution, data-driven tests
+
+```xml
+<PackageReference Include="NUnit" Version="4.0.1" />
+<PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+<PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
+```
+
+#### xUnit (Components)
+**Version**: 2.9.2  
+**License**: Apache 2.0  
+**Purpose**: Testing abstractions and logging
+
 ```xml
 <PackageReference Include="xunit.abstractions" Version="2.0.3" />
 <PackageReference Include="xunit.extensibility.core" Version="2.9.2" />
 <PackageReference Include="Xunit.Extensions.Logging" Version="1.1.0" />
 ```
 
-### NSubstitute
-**Version**: 5.3.0
-**Purpose**: Mocking framework
-**Package**:
+### Mocking & Assertions
+
+#### NSubstitute
+**Version**: 5.3.0  
+**License**: BSD  
+**Purpose**: Mocking framework  
+**Syntax**: Fluent, readable
+
 ```xml
 <PackageReference Include="NSubstitute" Version="5.3.0" />
 ```
 
-**Usage**:
-```csharp
-// Create mock
-var repository = Substitute.For<IConversationRepository>();
-repository.GetByIdAsync(Arg.Any<Guid>())
-    .Returns(Task.FromResult(new Conversation()));
+#### Moq
+**Version**: Latest  
+**License**: BSD  
+**Purpose**: Alternative mocking framework  
+**Usage**: Legacy test support
 
-// Verify calls
-await repository.Received(1).GetByIdAsync(conversationId);
-```### FluentAssertions
-**Version**: 7.0.0
-**Purpose**: Fluent assertion library
-**Package**:
+```xml
+<PackageReference Include="Moq" />
+```
+
+#### Shouldly
+**Version**: Latest  
+**License**: BSD  
+**Purpose**: Assertion framework  
+**Syntax**: Natural language assertions
+
+```xml
+<PackageReference Include="Shouldly" />
+```
+
+#### FluentAssertions
+**Version**: 7.0.0  
+**License**: Apache 2.0  
+**Purpose**: Fluent assertion library  
+**Features**: Deep object comparison
+
 ```xml
 <PackageReference Include="FluentAssertions" Version="7.0.0" />
 ```
 
-**Usage**:
-```csharp
-// Assertions
-result.Should().BeSuccess();
-result.Value.Should().NotBeNull();
-result.Value.ConversationId.Should().Be(expectedId);
+### Test Data Generation
 
-conversation.Messages.Should()
-    .HaveCount(2)
-    .And.ContainSingle(m => m.Role == MessageRole.User)
-    .And.ContainSingle(m => m.Role == MessageRole.Assistant);
-```
+#### Bogus
+**Version**: 35.6.1  
+**License**: MIT  
+**Purpose**: Fake data generation  
+**Locales**: 50+ language support
 
-### Bogus & AutoBogus
-**Version**: 35.6.1 / 2.13.1
-**Purpose**: Test data generation
-**Packages**:
 ```xml
 <PackageReference Include="Bogus" Version="35.6.1" />
-<PackageReference Include="AutoBogus" Version="2.13.1" />
-```**Usage**:
-```csharp
-// Generate test data
-var faker = new Faker<ConversationDto>()
-    .RuleFor(c => c.Id, f => f.Random.Guid())
-    .RuleFor(c => c.Title, f => f.Lorem.Sentence())
-    .RuleFor(c => c.UserId, f => f.Random.Long(1, 1000))
-    .RuleFor(c => c.MessageCount, f => f.Random.Int(0, 100))
-    .RuleFor(c => c.CreatedAt, f => f.Date.Past());
-
-var testData = faker.Generate(10);
 ```
 
-### Testcontainers
-**Version**: 4.0.0
-**Purpose**: Integration testing with containers
-**Packages**:
+#### AutoBogus
+**Version**: 2.13.1  
+**License**: MIT  
+**Purpose**: Automatic fake data generation  
+**Integration**: Works with Bogus
+
+```xml
+<PackageReference Include="AutoBogus" Version="2.13.1" />
+```
+
+### Integration Testing
+
+#### Testcontainers
+**Version**: 4.0.0  
+**License**: MIT  
+**Purpose**: Integration testing with containers  
+**Containers**: PostgreSQL, Redis, RabbitMQ, EventStore
+
 ```xml
 <PackageReference Include="Testcontainers" Version="4.0.0" />
 <PackageReference Include="Testcontainers.PostgreSql" Version="4.0.0" />
 <PackageReference Include="Testcontainers.RabbitMq" Version="4.0.0" />
 <PackageReference Include="Testcontainers.EventStoreDb" Version="4.0.0" />
-```**Usage**:
-```csharp
-public class IntegrationTestBase : IAsyncLifetime
-{
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
-        .WithDatabase("axon_test")
-        .WithUsername("test")
-        .WithPassword("test")
-        .Build();
-    
-    public async Task InitializeAsync()
-    {
-        await _postgres.StartAsync();
-        
-        // Apply migrations
-        var connectionString = _postgres.GetConnectionString();
-        // Setup test database
-    }
-    
-    public async Task DisposeAsync()
-    {
-        await _postgres.DisposeAsync();
-    }
-}
 ```
 
-### Respawn
-**Version**: 6.2.1
-**Purpose**: Database cleanup for integration tests
-**Package**:
+#### Respawn
+**Version**: 6.2.1  
+**License**: Apache 2.0  
+**Purpose**: Database cleanup for integration tests  
+**Performance**: Fast database reset
+
 ```xml
 <PackageReference Include="Respawn" Version="6.2.1" />
-```**Usage**:
-```csharp
-private static Respawner _respawner;
-
-// Initialize
-_respawner = await Respawner.CreateAsync(connectionString, new RespawnerOptions
-{
-    TablesToIgnore = new[] { "__EFMigrationsHistory" },
-    SchemasToInclude = new[] { "chat", "identity" }
-});
-
-// Reset database between tests
-await _respawner.ResetAsync(connectionString);
 ```
 
-### ASP.NET Core Test Host
-**Version**: 9.0.0
-**Purpose**: Integration testing for web APIs
-**Packages**:
+#### ASP.NET Core Test Host
+**Version**: 9.0.0  
+**License**: MIT  
+**Purpose**: In-memory API testing
+
 ```xml
 <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="9.0.0" />
 <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.0" />
 <PackageReference Include="WebMotions.Fake.Authentication.JwtBearer" Version="8.0.1" />
-```## Observability
+```
+
+### Performance Testing
+
+#### BenchmarkDotNet
+**Version**: Latest  
+**License**: MIT  
+**Purpose**: Micro-benchmarking framework  
+**Features**: Statistical analysis, memory diagnostics
+
+```xml
+<PackageReference Include="BenchmarkDotNet" />
+```
+
+## Observability & Logging
 
 ### OpenTelemetry
-**Version**: 1.11.1
-**Purpose**: Distributed tracing and metrics
-**Packages**:
+**Version**: 1.11.1  
+**License**: Apache 2.0  
+**Purpose**: Distributed tracing and metrics  
+**Backends**: Jaeger, Zipkin, OTLP, Prometheus
+
+#### Comprehensive Package List
 ```xml
+<!-- Core -->
 <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.11.1" />
 <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.11.1"/>
+
+<!-- Instrumentation -->
 <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.11.0"/>
-<PackageReference Include="OpenTelemetry.Instrumentation.GrpcNetClient" Version="1.11.0-beta.1"/>
 <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.11.0"/>
+<PackageReference Include="OpenTelemetry.Instrumentation.GrpcNetClient" Version="1.11.0-beta.1"/>
 <PackageReference Include="OpenTelemetry.Instrumentation.Process" Version="1.11.0-beta.1"/>
 <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.11.0"/>
+
+<!-- Exporters -->
 <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.11.0-beta.1"/>
 <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.11.1"/>
 <PackageReference Include="OpenTelemetry.Exporter.Zipkin" Version="1.11.1"/>
-```**Configuration**:
+
+<!-- Grafana Integration -->
+<PackageReference Include="Grafana.OpenTelemetry" Version="1.2.0"/>
+```
+
+#### Configuration
 ```csharp
 services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
-        .AddService("axon-backend")
+        .AddService(serviceName: "axon-backend", serviceVersion: version)
         .AddAttributes(new Dictionary<string, object>
         {
             ["environment"] = environment,
-            ["version"] = version
+            ["deployment.environment"] = environment,
+            ["service.namespace"] = "axon",
+            ["service.instance.id"] = Environment.MachineName
         }))
     .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddEntityFrameworkCoreInstrumentation()
+        .SetSampler(new TraceIdRatioBasedSampler(0.1)) // 10% sampling
+        .AddAspNetCoreInstrumentation(options =>
+        {
+            options.RecordException = true;
+            options.Filter = (httpContext) => 
+                !httpContext.Request.Path.StartsWithSegments("/health");
+        })
+        .AddHttpClientInstrumentation(options =>
+        {
+            options.RecordException = true;
+            options.FilterHttpRequestMessage = (httpRequestMessage) =>
+                !httpRequestMessage.RequestUri?.Host.Contains("localhost") ?? true;
+        })
+        .AddEntityFrameworkCoreInstrumentation(options =>
+        {
+            options.SetDbStatementForText = true;
+            options.SetDbStatementForStoredProcedure = true;
+        })
         .AddSource("MassTransit")
-        .AddOtlpExporter())
+        .AddSource("Axon.*")
+        .AddOtlpExporter(options =>
+        {
+            options.Endpoint = new Uri("http://localhost:4317");
+            options.Protocol = OtlpExportProtocol.Grpc;
+        }))
     .WithMetrics(metrics => metrics
+        .AddMeter("Axon.*")
         .AddAspNetCoreInstrumentation()
         .AddRuntimeInstrumentation()
         .AddProcessInstrumentation()
-        .AddPrometheusExporter());
+        .AddPrometheusExporter(options =>
+        {
+            options.StartHttpListener = true;
+            options.HttpListenerPrefixes = new[] { "http://localhost:9090/" };
+        }));
 ```
 
-### Grafana OpenTelemetry
-**Version**: 1.2.0
-**Purpose**: Grafana integration
-**Package**:
+### Logging (Microsoft.Extensions.Logging)
+**Version**: 9.0.0  
+**License**: MIT  
+**Purpose**: Structured logging abstraction  
+**Providers**: Console, Debug, EventSource, EventLog
+
 ```xml
-<PackageReference Include="Grafana.OpenTelemetry" Version="1.2.0"/>
-```### Health Checks
-**Version**: 9.0.0
-**Purpose**: Application health monitoring
-**Packages**:
+<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="9.0.0" />
+<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+```
+
+#### Structured Logging Pattern
+```csharp
+// High-performance logging with LoggerMessage
+public static class LoggerExtensions
+{
+    private static readonly Action<ILogger, string, double, Exception?> _requestProcessed =
+        LoggerMessage.Define<string, double>(
+            LogLevel.Information,
+            new EventId(1000, "RequestProcessed"),
+            "Request {RequestId} processed in {Duration}ms");
+    
+    public static void LogRequestProcessed(this ILogger logger, string requestId, double duration)
+        => _requestProcessed(logger, requestId, duration, null);
+}
+```
+
+### Health Checks
+**Version**: 9.0.0  
+**License**: MIT  
+**Purpose**: Application health monitoring  
+**Integrations**: Database, Redis, RabbitMQ, HTTP endpoints
+
+#### Packages
 ```xml
 <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0" />
 <PackageReference Include="AspNetCore.HealthChecks.UI" Version="9.0.0" />
@@ -787,142 +1115,178 @@ services.AddOpenTelemetry()
 <PackageReference Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0" />
 <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" Version="9.0.0" />
 <PackageReference Include="AspNetCore.HealthChecks.EventStore" Version="9.0.0" />
-```**Configuration**:
-```csharp
-services.AddHealthChecks()
-    .AddNpgSql(connectionString, name: "postgres")
-    .AddRabbitMQ(rabbitConnection, name: "rabbitmq")
-    .AddRedis(redisConnection, name: "redis")
-    .AddCheck<AiServiceHealthCheck>("ai-service")
-    .AddCheck<DatabaseMigrationHealthCheck>("db-migrations");
-
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
-
-app.MapHealthChecksUI(options => options.UIPath = "/health-ui");
 ```
 
 ## Resilience & Fault Tolerance
 
 ### Polly
-**Version**: 8.5.0
-**Purpose**: Resilience and transient-fault handling
-**Packages**:
+**Version**: 8.5.0  
+**License**: BSD  
+**Purpose**: Resilience and transient-fault handling  
+**Patterns**: Retry, Circuit Breaker, Timeout, Bulkhead, Cache
+
+#### Packages
 ```xml
 <PackageReference Include="Polly" Version="8.5.0" />
+<PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
 <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.0" />
 <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
-```**Usage Patterns**:
+```
+
+#### Resilience Pipeline
 ```csharp
-// HTTP client resilience
 services.AddHttpClient<IAiClient, OpenAiClient>()
-    .AddPolicyHandler(GetRetryPolicy())
-    .AddPolicyHandler(GetCircuitBreakerPolicy())
-    .AddPolicyHandler(GetTimeoutPolicy());
+    .AddStandardResilienceHandler(options =>
+    {
+        options.Retry.MaxRetryAttempts = 3;
+        options.Retry.Delay = TimeSpan.FromSeconds(1);
+        options.Retry.BackoffType = DelayBackoffType.Exponential;
+        options.Retry.UseJitter = true;
+        
+        options.CircuitBreaker.FailureRatio = 0.5;
+        options.CircuitBreaker.MinimumThroughput = 10;
+        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+        options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
+        
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(10);
+        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(30);
+    });
+```
 
-private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+### Microsoft.Extensions.ServiceDiscovery
+**Version**: 9.3.1  
+**License**: MIT  
+**Purpose**: Service discovery and load balancing  
+**Providers**: DNS, Configuration, Kubernetes
+
+```xml
+<PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="9.3.1" />
+```
+
+## Background Processing
+
+### Custom Background Services
+**Purpose**: Long-running background tasks  
+**Pattern**: IHostedService, BackgroundService  
+**Usage**: Message processing, cleanup tasks
+
+```csharp
+public class PersistMessageBackgroundService : BackgroundService
 {
-    return HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .WaitAndRetryAsync(
-            3,
-            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetry: (outcome, timespan, retryCount, context) =>
+    private readonly IServiceProvider _serviceProvider;
+    private readonly PersistMessageOptions _options;
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
             {
-                var logger = context.Values["logger"] as ILogger;
-                logger?.LogWarning("Retry {Count} after {Delay}ms", 
-                    retryCount, timespan.TotalMilliseconds);
-            });
+                using var scope = _serviceProvider.CreateScope();
+                var processor = scope.ServiceProvider
+                    .GetRequiredService<IPersistMessageProcessor>();
+                    
+                await processor.ProcessPendingMessagesAsync(stoppingToken);
+                await Task.Delay(_options.PollingInterval, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in background message processing");
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            }
+        }
+    }
 }
+```
 
-private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
-{
-    return HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
-}
-```## Development Tools
+## Development Tools
 
 ### Scrutor
-**Version**: 5.0.2
-**Purpose**: Assembly scanning and decoration for DI
-**Package**:
+**Version**: 5.0.2  
+**License**: MIT  
+**Purpose**: Assembly scanning and decoration  
+**Features**: Auto-registration, decorators
+
 ```xml
 <PackageReference Include="Scrutor" Version="5.0.2" />
 ```
 
-**Usage**:
-```csharp
-// Auto-register services
-services.Scan(scan => scan
-    .FromAssemblyOf<Program>()
-    .AddClasses(classes => classes.AssignableTo<IRepository>())
-        .AsImplementedInterfaces()
-        .WithScopedLifetime()
-    .AddClasses(classes => classes.AssignableTo<IService>())
-        .AsImplementedInterfaces()
-        .WithTransientLifetime());
+### Humanizer
+**Version**: 2.14.1  
+**License**: MIT  
+**Purpose**: String manipulation and formatting  
+**Features**: Pluralization, date humanizing
 
-// Decorator pattern
-services.Decorate<IConversationRepository, CachedConversationRepository>();
-```### Humanizer
-**Version**: 2.14.1
-**Purpose**: String manipulation and formatting
-**Package**:
 ```xml
 <PackageReference Include="Humanizer.Core" Version="2.14.1" />
 ```
 
-**Usage**:
-```csharp
-// String formatting
-"ConversationCreated".Humanize(); // "Conversation created"
-"conversation_id".Pascalize(); // "ConversationId"
-DateTime.UtcNow.Humanize(); // "2 hours ago"
-123456.ToWords(); // "one hundred and twenty-three thousand four hundred and fifty-six"
-```
-
 ### IdGen
-**Version**: 3.0.7
-**Purpose**: Distributed ID generation (Snowflake IDs)
-**Package**:
+**Version**: 3.0.7  
+**License**: MIT  
+**Purpose**: Distributed ID generation  
+**Algorithm**: Twitter Snowflake
+
 ```xml
 <PackageReference Include="IdGen" Version="3.0.7" />
-```**Usage**:
-```csharp
-// Configure ID generator
-var generator = new IdGenerator(0); // Machine ID = 0
-
-// Generate IDs
-var id = generator.CreateId();
 ```
 
 ### Figgle
-**Version**: 0.5.1
-**Purpose**: ASCII art generation for console output
-**Package**:
+**Version**: 0.5.1  
+**License**: Apache 2.0  
+**Purpose**: ASCII art generation  
+**Usage**: Startup banners
+
 ```xml
 <PackageReference Include="Figgle" Version="0.5.1" />
 ```
 
-**Usage**:
-```csharp
-// Startup banner
-Console.WriteLine(FiggleFonts.Standard.Render("Axon Backend"));
-```
-
 ### YARP (Yet Another Reverse Proxy)
-**Version**: 2.2.0
-**Purpose**: Reverse proxy functionality
-**Package**:
+**Version**: 2.2.0  
+**License**: MIT  
+**Purpose**: Reverse proxy functionality  
+**Features**: Load balancing, health checks
+
 ```xml
 <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
-```## Dependency Management
+```
+
+### System.Linq.Async
+**Version**: 6.0.1  
+**License**: MIT  
+**Purpose**: Async LINQ operations  
+**Features**: IAsyncEnumerable support
+
+```xml
+<PackageReference Include="System.Linq.Async" Version="6.0.1" />
+<PackageReference Include="System.Linq.Async.Queryable" Version="6.0.1" />
+```
+
+## Build & Deployment
+
+### gRPC Support
+**Purpose**: High-performance RPC framework  
+**Protocol**: HTTP/2, Protocol Buffers
+
+```xml
+<PackageReference Include="Google.Protobuf" Version="3.29.1" />
+<PackageReference Include="Grpc.Core.Testing" Version="2.46.6" />
+<PackageReference Include="Grpc.Net.ClientFactory" Version="2.67.0" />
+```
+
+### EasyNetQ Management
+**Version**: 3.0.0  
+**Purpose**: RabbitMQ management API client  
+**Features**: Queue management, monitoring
+
+```xml
+<PackageReference Include="EasyNetQ.Management.Client" Version="3.0.0" />
+```
+
+## Dependency Management
 
 ### Directory.Build.props
-Common properties for all projects:
+Central configuration for all projects:
 ```xml
 <Project>
   <PropertyGroup>
@@ -932,94 +1296,202 @@ Common properties for all projects:
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <Using Include="System.Text.Json" />
+    <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="MediatR" />
+  </ItemGroup>
 </Project>
 ```
 
 ### Central Package Management
-Directory.Packages.props for version management:
+Directory.Packages.props:
 ```xml
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   
   <ItemGroup>
-    <!-- Define all package versions centrally -->
+    <!-- Framework packages -->
+    <PackageVersion Include="Microsoft.AspNetCore.*" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.*" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.*" Version="9.0.0" />
+    
+    <!-- Third-party packages -->
     <PackageVersion Include="MediatR" Version="13.0.0" />
     <PackageVersion Include="FluentValidation" Version="11.11.0" />
+    <PackageVersion Include="Polly" Version="8.5.0" />
     <!-- ... other packages ... -->
   </ItemGroup>
 </Project>
-```## Version Strategy
+```
+
+## Version Strategy
 
 ### Versioning Policy
 
-1. **Framework & Runtime**
-   - .NET: Use latest LTS version
-   - Update within 3 months of new LTS release
+#### Framework & Runtime
+- **.NET**: Track LTS versions, update within 3 months
+- **C#**: Use latest stable language version
+- **Preview Features**: Test in development, avoid in production
 
-2. **Major Dependencies**
-   - Entity Framework Core: Match .NET version
-   - ASP.NET Core packages: Match .NET version
-   - MediatR: Latest stable
-   - FluentValidation: Latest stable
+#### Dependency Categories
 
-3. **Security Updates**
-   - Apply immediately for critical vulnerabilities
-   - Monthly review for non-critical updates
+1. **Critical Dependencies** (Immediate updates)
+   - Security libraries
+   - Authentication packages
+   - Cryptography libraries
 
-4. **Testing Dependencies**
-   - Can use preview/beta versions
-   - Update frequently for better features
+2. **Core Dependencies** (Quarterly review)
+   - Entity Framework Core
+   - MediatR
+   - FluentValidation
+   - Polly
+
+3. **Utility Dependencies** (Bi-annual review)
+   - Humanizer
+   - Figgle
+   - IdGen
+
+4. **Development Dependencies** (Flexible)
+   - Testing frameworks
+   - Mocking libraries
+   - Code analyzers
 
 ### Update Process
 
 ```bash
-# Check for outdated packages
-dotnet list package --outdated
+# Check outdated packages
+dotnet list package --outdated --include-transitive
+
+# Check vulnerable packages
+dotnet list package --vulnerable --include-transitive
+
+# Check deprecated packages
+dotnet list package --deprecated
 
 # Update specific package
 dotnet add package PackageName --version X.Y.Z
 
-# Update all packages in solution
+# Update all packages (use with caution)
 dotnet restore --force-evaluate
-```### Dependency Audit
-
-Regular audit checklist:
-
-- [ ] Check for security vulnerabilities
-- [ ] Review deprecated packages
-- [ ] Identify unused dependencies
-- [ ] Verify license compatibility
-- [ ] Assess package maintenance status
-
-```bash
-# Security audit
-dotnet list package --vulnerable
-
-# License check
-dotnet-license-checker
-
-# Remove unused packages
-dotnet remove package UnusedPackage
 ```
 
-## Migration Notes
+### Dependency Audit Checklist
 
-### From .NET 8 to .NET 10
-- Update target framework in all projects
-- Update all Microsoft packages to 10.0.0
-- Review breaking changes in migration guide
-- Update Docker base images
-- Test all integration points
+- [ ] Weekly: Security vulnerability scan
+- [ ] Monthly: Deprecated package review
+- [ ] Quarterly: Performance impact analysis
+- [ ] Bi-annually: License compliance check
+- [ ] Annually: Major version migration planning
 
-### Deprecated Packages
-- **Automapper**: Replaced with Mapster for performance
-- **Serilog**: Using built-in logging with OpenTelemetry
-- **Dapper**: Fully using EF Core for consistency
+## Security Compliance
+
+### Security Scanning Tools
+```bash
+# .NET Security Scanner
+dotnet list package --vulnerable
+
+# OWASP Dependency Check
+dependency-check --project "Axon Backend" --scan .
+
+# Snyk CLI
+snyk test
+```
+
+### License Compliance
+- **Approved**: MIT, Apache 2.0, BSD
+- **Review Required**: LGPL, MPL
+- **Restricted**: GPL, AGPL
+- **Commercial**: Duende IdentityServer (RPL)
+
+### Security Headers
+```csharp
+app.UseSecurityHeaders(policies =>
+{
+    policies.AddContentSecurityPolicy(builder =>
+    {
+        builder.AddDefaultSrc().Self();
+        builder.AddScriptSrc().Self().UnsafeInline();
+        builder.AddStyleSrc().Self().UnsafeInline();
+    });
+    policies.AddStrictTransportSecurity(maxAge: 31536000, includeSubDomains: true);
+    policies.AddXContentTypeOptions();
+    policies.AddXFrameOptions(XFrameOptionsDirective.Deny);
+    policies.AddReferrerPolicy(ReferrerPolicyDirective.StrictOriginWhenCrossOrigin);
+});
+```
+
+## Performance Optimization
+
+### Package-Specific Optimizations
+
+#### Entity Framework Core
+- Use compiled queries for hot paths
+- Enable query splitting for includes
+- Implement connection pooling
+- Use AsNoTracking for read-only queries
+
+#### MediatR
+- Avoid heavy operations in behaviors
+- Use streaming for large result sets
+- Implement caching behavior for queries
+
+#### JSON Serialization
+- Use source generators for AOT
+- Implement custom converters for complex types
+- Enable reference handling for circular dependencies
+
+#### HTTP Clients
+- Implement connection pooling
+- Use IHttpClientFactory
+- Configure appropriate timeouts
+- Enable HTTP/2 where supported
+
+### Memory Management
+```csharp
+// Use ArrayPool for temporary buffers
+var pool = ArrayPool<byte>.Shared;
+var buffer = pool.Rent(4096);
+try
+{
+    // Use buffer
+}
+finally
+{
+    pool.Return(buffer, clearArray: true);
+}
+
+// Use Memory<T> and Span<T> for zero-allocation
+ReadOnlySpan<char> span = text.AsSpan();
+```
+
+### Compilation Optimizations
+```xml
+<PropertyGroup>
+  <PublishAot>true</PublishAot>
+  <PublishTrimmed>true</PublishTrimmed>
+  <PublishSingleFile>true</PublishSingleFile>
+  <SelfContained>true</SelfContained>
+  <DebugType>none</DebugType>
+  <DebugSymbols>false</DebugSymbols>
+</PropertyGroup>
+```
 
 ---
 
-*Last Updated: August 2025*
-*Version: 1.0.0*
+**Document Version**: 2.0.0  
+**Last Updated**: 2025-08-06  
+**Next Review**: 2025-09-06  
+**Maintained By**: Architecture Team
+
+**References**:
+- [.NET Documentation](https://docs.microsoft.com/dotnet)
+- [NuGet Package Explorer](https://nuget.info)
+- [Package Security Advisories](https://github.com/advisories)

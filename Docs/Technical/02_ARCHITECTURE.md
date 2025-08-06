@@ -1,1640 +1,1991 @@
-# 🏗️ Axon Backend - System Architecture
+# 🏗️ Axon Backend - System Architecture (Enhanced Edition)
 
 ## Table of Contents
 - [Executive Summary](#executive-summary)
 - [Architectural Overview](#architectural-overview)
 - [Clean Architecture Implementation](#clean-architecture-implementation)
 - [Modular Monolith Design](#modular-monolith-design)
-- [CQRS & Event Sourcing](#cqrs--event-sourcing)
 - [Module Architecture](#module-architecture)
 - [Chat Module Deep Dive](#chat-module-deep-dive)
 - [Identity Module Architecture](#identity-module-architecture)
 - [Building Blocks Layer](#building-blocks-layer)
-- [API Gateway Pattern](#api-gateway-pattern)
-- [Data Architecture](#data-architecture)
+- [CQRS & Domain-Driven Design](#cqrs--domain-driven-design)
+- [Event-Driven Architecture](#event-driven-architecture)
+- [API Layer & FastEndpoints](#api-layer--fastendpoints)
+- [Data Architecture & Persistence](#data-architecture--persistence)
 - [Integration Patterns](#integration-patterns)
-- [Deployment Architecture](#deployment-architecture)
+- [Error Handling & Resilience](#error-handling--resilience)
 - [Security Architecture](#security-architecture)
-- [Performance Architecture](#performance-architecture)
+- [Performance & Caching](#performance--caching)
+- [Testing Architecture](#testing-architecture)
+- [Deployment & DevOps](#deployment--devops)
 - [Monitoring & Observability](#monitoring--observability)
+- [Migration Strategy](#migration-strategy)
+- [Technical Debt & Future Improvements](#technical-debt--future-improvements)
 
 ## Executive Summary
 
-Axon Backend implements a **Modular Monolith** architecture with **Clean Architecture** principles, **CQRS** pattern, and **Domain-Driven Design** tactical patterns. The system is designed for high scalability, maintainability, and eventual migration to microservices if needed.
+Axon Backend implements a **Modular Monolith** architecture designed for eventual microservices migration, built on **.NET 10** with **Clean Architecture**, **CQRS**, **Domain-Driven Design (DDD)**, and **Event Sourcing** principles.
 
-### Key Architectural Decisions
-- **Modular Monolith**: Single deployable unit with module isolation
-- **Clean Architecture**: Dependency inversion and separation of concerns
-- **CQRS**: Command Query Responsibility Segregation for scalability
-- **Event-Driven**: Domain events for loose coupling
-- **FastEndpoints**: High-performance minimal API framework
-- **.NET 10**: Latest framework features and performance improvements
+### Key Architectural Decisions (ADRs)
+
+| Decision | Rationale | Trade-offs | Status |
+|----------|-----------|------------|--------|
+| **Modular Monolith** | Single deployment with module isolation for simpler operations | Shared runtime resources | Active |
+| **Clean Architecture** | Clear separation of concerns and dependency inversion | Additional abstraction layers | Active |
+| **CQRS Pattern** | Optimized read/write paths for scalability | Increased complexity | Active |
+| **FastEndpoints** | High-performance minimal APIs with less ceremony | Less framework maturity | Active |
+| **PostgreSQL Primary** | Robust ACID compliance with JSONB support | Single point of failure | Active |
+| **Event Sourcing (Partial)** | Audit trail and temporal queries for critical aggregates | Storage overhead | Planned |
+| **.NET 10** | Latest performance improvements and features | Bleeding edge risks | Active |
+
+### System Characteristics
+
+- **Architecture Style**: Modular Monolith with Vertical Slices
+- **Communication**: In-process (sync) and Event Bus (async)
+- **Data Management**: Database per Module (logical separation)
+- **Deployment**: Containerized with Kubernetes support
+- **Scalability**: Horizontal via load balancing
+- **Resilience**: Circuit breakers, retries, and fallbacks
 
 ## Architectural Overview
 
+### High-Level System Architecture
+
 ```mermaid
 graph TB
-    subgraph "Client Layer"
-        WEB[Web App]
-        MOB[Mobile App]
+    subgraph "External Clients"
+        WEB[Web Application]
+        MOB[Mobile Apps]
         API[External APIs]
+        MCP[MCP Clients]
     end
     
-    subgraph "API Gateway"
-        FAST[FastEndpoints]
-        AUTH[Authentication]
-        RL[Rate Limiting]
+    subgraph "API Gateway Layer"
+        GW[API Gateway/Load Balancer]
+        AUTH[Auth Middleware]
+        RL[Rate Limiter]
+        CACHE[Response Cache]
     end
     
-    subgraph "Application Core"
-        subgraph "Modules"
-            CHAT[Chat Module]
-            IDENT[Identity Module]
-            FUTURE[Future Modules]
+    subgraph "Axon Backend Monolith"
+        subgraph "API Layer"
+            FAST[FastEndpoints]
+            SWAGGER[OpenAPI/Swagger]
+            HEALTH[Health Checks]
         end
         
-        subgraph "Shared Kernel"
-            BB[Building Blocks]
-            CQRS[CQRS Infrastructure]
-            EVT[Event Bus]
+        subgraph "Application Layer"
+            subgraph "Chat Module"
+                CHAT_APP[Chat Application]
+                CHAT_DOM[Chat Domain]
+                CHAT_INFRA[Chat Infrastructure]
+            end
+            
+            subgraph "Identity Module"
+                ID_APP[Identity Application]
+                ID_DOM[Identity Domain]
+                ID_INFRA[Identity Infrastructure]
+            end
+            
+            subgraph "Shared Kernel"
+                BB[Building Blocks]
+                CQRS[CQRS Infrastructure]
+                EVT[Event Bus]
+                CROSS[Cross-Cutting]
+            end
         end
-    end
-    
-    subgraph "Infrastructure"
-        PG[(PostgreSQL)]
-        REDIS[(Redis Cache)]
-        RABBIT[RabbitMQ]
-        ES[(EventStore)]
+        
+        subgraph "Infrastructure Layer"
+            PG[(PostgreSQL)]
+            REDIS[(Redis Cache)]
+            RABBIT[RabbitMQ]
+            ES[(EventStore)]
+        end
     end
     
     subgraph "External Services"
         AI[OpenAI API]
-        MCP[MCP Servers]
         EMAIL[Email Service]
+        SMS[SMS Provider]
+        BLOB[Blob Storage]
     end
     
-    WEB --> FAST
-    MOB --> FAST
-    API --> FAST
+    WEB --> GW
+    MOB --> GW
+    API --> GW
+    MCP --> GW
     
-    FAST --> AUTH
+    GW --> AUTH
     AUTH --> RL
-    RL --> CHAT
-    RL --> IDENT
+    RL --> CACHE
+    CACHE --> FAST
     
-    CHAT --> BB
-    IDENT --> BB
+    FAST --> CHAT_APP
+    FAST --> ID_APP
     
-    BB --> CQRS
-    CQRS --> EVT
+    CHAT_APP --> BB
+    ID_APP --> BB
     
-    CHAT --> PG
-    CHAT --> REDIS
-    CHAT --> AI
-    CHAT --> MCP
-    
+    BB --> PG
+    BB --> REDIS
     EVT --> RABBIT
     EVT --> ES
     
-    IDENT --> PG
-    IDENT --> EMAIL
+    CHAT_INFRA --> AI
+    ID_INFRA --> EMAIL
+```
+
+### Deployment View
+
+```mermaid
+graph LR
+    subgraph "Production Environment"
+        subgraph "Kubernetes Cluster"
+            subgraph "Ingress"
+                ING[NGINX Ingress]
+            end
+            
+            subgraph "Application Pods"
+                POD1[Axon Pod 1]
+                POD2[Axon Pod 2]
+                POD3[Axon Pod 3]
+            end
+            
+            subgraph "Data Layer"
+                PG_MASTER[(PG Master)]
+                PG_REPLICA[(PG Replica)]
+                REDIS_CLUSTER[(Redis Cluster)]
+            end
+            
+            subgraph "Message Layer"
+                RABBIT1[RabbitMQ-1]
+                RABBIT2[RabbitMQ-2]
+                RABBIT3[RabbitMQ-3]
+            end
+        end
+        
+        subgraph "External Cloud Services"
+            CDN[CloudFlare CDN]
+            S3[AWS S3]
+            MONITORING[DataDog]
+        end
+    end
+    
+    ING --> POD1
+    ING --> POD2
+    ING --> POD3
+    
+    POD1 --> PG_MASTER
+    POD2 --> PG_MASTER
+    POD3 --> PG_REPLICA
+    
+    POD1 --> REDIS_CLUSTER
+    POD2 --> REDIS_CLUSTER
+    POD3 --> REDIS_CLUSTER
 ```
 
 ## Clean Architecture Implementation
 
-### Layer Separation
+### Layer Dependencies & Boundaries
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         API Layer                           │
-│  • FastEndpoints       • Controllers      • Middleware      │
-│  • Request/Response    • Authentication   • Validation      │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
+│                      Presentation Layer                      │
+│                          (API)                               │
+│  • FastEndpoints       • Request/Response DTOs              │
+│  • Middleware          • OpenAPI Documentation               │
+│  • Authentication      • Global Exception Handling           │
+└────────────────────────┬────────────────────────────────────┘
+                         │ References
+                         ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                        │
-│  • Commands/Queries    • Handlers         • DTOs            │
-│  • Application Services• Interfaces       • Orchestration   │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
+│                     Application Layer                        │
+│                    (Use Cases/Services)                      │
+│  • Command Handlers    • Query Handlers                     │
+│  • Application Services• DTOs & ViewModels                  │
+│  • Interfaces (Ports)  • Validation Rules                   │
+│  • Orchestration       • Mapping Profiles                   │
+└────────────────────────┬────────────────────────────────────┘
+                         │ References
+                         ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                      Domain Layer                           │
-│  • Entities            • Value Objects    • Aggregates      │
-│  • Domain Services     • Domain Events    • Specifications  │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
+│                       Domain Layer                           │
+│                   (Business Logic Core)                      │
+│  • Aggregates          • Entities                           │
+│  • Value Objects       • Domain Events                      │
+│  • Domain Services     • Specifications                     │
+│  • Business Rules      • Domain Exceptions                  │
+└────────────────────────┬────────────────────────────────────┘
+                         ↑ Implements
 ┌─────────────────────────────────────────────────────────────┐
-│                   Infrastructure Layer                      │
-│  • Repositories        • External Services • Database       │
-│  • Message Bus         • File System      • Email           │
+│                   Infrastructure Layer                       │
+│                 (External Concerns/Adapters)                 │
+│  • EF Core DbContext   • Repositories                       │
+│  • External Services   • Message Bus                        │
+│  • File System         • Email/SMS                          │
+│  • AI Clients          • Caching                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Dependency Rules
-
-1. **Domain Layer**: No external dependencies (pure business logic)
-2. **Application Layer**: Depends only on Domain
-3. **Infrastructure Layer**: Implements Application interfaces
-4. **API Layer**: Orchestrates and depends on all layers
-
-### Project Structure
+### Project Structure (Actual Implementation)
 
 ```
-src/
-├── Api/                           # API Layer
-│   ├── Endpoints/                # FastEndpoints
-│   ├── Contracts/                # Request/Response DTOs
-│   ├── Common/                   # Shared API concerns
-│   └── Configuration/            # API setup
-│
-├── Modules/                      # Business Modules
-│   ├── Chat/                    # Chat Module
-│   │   ├── Domain/              # Business logic
-│   │   ├── Application/         # Use cases
-│   │   └── Infrastructure/      # External implementations
+Axon-Backend/
+├── src/
+│   ├── Api/                              # Presentation Layer
+│   │   ├── Configuration/                # API setup and DI
+│   │   │   ├── ServiceRegistration.cs   # FastEndpoints config
+│   │   │   └── SwaggerConfiguration.cs  # OpenAPI setup
+│   │   ├── Endpoints/                    # FastEndpoints implementations
+│   │   │   └── Chat/
+│   │   │       └── ProcessMessage/
+│   │   │           ├── ProcessMessageEndpoint.cs
+│   │   │           ├── ProcessMessageRequest.cs
+│   │   │           ├── ProcessMessageResponse.cs
+│   │   │           └── ProcessMessageValidator.cs
+│   │   ├── Middleware/                   # Custom middleware
+│   │   └── Program.cs                    # Entry point
 │   │
-│   └── Identity/                # Identity Module
-│       ├── Domain/
-│       ├── Application/
-│       └── Infrastructure/
+│   ├── Modules/                          # Business Modules
+│   │   ├── Chat/                         # Chat Module
+│   │   │   ├── Domain/                   # Core business logic
+│   │   │   │   ├── Conversation/
+│   │   │   │   │   ├── Conversation.cs  # Aggregate root
+│   │   │   │   │   ├── Entities/
+│   │   │   │   │   │   └── Message.cs
+│   │   │   │   │   ├── Events/
+│   │   │   │   │   │   ├── ConversationStartedDomainEvent.cs
+│   │   │   │   │   │   └── UserMessageAppendedDomainEvent.cs
+│   │   │   │   │   └── ValueObjects/
+│   │   │   │   │       ├── ConversationId.cs
+│   │   │   │   │       ├── MessageContent.cs
+│   │   │   │   │       └── UserId.cs
+│   │   │   │   ├── Errors/
+│   │   │   │   │   └── ChatErrors.cs
+│   │   │   │   └── Services/
+│   │   │   │       └── ConversationContextBuilder.cs
+│   │   │   │
+│   │   │   ├── Application/              # Use cases
+│   │   │   │   ├── Commands/
+│   │   │   │   │   ├── ProcessMessage/
+│   │   │   │   │   ├── StartConversation/
+│   │   │   │   │   └── AddMessage/
+│   │   │   │   ├── Queries/
+│   │   │   │   │   ├── GetConversation/
+│   │   │   │   │   └── SearchConversations/
+│   │   │   │   ├── Abstractions/
+│   │   │   │   │   ├── IAiClient.cs
+│   │   │   │   │   └── IMcpServerResolver.cs
+│   │   │   │   ├── DTOs/
+│   │   │   │   ├── Services/
+│   │   │   │   └── Repositories/
+│   │   │   │       └── IConversationRepository.cs
+│   │   │   │
+│   │   │   └── Infrastructure/           # External implementations
+│   │   │       ├── Ai/
+│   │   │       │   ├── OpenAiClient.cs
+│   │   │       │   └── OpenAiClientFacade.cs
+│   │   │       ├── Persistence/
+│   │   │       │   ├── ChatDbContext.cs
+│   │   │       │   ├── Configurations/
+│   │   │       │   ├── Repositories/
+│   │   │       │   └── Migrations/
+│   │   │       └── Services/
+│   │   │
+│   │   └── Identity/                     # Identity Module
+│   │       └── src/
+│   │           ├── Domain/
+│   │           ├── Application/
+│   │           └── Infrastructure/
+│   │
+│   └── BuildingBlocks/                   # Shared Kernel
+│       ├── Core/                         # Core abstractions
+│       │   ├── Domain/
+│       │   │   ├── BaseEntity.cs
+│       │   │   ├── BaseAggregate.cs
+│       │   │   └── IStrongId.cs
+│       │   └── CQRS/
+│       │       ├── ICommand.cs
+│       │       ├── IQuery.cs
+│       │       └── ICommandHandler.cs
+│       ├── CQRS/                         # CQRS implementation
+│       ├── Persistence/                  # Data access
+│       │   ├── Common/
+│       │   ├── Read/
+│       │   └── Write/
+│       ├── MassTransit/                  # Message bus
+│       ├── Polly/                        # Resilience
+│       └── Web/                          # Web utilities
 │
-└── BuildingBlocks/              # Shared Kernel
-    ├── Core/                    # Core abstractions
-    ├── CQRS/                    # CQRS infrastructure
-    ├── Persistence/             # Data access
-    └── Web/                     # Web utilities
+├── tests/                                # Test projects
+│   ├── UnitTests/
+│   ├── IntegrationTests/
+│   └── ArchitectureTests/
+│
+└── Docs/                                 # Documentation
+    ├── Technical/
+    ├── Architecture/
+    └── Development/
+```
+
+### Dependency Injection & Module Registration
+
+```csharp
+// Program.cs - Application Entry Point
+var builder = WebApplication.CreateBuilder(args);
+
+// Add Building Blocks
+builder.Services.AddBuildingBlocks(builder.Configuration);
+
+// Add Modules
+builder.AddChatModule();        // Chat module registration
+builder.AddIdentityModules();   // Identity module registration
+
+// Add API Layer
+builder.Services.AddFastEndpoints();
+builder.Services.AddSwaggerDoc();
+
+var app = builder.Build();
+
+// Configure Pipeline
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseFastEndpoints();
+app.UseSwaggerGen();
+
+// Use Modules
+app.UseChatModule();
+app.UseIdentityModules();
+
+await app.RunAsync();
 ```
 
 ## Modular Monolith Design
 
-### Module Boundaries
+### Module Isolation Principles
 
-Each module is a self-contained vertical slice with:
-- **Own Domain Model**: Separate bounded context
-- **Own Database Schema**: Logical separation
-- **Own API Surface**: Module-specific endpoints
-- **Internal Privacy**: No direct references between modules
+1. **Bounded Context Separation**: Each module represents a distinct bounded context
+2. **Database Schema Isolation**: Logical separation via schemas
+3. **No Direct References**: Modules communicate via contracts/events
+4. **Independent Development**: Teams can work independently
+5. **Separate Testing**: Module-specific test suites
+6. **Migration Ready**: Can be extracted to microservices
 
-### Module Communication
-
-```csharp
-// Modules communicate via:
-
-// 1. Domain Events (Async)
-public class OrderPlacedDomainEvent : IDomainEvent
-{
-    public Guid OrderId { get; init; }
-    public Guid CustomerId { get; init; }
-}
-
-// 2. Integration Events (Cross-module)
-public class PaymentProcessedIntegrationEvent : IIntegrationEvent
-{
-    public Guid PaymentId { get; init; }
-    public decimal Amount { get; init; }
-}
-
-// 3. Public Contracts (Sync when necessary)
-public interface IChatModuleApi
-{
-    Task<ConversationDto> GetConversationAsync(Guid id);
-}
-```
-
-### Module Isolation Patterns
+### Module Communication Patterns
 
 ```csharp
-// Each module has its own:
-
-// 1. Bounded Context
-namespace Axon.Modules.Chat.Domain
+// 1. Synchronous Communication via Public Contracts
+namespace Axon.Modules.Chat.Contracts
 {
-    public class Conversation : BaseAggregate<ConversationId>
+    public interface IChatModuleApi
     {
-        // Chat-specific domain logic
-    }
-}
-
-// 2. Database Context
-public class ChatDbContext : DbContext
-{
-    public DbSet<Conversation> Conversations { get; set; }
-    public DbSet<Message> Messages { get; set; }
-    
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        // Use schema separation
-        modelBuilder.HasDefaultSchema("chat");
-    }
-}
-
-// 3. Dependency Injection
-public static class ChatModuleRegistration
-{
-    public static IServiceCollection AddChatModule(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        // Register module-specific services
-        services.AddDbContext<ChatDbContext>();
-        services.AddScoped<IConversationRepository, ConversationRepository>();
-        
-        // Register handlers
-        services.AddMediatR(cfg => 
-            cfg.RegisterServicesFromAssembly(typeof(ChatModule).Assembly));
-            
-        return services;
-    }
-}
-```
-
-## CQRS & Event Sourcing
-
-### Command Side Architecture
-
-```csharp
-// Command Flow
-public class CommandPipeline
-{
-    // 1. API receives request
-    [Post("/api/chat/process")]
-    public async Task<IActionResult> ProcessMessage(ProcessMessageRequest request)
-    {
-        // 2. Map to command
-        var command = request.ToCommand();
-        
-        // 3. Send through MediatR
-        var result = await _mediator.Send(command);
-        
-        // 4. Return response
-        return result.ToActionResult();
-    }
-}
-
-// Command Handler
-public class ProcessMessageHandler : ICommandHandler<ProcessMessageCommand, ProcessMessageResponse>
-{
-    public async Task<Result<ProcessMessageResponse>> Handle(
-        ProcessMessageCommand command,
-        CancellationToken cancellationToken)
-    {
-        // 1. Load aggregate from event store
-        var conversation = await _eventStore.LoadAsync<Conversation>(command.ConversationId);
-        
-        // 2. Execute business operation
-        conversation.AddMessage(command.Message);
-        
-        // 3. Save events
-        await _eventStore.SaveAsync(conversation);
-        
-        // 4. Update read model
-        await _readModelUpdater.UpdateAsync(conversation);
-        
-        // 5. Publish integration events
-        await _eventBus.PublishAsync(new MessageProcessedEvent());
-        
-        return Result.Success(new ProcessMessageResponse());
-    }
-}
-```
-
-### Query Side Architecture
-
-```csharp
-// Query Flow
-public class QueryPipeline
-{
-    // Optimized read model
-    public class ConversationReadModel
-    {
-        public Guid Id { get; set; }
-        public string Title { get; set; }
-        public int MessageCount { get; set; }
-        public DateTime LastActivity { get; set; }
-        // Denormalized data for fast queries
+        Task<ConversationDto> GetConversationAsync(Guid id);
+        Task<MessageDto> GetMessageAsync(Guid id);
     }
     
-    // Query Handler
-    public class GetConversationHandler : IQueryHandler<GetConversationQuery, ConversationDto>
+    // Internal implementation
+    internal class ChatModuleApi : IChatModuleApi
     {
-        private readonly IReadModelRepository _repository;
+        private readonly IMediator _mediator;
         
-        public async Task<Result<ConversationDto>> Handle(
-            GetConversationQuery query,
-            CancellationToken cancellationToken)
+        public async Task<ConversationDto> GetConversationAsync(Guid id)
         {
-            // Direct query to read model (no domain logic)
-            var readModel = await _repository
-                .GetConversationReadModelAsync(query.ConversationId);
-                
-            return Result.Success(readModel.ToDto());
+            var query = new GetConversationQuery(id);
+            var result = await _mediator.Send(query);
+            return result.Value;
         }
     }
 }
-```
 
-### Event Sourcing Implementation
-
-```csharp
-// Event Store Abstraction
-public interface IEventStore
+// 2. Asynchronous Communication via Integration Events
+namespace Axon.Modules.Chat.IntegrationEvents
 {
-    Task<T> LoadAsync<T>(Guid aggregateId) where T : IAggregate;
-    Task SaveAsync<T>(T aggregate) where T : IAggregate;
-    Task<IEnumerable<IEvent>> GetEventsAsync(Guid aggregateId);
+    public record ConversationCreatedIntegrationEvent(
+        Guid ConversationId,
+        Guid UserId,
+        string Title,
+        DateTime CreatedAt
+    ) : IIntegrationEvent;
 }
 
-// Event-Sourced Aggregate
-public class Conversation : EventSourcedAggregate
+// 3. Domain Events (Internal to Module)
+namespace Axon.Modules.Chat.Domain.Conversation.Events
 {
-    private readonly List<Message> _messages = new();
-    
-    // Apply events to rebuild state
-    public void Apply(ConversationStartedEvent @event)
+    public sealed record ConversationStartedDomainEvent(
+        ConversationId ConversationId,
+        UserId UserId,
+        string Title,
+        DateTime OccurredAt
+    ) : IDomainEvent;
+}
+```
+
+### Module Structure Template
+
+```csharp
+// Module Root Marker
+namespace Axon.Modules.[ModuleName]
+{
+    public class [ModuleName]Module { }  // Marker class for assembly scanning
+}
+
+// Module Configuration
+public static class [ModuleName]ModuleExtensions
+{
+    public static IServiceCollection Add[ModuleName]Module(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        Id = @event.ConversationId;
-        UserId = @event.UserId;
-        CreatedAt = @event.Timestamp;
-    }
-    
-    public void Apply(MessageAddedEvent @event)
-    {
-        _messages.Add(new Message(@event.MessageId, @event.Content));
-        LastActivity = @event.Timestamp;
-    }
-    
-    // Business operations raise events
-    public void AddMessage(string content)
-    {
-        var @event = new MessageAddedEvent(
-            ConversationId: Id,
-            MessageId: MessageId.New(),
-            Content: content,
-            Timestamp: DateTime.UtcNow);
+        // Register Domain Services
+        services.AddScoped<I[ModuleName]DomainService, [ModuleName]DomainService>();
+        
+        // Register Application Services  
+        services.AddMediatR(cfg => 
+            cfg.RegisterServicesFromAssembly(typeof([ModuleName]Module).Assembly));
+        
+        // Register Infrastructure
+        services.AddDbContext<[ModuleName]DbContext>(options =>
+            options.UseNpgsql(configuration.GetConnectionString("[ModuleName]")));
             
-        RaiseEvent(@event);
+        services.AddScoped<I[ModuleName]Repository, [ModuleName]Repository>();
+        
+        return services;
+    }
+    
+    public static IApplicationBuilder Use[ModuleName]Module(
+        this IApplicationBuilder app)
+    {
+        // Module-specific middleware
+        app.UseMiddleware<[ModuleName]ExceptionMiddleware>();
+        
+        // Run migrations
+        using var scope = app.ApplicationServices.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<[ModuleName]DbContext>();
+        dbContext.Database.Migrate();
+        
+        return app;
     }
 }
 ```
 
 ## Module Architecture
 
-### Module Template Structure
-
-```
-Module/
-├── Domain/                       # Core Business Logic
-│   ├── [Aggregate]/             # Aggregate roots
-│   │   ├── [Aggregate].cs      # Main aggregate
-│   │   ├── Events/             # Domain events
-│   │   └── Rules/              # Business rules
-│   ├── Entities/               # Domain entities
-│   ├── ValueObjects/           # Value objects
-│   ├── Services/               # Domain services
-│   ├── Specifications/         # Business specifications
-│   └── Errors/                 # Domain errors
-│
-├── Application/                 # Use Cases
-│   ├── Commands/               # Write operations
-│   │   └── [Command]/
-│   │       ├── [Command]Command.cs
-│   │       ├── [Command]Handler.cs
-│   │       ├── [Command]Validator.cs
-│   │       └── [Command]Response.cs
-│   ├── Queries/                # Read operations
-│   ├── DTOs/                   # Data transfer objects
-│   ├── Mappings/               # Object mappings
-│   ├── Services/               # Application services
-│   ├── Abstractions/           # Interfaces
-│   └── Behaviors/              # Pipeline behaviors
-│
-└── Infrastructure/             # External Concerns
-    ├── Persistence/           # Database implementation
-    │   ├── Configurations/    # EF configurations
-    │   ├── Repositories/      # Repository implementations
-    │   ├── Migrations/        # Database migrations
-    │   └── DbContext.cs      # Module DB context
-    ├── Services/              # External service implementations
-    ├── MessageBus/            # Event publishing
-    └── Configuration/         # DI setup
-```
-
-### Module Registration Pattern
+### Chat Module Implementation
 
 ```csharp
-// Module interface
-public interface IModule
+// Domain Layer - Aggregate Root
+namespace Axon.Modules.Chat.Domain.Conversation
 {
-    void RegisterServices(IServiceCollection services, IConfiguration configuration);
-    void Configure(IApplicationBuilder app);
-    void ConfigureEndpoints(IEndpointRouteBuilder endpoints);
-}
-
-// Module implementation
-public class ChatModule : IModule
-{
-    public void RegisterServices(IServiceCollection services, IConfiguration configuration)
+    public sealed class Conversation : BaseAggregate<ConversationId>
     {
-        // Domain services
-        services.AddScoped<IConversationContextBuilder, ConversationContextBuilder>();
+        private readonly List<Message> _messages = new();
         
-        // Application services
-        services.AddScoped<IMessageRequestBuilder, MessageRequestBuilder>();
-        services.AddScoped<IAiClient, OpenAiClient>();
+        public ConversationId Id { get; private init; }
+        public UserId UserId { get; private init; }
+        public string Title { get; private set; }
+        public ConversationState State { get; private set; }
+        public DateTime CreatedAt { get; private init; }
+        public DateTime? UpdatedAt { get; private set; }
+        public IReadOnlyList<Message> Messages => _messages.AsReadOnly();
         
-        // Infrastructure
-        services.AddDbContext<ChatDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("ChatDb")));
-            
-        services.AddScoped<IConversationRepository, ConversationRepository>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-        
-        // MediatR handlers
-        services.AddMediatR(cfg => 
-            cfg.RegisterServicesFromAssembly(typeof(ChatModule).Assembly));
-    }
-    
-    public void Configure(IApplicationBuilder app)
-    {
-        // Module-specific middleware
-        app.UseMiddleware<ChatMetricsMiddleware>();
-    }
-    
-    public void ConfigureEndpoints(IEndpointRouteBuilder endpoints)
-    {
-        // Module API endpoints
-        endpoints.MapPost("/api/chat/process", ProcessMessageEndpoint.Handle);
-        endpoints.MapGet("/api/chat/conversations/{id}", GetConversationEndpoint.Handle);
-    }
-}
-```
-
-## Chat Module Deep Dive
-
-### Domain Model
-
-```csharp
-// Aggregate Root
-public sealed class Conversation : BaseAggregate<ConversationId>
-{
-    private readonly List<Message> _messages = new();
-    
-    public ConversationId Id { get; private init; }
-    public UserId UserId { get; private init; }
-    public string Title { get; private set; }
-    public ConversationState State { get; private set; }
-    public IReadOnlyList<Message> Messages => _messages.AsReadOnly();
-    
-    // Factory method
-    public static Result<Conversation> Create(UserId userId, string title)
-    {
-        // Validation
-        if (string.IsNullOrWhiteSpace(title))
-            return Result.Failure<Conversation>(ChatErrors.InvalidTitle);
-            
-        var conversation = new Conversation
+        // Factory Method with Validation
+        public static Result<Conversation> Create(
+            UserId userId,
+            string title,
+            MessageContent? initialMessage = null)
         {
-            Id = ConversationId.New(),
-            UserId = userId,
-            Title = title,
-            State = ConversationState.Active,
-            CreatedAt = DateTime.UtcNow
-        };
-        
-        conversation.AddDomainEvent(new ConversationStartedDomainEvent(
-            conversation.Id, userId));
-            
-        return Result.Success(conversation);
-    }
-    
-    // Business operations
-    public Result AddUserMessage(MessageContent content, UserId userId)
-    {
-        if (State != ConversationState.Active)
-            return Result.Failure(ChatErrors.ConversationNotActive);
-            
-        var message = Message.CreateUserMessage(content, userId);
-        _messages.Add(message);
-        
-        AddDomainEvent(new UserMessageAddedDomainEvent(Id, message.Id));
-        
-        return Result.Success();
-    }
-    
-    public Result AddAssistantMessage(MessageContent content, ToolExecution[] toolExecutions)
-    {
-        var message = Message.CreateAssistantMessage(content, toolExecutions);
-        _messages.Add(message);
-        
-        AddDomainEvent(new AssistantMessageAddedDomainEvent(Id, message.Id));
-        
-        return Result.Success();
-    }
-}
-
-// Entity
-public sealed class Message : Entity<MessageId>
-{
-    public MessageId Id { get; private init; }
-    public MessageContent Content { get; private init; }
-    public MessageRole Role { get; private init; }
-    public UserId? UserId { get; private init; }
-    public ToolExecution[] ToolExecutions { get; private init; }
-    public DateTime CreatedAt { get; private init; }
-    
-    public static Message CreateUserMessage(MessageContent content, UserId userId)
-    {
-        return new Message
-        {
-            Id = MessageId.New(),
-            Content = content,
-            Role = MessageRole.User,
-            UserId = userId,
-            ToolExecutions = Array.Empty<ToolExecution>(),
-            CreatedAt = DateTime.UtcNow
-        };
-    }
-}
-
-// Value Objects
-public sealed record MessageContent
-{
-    public string Value { get; }
-    
-    private MessageContent(string value) => Value = value;
-    
-    public static Result<MessageContent> Create(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return Result.Failure<MessageContent>(ChatErrors.EmptyContent);
-            
-        if (value.Length > 4000)
-            return Result.Failure<MessageContent>(ChatErrors.ContentTooLong);
-            
-        return Result.Success(new MessageContent(value));
-    }
-}
-
-public sealed record ConversationId(Guid Value) : IStrongId<Guid>
-{
-    public static ConversationId New() => new(Guid.NewGuid());
-    public static ConversationId From(Guid value) => new(value);
-}
-```
-
-### Application Layer
-
-```csharp
-// Command
-public sealed record ProcessMessageCommand(
-    string Message,
-    Guid? ConversationId,
-    long? UserId,
-    Guid? PreviousResponseId
-) : ICommand<ProcessMessageResponse>;
-
-// Handler with complex orchestration
-public sealed class ProcessMessageHandler : ICommandHandler<ProcessMessageCommand, ProcessMessageResponse>
-{
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IConversationRepository _conversationRepository;
-    private readonly IAiClient _aiClient;
-    private readonly IMcpServerResolver _mcpResolver;
-    private readonly ICurrentUserService _currentUser;
-    private readonly ILogger<ProcessMessageHandler> _logger;
-    
-    public async Task<Result<ProcessMessageResponse>> Handle(
-        ProcessMessageCommand command,
-        CancellationToken cancellationToken)
-    {
-        using var activity = Activity.StartActivity("ProcessMessage");
-        
-        try
-        {
-            // 1. Resolve or create conversation
-            var conversation = command.ConversationId.HasValue
-                ? await _conversationRepository.GetByIdAsync(command.ConversationId.Value, cancellationToken)
-                : Conversation.Create(_currentUser.UserId, "New Conversation").Value;
+            // Business Rule Validation
+            if (string.IsNullOrWhiteSpace(title))
+                return Result.Failure<Conversation>(ChatErrors.InvalidTitle);
                 
-            // 2. Add user message
-            var messageContent = MessageContent.Create(command.Message);
-            if (messageContent.IsFailure)
-                return Result.Failure<ProcessMessageResponse>(messageContent.Error);
-                
-            conversation.AddUserMessage(messageContent.Value, _currentUser.UserId);
+            if (title.Length > 200)
+                return Result.Failure<Conversation>(ChatErrors.TitleTooLong);
             
-            // 3. Build AI request with MCP context
-            var mcpServers = await _mcpResolver.ResolveServersAsync(cancellationToken);
-            var aiRequest = BuildAiRequest(conversation, mcpServers);
-            
-            // 4. Process with AI
-            var aiResponse = await _aiClient.ProcessAsync(aiRequest, cancellationToken);
-            
-            // 5. Handle tool executions
-            if (aiResponse.ToolExecutions.Any())
+            var conversation = new Conversation
             {
-                var toolResults = await ExecuteToolsAsync(aiResponse.ToolExecutions, cancellationToken);
-                aiResponse = await _aiClient.ProcessToolResultsAsync(toolResults, cancellationToken);
+                Id = ConversationId.New(),
+                UserId = userId,
+                Title = title,
+                State = ConversationState.Active,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            // Raise Domain Event
+            conversation.AddDomainEvent(new ConversationStartedDomainEvent(
+                conversation.Id,
+                userId,
+                title,
+                DateTime.UtcNow));
+            
+            if (initialMessage != null)
+            {
+                var message = Message.CreateUserMessage(initialMessage, userId);
+                conversation._messages.Add(message);
+                
+                conversation.AddDomainEvent(new UserMessageAppendedDomainEvent(
+                    conversation.Id,
+                    message.Id,
+                    DateTime.UtcNow));
             }
             
-            // 6. Add assistant response
-            conversation.AddAssistantMessage(
-                MessageContent.Create(aiResponse.Content).Value,
-                aiResponse.ToolExecutions);
-                
-            // 7. Persist changes
-            if (!command.ConversationId.HasValue)
-                await _conversationRepository.AddAsync(conversation, cancellationToken);
-            else
-                await _conversationRepository.UpdateAsync(conversation, cancellationToken);
-                
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            
-            // 8. Return response
-            return Result.Success(new ProcessMessageResponse
-            {
-                ConversationId = conversation.Id,
-                Response = aiResponse.Content,
-                ToolExecutions = aiResponse.ToolExecutions
-            });
+            return Result.Success(conversation);
         }
-        catch (AiServiceException ex)
+        
+        // Business Operations
+        public Result AddUserMessage(MessageContent content)
         {
-            _logger.LogError(ex, "AI service error");
-            return Result.Failure<ProcessMessageResponse>(ChatErrors.AiServiceError);
+            if (State != ConversationState.Active)
+                return Result.Failure(ChatErrors.ConversationNotActive);
+            
+            var message = Message.CreateUserMessage(content, UserId);
+            _messages.Add(message);
+            UpdatedAt = DateTime.UtcNow;
+            
+            AddDomainEvent(new UserMessageAppendedDomainEvent(
+                Id,
+                message.Id,
+                DateTime.UtcNow));
+            
+            return Result.Success();
+        }
+        
+        public Result AddAssistantMessage(
+            MessageContent content,
+            ToolExecution[] toolExecutions)
+        {
+            if (State != ConversationState.Active)
+                return Result.Failure(ChatErrors.ConversationNotActive);
+            
+            var message = Message.CreateAssistantMessage(content, toolExecutions);
+            _messages.Add(message);
+            UpdatedAt = DateTime.UtcNow;
+            
+            return Result.Success();
+        }
+        
+        public Result Archive()
+        {
+            if (State == ConversationState.Archived)
+                return Result.Failure(ChatErrors.AlreadyArchived);
+            
+            State = ConversationState.Archived;
+            UpdatedAt = DateTime.UtcNow;
+            
+            return Result.Success();
         }
     }
 }
 ```
 
-### Infrastructure Implementation
+### Application Layer - Command Handler
 
 ```csharp
-// Repository Pattern
-public sealed class ConversationRepository : IConversationRepository
+namespace Axon.Modules.Chat.Application.Commands.ProcessMessage
 {
-    private readonly ChatDbContext _context;
-    private readonly IEventStore _eventStore;
-    
-    public async Task<Conversation> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    public sealed class ProcessMessageHandler : ICommandHandler<ProcessMessageCommand, ProcessMessageResponse>
     {
-        // Option 1: Load from event store
-        return await _eventStore.LoadAsync<Conversation>(id);
+        private readonly IConversationRepository _conversationRepository;
+        private readonly IAiClient _aiClient;
+        private readonly IMcpServerResolver _mcpResolver;
+        private readonly IMessageRequestBuilder _requestBuilder;
+        private readonly IToolExecutionService _toolExecutor;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ILogger<ProcessMessageHandler> _logger;
+        private readonly IActivityTracker _activityTracker;
         
-        // Option 2: Load from read model
-        var entity = await _context.Conversations
-            .Include(c => c.Messages)
-            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
-            
-        return entity?.ToDomainModel();
-    }
-    
-    public async Task AddAsync(Conversation conversation, CancellationToken cancellationToken)
-    {
-        // Save to event store
-        await _eventStore.SaveAsync(conversation);
-        
-        // Update read model
-        var entity = conversation.ToEntity();
-        _context.Conversations.Add(entity);
-    }
-}
-
-// AI Client Implementation
-public sealed class OpenAiClient : IAiClient
-{
-    private readonly HttpClient _httpClient;
-    private readonly OpenAiOptions _options;
-    private readonly ILogger<OpenAiClient> _logger;
-    
-    public async Task<AiResponse> ProcessAsync(AiRequest request, CancellationToken cancellationToken)
-    {
-        var openAiRequest = new
+        public async Task<Result<ProcessMessageResponse>> Handle(
+            ProcessMessageCommand command,
+            CancellationToken cancellationToken)
         {
-            model = _options.Model,
-            messages = request.Messages.Select(m => new
+            using var activity = _activityTracker.StartActivity("ProcessMessage");
+            
+            try
             {
-                role = m.Role.ToString().ToLower(),
-                content = m.Content
-            }),
-            tools = request.Tools?.Select(t => new
-            {
-                type = "function",
-                function = new
+                // 1. Resolve or Create Conversation
+                Conversation conversation;
+                if (command.ConversationId.HasValue)
                 {
-                    name = t.Name,
-                    description = t.Description,
-                    parameters = t.Parameters
+                    conversation = await _conversationRepository
+                        .GetByIdAsync(command.ConversationId.Value, cancellationToken);
+                        
+                    if (conversation == null)
+                        return Result.Failure<ProcessMessageResponse>(
+                            ChatErrors.ConversationNotFound);
                 }
-            }),
-            temperature = _options.Temperature,
-            max_tokens = _options.MaxTokens
-        };
-        
-        var response = await _httpClient.PostAsJsonAsync(
-            "https://api.openai.com/v1/chat/completions",
-            openAiRequest,
-            cancellationToken);
-            
-        response.EnsureSuccessStatusCode();
-        
-        var content = await response.Content.ReadFromJsonAsync<OpenAiResponse>(cancellationToken);
-        
-        return MapToAiResponse(content);
+                else
+                {
+                    var createResult = Conversation.Create(
+                        UserId.From(command.UserId ?? 0),
+                        "New Conversation",
+                        MessageContent.Create(command.Message).Value);
+                        
+                    if (createResult.IsFailure)
+                        return Result.Failure<ProcessMessageResponse>(createResult.Error);
+                        
+                    conversation = createResult.Value;
+                    await _conversationRepository.AddAsync(conversation, cancellationToken);
+                }
+                
+                // 2. Add User Message (if existing conversation)
+                if (command.ConversationId.HasValue)
+                {
+                    var messageContent = MessageContent.Create(command.Message);
+                    if (messageContent.IsFailure)
+                        return Result.Failure<ProcessMessageResponse>(messageContent.Error);
+                        
+                    var addResult = conversation.AddUserMessage(messageContent.Value);
+                    if (addResult.IsFailure)
+                        return Result.Failure<ProcessMessageResponse>(addResult.Error);
+                }
+                
+                // 3. Build AI Request with MCP Tools
+                var mcpServers = await _mcpResolver.ResolveServersAsync(cancellationToken);
+                var aiRequest = await _requestBuilder.BuildRequestAsync(
+                    conversation,
+                    mcpServers,
+                    cancellationToken);
+                
+                // 4. Process with AI
+                _logger.LogInformation("Sending request to AI with {ToolCount} tools",
+                    aiRequest.Tools?.Count ?? 0);
+                    
+                var aiResponse = await _aiClient.ProcessAsync(aiRequest, cancellationToken);
+                
+                // 5. Handle Tool Executions
+                if (aiResponse.ToolExecutions?.Any() == true)
+                {
+                    _logger.LogInformation("Executing {Count} tools",
+                        aiResponse.ToolExecutions.Length);
+                        
+                    var toolResults = await _toolExecutor.ExecuteToolsAsync(
+                        aiResponse.ToolExecutions,
+                        cancellationToken);
+                        
+                    // Send tool results back to AI
+                    aiResponse = await _aiClient.ProcessToolResultsAsync(
+                        toolResults,
+                        cancellationToken);
+                }
+                
+                // 6. Add Assistant Response
+                var assistantContent = MessageContent.Create(aiResponse.Content);
+                if (assistantContent.IsFailure)
+                    return Result.Failure<ProcessMessageResponse>(assistantContent.Error);
+                    
+                conversation.AddAssistantMessage(
+                    assistantContent.Value,
+                    aiResponse.ToolExecutions ?? Array.Empty<ToolExecution>());
+                
+                // 7. Persist Changes
+                await _conversationRepository.UpdateAsync(conversation, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                
+                // 8. Return Response
+                return Result.Success(new ProcessMessageResponse
+                {
+                    ConversationId = conversation.Id.Value,
+                    Response = aiResponse.Content,
+                    ToolExecutions = aiResponse.ToolExecutions
+                });
+            }
+            catch (AiServiceException ex)
+            {
+                _logger.LogError(ex, "AI service error");
+                return Result.Failure<ProcessMessageResponse>(ChatErrors.AiServiceError);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error processing message");
+                return Result.Failure<ProcessMessageResponse>(ChatErrors.UnexpectedError);
+            }
+        }
     }
 }
 ```
 
-## Identity Module Architecture
-
-### Authentication & Authorization
+### Infrastructure Layer - Repository Implementation
 
 ```csharp
-// Identity Aggregate
-public sealed class User : BaseAuditableAggregate<UserId>
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories
 {
-    private readonly List<Role> _roles = new();
-    private readonly List<Permission> _permissions = new();
-    
-    public UserId Id { get; private init; }
-    public Email Email { get; private set; }
-    public Username Username { get; private set; }
-    public PasswordHash PasswordHash { get; private set; }
-    public UserStatus Status { get; private set; }
-    public IReadOnlyList<Role> Roles => _roles.AsReadOnly();
-    
-    public static Result<User> Register(Email email, Username username, Password password)
+    public sealed class ConversationRepository : Repository<Conversation, ConversationId>, 
+        IConversationRepository
     {
-        var user = new User
+        private readonly ChatDbContext _context;
+        
+        public ConversationRepository(ChatDbContext context) : base(context)
         {
-            Id = UserId.New(),
-            Email = email,
-            Username = username,
-            PasswordHash = PasswordHash.Create(password),
-            Status = UserStatus.Active,
-            CreatedAt = DateTime.UtcNow
-        };
+            _context = context;
+        }
         
-        user.AddDomainEvent(new UserRegisteredDomainEvent(user.Id, email));
-        
-        return Result.Success(user);
-    }
-    
-    public Result ChangePassword(Password currentPassword, Password newPassword)
-    {
-        if (!PasswordHash.Verify(currentPassword))
-            return Result.Failure(IdentityErrors.InvalidPassword);
-            
-        PasswordHash = PasswordHash.Create(newPassword);
-        
-        AddDomainEvent(new PasswordChangedDomainEvent(Id));
-        
-        return Result.Success();
-    }
-}
-
-// JWT Token Service
-public sealed class JwtTokenService : ITokenService
-{
-    private readonly JwtOptions _options;
-    
-    public string GenerateAccessToken(User user)
-    {
-        var claims = new List<Claim>
+        public async Task<Conversation?> GetByIdAsync(
+            ConversationId id,
+            CancellationToken cancellationToken = default)
         {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Name, user.Username)
-        };
+            return await _context.Conversations
+                .Include(c => c.Messages.OrderByDescending(m => m.CreatedAt))
+                .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted, cancellationToken);
+        }
         
-        claims.AddRange(user.Roles.Select(r => new Claim(ClaimTypes.Role, r.Name)));
-        claims.AddRange(user.Permissions.Select(p => new Claim("permission", p.Value)));
+        public async Task<IReadOnlyList<Conversation>> GetByUserIdAsync(
+            UserId userId,
+            int skip = 0,
+            int take = 20,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Conversations
+                .Where(c => c.UserId == userId && !c.IsDeleted)
+                .OrderByDescending(c => c.UpdatedAt ?? c.CreatedAt)
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(cancellationToken);
+        }
         
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Secret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        
-        var token = new JwtSecurityToken(
-            issuer: _options.Issuer,
-            audience: _options.Audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_options.AccessTokenExpirationMinutes),
-            signingCredentials: creds);
-            
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        public async Task<bool> ExistsAsync(
+            ConversationId id,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Conversations
+                .AnyAsync(c => c.Id == id && !c.IsDeleted, cancellationToken);
+        }
     }
 }
 ```
 
 ## Building Blocks Layer
 
-### Core Abstractions
+### Core Domain Abstractions
 
 ```csharp
-// Base Entity
-public abstract record BaseEntity<T> : IEntity<T> 
-    where T : struct, IEquatable<T>
+namespace BuildingBlocks.Core.Domain
 {
-    public T? Id { get; init; }
-    public bool IsDeleted { get; set; }
-    public long Version { get; set; }
-}
-
-// Base Aggregate
-public abstract record BaseAggregate<TId> : BaseAuditableEntity<TId>, IAggregate<TId> 
-    where TId : struct, IEquatable<TId>
-{
-    private readonly List<IDomainEvent> _domainEvents = new();
-    
-    public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
-    
-    protected void AddDomainEvent(IDomainEvent domainEvent)
+    // Base Entity with Optimistic Concurrency
+    public abstract record BaseEntity<TId> : IEntity<TId>
+        where TId : struct, IEquatable<TId>
     {
-        _domainEvents.Add(domainEvent);
+        public TId Id { get; init; }
+        public bool IsDeleted { get; set; }
+        public long Version { get; set; }  // For optimistic concurrency
+        
+        public bool IsTransient() => Id.Equals(default(TId));
     }
     
-    public IEvent[] ClearDomainEvents()
+    // Auditable Entity
+    public abstract record BaseAuditableEntity<TId> : BaseEntity<TId>, IAuditable
+        where TId : struct, IEquatable<TId>
     {
-        var events = _domainEvents.ToArray();
-        _domainEvents.Clear();
-        return events;
+        public DateTime CreatedAt { get; init; }
+        public string? CreatedBy { get; init; }
+        public DateTime? UpdatedAt { get; set; }
+        public string? UpdatedBy { get; set; }
     }
-}
-
-// CQRS Base
-public interface ICommand<TResponse> : IAxonRequest<Result<TResponse>>, IRequest<Result<TResponse>>
-    where TResponse : notnull
-{
-}
-
-public interface IQuery<TResponse> : IAxonRequest<Result<TResponse>>, IRequest<Result<TResponse>>
-    where TResponse : notnull
-{
-}
-
-// Result Pattern
-public class Result<T>
-{
-    public T Value { get; }
-    public Error Error { get; }
-    public bool IsSuccess { get; }
-    public bool IsFailure => !IsSuccess;
     
-    public static Result<T> Success(T value) => new(value, null, true);
-    public static Result<T> Failure(Error error) => new(default, error, false);
+    // Aggregate Root with Domain Events
+    public abstract record BaseAggregate<TId> : BaseAuditableEntity<TId>, IAggregate<TId>
+        where TId : struct, IEquatable<TId>
+    {
+        private readonly List<IDomainEvent> _domainEvents = new();
+        
+        public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+        
+        protected void AddDomainEvent(IDomainEvent domainEvent)
+        {
+            _domainEvents.Add(domainEvent);
+        }
+        
+        public IEvent[] ClearDomainEvents()
+        {
+            var events = _domainEvents.ToArray();
+            _domainEvents.Clear();
+            return events;
+        }
+    }
+    
+    // Strong Typed IDs
+    public interface IStrongId<T> where T : struct
+    {
+        T Value { get; }
+    }
+    
+    // Value Object Base
+    public abstract record ValueObject
+    {
+        protected abstract IEnumerable<object> GetEqualityComponents();
+        
+        public override int GetHashCode()
+        {
+            return GetEqualityComponents()
+                .Select(x => x?.GetHashCode() ?? 0)
+                .Aggregate((x, y) => x ^ y);
+        }
+    }
 }
 ```
 
-### Cross-Cutting Concerns
+### CQRS Abstractions
 
 ```csharp
-// Validation Pipeline
-public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : IRequest<TResponse>
+namespace BuildingBlocks.Core.CQRS
 {
-    private readonly IEnumerable<IValidator<TRequest>> _validators;
-    
-    public async Task<TResponse> Handle(
-        TRequest request,
-        RequestHandlerDelegate<TResponse> next,
-        CancellationToken cancellationToken)
+    // Command Interface
+    public interface ICommand<TResponse> : IRequest<Result<TResponse>>
+        where TResponse : notnull
     {
-        var context = new ValidationContext<TRequest>(request);
+    }
+    
+    // Query Interface
+    public interface IQuery<TResponse> : IRequest<Result<TResponse>>
+        where TResponse : notnull
+    {
+    }
+    
+    // Command Handler
+    public interface ICommandHandler<TCommand, TResponse> 
+        : IRequestHandler<TCommand, Result<TResponse>>
+        where TCommand : ICommand<TResponse>
+        where TResponse : notnull
+    {
+    }
+    
+    // Query Handler
+    public interface IQueryHandler<TQuery, TResponse> 
+        : IRequestHandler<TQuery, Result<TResponse>>
+        where TQuery : IQuery<TResponse>
+        where TResponse : notnull
+    {
+    }
+    
+    // Result Pattern
+    public class Result<T>
+    {
+        public T? Value { get; }
+        public Error? Error { get; }
+        public bool IsSuccess { get; }
+        public bool IsFailure => !IsSuccess;
         
-        var failures = _validators
-            .Select(v => v.Validate(context))
-            .SelectMany(result => result.Errors)
-            .Where(f => f != null)
-            .ToList();
+        private Result(T? value, Error? error, bool isSuccess)
+        {
+            Value = value;
+            Error = error;
+            IsSuccess = isSuccess;
+        }
+        
+        public static Result<T> Success(T value) => 
+            new(value, null, true);
             
-        if (failures.Count != 0)
-            throw new ValidationException(failures);
+        public static Result<T> Failure(Error error) => 
+            new(default, error, false);
             
-        return await next();
+        public static implicit operator Result<T>(T value) => 
+            Success(value);
+            
+        public static implicit operator Result<T>(Error error) => 
+            Failure(error);
+    }
+    
+    // Error Type
+    public record Error(
+        string Code,
+        string Message,
+        ErrorType Type = ErrorType.Failure,
+        Dictionary<string, object>? Metadata = null)
+    {
+        public static Error NotFound(string message) => 
+            new("NotFound", message, ErrorType.NotFound);
+            
+        public static Error Validation(string message) => 
+            new("Validation", message, ErrorType.Validation);
+            
+        public static Error Unauthorized(string message) => 
+            new("Unauthorized", message, ErrorType.Unauthorized);
+            
+        public static Error Conflict(string message) => 
+            new("Conflict", message, ErrorType.Conflict);
+    }
+    
+    public enum ErrorType
+    {
+        Failure,
+        NotFound,
+        Validation,
+        Unauthorized,
+        Forbidden,
+        Conflict
+    }
+}
+```
+
+### Cross-Cutting Pipeline Behaviors
+
+```csharp
+namespace BuildingBlocks.Core.Behaviors
+{
+    // Validation Behavior
+    public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+        where TResponse : class
+    {
+        private readonly IEnumerable<IValidator<TRequest>> _validators;
+        
+        public async Task<TResponse> Handle(
+            TRequest request,
+            RequestHandlerDelegate<TResponse> next,
+            CancellationToken cancellationToken)
+        {
+            if (!_validators.Any())
+                return await next();
+            
+            var context = new ValidationContext<TRequest>(request);
+            
+            var validationResults = await Task.WhenAll(
+                _validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+                
+            var failures = validationResults
+                .SelectMany(r => r.Errors)
+                .Where(f => f != null)
+                .ToList();
+            
+            if (failures.Count != 0)
+            {
+                var error = Error.Validation(
+                    string.Join("; ", failures.Select(f => f.ErrorMessage)));
+                    
+                // Return Result.Failure for commands/queries
+                if (typeof(TResponse).IsGenericType &&
+                    typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>))
+                {
+                    var resultType = typeof(TResponse).GetGenericArguments()[0];
+                    var failureMethod = typeof(Result<>)
+                        .MakeGenericType(resultType)
+                        .GetMethod(nameof(Result<object>.Failure));
+                        
+                    return (TResponse)failureMethod!.Invoke(null, new object[] { error })!;
+                }
+                
+                throw new ValidationException(failures);
+            }
+            
+            return await next();
+        }
+    }
+    
+    // Logging Behavior
+    public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
+        
+        public async Task<TResponse> Handle(
+            TRequest request,
+            RequestHandlerDelegate<TResponse> next,
+            CancellationToken cancellationToken)
+        {
+            var requestName = typeof(TRequest).Name;
+            var requestId = Guid.NewGuid();
+            
+            using (_logger.BeginScope(new Dictionary<string, object>
+            {
+                ["RequestId"] = requestId,
+                ["RequestName"] = requestName
+            }))
+            {
+                _logger.LogInformation("Handling {RequestName}", requestName);
+                
+                var stopwatch = Stopwatch.StartNew();
+                
+                try
+                {
+                    var response = await next();
+                    
+                    stopwatch.Stop();
+                    
+                    _logger.LogInformation(
+                        "Handled {RequestName} in {ElapsedMs}ms",
+                        requestName,
+                        stopwatch.ElapsedMilliseconds);
+                    
+                    return response;
+                }
+                catch (Exception ex)
+                {
+                    stopwatch.Stop();
+                    
+                    _logger.LogError(ex,
+                        "Error handling {RequestName} after {ElapsedMs}ms",
+                        requestName,
+                        stopwatch.ElapsedMilliseconds);
+                    
+                    throw;
+                }
+            }
+        }
+    }
+    
+    // Transaction Behavior
+    public class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : ICommand<TResponse>
+        where TResponse : notnull
+    {
+        private readonly IDbContext _dbContext;
+        private readonly ILogger<TransactionBehavior<TRequest, TResponse>> _logger;
+        
+        public async Task<TResponse> Handle(
+            TRequest request,
+            RequestHandlerDelegate<TResponse> next,
+            CancellationToken cancellationToken)
+        {
+            // Skip if already in transaction
+            if (_dbContext.HasActiveTransaction)
+                return await next();
+            
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.BeginTransactionAsync();
+                
+                try
+                {
+                    var response = await next();
+                    
+                    await _dbContext.CommitTransactionAsync(transaction);
+                    
+                    return response;
+                }
+                catch
+                {
+                    await _dbContext.RollbackTransactionAsync();
+                    throw;
+                }
+            });
+        }
+    }
+}
+```
+
+## CQRS & Domain-Driven Design
+
+### Command and Query Separation
+
+```csharp
+// Command Side - Write Model
+namespace Axon.Modules.Chat.Application.Commands
+{
+    // Command with Validation
+    public sealed record ProcessMessageCommand(
+        string Message,
+        Guid? ConversationId,
+        long? UserId,
+        Guid? PreviousResponseId
+    ) : ICommand<ProcessMessageResponse>;
+    
+    // Command Validator
+    public sealed class ProcessMessageValidator : AbstractValidator<ProcessMessageCommand>
+    {
+        public ProcessMessageValidator()
+        {
+            RuleFor(x => x.Message)
+                .NotEmpty().WithMessage("Message is required")
+                .MaximumLength(4000).WithMessage("Message too long");
+                
+            When(x => x.ConversationId.HasValue, () =>
+            {
+                RuleFor(x => x.ConversationId)
+                    .NotEqual(Guid.Empty).WithMessage("Invalid conversation ID");
+            });
+        }
+    }
+    
+    // Command Response
+    public sealed record ProcessMessageResponse
+    {
+        public Guid ConversationId { get; init; }
+        public string Response { get; init; } = string.Empty;
+        public ToolExecution[]? ToolExecutions { get; init; }
     }
 }
 
-// Logging Pipeline
-public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : IRequest<TResponse>
+// Query Side - Read Model
+namespace Axon.Modules.Chat.Application.Queries
 {
-    private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
+    // Query
+    public sealed record GetConversationQuery(
+        Guid ConversationId
+    ) : IQuery<ConversationDto>;
     
-    public async Task<TResponse> Handle(
-        TRequest request,
-        RequestHandlerDelegate<TResponse> next,
+    // Query Handler with Optimized Read Model
+    public sealed class GetConversationHandler : IQueryHandler<GetConversationQuery, ConversationDto>
+    {
+        private readonly IConversationReadRepository _readRepository;
+        private readonly IMapper _mapper;
+        
+        public async Task<Result<ConversationDto>> Handle(
+            GetConversationQuery query,
+            CancellationToken cancellationToken)
+        {
+            // Direct query to read-optimized model
+            var conversation = await _readRepository
+                .GetConversationWithMessagesAsync(query.ConversationId, cancellationToken);
+                
+            if (conversation == null)
+                return Result.Failure<ConversationDto>(ChatErrors.ConversationNotFound);
+                
+            return Result.Success(_mapper.Map<ConversationDto>(conversation));
+        }
+    }
+}
+```
+
+### Domain Event Handling
+
+```csharp
+// Domain Event
+public sealed record ConversationStartedDomainEvent(
+    ConversationId ConversationId,
+    UserId UserId,
+    string Title,
+    DateTime OccurredAt
+) : IDomainEvent;
+
+// Domain Event Handler
+public sealed class ConversationStartedDomainEventHandler 
+    : INotificationHandler<ConversationStartedDomainEvent>
+{
+    private readonly IEventBus _eventBus;
+    private readonly ILogger<ConversationStartedDomainEventHandler> _logger;
+    
+    public async Task Handle(
+        ConversationStartedDomainEvent notification,
         CancellationToken cancellationToken)
     {
-        var requestName = request.GetType().Name;
-        var requestGuid = Guid.NewGuid().ToString();
-        
         _logger.LogInformation(
-            "Handling {RequestName} ({RequestGuid})",
-            requestName, requestGuid);
-            
-        var stopwatch = Stopwatch.StartNew();
+            "Handling domain event: Conversation {ConversationId} started",
+            notification.ConversationId);
         
-        try
+        // Publish integration event for other modules
+        var integrationEvent = new ConversationCreatedIntegrationEvent(
+            notification.ConversationId.Value,
+            notification.UserId.Value,
+            notification.Title,
+            notification.OccurredAt);
+            
+        await _eventBus.PublishAsync(integrationEvent, cancellationToken);
+    }
+}
+```
+
+## Event-Driven Architecture
+
+### Event Bus Implementation (MassTransit)
+
+```csharp
+namespace BuildingBlocks.MassTransit
+{
+    public static class MassTransitExtensions
+    {
+        public static IServiceCollection AddCustomMassTransit(
+            this IServiceCollection services,
+            IConfiguration configuration,
+            params Type[] consumerAssemblies)
         {
-            var response = await next();
-            
-            stopwatch.Stop();
-            
-            _logger.LogInformation(
-                "Handled {RequestName} ({RequestGuid}) in {ElapsedMs}ms",
-                requestName, requestGuid, stopwatch.ElapsedMilliseconds);
+            services.AddMassTransit(x =>
+            {
+                // Register consumers from assemblies
+                foreach (var assembly in consumerAssemblies)
+                {
+                    x.AddConsumers(assembly);
+                }
                 
-            return response;
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
+                // Configure RabbitMQ
+                x.UsingRabbitMq((context, cfg) =>
+                {
+                    cfg.Host(configuration["RabbitMQ:Host"], h =>
+                    {
+                        h.Username(configuration["RabbitMQ:Username"]);
+                        h.Password(configuration["RabbitMQ:Password"]);
+                    });
+                    
+                    // Configure endpoints
+                    cfg.ConfigureEndpoints(context);
+                    
+                    // Retry policy
+                    cfg.UseMessageRetry(r => r.Exponential(
+                        retryCount: 5,
+                        minInterval: TimeSpan.FromSeconds(1),
+                        maxInterval: TimeSpan.FromSeconds(30),
+                        intervalDelta: TimeSpan.FromSeconds(2)));
+                    
+                    // Circuit breaker
+                    cfg.UseCircuitBreaker(cb =>
+                    {
+                        cb.TrackingPeriod = TimeSpan.FromMinutes(1);
+                        cb.TripThreshold = 15;
+                        cb.ActiveThreshold = 10;
+                        cb.ResetInterval = TimeSpan.FromMinutes(5);
+                    });
+                    
+                    // Outbox pattern for reliability
+                    cfg.UseInMemoryOutbox();
+                });
+            });
             
-            _logger.LogError(ex,
-                "Error handling {RequestName} ({RequestGuid}) after {ElapsedMs}ms",
-                requestName, requestGuid, stopwatch.ElapsedMilliseconds);
-                
-            throw;
+            return services;
         }
     }
 }
 ```
 
-## API Gateway Pattern
+### Outbox Pattern Implementation
+
+```csharp
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Entities
+{
+    public class OutboxMessage
+    {
+        public Guid Id { get; set; }
+        public string EventType { get; set; } = string.Empty;
+        public string Payload { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ProcessedAt { get; set; }
+        public int RetryCount { get; set; }
+        public string? Error { get; set; }
+        
+        public void MarkAsProcessed()
+        {
+            ProcessedAt = DateTime.UtcNow;
+        }
+        
+        public void IncrementRetry(string? error = null)
+        {
+            RetryCount++;
+            Error = error;
+        }
+        
+        public bool ShouldRetry() => RetryCount < 3 && ProcessedAt == null;
+    }
+}
+
+// Outbox Processor Background Service
+public class OutboxProcessor : BackgroundService
+{
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<OutboxProcessor> _logger;
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
+                var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+                
+                var messages = await dbContext.OutboxMessages
+                    .Where(m => m.ProcessedAt == null && m.RetryCount < 3)
+                    .OrderBy(m => m.CreatedAt)
+                    .Take(100)
+                    .ToListAsync(stoppingToken);
+                
+                foreach (var message in messages)
+                {
+                    try
+                    {
+                        var @event = JsonSerializer.Deserialize(
+                            message.Payload,
+                            Type.GetType(message.EventType)!);
+                            
+                        await eventBus.PublishAsync(@event, stoppingToken);
+                        
+                        message.MarkAsProcessed();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to process outbox message {Id}", message.Id);
+                        message.IncrementRetry(ex.Message);
+                    }
+                }
+                
+                await dbContext.SaveChangesAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in outbox processor");
+            }
+            
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        }
+    }
+}
+```
+
+## API Layer & FastEndpoints
 
 ### FastEndpoints Implementation
 
 ```csharp
-// Endpoint Base Class
-public abstract class EndpointBase<TRequest, TResponse> : Endpoint<TRequest, TResponse>
-    where TRequest : notnull
+namespace Axon.Api.Endpoints.Chat.ProcessMessage
 {
-    protected IMediator Mediator => Resolve<IMediator>();
-    protected ILogger Logger => Resolve<ILogger<EndpointBase<TRequest, TResponse>>>();
-    
-    protected IActionResult HandleResult<T>(Result<T> result)
+    public sealed class ProcessMessageEndpoint : Endpoint<ProcessMessageRequest, ProcessMessageResponse>
     {
-        if (result.IsSuccess)
-            return Ok(result.Value);
-            
-        return result.Error.Type switch
-        {
-            ErrorType.NotFound => NotFound(result.Error.ToProblemDetails()),
-            ErrorType.Validation => BadRequest(result.Error.ToProblemDetails()),
-            ErrorType.Unauthorized => Unauthorized(result.Error.ToProblemDetails()),
-            ErrorType.Forbidden => Forbid(result.Error.ToProblemDetails()),
-            _ => Problem(result.Error.ToProblemDetails())
-        };
-    }
-}
-
-// Endpoint Implementation
-public sealed class ProcessMessageEndpoint : EndpointBase<ProcessMessageRequest, ProcessMessageResponse>
-{
-    public override void Configure()
-    {
-        Post("/api/chat/process");
-        AllowAnonymous(); // TODO: Add auth
-        Summary(s =>
-        {
-            s.Summary = "Process a chat message";
-            s.Description = "Processes a user message and returns AI response";
-            s.Response<ProcessMessageResponse>(200, "Message processed successfully");
-            s.Response<ProblemDetails>(400, "Invalid request");
-            s.Response<ProblemDetails>(500, "Server error");
-        });
-    }
-    
-    public override async Task HandleAsync(ProcessMessageRequest req, CancellationToken ct)
-    {
-        var command = new ProcessMessageCommand(
-            req.Message,
-            req.ConversationId,
-            req.UserId,
-            req.PreviousResponseId);
-            
-        var result = await Mediator.Send(command, ct);
+        private readonly IMediator _mediator;
+        private readonly ILogger<ProcessMessageEndpoint> _logger;
         
-        await SendResultAsync(result.ToHttpResult());
-    }
-}
-```
-
-### API Versioning
-
-```csharp
-public class ApiVersioningConfiguration
-{
-    public static void Configure(IServiceCollection services)
-    {
-        services.AddApiVersioning(options =>
+        public override void Configure()
         {
-            options.DefaultApiVersion = new ApiVersion(1, 0);
-            options.AssumeDefaultVersionWhenUnspecified = true;
-            options.ReportApiVersions = true;
-            options.ApiVersionReader = ApiVersionReader.Combine(
-                new HeaderApiVersionReader("X-Api-Version"),
-                new QueryStringApiVersionReader("api-version"),
-                new UrlSegmentApiVersionReader());
-        });
-        
-        services.AddVersionedApiExplorer(options =>
-        {
-            options.GroupNameFormat = "'v'VVV";
-            options.SubstituteApiVersionInUrl = true;
-        });
-    }
-}
-
-// Versioned Endpoint
-[ApiVersion("1.0")]
-[ApiVersion("2.0")]
-public class GetConversationEndpoint : EndpointBase<GetConversationRequest, ConversationDto>
-{
-    public override void Configure()
-    {
-        Get("/api/v{version:apiVersion}/conversations/{id}");
-        Version(1, 2); // Available in v1 and v2
-    }
-}
-```
-
-## Data Architecture
-
-### Database Design
-
-```sql
--- Schema separation for modules
-CREATE SCHEMA chat;
-CREATE SCHEMA identity;
-CREATE SCHEMA shared;
-
--- Chat module tables
-CREATE TABLE chat.conversations (
-    id UUID PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    title VARCHAR(200) NOT NULL,
-    state VARCHAR(50) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ,
-    version BIGINT NOT NULL DEFAULT 0,
-    is_deleted BOOLEAN NOT NULL DEFAULT FALSE
-);
-
-CREATE TABLE chat.messages (
-    id UUID PRIMARY KEY,
-    conversation_id UUID NOT NULL REFERENCES chat.conversations(id),
-    content TEXT NOT NULL,
-    role VARCHAR(50) NOT NULL,
-    user_id BIGINT,
-    tool_executions JSONB,
-    created_at TIMESTAMPTZ NOT NULL,
-    CONSTRAINT fk_conversation FOREIGN KEY (conversation_id) 
-        REFERENCES chat.conversations(id) ON DELETE CASCADE
-);
-
--- Indexes for performance
-CREATE INDEX idx_conversations_user_id ON chat.conversations(user_id);
-CREATE INDEX idx_conversations_created_at ON chat.conversations(created_at DESC);
-CREATE INDEX idx_messages_conversation_id ON chat.messages(conversation_id);
-CREATE INDEX idx_messages_created_at ON chat.messages(created_at DESC);
-
--- Event sourcing tables
-CREATE TABLE shared.event_store (
-    id UUID PRIMARY KEY,
-    aggregate_id UUID NOT NULL,
-    aggregate_type VARCHAR(500) NOT NULL,
-    event_type VARCHAR(500) NOT NULL,
-    event_data JSONB NOT NULL,
-    event_version INT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_event_store_aggregate ON shared.event_store(aggregate_id, event_version);
-
--- Outbox pattern for reliable messaging
-CREATE TABLE shared.outbox_messages (
-    id UUID PRIMARY KEY,
-    event_type VARCHAR(500) NOT NULL,
-    payload JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    processed_at TIMESTAMPTZ,
-    attempts INT NOT NULL DEFAULT 0,
-    error TEXT
-);
-
-CREATE INDEX idx_outbox_unprocessed ON shared.outbox_messages(processed_at) 
-    WHERE processed_at IS NULL;
-```
-
-### Repository Pattern
-
-```csharp
-// Generic Repository
-public abstract class Repository<TEntity, TId> : IRepository<TEntity, TId>
-    where TEntity : class, IEntity<TId>
-    where TId : struct
-{
-    protected readonly DbContext Context;
-    protected readonly DbSet<TEntity> DbSet;
-    
-    protected Repository(DbContext context)
-    {
-        Context = context;
-        DbSet = context.Set<TEntity>();
-    }
-    
-    public virtual async Task<TEntity?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
-    {
-        return await DbSet
-            .FirstOrDefaultAsync(e => e.Id.Equals(id), cancellationToken);
-    }
-    
-    public virtual async Task<IReadOnlyList<TEntity>> GetAllAsync(CancellationToken cancellationToken = default)
-    {
-        return await DbSet
-            .Where(e => !e.IsDeleted)
-            .ToListAsync(cancellationToken);
-    }
-    
-    public virtual async Task AddAsync(TEntity entity, CancellationToken cancellationToken = default)
-    {
-        await DbSet.AddAsync(entity, cancellationToken);
-    }
-    
-    public virtual void Update(TEntity entity)
-    {
-        DbSet.Update(entity);
-    }
-    
-    public virtual void Remove(TEntity entity)
-    {
-        entity.IsDeleted = true;
-        Update(entity);
-    }
-}
-
-// Specification Pattern
-public abstract class Specification<T>
-{
-    public abstract Expression<Func<T, bool>> ToExpression();
-    
-    public bool IsSatisfiedBy(T entity)
-    {
-        var predicate = ToExpression().Compile();
-        return predicate(entity);
-    }
-    
-    public static implicit operator Expression<Func<T, bool>>(Specification<T> specification)
-    {
-        return specification.ToExpression();
-    }
-}
-
-// Usage
-public class ActiveConversationSpecification : Specification<Conversation>
-{
-    public override Expression<Func<Conversation, bool>> ToExpression()
-    {
-        return conversation => conversation.State == ConversationState.Active 
-            && !conversation.IsDeleted;
-    }
-}
-```
-
-## Integration Patterns
-
-### Message Bus
-
-```csharp
-// MassTransit Configuration
-public static class MessageBusConfiguration
-{
-    public static void ConfigureMassTransit(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.AddMassTransit(x =>
-        {
-            // Add consumers
-            x.AddConsumer<MessageProcessedConsumer>();
-            x.AddConsumer<ConversationCreatedConsumer>();
+            Post("/api/chat/process");
+            AllowAnonymous(); // TODO: Change to require auth
             
-            // Configure RabbitMQ
-            x.UsingRabbitMq((context, cfg) =>
+            Summary(s =>
             {
-                cfg.Host(configuration["RabbitMQ:Host"], h =>
-                {
-                    h.Username(configuration["RabbitMQ:Username"]);
-                    h.Password(configuration["RabbitMQ:Password"]);
-                });
+                s.Summary = "Process a chat message";
+                s.Description = "Processes a user message through AI and returns response";
+                s.Response<ProcessMessageResponse>(200, "Message processed successfully");
+                s.Response<ValidationProblemDetails>(400, "Validation failed");
+                s.Response<ProblemDetails>(500, "Internal server error");
                 
-                // Configure endpoints
-                cfg.ReceiveEndpoint("chat-events", e =>
+                s.ExampleRequest = new ProcessMessageRequest
                 {
-                    e.ConfigureConsumer<MessageProcessedConsumer>(context);
-                });
-                
-                // Retry policy
-                cfg.UseMessageRetry(r => r.Intervals(100, 200, 500, 1000, 2000));
-                
-                // Circuit breaker
-                cfg.UseCircuitBreaker(cb =>
-                {
-                    cb.TrackingPeriod = TimeSpan.FromMinutes(1);
-                    cb.TripThreshold = 15;
-                    cb.ActiveThreshold = 10;
-                    cb.ResetInterval = TimeSpan.FromMinutes(5);
-                });
+                    Message = "Hello, how can you help me?",
+                    ConversationId = Guid.NewGuid()
+                };
             });
-        });
-    }
-}
-
-// Event Publisher
-public class MassTransitEventPublisher : IEventPublisher
-{
-    private readonly IPublishEndpoint _publishEndpoint;
-    
-    public async Task PublishAsync<T>(T @event, CancellationToken cancellationToken = default)
-        where T : class, IIntegrationEvent
-    {
-        await _publishEndpoint.Publish(@event, cancellationToken);
-    }
-}
-```
-
-### HTTP Resilience
-
-```csharp
-// Polly Configuration
-public static class HttpResilienceConfiguration
-{
-    public static IHttpClientBuilder AddResilience(this IHttpClientBuilder builder)
-    {
-        return builder
-            .AddPolicyHandler(GetRetryPolicy())
-            .AddPolicyHandler(GetCircuitBreakerPolicy())
-            .AddPolicyHandler(GetTimeoutPolicy());
-    }
-    
-    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-    {
-        return HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .OrResult(msg => !msg.IsSuccessStatusCode)
-            .WaitAndRetryAsync(
-                3,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                onRetry: (outcome, timespan, retryCount, context) =>
-                {
-                    var logger = context.Values["logger"] as ILogger;
-                    logger?.LogWarning("Retry {RetryCount} after {Delay}ms", retryCount, timespan.TotalMilliseconds);
-                });
-    }
-    
-    private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
-    {
-        return HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .CircuitBreakerAsync(
-                5,
-                TimeSpan.FromSeconds(30),
-                onBreak: (result, timespan) =>
-                {
-                    // Log circuit open
-                },
-                onReset: () =>
-                {
-                    // Log circuit closed
-                });
-    }
-    
-    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
-    {
-        return Policy.TimeoutAsync<HttpResponseMessage>(10);
-    }
-}
-```
-
-## Deployment Architecture
-
-### Container Strategy
-
-```dockerfile
-# Multi-stage build
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-
-# Copy and restore
-COPY ["src/Api/Axon.Api.csproj", "src/Api/"]
-COPY ["src/Modules/", "src/Modules/"]
-COPY ["src/BuildingBlocks/", "src/BuildingBlocks/"]
-RUN dotnet restore "src/Api/Axon.Api.csproj"
-
-# Build
-COPY . .
-WORKDIR "/src/src/Api"
-RUN dotnet build "Axon.Api.csproj" -c Release -o /app/build
-
-# Publish
-FROM build AS publish
-RUN dotnet publish "Axon.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
-
-# Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
-WORKDIR /app
-EXPOSE 80
-EXPOSE 443
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
-
-COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "Axon.Api.dll"]
-```
-
-### Kubernetes Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: axon-backend
-  namespace: production
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: axon-backend
-  template:
-    metadata:
-      labels:
-        app: axon-backend
-    spec:
-      containers:
-      - name: axon-backend
-        image: axon/backend:latest
-        ports:
-        - containerPort: 80
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Production"
-        - name: ConnectionStrings__DefaultConnection
-          valueFrom:
-            secretKeyRef:
-              name: db-connection
-              key: connection-string
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 80
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health/ready
-            port: 80
-          initialDelaySeconds: 5
-          periodSeconds: 5
-```
-
-## Security Architecture
-
-### Authentication Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API
-    participant Identity
-    participant JWT
-    participant Database
-    
-    Client->>API: POST /auth/login {email, password}
-    API->>Identity: Authenticate(email, password)
-    Identity->>Database: GetUser(email)
-    Database-->>Identity: User
-    Identity->>Identity: VerifyPassword(password, hash)
-    Identity->>JWT: GenerateTokens(user)
-    JWT-->>Identity: {accessToken, refreshToken}
-    Identity-->>API: AuthResult
-    API-->>Client: 200 OK {tokens}
-    
-    Client->>API: GET /api/data [Bearer token]
-    API->>JWT: ValidateToken(token)
-    JWT-->>API: Claims
-    API->>API: Authorize(claims)
-    API-->>Client: 200 OK {data}
-```
-
-### Authorization Policies
-
-```csharp
-// Policy Configuration
-public static class AuthorizationConfiguration
-{
-    public static void ConfigureAuthorization(this IServiceCollection services)
-    {
-        services.AddAuthorization(options =>
-        {
-            // Role-based policies
-            options.AddPolicy("RequireAdmin", policy =>
-                policy.RequireRole("Admin"));
-                
-            options.AddPolicy("RequireUser", policy =>
-                policy.RequireAuthenticatedUser());
-                
-            // Claim-based policies
-            options.AddPolicy("CanManageConversations", policy =>
-                policy.RequireClaim("permission", "conversations:manage"));
-                
-            // Custom policies
-            options.AddPolicy("ConversationOwner", policy =>
-                policy.Requirements.Add(new ConversationOwnerRequirement()));
-        });
-        
-        // Register handlers
-        services.AddScoped<IAuthorizationHandler, ConversationOwnerHandler>();
-    }
-}
-
-// Custom Authorization Handler
-public class ConversationOwnerHandler : AuthorizationHandler<ConversationOwnerRequirement, Conversation>
-{
-    protected override Task HandleRequirementAsync(
-        AuthorizationHandlerContext context,
-        ConversationOwnerRequirement requirement,
-        Conversation resource)
-    {
-        var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        if (userId != null && resource.UserId.ToString() == userId)
-        {
-            context.Succeed(requirement);
-        }
-        
-        return Task.CompletedTask;
-    }
-}
-```
-
-## Performance Architecture
-
-### Caching Strategy
-
-```csharp
-// Multi-level caching
-public class CachingService : ICachingService
-{
-    private readonly IMemoryCache _l1Cache;
-    private readonly IDistributedCache _l2Cache;
-    private readonly ICacheKeyGenerator _keyGenerator;
-    
-    public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
-    {
-        // L1: Memory cache
-        if (_l1Cache.TryGetValue<T>(key, out var cachedValue))
-            return cachedValue;
             
-        // L2: Distributed cache
-        var distributedValue = await _l2Cache.GetAsync(key, cancellationToken);
-        if (distributedValue != null)
-        {
-            var value = JsonSerializer.Deserialize<T>(distributedValue);
-            _l1Cache.Set(key, value, TimeSpan.FromMinutes(5));
-            return value;
+            Options(o => o.WithTags("Chat"));
         }
         
-        return default;
+        public override async Task HandleAsync(
+            ProcessMessageRequest req,
+            CancellationToken ct)
+        {
+            var command = new ProcessMessageCommand(
+                req.Message,
+                req.ConversationId,
+                req.UserId,
+                req.PreviousResponseId);
+            
+            var result = await _mediator.Send(command, ct);
+            
+            if (result.IsFailure)
+            {
+                await SendErrorAsync(result.Error, ct);
+                return;
+            }
+            
+            await SendOkAsync(result.Value, ct);
+        }
+        
+        private async Task SendErrorAsync(Error error, CancellationToken ct)
+        {
+            var problemDetails = error.Type switch
+            {
+                ErrorType.NotFound => new ProblemDetails
+                {
+                    Status = 404,
+                    Title = "Not Found",
+                    Detail = error.Message
+                },
+                ErrorType.Validation => new ValidationProblemDetails
+                {
+                    Status = 400,
+                    Title = "Validation Failed",
+                    Detail = error.Message
+                },
+                _ => new ProblemDetails
+                {
+                    Status = 500,
+                    Title = "Internal Server Error",
+                    Detail = error.Message
+                }
+            };
+            
+            await SendAsync(problemDetails, problemDetails.Status ?? 500, ct);
+        }
     }
     
-    public async Task SetAsync<T>(
-        string key,
-        T value,
-        CacheOptions options,
-        CancellationToken cancellationToken = default)
+    // Request DTO
+    public sealed record ProcessMessageRequest
     {
-        // Set in both caches
-        _l1Cache.Set(key, value, options.L1Expiration);
-        
-        var serialized = JsonSerializer.SerializeToUtf8Bytes(value);
-        await _l2Cache.SetAsync(
-            key,
-            serialized,
-            new DistributedCacheEntryOptions
+        public required string Message { get; init; }
+        public Guid? ConversationId { get; init; }
+        public long? UserId { get; init; }
+        public Guid? PreviousResponseId { get; init; }
+    }
+    
+    // Response DTO  
+    public sealed record ProcessMessageResponse
+    {
+        public Guid ConversationId { get; init; }
+        public string Response { get; init; } = string.Empty;
+        public ToolExecution[]? ToolExecutions { get; init; }
+    }
+    
+    // Validator
+    public sealed class ProcessMessageValidator : Validator<ProcessMessageRequest>
+    {
+        public ProcessMessageValidator()
+        {
+            RuleFor(x => x.Message)
+                .NotEmpty()
+                .MaximumLength(4000);
+        }
+    }
+}
+```
+
+### Global Configuration
+
+```csharp
+namespace Axon.Api.Configuration
+{
+    public static class ServiceRegistration
+    {
+        public static IServiceCollection AddApiServices(
+            this IServiceCollection services,
+            IConfiguration configuration)
+        {
+            // Add FastEndpoints
+            services.AddFastEndpoints(options =>
             {
-                AbsoluteExpirationRelativeToNow = options.L2Expiration
-            },
+                options.SourceGeneratorDiscoveredTypes = DiscoveredTypes.All;
+            });
+            
+            // Add Swagger
+            services.AddSwaggerDocument(options =>
+            {
+                options.DocumentSettings = s =>
+                {
+                    s.Title = "Axon Backend API";
+                    s.Version = "v1";
+                    s.Description = "AI-powered chat backend API";
+                };
+                
+                options.EnableJWTBearerAuth = true;
+                options.TagDescriptions = t =>
+                {
+                    t["Chat"] = "Chat operations";
+                    t["Identity"] = "Authentication and user management";
+                };
+            });
+            
+            // Add versioning
+            services.AddApiVersioning(options =>
+            {
+                options.DefaultApiVersion = new ApiVersion(1, 0);
+                options.AssumeDefaultVersionWhenUnspecified = true;
+                options.ReportApiVersions = true;
+            });
+            
+            return services;
+        }
+    }
+}
+```
+
+## Data Architecture & Persistence
+
+### Entity Framework Core Configuration
+
+```csharp
+namespace Axon.Modules.Chat.Infrastructure.Persistence
+{
+    public sealed class ChatDbContext : DbContext
+    {
+        private readonly ICurrentUserService _currentUserService;
+        private readonly IDateTimeProvider _dateTimeProvider;
+        
+        public DbSet<Conversation> Conversations => Set<Conversation>();
+        public DbSet<Message> Messages => Set<Message>();
+        public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+        
+        public ChatDbContext(
+            DbContextOptions<ChatDbContext> options,
+            ICurrentUserService currentUserService,
+            IDateTimeProvider dateTimeProvider) : base(options)
+        {
+            _currentUserService = currentUserService;
+            _dateTimeProvider = dateTimeProvider;
+        }
+        
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // Apply schema
+            modelBuilder.HasDefaultSchema("chat");
+            
+            // Apply configurations
+            modelBuilder.ApplyConfigurationsFromAssembly(typeof(ChatDbContext).Assembly);
+            
+            // Global query filters
+            modelBuilder.Entity<Conversation>()
+                .HasQueryFilter(e => !e.IsDeleted);
+                
+            modelBuilder.Entity<Message>()
+                .HasQueryFilter(e => !e.IsDeleted);
+        }
+        
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            // Handle auditing
+            foreach (var entry in ChangeTracker.Entries<IAuditable>())
+            {
+                switch (entry.State)
+                {
+                    case EntityState.Added:
+                        entry.Entity.CreatedAt = _dateTimeProvider.UtcNow;
+                        entry.Entity.CreatedBy = _currentUserService.UserId;
+                        break;
+                        
+                    case EntityState.Modified:
+                        entry.Entity.UpdatedAt = _dateTimeProvider.UtcNow;
+                        entry.Entity.UpdatedBy = _currentUserService.UserId;
+                        break;
+                }
+            }
+            
+            // Handle domain events
+            var domainEvents = ChangeTracker.Entries<IAggregate>()
+                .SelectMany(e => e.Entity.DomainEvents)
+                .ToList();
+            
+            // Clear domain events before saving
+            ChangeTracker.Entries<IAggregate>()
+                .ToList()
+                .ForEach(e => e.Entity.ClearDomainEvents());
+            
+            // Save changes
+            var result = await base.SaveChangesAsync(cancellationToken);
+            
+            // Publish domain events after successful save
+            await PublishDomainEventsAsync(domainEvents, cancellationToken);
+            
+            return result;
+        }
+        
+        private async Task PublishDomainEventsAsync(
+            List<IDomainEvent> domainEvents,
+            CancellationToken cancellationToken)
+        {
+            // Save to outbox for reliability
+            foreach (var @event in domainEvents)
+            {
+                var outboxMessage = new OutboxMessage
+                {
+                    Id = Guid.NewGuid(),
+                    EventType = @event.GetType().AssemblyQualifiedName!,
+                    Payload = JsonSerializer.Serialize(@event),
+                    CreatedAt = _dateTimeProvider.UtcNow
+                };
+                
+                OutboxMessages.Add(outboxMessage);
+            }
+            
+            await base.SaveChangesAsync(cancellationToken);
+        }
+    }
+}
+```
+
+### Entity Configuration
+
+```csharp
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Configurations
+{
+    public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
+    {
+        public void Configure(EntityTypeBuilder<Conversation> builder)
+        {
+            builder.ToTable("conversations", "chat");
+            
+            // Primary Key
+            builder.HasKey(c => c.Id);
+            
+            // Properties
+            builder.Property(c => c.Id)
+                .HasConversion(
+                    v => v.Value,
+                    v => ConversationId.From(v))
+                .ValueGeneratedNever();
+            
+            builder.Property(c => c.UserId)
+                .HasConversion(
+                    v => v.Value,
+                    v => UserId.From(v))
+                .IsRequired();
+            
+            builder.Property(c => c.Title)
+                .HasMaxLength(200)
+                .IsRequired();
+            
+            builder.Property(c => c.State)
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
+            
+            // Relationships
+            builder.HasMany(c => c.Messages)
+                .WithOne()
+                .HasForeignKey("ConversationId")
+                .OnDelete(DeleteBehavior.Cascade);
+            
+            // Indexes
+            builder.HasIndex(c => c.UserId)
+                .HasDatabaseName("IX_Conversations_UserId");
+                
+            builder.HasIndex(c => new { c.UserId, c.CreatedAt })
+                .HasDatabaseName("IX_Conversations_UserId_CreatedAt")
+                .IsDescending(false, true);
+            
+            // Concurrency token
+            builder.Property(c => c.Version)
+                .IsConcurrencyToken();
+        }
+    }
+}
+```
+
+## Error Handling & Resilience
+
+### Polly Resilience Policies
+
+```csharp
+namespace BuildingBlocks.Polly
+{
+    public static class ResilienceExtensions
+    {
+        public static IServiceCollection AddResilience(this IServiceCollection services)
+        {
+            // Add Polly resilience pipeline
+            services.AddResiliencePipeline("default", builder =>
+            {
+                builder
+                    .AddRetry(new RetryStrategyOptions
+                    {
+                        MaxRetryAttempts = 3,
+                        Delay = TimeSpan.FromSeconds(1),
+                        BackoffType = DelayBackoffType.Exponential,
+                        UseJitter = true,
+                        OnRetry = args =>
+                        {
+                            var logger = args.Context.ServiceProvider
+                                .GetRequiredService<ILogger<Program>>();
+                            logger.LogWarning(
+                                "Retry {Attempt} after {Delay}ms",
+                                args.AttemptNumber,
+                                args.RetryDelay.TotalMilliseconds);
+                            return default;
+                        }
+                    })
+                    .AddCircuitBreaker(new CircuitBreakerStrategyOptions
+                    {
+                        FailureRatio = 0.5,
+                        SamplingDuration = TimeSpan.FromSeconds(10),
+                        MinimumThroughput = 20,
+                        BreakDuration = TimeSpan.FromSeconds(30),
+                        OnOpened = args =>
+                        {
+                            var logger = args.Context.ServiceProvider
+                                .GetRequiredService<ILogger<Program>>();
+                            logger.LogError("Circuit breaker opened");
+                            return default;
+                        }
+                    })
+                    .AddTimeout(TimeSpan.FromSeconds(10));
+            });
+            
+            return services;
+        }
+    }
+}
+
+// Usage in Infrastructure
+public class ResilientOpenAiClient : IAiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly ResiliencePipeline _resiliencePipeline;
+    
+    public async Task<AiResponse> ProcessAsync(
+        AiRequest request,
+        CancellationToken cancellationToken)
+    {
+        return await _resiliencePipeline.ExecuteAsync(
+            async token => await CallOpenAiAsync(request, token),
             cancellationToken);
     }
 }
+```
 
-// Cache-aside pattern
-public class CachedConversationRepository : IConversationRepository
+### Global Exception Handling
+
+```csharp
+namespace Axon.Api.Middleware
 {
-    private readonly IConversationRepository _repository;
-    private readonly ICachingService _cache;
-    
-    public async Task<Conversation?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    public class GlobalExceptionMiddleware
     {
-        var cacheKey = $"conversation:{id}";
+        private readonly RequestDelegate _next;
+        private readonly ILogger<GlobalExceptionMiddleware> _logger;
+        private readonly IWebHostEnvironment _environment;
         
-        var cached = await _cache.GetAsync<Conversation>(cacheKey, cancellationToken);
-        if (cached != null)
-            return cached;
-            
-        var conversation = await _repository.GetByIdAsync(id, cancellationToken);
-        if (conversation != null)
+        public async Task InvokeAsync(HttpContext context)
         {
-            await _cache.SetAsync(
-                cacheKey,
-                conversation,
-                new CacheOptions
-                {
-                    L1Expiration = TimeSpan.FromMinutes(5),
-                    L2Expiration = TimeSpan.FromHours(1)
-                },
-                cancellationToken);
+            try
+            {
+                await _next(context);
+            }
+            catch (Exception ex)
+            {
+                await HandleExceptionAsync(context, ex);
+            }
         }
         
-        return conversation;
+        private async Task HandleExceptionAsync(HttpContext context, Exception exception)
+        {
+            _logger.LogError(exception, "An unhandled exception occurred");
+            
+            var problemDetails = exception switch
+            {
+                ValidationException validationEx => new ValidationProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Validation Failed",
+                    Detail = string.Join("; ", validationEx.Errors.Select(e => e.ErrorMessage)),
+                    Extensions = { ["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier }
+                },
+                
+                EntityNotFoundException notFoundEx => new ProblemDetails
+                {
+                    Status = StatusCodes.Status404NotFound,
+                    Title = "Resource Not Found",
+                    Detail = notFoundEx.Message,
+                    Extensions = { ["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier }
+                },
+                
+                UnauthorizedException unauthorizedEx => new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "Unauthorized",
+                    Detail = unauthorizedEx.Message,
+                    Extensions = { ["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier }
+                },
+                
+                _ => new ProblemDetails
+                {
+                    Status = StatusCodes.Status500InternalServerError,
+                    Title = "An error occurred",
+                    Detail = _environment.IsDevelopment() 
+                        ? exception.ToString() 
+                        : "An error occurred while processing your request",
+                    Extensions = { ["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier }
+                }
+            };
+            
+            context.Response.StatusCode = problemDetails.Status ?? 500;
+            context.Response.ContentType = "application/problem+json";
+            
+            await context.Response.WriteAsJsonAsync(problemDetails);
+        }
     }
 }
 ```
 
-### Query Optimization
+## Testing Architecture
+
+### Test Project Structure
+
+```
+tests/
+├── UnitTests/
+│   ├── Chat/
+│   │   ├── Domain/
+│   │   │   └── ConversationTests.cs
+│   │   ├── Application/
+│   │   │   └── ProcessMessageHandlerTests.cs
+│   │   └── Infrastructure/
+│   │       └── OpenAiClientTests.cs
+│   └── Identity/
+│
+├── IntegrationTests/
+│   ├── Chat/
+│   │   ├── Endpoints/
+│   │   │   └── ProcessMessageEndpointTests.cs
+│   │   └── Database/
+│   │       └── ConversationRepositoryTests.cs
+│   └── TestBase/
+│       ├── IntegrationTestBase.cs
+│       └── TestContainers.cs
+│
+└── ArchitectureTests/
+    ├── DependencyTests.cs
+    ├── NamingConventionTests.cs
+    └── LayerTests.cs
+```
+
+### Unit Test Example
 
 ```csharp
-// Compiled queries
-public static class CompiledQueries
+public class ConversationTests
 {
-    public static readonly Func<ChatDbContext, Guid, Task<Conversation?>> GetConversationById =
-        EF.CompileAsyncQuery((ChatDbContext context, Guid id) =>
-            context.Conversations
-                .Include(c => c.Messages.OrderByDescending(m => m.CreatedAt).Take(50))
-                .FirstOrDefault(c => c.Id == id));
-                
-    public static readonly Func<ChatDbContext, long, IAsyncEnumerable<ConversationSummary>> GetUserConversations =
-        EF.CompileAsyncQuery((ChatDbContext context, long userId) =>
-            context.Conversations
-                .Where(c => c.UserId == userId && !c.IsDeleted)
-                .OrderByDescending(c => c.UpdatedAt)
-                .Select(c => new ConversationSummary
-                {
-                    Id = c.Id,
-                    Title = c.Title,
-                    LastMessage = c.Messages
-                        .OrderByDescending(m => m.CreatedAt)
-                        .Select(m => m.Content)
-                        .FirstOrDefault(),
-                    MessageCount = c.Messages.Count(),
-                    UpdatedAt = c.UpdatedAt
-                }));
+    [Fact]
+    public void Create_WithValidData_ShouldSucceed()
+    {
+        // Arrange
+        var userId = UserId.From(123);
+        var title = "Test Conversation";
+        
+        // Act
+        var result = Conversation.Create(userId, title);
+        
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.UserId.Should().Be(userId);
+        result.Value.Title.Should().Be(title);
+        result.Value.State.Should().Be(ConversationState.Active);
+        result.Value.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ConversationStartedDomainEvent>();
+    }
+    
+    [Fact]
+    public void AddUserMessage_WhenConversationArchived_ShouldFail()
+    {
+        // Arrange
+        var conversation = CreateConversation();
+        conversation.Archive();
+        var content = MessageContent.Create("Test message").Value;
+        
+        // Act
+        var result = conversation.AddUserMessage(content);
+        
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(ChatErrors.ConversationNotActive);
+    }
+}
+```
+
+### Integration Test Example
+
+```csharp
+public class ProcessMessageEndpointTests : IntegrationTestBase
+{
+    [Fact]
+    public async Task ProcessMessage_WithNewConversation_ShouldCreateAndReturn()
+    {
+        // Arrange
+        var request = new ProcessMessageRequest
+        {
+            Message = "Hello, AI!"
+        };
+        
+        // Act
+        var (response, statusCode) = await Client.POSTAsync<
+            ProcessMessageEndpoint,
+            ProcessMessageRequest,
+            ProcessMessageResponse>(request);
+        
+        // Assert
+        statusCode.Should().Be(HttpStatusCode.OK);
+        response.ConversationId.Should().NotBeEmpty();
+        response.Response.Should().NotBeNullOrWhiteSpace();
+        
+        // Verify in database
+        await using var scope = Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
+        
+        var conversation = await dbContext.Conversations
+            .FirstOrDefaultAsync(c => c.Id == ConversationId.From(response.ConversationId));
+            
+        conversation.Should().NotBeNull();
+        conversation!.Messages.Should().HaveCount(2); // User + Assistant
+    }
+}
+```
+
+### Architecture Test Example
+
+```csharp
+public class LayerTests
+{
+    private static readonly Assembly[] Assemblies = 
+    {
+        typeof(Conversation).Assembly,           // Domain
+        typeof(ProcessMessageHandler).Assembly,  // Application
+        typeof(ChatDbContext).Assembly,         // Infrastructure
+        typeof(ProcessMessageEndpoint).Assembly  // API
+    };
+    
+    [Fact]
+    public void Domain_ShouldNotDependOnOtherLayers()
+    {
+        // Arrange
+        var domainAssembly = typeof(Conversation).Assembly;
+        
+        // Act & Assert
+        domainAssembly.Should()
+            .NotReference(typeof(ProcessMessageHandler).Assembly)
+            .And.NotReference(typeof(ChatDbContext).Assembly)
+            .And.NotReference(typeof(ProcessMessageEndpoint).Assembly);
+    }
+    
+    [Fact]
+    public void Handlers_ShouldHaveNameEndingWithHandler()
+    {
+        // Arrange
+        var handlerTypes = Types.InAssemblies(Assemblies)
+            .That().ImplementInterface(typeof(IRequestHandler<,>))
+            .GetTypes();
+        
+        // Act & Assert
+        handlerTypes.Should()
+            .OnlyContain(t => t.Name.EndsWith("Handler"));
+    }
 }
 ```
 
 ## Monitoring & Observability
 
-### OpenTelemetry Integration
+### OpenTelemetry Configuration
 
 ```csharp
-// Telemetry Configuration
-public static class TelemetryConfiguration
+public static class ObservabilityConfiguration
 {
-    public static void ConfigureOpenTelemetry(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddObservability(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
+        // Add metrics
+        services.AddSingleton<Metrics>();
+        
+        // Configure OpenTelemetry
         services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
                 .AddService(
                     serviceName: "axon-backend",
-                    serviceVersion: Assembly.GetExecutingAssembly().GetName().Version?.ToString())
+                    serviceVersion: Assembly.GetExecutingAssembly()
+                        .GetName().Version?.ToString() ?? "unknown")
                 .AddAttributes(new Dictionary<string, object>
                 {
                     ["environment"] = configuration["Environment"] ?? "development",
-                    ["deployment"] = configuration["Deployment"] ?? "local"
+                    ["deployment.environment"] = configuration["DeploymentEnvironment"] ?? "local"
                 }))
             .WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation(options =>
                 {
                     options.RecordException = true;
-                    options.Filter = httpContext => !httpContext.Request.Path.StartsWithSegments("/health");
+                    options.Filter = httpContext => 
+                        !httpContext.Request.Path.StartsWithSegments("/health");
                 })
                 .AddHttpClientInstrumentation()
                 .AddEntityFrameworkCoreInstrumentation(options =>
                 {
                     options.SetDbStatementForText = true;
-                    options.SetDbStatementForStoredProcedure = true;
                 })
                 .AddSource("MassTransit")
+                .AddSource("Axon")
                 .AddOtlpExporter(options =>
                 {
-                    options.Endpoint = new Uri(configuration["OpenTelemetry:Endpoint"]);
+                    options.Endpoint = new Uri(
+                        configuration["OpenTelemetry:Endpoint"] ?? 
+                        "http://localhost:4317");
                 }))
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
@@ -1643,44 +1994,50 @@ public static class TelemetryConfiguration
                 .AddProcessInstrumentation()
                 .AddMeter("Axon.Metrics")
                 .AddPrometheusExporter());
+        
+        return services;
     }
 }
 
 // Custom Metrics
-public class MetricsService
+public class Metrics
 {
     private readonly Meter _meter;
-    private readonly Counter<long> _messageProcessedCounter;
+    private readonly Counter<long> _messagesProcessed;
     private readonly Histogram<double> _processingDuration;
     private readonly ObservableGauge<int> _activeConversations;
     
-    public MetricsService()
+    public Metrics(IMeterFactory meterFactory)
     {
-        _meter = new Meter("Axon.Metrics", "1.0.0");
+        _meter = meterFactory.Create("Axon.Metrics");
         
-        _messageProcessedCounter = _meter.CreateCounter<long>(
-            "messages_processed_total",
+        _messagesProcessed = _meter.CreateCounter<long>(
+            "axon.messages.processed",
+            unit: "messages",
             description: "Total number of messages processed");
             
         _processingDuration = _meter.CreateHistogram<double>(
-            "message_processing_duration_ms",
+            "axon.message.processing.duration",
             unit: "ms",
             description: "Message processing duration");
             
         _activeConversations = _meter.CreateObservableGauge(
-            "active_conversations",
+            "axon.conversations.active",
             () => GetActiveConversationCount(),
+            unit: "conversations",
             description: "Number of active conversations");
     }
     
-    public void RecordMessageProcessed(string conversationType)
+    public void RecordMessageProcessed(string conversationType = "default")
     {
-        _messageProcessedCounter.Add(1, new KeyValuePair<string, object?>("type", conversationType));
+        _messagesProcessed.Add(1, 
+            new KeyValuePair<string, object?>("type", conversationType));
     }
     
-    public void RecordProcessingDuration(double duration, string operation)
+    public void RecordProcessingDuration(double durationMs, string operation)
     {
-        _processingDuration.Record(duration, new KeyValuePair<string, object?>("operation", operation));
+        _processingDuration.Record(durationMs,
+            new KeyValuePair<string, object?>("operation", operation));
     }
 }
 ```
@@ -1688,63 +2045,124 @@ public class MetricsService
 ### Health Checks
 
 ```csharp
-// Health Check Configuration
 public static class HealthCheckConfiguration
 {
-    public static void ConfigureHealthChecks(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddHealthChecks(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         services.AddHealthChecks()
-            // Database
+            // Database health check
             .AddNpgSql(
-                configuration.GetConnectionString("DefaultConnection"),
-                name: "postgres",
+                configuration.GetConnectionString("Default"),
+                name: "postgres-db",
                 tags: new[] { "db", "critical" })
-            // Redis
+                
+            // Redis health check
             .AddRedis(
                 configuration.GetConnectionString("Redis"),
-                name: "redis",
+                name: "redis-cache",
                 tags: new[] { "cache" })
-            // RabbitMQ
+                
+            // RabbitMQ health check
             .AddRabbitMQ(
                 rabbitConnectionString: configuration.GetConnectionString("RabbitMQ"),
-                name: "rabbitmq",
+                name: "rabbitmq-bus",
                 tags: new[] { "messaging" })
-            // Custom health checks
+                
+            // Custom AI service health check
             .AddTypeActivatedCheck<AiServiceHealthCheck>(
                 "ai-service",
-                tags: new[] { "external", "ai" })
-            .AddTypeActivatedCheck<DatabaseMigrationHealthCheck>(
-                "db-migrations",
-                tags: new[] { "db", "startup" });
-    }
-}
-
-// Custom Health Check
-public class AiServiceHealthCheck : IHealthCheck
-{
-    private readonly IAiClient _aiClient;
-    
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        try
+                tags: new[] { "external", "ai" });
+        
+        // Add health check UI
+        services.AddHealthChecksUI(options =>
         {
-            var response = await _aiClient.CheckHealthAsync(cancellationToken);
-            
-            return response.IsHealthy
-                ? HealthCheckResult.Healthy("AI service is responsive")
-                : HealthCheckResult.Degraded($"AI service degraded: {response.Message}");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("AI service is unavailable", ex);
-        }
+            options.SetEvaluationTimeInSeconds(30);
+            options.MaximumHistoryEntriesPerEndpoint(50);
+        })
+        .AddInMemoryStorage();
+        
+        return services;
     }
 }
 ```
 
+## Migration Strategy
+
+### From Monolith to Microservices
+
+```mermaid
+graph LR
+    subgraph "Phase 1: Current State"
+        MONO[Modular Monolith]
+    end
+    
+    subgraph "Phase 2: Extract Read Models"
+        MONO2[Monolith]
+        READ[Read Service]
+        MONO2 -->|Events| READ
+    end
+    
+    subgraph "Phase 3: Extract Modules"
+        CHAT_SVC[Chat Service]
+        ID_SVC[Identity Service]
+        READ2[Read Service]
+        CHAT_SVC -->|Events| READ2
+        ID_SVC -->|Events| READ2
+    end
+    
+    subgraph "Phase 4: Full Microservices"
+        CHAT2[Chat Service]
+        ID2[Identity Service]
+        READ3[Read Service]
+        SEARCH[Search Service]
+        NOTIF[Notification Service]
+    end
+    
+    MONO --> MONO2
+    MONO2 --> CHAT_SVC
+    CHAT_SVC --> CHAT2
+```
+
+### Migration Checklist
+
+- [ ] **Module Boundaries**: Ensure clean separation
+- [ ] **Data Isolation**: Separate schemas/databases
+- [ ] **API Contracts**: Define and version public APIs
+- [ ] **Event Contracts**: Stabilize integration events
+- [ ] **Configuration**: Externalize all configuration
+- [ ] **Monitoring**: Distributed tracing ready
+- [ ] **Testing**: Module-level integration tests
+- [ ] **Documentation**: API documentation complete
+- [ ] **Deployment**: Container-ready with health checks
+- [ ] **Rollback Plan**: Gradual migration with fallback
+
+## Technical Debt & Future Improvements
+
+### Current Technical Debt
+
+1. **Event Sourcing**: Partial implementation only
+2. **Authentication**: Currently using AllowAnonymous
+3. **Caching**: Basic implementation, needs distributed cache
+4. **Search**: No full-text search implementation
+5. **Rate Limiting**: Not implemented
+6. **API Versioning**: Basic setup, needs strategy
+
+### Planned Improvements
+
+1. **Complete Event Sourcing**: For audit and temporal queries
+2. **GraphQL API**: For flexible client queries
+3. **gRPC Services**: For internal service communication
+4. **Elasticsearch**: For advanced search capabilities
+5. **Distributed Caching**: Redis cluster implementation
+6. **Service Mesh**: Istio for advanced networking
+7. **SAGA Pattern**: For distributed transactions
+8. **Feature Flags**: For gradual rollouts
+
 ---
 
-*Last Updated: August 2025*
-*Version: 1.0.0*
+*Document Version: 2.0.0*  
+*Last Updated: August 2025*  
+*Status: Living Document*  
+*Next Review: September 2025*
