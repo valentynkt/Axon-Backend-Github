@@ -1,9 +1,9 @@
 using Axon.BuildingBlocks.Core.Pagination;
-using Axon.BuildingBlocks.Core.Results;
 using Axon.BuildingBlocks.Persistence.Interfaces;
 using Axon.Modules.Chat.Domain.Messages;
 using Axon.Modules.Chat.Domain.Messages.ValueObjects;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
+using BuildingBlocks.Core.Results;
 
 namespace Axon.Modules.Chat.Application.Repositories;
 

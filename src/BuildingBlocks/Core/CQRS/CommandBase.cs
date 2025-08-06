@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Results;
 using MediatR;
 using MassTransit;
 
@@ -7,17 +8,18 @@ namespace BuildingBlocks.Core.CQRS;
 /// Abstract base record for commands without return values.
 /// Provides consistent implementation for command identification and timestamps.
 /// Uses record type for value equality and immutability benefits.
+/// Commands return Result pattern for consistent error handling.
 /// </summary>
-public abstract record CommandBase : RequestBase<Unit>, ICommand
+public abstract record CommandBase : RequestBase<Result<Unit>>, ICommand
 {
 }
 
 /// <summary>
-/// Abstract base record for commands that return a response.
-/// Combines base command functionality with type-safe response handling.
+/// Abstract base record for commands that return a response wrapped in Result pattern.
+/// Combines base command functionality with type-safe response handling and error management.
 /// </summary>
 /// <typeparam name="TResponse">The type of response this command produces</typeparam>
-public abstract record CommandBase<TResponse> : RequestBase<TResponse>, ICommand<TResponse>
+public abstract record CommandBase<TResponse> : RequestBase<Result<TResponse>>, ICommand<TResponse>
     where TResponse : notnull
 {
 }

@@ -1,4 +1,4 @@
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
 using MediatR;
 

@@ -1,6 +1,6 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Repositories;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
 using MediatR;
 

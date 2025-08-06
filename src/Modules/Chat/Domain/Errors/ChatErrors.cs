@@ -5,6 +5,9 @@ namespace Axon.Modules.Chat.Domain.Errors;
 /// <summary>
 /// Domain-specific errors for the Chat module
 /// </summary>
+/// <summary>
+/// Domain-specific errors for the Chat module
+/// </summary>
 public static class ChatErrors
 {
     /// <summary>
@@ -74,7 +77,7 @@ public static class ChatErrors
     }
     
     /// <summary>
-    /// Errors related to conversations
+    /// Errors related to conversations - London School TDD domain invariants
     /// </summary>
     public static class Conversation
     {
@@ -85,5 +88,47 @@ public static class ChatErrors
         public static Error InvalidContext => Error.Validation(
             "Conversation context is invalid or corrupted", 
             "CHAT_CONVERSATION_INVALID_CONTEXT");
+
+        /// <summary>
+        /// Error when attempting to perform operations without specifying the conversation owner
+        /// </summary>
+        public static Error OwnerRequired => Error.Validation(
+            "Conversation owner must be specified", 
+            "CHAT_CONVERSATION_OWNER_REQUIRED");
+
+        /// <summary>
+        /// Error when message content violates domain rules
+        /// </summary>
+        public static Error InvalidMessageContent(string reason) => Error.Validation(
+            $"Invalid message content: {reason}", 
+            "CHAT_CONVERSATION_INVALID_MESSAGE_CONTENT");
+
+        /// <summary>
+        /// Error when message sequence is out of order or invalid
+        /// </summary>
+        public static Error SequenceViolation(int expected, int actual) => Error.Validation(
+            $"Message sequence violation: expected {expected}, but got {actual}", 
+            "CHAT_CONVERSATION_SEQUENCE_VIOLATION");
+
+        /// <summary>
+        /// Error when user attempts to access conversation they don't own
+        /// </summary>
+        public static Error NotConversationOwner(string userId, string conversationId) => Error.Forbidden(
+            $"User '{userId}' is not the owner of conversation '{conversationId}'", 
+            "CHAT_CONVERSATION_NOT_OWNER");
+
+        /// <summary>
+        /// Error when attempting to start a conversation without proper initialization
+        /// </summary>
+        public static Error CannotStart(string reason) => Error.Validation(
+            $"Cannot start conversation: {reason}", 
+            "CHAT_CONVERSATION_CANNOT_START");
+
+        /// <summary>
+        /// Error when attempting to add messages to an inactive conversation
+        /// </summary>
+        public static Error ConversationNotActive => Error.Validation(
+            "Cannot add messages to inactive conversation", 
+            "CHAT_CONVERSATION_NOT_ACTIVE");
     }
 }

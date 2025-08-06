@@ -1,7 +1,5 @@
 using System.Text;
-using Axon.Modules.Chat.Domain.Aggregates;
-using Axon.Modules.Chat.Domain.Entities;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Shared.Common;
 using Axon.Shared.Domain;
 
@@ -19,7 +17,7 @@ public sealed class ConversationContextBuilder : IConversationContextBuilder
     /// <summary>
     /// Builds conversation context for AI processing with domain logic
     /// </summary>
-    public Result<ConversationContext> BuildContext(Conversation conversation, int? maxMessages = null)
+    public Result<ConversationContext> BuildContext(Conversation.Conversation conversation, int? maxMessages = null)
     {
         if (conversation is null)
             return Error.Validation("Conversation cannot be null");
@@ -38,7 +36,7 @@ public sealed class ConversationContextBuilder : IConversationContextBuilder
     /// Builds conversation context optimized for AI processing with token limits
     /// </summary>
     public Result<ConversationContext> BuildContextForAi(
-        Conversation conversation, 
+        Conversation.Conversation conversation, 
         int maxTokens, 
         double estimatedTokensPerChar = DefaultTokensPerChar)
     {
@@ -63,7 +61,7 @@ public sealed class ConversationContextBuilder : IConversationContextBuilder
     /// Builds context with specific message filtering and priorities
     /// </summary>
     public Result<ConversationContext> BuildContextWithOptions(
-        Conversation conversation, 
+        Conversation.Conversation conversation, 
         ContextBuildingOptions options)
     {
         if (conversation is null)
@@ -141,7 +139,7 @@ public sealed class ConversationContextBuilder : IConversationContextBuilder
     }
 
     private static IEnumerable<Message> GetFilteredMessages(
-        Conversation conversation, 
+        Conversation.Conversation conversation, 
         ContextBuildingOptions options)
     {
         var messages = conversation.MessagesOrdered.AsEnumerable();

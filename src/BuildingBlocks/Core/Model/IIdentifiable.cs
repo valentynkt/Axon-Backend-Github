@@ -4,11 +4,11 @@ namespace BuildingBlocks.Core.Model;
 /// Represents an entity that has a unique identifier.
 /// Follows SRP by focusing solely on identity concerns.
 /// </summary>
-/// <typeparam name="T">The type of the identifier</typeparam>
-public interface IIdentifiable<T>
+/// <typeparam name="TValue">The type of the identifier</typeparam>
+public interface IIdentifiable<TValue> where TValue : struct, IEquatable<TValue>
 {
     /// <summary>
-    /// Gets or sets the unique identifier for this entity.
+    /// Gets the unique identifier for this entity.
     /// </summary>
-    T? Id { get; set; }
+    TValue? Id { get; }
 }

@@ -1,6 +1,3 @@
-using Axon.Modules.Chat.Domain.Aggregates;
-using Axon.Modules.Chat.Domain.Entities;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Infrastructure.Persistence.Configurations;
 using Axon.Modules.Chat.Infrastructure.Persistence.Entities;
 using Axon.Modules.Chat.Infrastructure.Persistence.Interceptors;
@@ -11,6 +8,9 @@ using Microsoft.Extensions.Logging;
 using NpgsqlTypes;
 using System.Reflection;
 using Axon.BuildingBlocks.Persistence.Common;
+using Axon.Modules.Chat.Domain.Conversation;
+using Axon.Modules.Chat.Domain.Conversation.Entities;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
 

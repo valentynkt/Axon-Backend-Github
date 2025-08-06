@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Postgres
+namespace BuildingBlocks.Persistence.Infrastructure
 {
     public interface IDataSeeder
     {

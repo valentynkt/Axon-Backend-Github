@@ -1,6 +1,5 @@
-using Axon.Modules.Chat.Domain.Aggregates;
-using Axon.Modules.Chat.Domain.Entities;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Conversation;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

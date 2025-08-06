@@ -6,10 +6,10 @@ namespace BuildingBlocks.Core.Model;
 /// Uses record type for value equality and immutability benefits.
 /// </summary>
 /// <typeparam name="T">The type of the entity identifier</typeparam>
-public abstract record BaseEntity<T> : IEntity<T>
+public abstract record BaseEntity<T> : IEntity<T> where T : struct, IEquatable<T>
 {
     // IIdentifiable<T> implementation
-    public T? Id { get; set; }
+    public T? Id { get; init; }
     
     // ISoftDeletable implementation
     public bool IsDeleted { get; set; }
@@ -24,7 +24,7 @@ public abstract record BaseEntity<T> : IEntity<T>
 /// Use this for entities that require creation/modification tracking.
 /// </summary>
 /// <typeparam name="T">The type of the entity identifier</typeparam>
-public abstract record BaseAuditableEntity<T> : BaseEntity<T>, IAuditableEntity<T>
+public abstract record BaseAuditableEntity<T> : BaseEntity<T>, IAuditableEntity<T> where T : struct, IEquatable<T>
 {
     // IAuditable implementation
     public DateTime? CreatedAt { get; set; }

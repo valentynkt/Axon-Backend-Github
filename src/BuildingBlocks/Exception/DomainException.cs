@@ -1,7 +1,6 @@
 using System.Net;
-using BuildingBlocks.Exception;
 
-namespace SmartCharging.Infrastructure.Exceptions
+namespace BuildingBlocks.Exception
 {
     public class DomainException : CustomException
     {
@@ -9,7 +8,7 @@ namespace SmartCharging.Infrastructure.Exceptions
         {
         }
 
-        public DomainException(string message, Exception innerException, HttpStatusCode statusCode = HttpStatusCode.BadRequest, int? code = null) : base(message, innerException, statusCode, code)
+        public DomainException(string message, System.Exception innerException, HttpStatusCode statusCode = HttpStatusCode.BadRequest, int? code = null) : base(message, innerException, statusCode, code)
         {
         }
     }

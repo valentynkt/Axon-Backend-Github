@@ -1,6 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Infrastructure.Configuration;
 using Axon.Shared.Common;
 using Microsoft.Extensions.Logging;

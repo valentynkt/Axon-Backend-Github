@@ -8,7 +8,7 @@ namespace BuildingBlocks.Core.Pagination;
 /// Follows ISP by composing pagination and query interfaces.
 /// </summary>
 /// <typeparam name="TResponse">The type of paginated response this query returns</typeparam>
-public interface IPageQuery<out TResponse> : IPageRequest, IQuery<TResponse>
+public interface IPageQuery<TResponse> : IPageRequest, IQuery<TResponse>
     where TResponse : class
 {
 }

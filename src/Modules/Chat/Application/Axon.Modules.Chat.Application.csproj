@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

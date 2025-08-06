@@ -8,7 +8,7 @@ namespace BuildingBlocks.Core.Model;
 /// Use this for aggregates that don't need audit trail capabilities.
 /// </summary>
 /// <typeparam name="TId">The type of the aggregate identifier</typeparam>
-public abstract record BaseAggregate<TId> : BaseAuditableEntity<TId>, IAggregate<TId>
+public abstract record BaseAggregate<TId> : BaseAuditableEntity<TId>, IAggregate<TId> where TId : struct, IEquatable<TId>
 {
     private readonly List<IDomainEvent> _domainEvents = new();
     
@@ -47,7 +47,7 @@ public abstract record BaseAggregate<TId> : BaseAuditableEntity<TId>, IAggregate
 /// Use this for aggregates that need to track who created/modified them.
 /// </summary>
 /// <typeparam name="TId">The type of the aggregate identifier</typeparam>
-public abstract record BaseAuditableAggregate<TId> : BaseAuditableEntity<TId>, IAuditableAggregate<TId>
+public abstract record BaseAuditableAggregate<TId> : BaseAuditableEntity<TId>, IAuditableAggregate<TId>  where TId : struct, IEquatable<TId>
 {
     private readonly List<IDomainEvent> _domainEvents = new();
     
@@ -78,14 +78,4 @@ public abstract record BaseAuditableAggregate<TId> : BaseAuditableEntity<TId>, I
         _domainEvents.Clear();
         return dequeuedEvents;
     }
-}
-
-/// <summary>
-/// Legacy alias for backward compatibility.
-/// Use BaseAggregate&lt;TId&gt; or BaseAuditableAggregate&lt;TId&gt; in new code.
-/// </summary>
-/// <typeparam name="TId">The type of the aggregate identifier</typeparam>
-[Obsolete("Use BaseAggregate<TId> or BaseAuditableAggregate<TId> instead")]
-public abstract record Aggregate<TId> : BaseAuditableAggregate<TId>
-{
 }

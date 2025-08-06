@@ -21,8 +21,9 @@ public interface IAxonRequest
 /// <summary>
 /// Interface for requests that return a response.
 /// Extends base request with type-safe response handling.
+/// For CQRS operations, TResponse should typically be Result&lt;T&gt; to ensure consistent error handling.
 /// </summary>
 /// <typeparam name="TResponse">The type of response this request produces</typeparam>
-public interface IAxonRequest<out TResponse> : IAxonRequest where TResponse : notnull
+public interface IAxonRequest<TResponse> : IAxonRequest where TResponse : notnull
 {
 }

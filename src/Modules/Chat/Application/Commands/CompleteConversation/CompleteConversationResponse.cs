@@ -1,4 +1,4 @@
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 
 namespace Axon.Modules.Chat.Application.Commands.CompleteConversation;
 

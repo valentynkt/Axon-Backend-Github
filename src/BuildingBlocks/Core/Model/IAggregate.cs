@@ -27,7 +27,7 @@ public interface IBaseAggregate
 /// This is the standard interface that most aggregates should implement.
 /// </summary>
 /// <typeparam name="T">The type of the aggregate identifier</typeparam>
-public interface IAggregate<T> : IBaseAggregate, IEntity<T>
+public interface IAggregate<T> : IBaseAggregate, IEntity<T> where T : struct, IEquatable<T>
 {
 }
 
@@ -37,16 +37,6 @@ public interface IAggregate<T> : IBaseAggregate, IEntity<T>
 /// Use this for aggregates that need to track who created/modified them.
 /// </summary>
 /// <typeparam name="T">The type of the aggregate identifier</typeparam>
-public interface IAuditableAggregate<T> : IBaseAggregate, IAuditableEntity<T>, IVersioned, ISoftDeletable
-{
-}
-
-/// <summary>
-/// Legacy interface for backward compatibility.
-/// New code should use IAggregate&lt;T&gt; or IAuditableAggregate&lt;T&gt; instead.
-/// Provides all audit properties needed by WriteDbContextBase for legacy support.
-/// </summary>
-[Obsolete("Use IAggregate<T> or IAuditableAggregate<T> instead")]
-public interface IAggregate : IBaseAggregate, IAuditable, IVersioned, ISoftDeletable
+public interface IAuditableAggregate<T> : IBaseAggregate, IAuditableEntity<T>, IVersioned, ISoftDeletable where T : struct, IEquatable<T>
 {
 }

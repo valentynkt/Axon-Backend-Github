@@ -1,5 +1,4 @@
-using Axon.Modules.Chat.Domain.Aggregates;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
 using Axon.Shared.Domain;
 
@@ -17,7 +16,7 @@ public interface IConversationContextBuilder
     /// <param name="conversation">The conversation to build context from</param>
     /// <param name="maxMessages">Maximum number of messages to include (optional)</param>
     /// <returns>Result containing the built context or error</returns>
-    Result<ConversationContext> BuildContext(Conversation conversation, int? maxMessages = null);
+    Result<ConversationContext> BuildContext(Conversation.Conversation conversation, int? maxMessages = null);
 
     /// <summary>
     /// Builds conversation context optimized for AI processing with token limits
@@ -27,7 +26,7 @@ public interface IConversationContextBuilder
     /// <param name="estimatedTokensPerChar">Estimated tokens per character ratio</param>
     /// <returns>Result containing the AI-optimized context or error</returns>
     Result<ConversationContext> BuildContextForAi(
-        Conversation conversation, 
+        Conversation.Conversation conversation, 
         int maxTokens, 
         double estimatedTokensPerChar = 0.25);
 
@@ -38,7 +37,7 @@ public interface IConversationContextBuilder
     /// <param name="options">Context building options</param>
     /// <returns>Result containing the filtered context or error</returns>
     Result<ConversationContext> BuildContextWithOptions(
-        Conversation conversation, 
+        Conversation.Conversation conversation, 
         ContextBuildingOptions options);
 }
 

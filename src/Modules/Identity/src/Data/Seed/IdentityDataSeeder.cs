@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using BuildingBlocks.Constants;
 using BuildingBlocks.Contracts.EventBus.Messages;
 using BuildingBlocks.Core;
+using BuildingBlocks.Core.Event;
 using BuildingBlocks.Persistence.Infrastructure;
 using Identity.Identity.Constants;
 using Identity.Identity.Models;

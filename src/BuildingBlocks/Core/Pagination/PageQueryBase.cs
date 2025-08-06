@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.CQRS;
+using BuildingBlocks.Core.Results;
 
 namespace BuildingBlocks.Core.Pagination;
 
@@ -6,9 +7,10 @@ namespace BuildingBlocks.Core.Pagination;
 /// Abstract base record for paginated queries.
 /// Provides consistent implementation of pagination parameters with validation.
 /// Uses record type for value equality and immutability benefits.
+/// All paginated queries return Result&lt;T&gt; for consistent error handling.
 /// </summary>
 /// <typeparam name="TResponse">The type of paginated response this query returns</typeparam>
-public abstract record PageQueryBase<TResponse> : RequestBase<TResponse>, IPageQuery<TResponse>
+public abstract record PageQueryBase<TResponse> : RequestBase<Result<TResponse>>, IPageQuery<TResponse>
     where TResponse : class
 {
     /// <summary>

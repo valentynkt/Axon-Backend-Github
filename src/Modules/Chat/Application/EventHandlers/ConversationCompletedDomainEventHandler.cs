@@ -1,4 +1,3 @@
-using Axon.Modules.Chat.Domain.Events;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

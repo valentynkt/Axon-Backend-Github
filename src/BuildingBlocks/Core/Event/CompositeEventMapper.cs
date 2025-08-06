@@ -1,6 +1,4 @@
-using BuildingBlocks.Core.Event;
-
-namespace BuildingBlocks.Core;
+namespace BuildingBlocks.Core.Event;
 
 public class CompositeEventMapper : IEventMapper
 {
