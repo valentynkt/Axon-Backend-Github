@@ -9,12 +9,13 @@
 
 ## Executive Summary
 
-This document provides a **comprehensive, step-by-step implementation guide** for completely refactoring the BuildingBlocks Infrastructure folder. Following the brutal refactoring philosophy from the PRD v3.1, we will:
+This document provides a **lean, step-by-step implementation guide** for refactoring the BuildingBlocks Infrastructure folder. Following the brutal refactoring philosophy from the PRD v3.1, we will:
 
-- ✅ **Complete replacement** of existing infrastructure code
-- ✅ **No backward compatibility** - clean implementation
+- ✅ **Eliminate over-engineering** - Remove custom wrappers that duplicate .NET functionality
+- ✅ **Use standard libraries** - OpenTelemetry, Polly, built-in options validation
+- ✅ **Minimal abstractions** - Only abstract what adds genuine business value
 - ✅ **New PostgreSQL database** - no migration complexity
-- ✅ **Production-ready patterns** - resilience, observability, caching
+- ✅ **Production-ready patterns** - using proven, vendor-supported solutions
 - ✅ **Functional programming** throughout with Result<T> pattern
 
 ---
@@ -34,7 +35,77 @@ This document provides a **comprehensive, step-by-step implementation guide** fo
 
 ---
 
+## 🚨 5 "Fix-These-First" Adjustments for the Infrastructure Layer
+
+| #   | Issue                                                        | Why it's risky / wasted effort                                                                              | Minimal fix                                                                                                                                                                                                                                                                                                              |
+| --- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Custom correlation accessor (`ICorrelationContextAccessor`) | Duplicates OTel's W3C propagation ⇒ double bookkeeping, missing hops, harder vendor-interop.               | Delete accessor + `CorrelationContext`. Wherever needed read `Activity.Current?.TraceId` / `SpanId`; persist the `traceparent` header in Outbox. Update `AuditInterceptor`, DI registrations, tests.                                                                                                                   |
+| 2   | Hand-rolled `GetOptionsResult<T>` + Result-wrapped validation | Re-codes what `OptionsBuilder.Validate*()` gives for free; hides failure reasons from ASP.NET options diagnostics. | Swap for:<br>`csharp\nservices.AddOptions<FooOptions>()\n .Bind(config.GetSection("Foo"))\n .ValidateDataAnnotations();`<br>Remove the extension + Result noise.                                                                                                                                                      |
+| 3   | Custom `IMetrics` abstraction & counters                    | Splits metrics between OTel and home-grown; no automatic export, no standard tools.                         | Drop `IMetrics`, inject `Meter` (from OTel) where counters are needed:<br>`csharp\nprivate readonly Counter<long> _cacheHit;\n_cacheHit = meter.CreateCounter<long>("cache.hit");`<br>Remove `CustomMetrics` class and all `.IncrementCounter(...)` calls.                                                         |
+| 4   | Bespoke `CircuitBreakerPolicy` wrapper around Polly        | Masks Polly diagnostics, breaks OTel auto-instrumentation, extra serialization gymnastics.                 | Remove wrapper & interface. Register Polly directly on clients:<br>`csharp\nservices.AddHttpClient("external")\n .AddTransientHttpErrorPolicy(p => p.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));`                                                                                                              |
+| 5   | Over-engineered `MultiLevelCache` (tags, metrics, `Option<Result<T>>` layers) | 300+ LOC for what 6 lines of read-through logic do; tag eviction isn't implemented.                        | Keep the interface but rewrite impl to a thin wrapper: memory → distributed, no custom tags, no internal metrics (use OTel). Cache the `Result` object if callers expect functional types.                                                                                                                              |
+
+---
+
 ## 1. Current State Analysis
+
+### 🔍 Key Over-engineering Findings & Concrete Adjustments
+
+| #  | Theme                                 | Current Custom Piece                                                                                                                                | Why It's Redundant / Risky                                                                                                                                                                                                              | Lean-er Replacement                                                                                                                                                                                                                                                                                                            |
+| -- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1  | **Correlation / Trace context**       | `ICorrelationContextAccessor`, `CorrelationContext`, explicit headers in `OutboxMessage`, constructor injections across Audit / Outbox interceptors | OpenTelemetry (OTel) already propagates W3C `traceparent`/`tracestate` via `Activity.Current`, `Baggage` and the built-in `W3CTraceContextPropagator`. Maintaining a parallel ambient context → double bookkeeping, drift, missed hops. | **Delete** the whole accessor package. Wherever it's read:<br>`csharp\nvar traceId = Activity.Current?.TraceId.ToString();`<br>and rely on `Activity.Current?.SpanId` / `Activity.Current?.Context` for causation-id. Outbox headers: persist `traceparent` & `tracestate` only.                                               |
+| 2  | **Options validation**                | Hand-rolled `GetOptionsResult<T>` + functional errors                                                                                               | `Microsoft.Extensions.Options` has `ValidateDataAnnotations()` / `Validate(...)` fluent helpers.                                                                                                                                        | Replace with:<br>`csharp\nservices.AddOptions<ObservabilityOptions>()\n        .Bind(config.GetSection(\"Observability\"))\n        .ValidateDataAnnotations();`<br>and drop the extension + Result-wrapping.                                                                                                                  |
+| 3  | **Metrics abstraction**               | Custom `IMetrics` + `CustomMetrics` + manual counters in cache / CB code                                                                            | OTel Metrics SDK (preview → stable in .NET 8) supplies `Meter` & `Counter<T>`. Duplicating hides data from the pipeline.                                                                                                                | Remove `IMetrics`; inject `Meter meter` from `MeterProvider`. Create counters once:<br>`csharp\nprivate readonly Counter<long> _cacheHit;\n_cacheHit = meter.CreateCounter<long>(\"cache.hit\");`                                                                                                                              |
+| 4  | **Circuit-Breaker wrapper**           | `ICircuitBreakerPolicy` + bespoke `CircuitBreakerPolicy` that internally *re-wraps* Polly                                                           | Polly already *is* the CB. Wrapping steals diagnostics (Polly v8 exposes events + OTel).                                                                                                                                                | Delete wrapper. Register: <br>`csharp\nservices.AddHttpClient(\"external\")\n        .AddPolicyHandler(Policy<HttpResponseMessage>\n            .HandleTransientHttpError()\n            .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));\n`                                                                                |
+| 5  | **Retry / Timeout wrappers**          | Planned `RetryPolicy`, `RetryBehavior`, etc.                                                                                                        | Same as (4): Polly (or .NET 8 `RateLimiting`/`TimeoutPolicy`) does it better and already exports OTel events.                                                                                                                           | Use Polly pipeline on the *infrastructure* client (DB, MQ, HTTP). Remove custom retry logic from behaviors.                                                                                                                                                                                                                    |
+| 6  | **Custom multi-level cache**          | `IMultiLevelCache`, own tag-aware options                                                                                                           | .NET already gives `IMemoryCache` + `IDistributedCache`. Multi-level pattern is valid, but 90 % of the class duplicates simple `TryGetValue/SetAsync`.                                                                                  | Keep **interface** if business code wants abstraction, but replace impl with <br>`csharp\npublic class TwoLevelCache : IMultiLevelCache {\n  private readonly IMemoryCache _mem;\n  private readonly IDistributedCache _dist;\n  // 6 lines: read-through then SetAsync.\n}\n`<br>Drop tag list & metrics counters (use OTel). |
+| 7  | **DateTime provider**                 | `IDateTimeProvider` + mutable `SystemDateTimeProvider`                                                                                              | Value in tests; fine to keep. **No change**.                                                                                                                                                                                            |                                                                                                                                                                                                                                                                                                                                |
+| 8  | **EF Core interceptors**              | `AuditInterceptor` uses custom correlation accessor                                                                                                 | After #1 remove ctor arg; record `Activity.Current?.TraceId`.                                                                                                                                                                           |                                                                                                                                                                                                                                                                                                                                |
+| 9  | **UnitOfWork extras**                 | Missing `HasActiveTransaction`, bad return types                                                                                                    | Align with Application fix set:<br>`csharp\nTask<Result<IDbContextTransaction>> BeginTransactionAsync(...)\nbool HasActiveTransaction {get;}\n`                                                                                         |                                                                                                                                                                                                                                                                                                                                |
+| 10 | **Configuration of Redis/Resilience** | Manual retry/circuit config in `OnConfiguring`                                                                                                      | EF Core 8 has `EnableRetryOnFailure()` (already used) + `ExecutionStrategy`. Leave as-is but remove extra Polly wrapper.                                                                                                                |                                                                                                                                                                                                                                                                                                                                |
+
+### 🗄️ Files/Sections to Modify or Delete
+
+1. **Delete**
+
+   * `Infrastructure/Core/Abstractions/ICorrelationContextAccessor*.cs`
+   * `CorrelationContext` record
+   * `IMetrics`, `CustomMetrics`
+   * `Resilience/CircuitBreaker/CircuitBreakerPolicy*.cs` + its interface
+   * Any `RetryPolicy`, `RetryBehavior`, custom metric counters in code snippets
+
+2. **Refactor**
+
+   * `ServiceCollectionExtensions.cs` – remove registrations for accessor/metrics; replace Options validation per #2.
+   * `AxonDbContext.cs` – update `AuditInterceptor` ctor, drop `_correlationContext`.
+   * `OutboxMessage.Create` – write `Activity.Current?.Id` into headers instead of custom IDs.
+   * `MultiLevelCache.cs` – shrink to thin two-level wrapper; replace `_metrics.IncrementCounter` calls with OTel `Counter<long>`.
+   * `IUnitOfWork` + `EfUnitOfWork` – add `HasActiveTransaction`, change `BeginTransactionAsync` signature.
+
+3. **Add / Update DI**
+
+   ```csharp
+   // Observability
+   services.AddOpenTelemetry()
+           .WithMetrics(m => m.AddMeter("BuildingBlocks.*"));
+
+   // Polly integration examples
+   services.AddHttpClient("external")
+           .AddPolicyHandler(Policy<HttpResponseMessage>
+               .HandleTransientHttpError()
+               .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+   ```
+
+### ✅ Quick Sanity Checklist
+
+* [ ] No custom correlation accessor; OTel propagation only.
+* [ ] Options use `ValidateDataAnnotations()` not `GetOptionsResult`.
+* [ ] No home-grown `IMetrics`; counters created from `Meter`.
+* [ ] Polly policies used directly; custom CB / retry classes removed.
+* [ ] `TwoLevelCache` slimmed; emits OTel metrics.
+* [ ] `AuditInterceptor` captures `Activity.Current.TraceId`.
+* [ ] `OutboxMessage` stores W3C `traceparent`.
+* [ ] `IUnitOfWork` exposes `HasActiveTransaction` + proper return types.
 
 ### Current Infrastructure Structure
 ```
@@ -56,6 +127,7 @@ Infrastructure/
 - ❌ **Limited Resilience**: Basic Polly without circuit breakers
 - ❌ **Poor Separation**: Read/Write repositories not properly isolated
 - ❌ **No Event Store**: Missing event sourcing infrastructure (though not MVP)
+- ❌ **Over-engineered Components**: Custom correlation, metrics, circuit-breaker wrappers that duplicate .NET functionality
 
 ---
 
@@ -131,7 +203,7 @@ graph LR
 
 ## 4. Phase 1: Core Infrastructure Foundation
 
-### 4.1 Core Abstractions
+### 4.1 Core Abstractions (Minimal Set)
 
 #### File: `Infrastructure/Core/Abstractions/IDateTimeProvider.cs`
 ```csharp
@@ -166,83 +238,7 @@ public sealed class SystemDateTimeProvider : IDateTimeProvider
 }
 ```
 
-#### File: `Infrastructure/Core/Abstractions/ICorrelationContextAccessor.cs`
-```csharp
-namespace BuildingBlocks.Infrastructure.Core.Abstractions;
-
-/// <summary>
-/// Provides access to correlation context for distributed tracing
-/// </summary>
-public interface ICorrelationContextAccessor
-{
-    CorrelationContext? CorrelationContext { get; set; }
-}
-
-public sealed class CorrelationContextAccessor : ICorrelationContextAccessor
-{
-    private static readonly AsyncLocal<CorrelationContext?> _correlationContext = new();
-    
-    public CorrelationContext? CorrelationContext
-    {
-        get => _correlationContext.Value;
-        set => _correlationContext.Value = value;
-    }
-}
-
-public sealed record CorrelationContext(
-    Guid CorrelationId,
-    Guid? CausationId = null,
-    string? UserId = null,
-    string? TenantId = null,
-    Dictionary<string, string>? Metadata = null)
-{
-    public static CorrelationContext Create(string? userId = null) 
-        => new(Guid.NewGuid(), null, userId);
-}
-```
-
-### 4.2 Configuration Management
-
-#### File: `Infrastructure/Core/Configuration/ConfigurationExtensions.cs`
-```csharp
-namespace BuildingBlocks.Infrastructure.Core.Configuration;
-
-public static class ConfigurationExtensions
-{
-    /// <summary>
-    /// Gets strongly-typed options with validation
-    /// </summary>
-    public static Result<TOptions> GetOptionsResult<TOptions>(
-        this IConfiguration configuration, 
-        string sectionName) 
-        where TOptions : class, new()
-    {
-        var section = configuration.GetSection(sectionName);
-        if (!section.Exists())
-        {
-            return Result<TOptions>.Failure(
-                Error.NotFound($"Configuration section '{sectionName}' not found"));
-        }
-        
-        var options = new TOptions();
-        section.Bind(options);
-        
-        var validationResults = new List<ValidationResult>();
-        var context = new ValidationContext(options);
-        
-        if (!Validator.TryValidateObject(options, context, validationResults, true))
-        {
-            var errors = string.Join(", ", validationResults.Select(r => r.ErrorMessage));
-            return Result<TOptions>.Failure(
-                Error.Validation($"INVALID_CONFIG", $"Configuration validation failed: {errors}"));
-        }
-        
-        return Result<TOptions>.Success(options);
-    }
-}
-```
-
-### 4.3 Dependency Injection
+### 4.2 Dependency Injection (Using Standard .NET Patterns)
 
 #### File: `Infrastructure/Core/DependencyInjection/ServiceCollectionExtensions.cs`
 ```csharp
@@ -254,9 +250,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Register core services
+        // Register core services (minimal set)
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
-        services.AddSingleton<ICorrelationContextAccessor, CorrelationContextAccessor>();
         
         // Add HTTP context accessor for web scenarios
         services.AddHttpContextAccessor();
@@ -264,26 +259,70 @@ public static class ServiceCollectionExtensions
         // Add memory cache
         services.AddMemoryCache();
         
-        // Configure options
-        services.ConfigureOptions<DatabaseOptions>(configuration, "Database");
-        services.ConfigureOptions<CacheOptions>(configuration, "Cache");
-        services.ConfigureOptions<MessagingOptions>(configuration, "Messaging");
+        // Configure options using standard .NET validation
+        services.AddOptions<DatabaseOptions>()
+            .Bind(configuration.GetSection("Database"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+            
+        services.AddOptions<CacheOptions>()
+            .Bind(configuration.GetSection("Cache"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+            
+        services.AddOptions<MessagingOptions>()
+            .Bind(configuration.GetSection("Messaging"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         
         return services;
     }
+}
+```
+
+### 4.3 Options Classes with Data Annotations
+
+#### File: `Infrastructure/Core/Configuration/DatabaseOptions.cs`
+```csharp
+namespace BuildingBlocks.Infrastructure.Core.Configuration;
+
+public sealed class DatabaseOptions
+{
+    [Required]
+    [StringLength(500, MinimumLength = 10)]
+    public string ConnectionString { get; set; } = string.Empty;
     
-    private static IServiceCollection ConfigureOptions<TOptions>(
-        this IServiceCollection services,
-        IConfiguration configuration,
-        string sectionName)
-        where TOptions : class
-    {
-        services.Configure<TOptions>(configuration.GetSection(sectionName));
-        services.AddSingleton(provider => 
-            provider.GetRequiredService<IOptions<TOptions>>().Value);
-        
-        return services;
-    }
+    [Range(1, 300)]
+    public int CommandTimeoutSeconds { get; set; } = 30;
+    
+    [Range(1, 10)]
+    public int RetryAttempts { get; set; } = 3;
+    
+    public bool EnableSensitiveDataLogging { get; set; } = false;
+}
+
+public sealed class CacheOptions
+{
+    [Range(1, 86400)]
+    public int DefaultTtlSeconds { get; set; } = 3600;
+    
+    [Required]
+    public string RedisConnectionString { get; set; } = string.Empty;
+    
+    [Range(1, 100)]
+    public int MaxRetries { get; set; } = 3;
+}
+
+public sealed class MessagingOptions
+{
+    [Required]
+    public string RabbitMqConnectionString { get; set; } = string.Empty;
+    
+    [Range(1, 1000)]
+    public int BatchSize { get; set; } = 50;
+    
+    [Range(1000, 60000)]
+    public int ProcessingIntervalMs { get; set; } = 5000;
 }
 ```
 
@@ -303,9 +342,11 @@ namespace BuildingBlocks.Infrastructure.Persistence.UnitOfWork;
 public interface IUnitOfWork : IDisposable
 {
     Task<Result<int>> SaveChangesAsync(CancellationToken ct = default);
-    Task<Result<Unit>> BeginTransactionAsync(CancellationToken ct = default);
+    Task<Result<IDbContextTransaction>> BeginTransactionAsync(CancellationToken ct = default);
     Task<Result<Unit>> CommitTransactionAsync(CancellationToken ct = default);
     Task<Result<Unit>> RollbackTransactionAsync(CancellationToken ct = default);
+    
+    bool HasActiveTransaction { get; }
     
     // Execute in transaction with automatic rollback on failure
     Task<Result<T>> ExecuteInTransactionAsync<T>(
@@ -326,6 +367,8 @@ public sealed class EfUnitOfWork<TContext> : IUnitOfWork
     private readonly ILogger<EfUnitOfWork<TContext>> _logger;
     private readonly IDomainEventDispatcher _eventDispatcher;
     private IDbContextTransaction? _currentTransaction;
+    
+    public bool HasActiveTransaction => _currentTransaction is not null;
     
     public EfUnitOfWork(
         TContext context,
@@ -366,23 +409,23 @@ public sealed class EfUnitOfWork<TContext> : IUnitOfWork
         }
     }
     
-    public async Task<Result<Unit>> BeginTransactionAsync(CancellationToken ct = default)
+    public async Task<Result<IDbContextTransaction>> BeginTransactionAsync(CancellationToken ct = default)
     {
         if (_currentTransaction != null)
         {
-            return Result<Unit>.Failure(Error.InvalidOperation(
+            return Result<IDbContextTransaction>.Failure(Error.InvalidOperation(
                 "Transaction", "Transaction already in progress"));
         }
         
         try
         {
             _currentTransaction = await _context.Database.BeginTransactionAsync(ct);
-            return Result<Unit>.Success(Unit.Value);
+            return Result<IDbContextTransaction>.Success(_currentTransaction);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to begin transaction");
-            return Result<Unit>.Failure(Error.FromException(ex));
+            return Result<IDbContextTransaction>.Failure(Error.FromException(ex));
         }
     }
     
@@ -714,16 +757,13 @@ namespace BuildingBlocks.Infrastructure.Persistence.EntityFramework;
 
 public class AxonDbContext : DbContext
 {
-    private readonly ICorrelationContextAccessor _correlationContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     
     public AxonDbContext(
         DbContextOptions<AxonDbContext> options,
-        ICorrelationContextAccessor correlationContext,
         IDateTimeProvider dateTimeProvider) 
         : base(options)
     {
-        _correlationContext = correlationContext;
         _dateTimeProvider = dateTimeProvider;
     }
     
@@ -737,7 +777,7 @@ public class AxonDbContext : DbContext
             })
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(
-                new AuditInterceptor(_dateTimeProvider, _correlationContext),
+                new AuditInterceptor(_dateTimeProvider),
                 new DomainEventInterceptor(),
                 new OutboxInterceptor(),
                 new PerformanceInterceptor());
@@ -789,9 +829,7 @@ public sealed class OutboxMessage
     
     private OutboxMessage() { } // EF Core
     
-    public static OutboxMessage Create(
-        IIntegrationEvent @event,
-        ICorrelationContext? context = null)
+    public static OutboxMessage Create(IIntegrationEvent @event)
     {
         var headers = new Dictionary<string, string>
         {
@@ -800,13 +838,19 @@ public sealed class OutboxMessage
             ["OccurredAt"] = @event.OccurredAt.ToString("O")
         };
         
-        if (context != null)
+        // Use OpenTelemetry Activity.Current for tracing
+        var activity = Activity.Current;
+        if (activity is not null)
         {
-            headers["CorrelationId"] = context.CorrelationId.ToString();
-            if (context.CausationId.HasValue)
-                headers["CausationId"] = context.CausationId.Value.ToString();
-            if (!string.IsNullOrEmpty(context.UserId))
-                headers["UserId"] = context.UserId;
+            headers["traceparent"] = activity.Id!;
+            if (!string.IsNullOrEmpty(activity.TraceStateString))
+                headers["tracestate"] = activity.TraceStateString;
+            
+            // Add baggage items for business context
+            foreach (var baggage in activity.Baggage)
+            {
+                headers[$"baggage.{baggage.Key}"] = baggage.Value ?? string.Empty;
+            }
         }
         
         return new OutboxMessage
@@ -970,33 +1014,80 @@ public sealed class OutboxProcessor : BackgroundService
 
 ## 7. Phase 4: Observability & Resilience
 
-### 7.1 Circuit Breaker Implementation
+### 7.1 Resilience with Direct Polly Integration
 
-#### File: `Infrastructure/Resilience/CircuitBreaker/CircuitBreakerPolicy.cs`
+#### File: `Infrastructure/Resilience/ResilienceExtensions.cs`
 ```csharp
-namespace BuildingBlocks.Infrastructure.Resilience.CircuitBreaker;
+namespace BuildingBlocks.Infrastructure.Resilience;
 
-public interface ICircuitBreakerPolicy
+public static class ResilienceExtensions
 {
-    Task<Result<T>> ExecuteAsync<T>(
-        Func<Task<Result<T>>> operation,
-        string operationKey,
-        CancellationToken ct = default);
-}
-
-public sealed class CircuitBreakerPolicy : ICircuitBreakerPolicy
-{
-    private readonly IAsyncPolicy<HttpResponseMessage> _policy;
-    private readonly ILogger<CircuitBreakerPolicy> _logger;
-    private readonly IMetrics _metrics;
-    
-    public CircuitBreakerPolicy(
-        ILogger<CircuitBreakerPolicy> logger,
-        IMetrics metrics,
-        CircuitBreakerOptions options)
+    public static IServiceCollection AddResiliencePatterns(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        _logger = logger;
-        _metrics = metrics;
+        // Configure HTTP clients with Polly policies directly
+        services.AddHttpClient("external-api")
+            .AddPolicyHandler(GetRetryPolicy())
+            .AddPolicyHandler(GetCircuitBreakerPolicy())
+            .AddPolicyHandler(GetTimeoutPolicy());
+            
+        // Add database resilience
+        services.AddDbContextPool<AxonDbContext>((provider, options) =>
+        {
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(30),
+                    errorCodesToAdd: null);
+            });
+        });
+        
+        return services;
+    }
+    
+    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+    {
+        return Policy<HttpResponseMessage>
+            .HandleTransientHttpError()
+            .WaitAndRetryAsync(
+                retryCount: 3,
+                sleepDurationProvider: retryAttempt => 
+                    TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                onRetry: (outcome, timespan, retryCount, context) =>
+                {
+                    using var activity = Activity.StartActivity("Retry");
+                    activity?.SetTag("retry.attempt", retryCount);
+                    activity?.SetTag("retry.delay_ms", timespan.TotalMilliseconds);
+                });
+    }
+    
+    private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+    {
+        return Policy<HttpResponseMessage>
+            .HandleTransientHttpError()
+            .CircuitBreakerAsync(
+                handledEventsAllowedBeforeBreaking: 5,
+                durationOfBreak: TimeSpan.FromSeconds(30),
+                onBreak: (delegateResult, duration) =>
+                {
+                    using var activity = Activity.StartActivity("CircuitBreakerOpened");
+                    activity?.SetTag("circuit_breaker.duration_seconds", duration.TotalSeconds);
+                },
+                onReset: () =>
+                {
+                    using var activity = Activity.StartActivity("CircuitBreakerReset");
+                });
+    }
+    
+    private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
+    {
+        return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(30));
+    }
+}
+```
         
         _policy = Policy
             .HandleResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
@@ -1087,8 +1178,14 @@ public static class OpenTelemetryExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var options = configuration.GetOptionsResult<ObservabilityOptions>("Observability")
-            .GetOrThrow();
+        // Use standard .NET options validation instead of custom Result wrapper
+        services.AddOptions<ObservabilityOptions>()
+            .Bind(configuration.GetSection("Observability"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+            
+        var options = configuration.GetSection("Observability")
+            .Get<ObservabilityOptions>()!;
         
         services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
@@ -1152,8 +1249,12 @@ public static class OpenTelemetryExtensions
                     });
             });
         
-        // Add custom metrics
-        services.AddSingleton<IMetrics, CustomMetrics>();
+        // Register Meter for creating counters/gauges directly
+        services.AddSingleton(provider => 
+        {
+            var meterProvider = provider.GetRequiredService<MeterProvider>();
+            return new Meter("BuildingBlocks.Infrastructure", "1.0.0");
+        });
         
         return services;
     }
@@ -1164,67 +1265,70 @@ public static class OpenTelemetryExtensions
 
 ## 8. Phase 5: Caching & Performance
 
-### 8.1 Multi-Level Caching
+### 8.1 Two-Level Cache (Lean Implementation)
 
-#### File: `Infrastructure/Caching/MultiLevelCache.cs`
+#### File: `Infrastructure/Caching/TwoLevelCache.cs`
 ```csharp
 namespace BuildingBlocks.Infrastructure.Caching;
 
-public interface IMultiLevelCache
+public interface ITwoLevelCache
 {
     Task<Result<Option<T>>> GetAsync<T>(string key, CancellationToken ct = default);
-    Task<Result<Unit>> SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken ct = default);
+    Task<Result<Unit>> SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken ct = default);
     Task<Result<Unit>> RemoveAsync(string key, CancellationToken ct = default);
-    Task<Result<Unit>> RemoveByPrefixAsync(string prefix, CancellationToken ct = default);
 }
 
-public sealed class MultiLevelCache : IMultiLevelCache
+public sealed class TwoLevelCache : ITwoLevelCache
 {
-    private readonly IMemoryCache _l1Cache;
-    private readonly IDistributedCache _l2Cache;
-    private readonly ILogger<MultiLevelCache> _logger;
-    private readonly IMetrics _metrics;
+    private readonly IMemoryCache _memoryCache;
+    private readonly IDistributedCache _distributedCache;
+    private readonly Counter<long> _cacheHits;
+    private readonly Counter<long> _cacheMisses;
+    private readonly ILogger<TwoLevelCache> _logger;
     
-    public MultiLevelCache(
-        IMemoryCache l1Cache,
-        IDistributedCache l2Cache,
-        ILogger<MultiLevelCache> logger,
-        IMetrics metrics)
+    public TwoLevelCache(
+        IMemoryCache memoryCache,
+        IDistributedCache distributedCache,
+        Meter meter,
+        ILogger<TwoLevelCache> logger)
     {
-        _l1Cache = l1Cache;
-        _l2Cache = l2Cache;
+        _memoryCache = memoryCache;
+        _distributedCache = distributedCache;
         _logger = logger;
-        _metrics = metrics;
+        
+        // Use OpenTelemetry metrics directly
+        _cacheHits = meter.CreateCounter<long>("cache.hit");
+        _cacheMisses = meter.CreateCounter<long>("cache.miss");
     }
     
     public async Task<Result<Option<T>>> GetAsync<T>(string key, CancellationToken ct = default)
     {
         try
         {
-            // Check L1 cache
-            if (_l1Cache.TryGetValue<T>(key, out var l1Value))
+            // Check memory cache first
+            if (_memoryCache.TryGetValue<T>(key, out var memValue))
             {
-                _metrics.IncrementCounter("cache.hit", new TagList { { "level", "L1" } });
-                return Result<Option<T>>.Success(Option<T>.Some(l1Value));
+                _cacheHits.Add(1, new TagList { ["level"] = "memory" });
+                return Result<Option<T>>.Success(Option<T>.Some(memValue));
             }
             
-            // Check L2 cache
-            var l2Bytes = await _l2Cache.GetAsync(key, ct);
-            if (l2Bytes != null)
+            // Check distributed cache
+            var distributedBytes = await _distributedCache.GetAsync(key, ct);
+            if (distributedBytes is not null)
             {
-                var l2Value = JsonSerializer.Deserialize<T>(l2Bytes);
-                if (l2Value != null)
+                var distributedValue = JsonSerializer.Deserialize<T>(distributedBytes);
+                if (distributedValue is not null)
                 {
-                    _metrics.IncrementCounter("cache.hit", new TagList { { "level", "L2" } });
+                    _cacheHits.Add(1, new TagList { ["level"] = "distributed" });
                     
-                    // Populate L1 cache
-                    _l1Cache.Set(key, l2Value, TimeSpan.FromMinutes(5));
+                    // Populate memory cache with shorter TTL
+                    _memoryCache.Set(key, distributedValue, TimeSpan.FromMinutes(5));
                     
-                    return Result<Option<T>>.Success(Option<T>.Some(l2Value));
+                    return Result<Option<T>>.Success(Option<T>.Some(distributedValue));
                 }
             }
             
-            _metrics.IncrementCounter("cache.miss");
+            _cacheMisses.Add(1);
             return Result<Option<T>>.Success(Option<T>.None());
         }
         catch (Exception ex)
@@ -1237,34 +1341,23 @@ public sealed class MultiLevelCache : IMultiLevelCache
     public async Task<Result<Unit>> SetAsync<T>(
         string key, 
         T value, 
-        CacheEntryOptions options, 
+        TimeSpan? expiration = null, 
         CancellationToken ct = default)
     {
         try
         {
-            // Set in L1 cache
-            var l1Options = new MemoryCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = options.AbsoluteExpiration,
-                SlidingExpiration = options.SlidingExpiration,
-                Priority = options.Priority == CachePriority.High 
-                    ? CacheItemPriority.High 
-                    : CacheItemPriority.Normal
-            };
+            var ttl = expiration ?? TimeSpan.FromHours(1);
             
-            _l1Cache.Set(key, value, l1Options);
+            // Set in memory cache (shorter TTL)
+            _memoryCache.Set(key, value, TimeSpan.FromMinutes(Math.Min(ttl.TotalMinutes, 30)));
             
-            // Set in L2 cache
-            var l2Options = new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = options.AbsoluteExpiration,
-                SlidingExpiration = options.SlidingExpiration
-            };
-            
+            // Set in distributed cache
             var bytes = JsonSerializer.SerializeToUtf8Bytes(value);
-            await _l2Cache.SetAsync(key, bytes, l2Options, ct);
+            await _distributedCache.SetAsync(key, bytes, new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = ttl
+            }, ct);
             
-            _metrics.IncrementCounter("cache.set");
             return Result<Unit>.Success(Unit.Value);
         }
         catch (Exception ex)
@@ -1278,10 +1371,8 @@ public sealed class MultiLevelCache : IMultiLevelCache
     {
         try
         {
-            _l1Cache.Remove(key);
-            await _l2Cache.RemoveAsync(key, ct);
-            
-            _metrics.IncrementCounter("cache.remove");
+            _memoryCache.Remove(key);
+            await _distributedCache.RemoveAsync(key, ct);
             return Result<Unit>.Success(Unit.Value);
         }
         catch (Exception ex)
@@ -1290,76 +1381,55 @@ public sealed class MultiLevelCache : IMultiLevelCache
             return Result<Unit>.Failure(Error.FromException(ex));
         }
     }
-    
-    public async Task<Result<Unit>> RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
-    {
-        try
-        {
-            // For L1 cache, we need to track keys separately
-            // This is a simplified version - production would need proper key tracking
-            
-            // For L2 cache (Redis), we can use pattern matching
-            // This requires IConnectionMultiplexer from StackExchange.Redis
-            // Implementation depends on the specific distributed cache being used
-            
-            _metrics.IncrementCounter("cache.remove_by_prefix");
-            return Result<Unit>.Success(Unit.Value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to remove cache values by prefix {Prefix}", prefix);
-            return Result<Unit>.Failure(Error.FromException(ex));
-        }
-    }
 }
-
-public sealed class CacheEntryOptions
-{
-    public TimeSpan? AbsoluteExpiration { get; init; }
-    public TimeSpan? SlidingExpiration { get; init; }
-    public CachePriority Priority { get; init; } = CachePriority.Normal;
-    public string[]? Tags { get; init; }
-}
-
-public enum CachePriority
-{
-    Low,
-    Normal,
-    High
-}
+```
 ```
 
 ---
 
 ## 9. File-by-File Refactoring Guide
 
-### Files to DELETE Completely
+### Files to DELETE Completely (Over-engineered Components)
 ```bash
-# Remove old implementations that will be replaced
-rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IDbContext.cs
-rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IReadDbContext.cs
-rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IWriteDbContext.cs
-rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IReadRepository.cs
-rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IWriteRepository.cs
-rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IWriteUnitOfWork.cs
+# Remove custom abstractions that duplicate .NET functionality
+rm -rf src/BuildingBlocks/Infrastructure/Core/Abstractions/ICorrelationContextAccessor.cs
+rm -rf src/BuildingBlocks/Infrastructure/Core/Abstractions/CorrelationContext.cs
+rm -rf src/BuildingBlocks/Infrastructure/Core/Configuration/ConfigurationExtensions.cs
+rm -rf src/BuildingBlocks/Infrastructure/Observability/IMetrics.cs
+rm -rf src/BuildingBlocks/Infrastructure/Observability/CustomMetrics.cs
+rm -rf src/BuildingBlocks/Infrastructure/Resilience/CircuitBreaker/ICircuitBreakerPolicy.cs
+rm -rf src/BuildingBlocks/Infrastructure/Resilience/CircuitBreaker/CircuitBreakerPolicy.cs
+rm -rf src/BuildingBlocks/Infrastructure/Resilience/Retry/RetryPolicy.cs
+rm -rf src/BuildingBlocks/Infrastructure/Resilience/Timeout/TimeoutPolicy.cs
 ```
 
-### Files to REPLACE Completely
-- `Infrastructure/Persistence/Write/EfWriteRepository.cs` → New implementation with Result<T>
-- `Infrastructure/Persistence/Read/EfReadRepository.cs` → New implementation with Result<T>
-- `Infrastructure/Persistence/Write/EfWriteUnitOfWork.cs` → New implementation with transactions
-- `Infrastructure/Messaging/Outbox/IntegrationEventWrapper.cs` → New OutboxMessage
-- `Infrastructure/Caching/CachingBehavior.cs` → New multi-level caching
+### Files to REPLACE with Lean Implementations
+- `Infrastructure/Persistence/Write/EfWriteRepository.cs` → Simplified with Result<T>
+- `Infrastructure/Persistence/Read/EfReadRepository.cs` → Simplified with Result<T>
+- `Infrastructure/Persistence/Write/EfWriteUnitOfWork.cs` → Add `HasActiveTransaction` property
+- `Infrastructure/Messaging/Outbox/IntegrationEventWrapper.cs` → New OutboxMessage with Activity.Current
+- `Infrastructure/Caching/MultiLevelCache.cs` → Thin TwoLevelCache wrapper
+- `Infrastructure/Observability/OpenTelemetry/OpenTelemetryExtensions.cs` → Direct Meter registration
+- `Web/Extensions/ServiceCollectionExtensions.cs` → Standard .NET options validation
 
-### Files to CREATE New
-- `Infrastructure/Core/Abstractions/IDateTimeProvider.cs`
-- `Infrastructure/Core/Abstractions/ICorrelationContextAccessor.cs`
-- `Infrastructure/Core/Configuration/ConfigurationExtensions.cs`
-- `Infrastructure/Persistence/UnitOfWork/IUnitOfWork.cs`
-- `Infrastructure/Persistence/UnitOfWork/EfUnitOfWork.cs`
-- `Infrastructure/Messaging/Outbox/OutboxProcessor.cs`
-- `Infrastructure/Resilience/CircuitBreaker/CircuitBreakerPolicy.cs`
-- `Infrastructure/Caching/MultiLevelCache.cs`
+### Files to CREATE (Minimal Set)
+- `Infrastructure/Core/Abstractions/IDateTimeProvider.cs` (keep - useful for testing)
+- `Infrastructure/Core/Configuration/DatabaseOptions.cs` (with DataAnnotations)
+- `Infrastructure/Core/Configuration/CacheOptions.cs` (with DataAnnotations)  
+- `Infrastructure/Core/Configuration/MessagingOptions.cs` (with DataAnnotations)
+- `Infrastructure/Persistence/UnitOfWork/IUnitOfWork.cs` (with proper return types)
+- `Infrastructure/Persistence/UnitOfWork/EfUnitOfWork.cs` (remove correlation dependency)
+- `Infrastructure/Messaging/Outbox/OutboxProcessor.cs` (simplified)
+- `Infrastructure/Resilience/ResilienceExtensions.cs` (direct Polly usage)
+- `Infrastructure/Caching/TwoLevelCache.cs` (6-line implementation)
+
+### Key Simplifications Applied
+- ✅ **Correlation**: Removed custom accessor → Use `Activity.Current.TraceId`
+- ✅ **Options**: Removed Result wrapper → Use `AddOptions().ValidateDataAnnotations()`
+- ✅ **Metrics**: Removed IMetrics → Inject `Meter` directly
+- ✅ **Circuit Breaker**: Removed wrapper → Register Polly policies directly
+- ✅ **Caching**: Removed tags/custom options → Simple read-through pattern
+- ✅ **Configuration**: Use standard .NET validation patterns
 
 ---
 
@@ -1367,15 +1437,33 @@ rm -rf src/BuildingBlocks/Infrastructure/Persistence/Common/Interfaces/IWriteUni
 
 ### Phase 1 Verification
 ```csharp
-// Test: Core abstractions compile
+// Test: Only essential abstractions exist
 [Fact]
-public void CoreAbstractions_ShouldCompile()
+public void CoreAbstractions_ShouldBeMinimal()
 {
     var dateTimeProvider = new SystemDateTimeProvider();
-    var correlationAccessor = new CorrelationContextAccessor();
     
     Assert.NotNull(dateTimeProvider.UtcNow);
-    Assert.NotNull(correlationAccessor);
+    // No correlation accessor - using Activity.Current directly
+}
+
+// Test: Options validation works with standard .NET
+[Fact]
+public void OptionsValidation_ShouldUseStandardPatterns()
+{
+    var services = new ServiceCollection();
+    var configuration = new ConfigurationBuilder().Build();
+    
+    services.AddOptions<DatabaseOptions>()
+        .Bind(configuration.GetSection("Database"))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+    
+    var provider = services.BuildServiceProvider();
+    
+    // Should throw on invalid configuration
+    Assert.Throws<OptionsValidationException>(() => 
+        provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
 }
 ```
 
@@ -1395,11 +1483,18 @@ public async Task Repository_ShouldReturnResult()
 
 ### Phase 3 Verification
 ```csharp
-// Test: Outbox processes messages
+// Test: Outbox uses OpenTelemetry Activity for tracing
 [Fact]
-public async Task Outbox_ShouldProcessMessages()
+public async Task Outbox_ShouldUseActivityCurrent()
 {
+    using var activity = new Activity("TestActivity").Start();
+    
     var message = OutboxMessage.Create(new TestEvent());
+    
+    // Should have traceparent from Activity.Current
+    Assert.True(message.Headers.ContainsKey("traceparent"));
+    Assert.Equal(activity.Id, message.Headers["traceparent"]);
+    
     await context.OutboxMessages.AddAsync(message);
     await context.SaveChangesAsync();
     
@@ -1411,44 +1506,63 @@ public async Task Outbox_ShouldProcessMessages()
 
 ### Phase 4 Verification
 ```csharp
-// Test: Circuit breaker opens on failures
+// Test: Polly policies work directly without custom wrappers
 [Fact]
-public async Task CircuitBreaker_ShouldOpenOnFailures()
+public async Task Polly_ShouldWorkDirectly()
 {
-    var policy = new CircuitBreakerPolicy(logger, metrics, options);
+    var policy = Policy<HttpResponseMessage>
+        .HandleTransientHttpError()
+        .CircuitBreakerAsync(3, TimeSpan.FromSeconds(1));
     
-    // Simulate failures
-    for (int i = 0; i < 5; i++)
+    var httpClient = new HttpClient();
+    
+    // Circuit breaker should open after 3 failures
+    for (int i = 0; i < 3; i++)
     {
-        await policy.ExecuteAsync(
-            () => Task.FromResult(Result<int>.Failure(Error.External("Test", "Failed"))),
-            "test-operation");
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
+            await policy.ExecuteAsync(() => httpClient.GetAsync("http://invalid-url")));
     }
     
-    // Circuit should be open
-    var result = await policy.ExecuteAsync(
-        () => Task.FromResult(Result<int>.Success(42)),
-        "test-operation");
+    // Circuit should now be open
+    await Assert.ThrowsAsync<CircuitBreakerOpenException>(async () =>
+        await policy.ExecuteAsync(() => httpClient.GetAsync("http://valid-url")));
+}
+
+// Test: OpenTelemetry Meter works without custom IMetrics
+[Fact]
+public void Meter_ShouldCreateCountersDirectly()
+{
+    var meter = new Meter("TestMeter", "1.0.0");
+    var counter = meter.CreateCounter<long>("test.counter");
     
-    Assert.True(result.IsFailure);
-    Assert.Contains("Circuit breaker is open", result.Error.Message);
+    counter.Add(1, new TagList { ["test"] = "value" });
+    
+    Assert.NotNull(counter);
+    // No custom IMetrics wrapper needed
 }
 ```
 
 ### Phase 5 Verification
 ```csharp
-// Test: Multi-level cache works
+// Test: Two-level cache is lean and simple
 [Fact]
-public async Task MultiLevelCache_ShouldCascade()
+public async Task TwoLevelCache_ShouldBeSimple()
 {
-    var cache = new MultiLevelCache(memoryCache, distributedCache, logger, metrics);
+    var memoryCache = new MemoryCache(new MemoryCacheOptions());
+    var distributedCache = new MockDistributedCache();
+    var meter = new Meter("TestMeter");
+    var logger = Mock.Of<ILogger<TwoLevelCache>>();
     
-    await cache.SetAsync("key", "value", new CacheEntryOptions());
+    var cache = new TwoLevelCache(memoryCache, distributedCache, meter, logger);
+    
+    await cache.SetAsync("key", "value", TimeSpan.FromMinutes(5));
     var result = await cache.GetAsync<string>("key");
     
     Assert.True(result.IsSuccess);
     Assert.True(result.Value.IsSome);
     Assert.Equal("value", result.Value.Value);
+    
+    // No custom tags, metrics, or complex options - just simple caching
 }
 ```
 
@@ -1458,35 +1572,50 @@ public async Task MultiLevelCache_ShouldCascade()
 
 ### Technical Metrics
 - ✅ All infrastructure code uses Result<T> pattern
-- ✅ Zero null reference exceptions possible
-- ✅ 100% async/await throughout
-- ✅ Full OpenTelemetry instrumentation
-- ✅ Transactional outbox implemented
-- ✅ Circuit breaker patterns active
-- ✅ Multi-level caching operational
+- ✅ Zero custom abstractions that duplicate .NET functionality
+- ✅ Direct use of OpenTelemetry Activity.Current for tracing
+- ✅ Standard .NET options validation with DataAnnotations
+- ✅ Direct Polly policy registration (no wrappers)
+- ✅ Simple two-level cache (< 100 lines)
+- ✅ OpenTelemetry Meter used directly for metrics
+
+### Simplification Metrics
+- ✅ Removed ICorrelationContextAccessor → Use Activity.Current
+- ✅ Removed GetOptionsResult<T> → Use AddOptions().ValidateDataAnnotations()
+- ✅ Removed IMetrics → Inject Meter directly
+- ✅ Removed CircuitBreakerPolicy wrapper → Use Polly directly
+- ✅ Removed MultiLevelCache complexity → Simple TwoLevelCache
+- ✅ UnitOfWork has HasActiveTransaction + proper return types
 
 ### Performance Metrics
 - ✅ Database queries < 50ms p99
 - ✅ Cache hit ratio > 80%
 - ✅ Outbox processing latency < 100ms
-- ✅ Circuit breaker response time < 5ms
+- ✅ No performance overhead from custom wrappers
 
 ### Quality Metrics
 - ✅ Test coverage > 90%
 - ✅ No compiler warnings
 - ✅ All code follows functional patterns
-- ✅ Comprehensive logging and metrics
+- ✅ Lean codebase with minimal abstractions
 
 ---
 
 ## Conclusion
 
-This implementation guide provides a complete roadmap for refactoring the BuildingBlocks Infrastructure folder following the brutal refactoring approach. The phased implementation ensures:
+This implementation guide provides a **lean roadmap** for refactoring the BuildingBlocks Infrastructure folder by **eliminating over-engineering**. The key principles applied:
 
-1. **Clean Architecture**: Proper separation of concerns
-2. **Functional Programming**: Result<T> pattern throughout
-3. **Production Readiness**: Full observability and resilience
-4. **Performance**: Multi-level caching and optimizations
-5. **Reliability**: Transactional outbox and circuit breakers
+1. **Eliminate Custom Wrappers**: Remove abstractions that duplicate .NET functionality
+2. **Use Standard Libraries**: OpenTelemetry, Polly, built-in options validation
+3. **Minimal Abstractions**: Only abstract what adds genuine business value
+4. **Direct Integration**: No intermediate layers that hide vendor functionality
+5. **Simple Implementations**: Favor 6-line implementations over 300-line ones
 
-The implementation can be completed in approximately 10 days with proper verification gates between phases.
+### Key Deletions Made:
+- ❌ Custom correlation accessor → OpenTelemetry Activity.Current
+- ❌ Hand-rolled options validation → .NET AddOptions().ValidateDataAnnotations()
+- ❌ Custom IMetrics → OpenTelemetry Meter directly
+- ❌ Circuit breaker wrapper → Polly policies directly
+- ❌ Over-engineered cache → Simple two-level wrapper
+
+The implementation can be completed in approximately **5 days** (down from 10) with the simplified approach, resulting in **less code to maintain**, **better vendor interoperability**, and **reduced cognitive overhead**.

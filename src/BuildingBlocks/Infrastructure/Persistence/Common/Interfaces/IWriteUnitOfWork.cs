@@ -1,5 +1,7 @@
 using System.Data;
 using BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 namespace BuildingBlocks.Persistence.Common.Interfaces;
 
@@ -13,23 +15,23 @@ public interface IWriteUnitOfWork : IDisposable
 
     /// <summary>
     /// Convenience helper: persists changes <i>and</i> publishes domain events
-    /// in one call.  (<b>High</b> priority DX addition)
+    /// in one call.  (<b>High</b> priority DX addition)
     /// </summary>
-    Task<int> SaveChangesAndDispatchEventsAsync(CancellationToken ct = default); // ★ new
+    Task<int> SaveChangesAndDispatchEventsAsync(CancellationToken ct = default); // ⭐ new
 
     // ——— T r a n s a c t i o n ———
-    Task BeginTransactionAsync(CancellationToken ct = default);
-    Task BeginTransactionAsync(IsolationLevel level, CancellationToken ct = default); // ★ new
+    Task<Result<ITransaction>> BeginTransactionAsync(CancellationToken ct = default);
+    Task<Result<ITransaction>> BeginTransactionAsync(IsolationLevel level, CancellationToken ct = default); // ⭐ new
     Task CommitTransactionAsync(CancellationToken ct = default);
     Task RollbackTransactionAsync(CancellationToken ct = default);
 
     bool HasChanges { get; }
     bool HasActiveTransaction { get; }
-    string? CurrentTransactionId { get; } // ★ new parity with IDbContext
+    string? CurrentTransactionId { get; } // ⭐ new parity with IDbContext
 
     // ——— D o m a i n  e v e n t s ———
     IReadOnlyList<IDomainEvent> GetDomainEvents();
-    bool HasDomainEvents { get; } // ★ new
+    bool HasDomainEvents { get; } // ⭐ new
     void ClearDomainEvents();
 
     // ——— E x e c u t e  i n  t x ———
@@ -40,7 +42,9 @@ public interface IWriteUnitOfWork : IDisposable
         CancellationToken ct = default);
 }
 
-/// <summary>Typed UoW exposing its concrete write DbContext.</summary>
+/// <summary>
+/// Generic write unit-of-work with typed context access
+/// </summary>
 public interface IWriteUnitOfWork<out TWriteContext> : IWriteUnitOfWork
     where TWriteContext : class, IWriteDbContext<object>
 {

@@ -27,6 +27,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
             return await next(cancellationToken);
 
         var cacheKey = cacheRequest.CacheKey;
+        // Cache the entire Result<T> to preserve success/failure metadata
         var cachedResponse = await _cachingProvider.GetAsync<TResponse>(cacheKey, cancellationToken);
         if (cachedResponse.Value != null)
         {
@@ -40,6 +41,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         var expirationTime = cacheRequest.AbsoluteExpirationRelativeToNow ??
                              DateTime.Now.AddHours(defaultCacheExpirationInHours);
 
+        // Cache the entire result (including Result<T> wrapper with success/failure metadata)
         await _cachingProvider.SetAsync(cacheKey, response, expirationTime.TimeOfDay, cancellationToken);
 
         _logger.LogDebug("Caching response for {TRequest} with cache key: {CacheKey}", typeof(TRequest).FullName,

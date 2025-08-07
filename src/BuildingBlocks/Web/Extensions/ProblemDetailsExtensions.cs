@@ -1,6 +1,6 @@
-namespace BuildingBlocks.ProblemDetails;
+using BuildingBlocks.Core.Diagnostics;
 
-using Exception;
+namespace BuildingBlocks.Web.Extensions;
 using Grpc.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;

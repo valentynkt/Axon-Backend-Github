@@ -1,11 +1,12 @@
 using FluentValidation;
 using MediatR;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BuildingBlocks.Validation;
 
 public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : class, IRequest<TResponse>
+    where TRequest : class, IAxonRequest<TResponse>
 {
     private IValidator<TRequest>? _validator;
     private readonly IServiceProvider _serviceProvider;

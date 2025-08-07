@@ -1,4 +1,4 @@
-using BuildingBlocks.Exception;
+using BuildingBlocks.Core.Diagnostics;
 using FluentValidation;
 
 namespace BuildingBlocks.Validation
@@ -14,7 +14,7 @@ namespace BuildingBlocks.Validation
             if (!validationResult.IsValid)
             {
                 var errorMessage = validationResult.Errors?.First()?.ErrorMessage ?? "Validation failed";
-                throw new Exception.ValidationException(errorMessage);
+                throw new ValidationException(errorMessage);
             }
         }
     }
