@@ -1,5 +1,5 @@
 using BuildingBlocks.Core.CQRS;
-using BuildingBlocks.Core.Results;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Pagination;
 

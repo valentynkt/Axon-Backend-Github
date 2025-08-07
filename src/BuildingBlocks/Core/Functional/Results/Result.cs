@@ -1,346 +1,428 @@
-using System.Diagnostics.CodeAnalysis;
+using BuildingBlocks.Core.Functional.Options;
 
-#pragma warning disable CA1031 // Do not catch general exception types - intentional for Try methods
-
-namespace BuildingBlocks.Core.Results;
+namespace BuildingBlocks.Core.Functional.Results;
 
 /// <summary>
-/// Represents the result of an operation that can either succeed or fail.
-/// Follows functional programming patterns with method chaining and strong type safety.
-/// Inspired by FluentResults and TypeScript Result patterns.
+/// Complete Result monad for railway-oriented programming.
+/// Thread-safe, immutable, and performance-optimized.
 /// </summary>
-public readonly record struct Result
-{
-    private readonly Error? _error;
-    
-    /// <summary>
-    /// Indicates whether the operation was successful
-    /// </summary>
-    public bool IsSuccess { get; }
-    
-    /// <summary>
-    /// Indicates whether the operation failed
-    /// </summary>
-    public bool IsFailure => !IsSuccess;
-    
-    /// <summary>
-    /// Gets the error if the operation failed
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when accessing Error on a successful result</exception>
-    public Error Error => IsFailure ? _error! : throw new InvalidOperationException("Cannot access Error when Result is successful");
-
-    private Result(bool isSuccess, Error? error = null)
-    {
-        IsSuccess = isSuccess;
-        _error = error;
-    }
-
-    /// <summary>
-    /// Creates a successful result
-    /// </summary>
-    public static Result Success() => new(true);
-    
-    /// <summary>
-    /// Creates a failed result with the specified error
-    /// </summary>
-    public static Result Failure(Error error) => new(false, error);
-    
-    /// <summary>
-    /// Creates a successful result with a value
-    /// </summary>
-    public static Result<T> Success<T>(T value) => Result<T>.Success(value);
-    
-    /// <summary>
-    /// Creates a failed result with a value type
-    /// </summary>
-    public static Result<T> Failure<T>(Error error) => Result<T>.Failure(error);
-
-    /// <summary>
-    /// Executes a function and wraps potential exceptions in a Result
-    /// </summary>
-    public static Result Try(Action action, Func<System.Exception, Error>? errorFactory = null)
-    {
-        try
-        {
-            action();
-            return Success();
-        }
-        catch (System.Exception ex)
-        {
-            var error = errorFactory?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex);
-            return Failure(error);
-        }
-    }
-
-    /// <summary>
-    /// Executes a function and wraps potential exceptions in a Result with value
-    /// </summary>
-    public static Result<T> Try<T>(Func<T> func, Func<System.Exception, Error>? errorFactory = null)
-    {
-        try
-        {
-            var value = func();
-            return Result<T>.Success(value);
-        }
-        catch (System.Exception ex)
-        {
-            var error = errorFactory?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex);
-            return Result<T>.Failure(error);
-        }
-    }
-
-    /// <summary>
-    /// Executes an async function and wraps potential exceptions in a Result
-    /// </summary>
-    public static async Task<Result> TryAsync(Func<Task> func, Func<System.Exception, Error>? errorFactory = null)
-    {
-        try
-        {
-            await func();
-            return Success();
-        }
-        catch (System.Exception ex)
-        {
-            var error = errorFactory?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex);
-            return Failure(error);
-        }
-    }
-
-    /// <summary>
-    /// Executes an async function and wraps potential exceptions in a Result with value
-    /// </summary>
-    public static async Task<Result<T>> TryAsync<T>(Func<Task<T>> func, Func<System.Exception, Error>? errorFactory = null)
-    {
-        try
-        {
-            var value = await func();
-            return Result<T>.Success(value);
-        }
-        catch (System.Exception ex)
-        {
-            var error = errorFactory?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex);
-            return Result<T>.Failure(error);
-        }
-    }
-
-    /// <summary>
-    /// Combines multiple results. Returns success only if all results are successful.
-    /// </summary>
-    public static Result Combine(params Result[] results)
-    {
-        var failures = results.Where(r => r.IsFailure).ToList();
-        if (failures.Count == 0)
-            return Success();
-
-        // For simplicity, return the first error. In advanced scenarios, you might want to aggregate errors.
-        return Failure(failures.First().Error);
-    }
-
-    /// <summary>
-    /// Combines multiple results with values. Returns success only if all results are successful.
-    /// </summary>
-    public static Result<T[]> Combine<T>(params Result<T>[] results)
-    {
-        var failures = results.Where(r => r.IsFailure).ToList();
-        if (failures.Count == 0)
-        {
-            var values = results.Select(r => r.Value).ToArray();
-            return Result<T[]>.Success(values);
-        }
-
-        return Result<T[]>.Failure(failures.First().Error);
-    }
-
-    /// <summary>
-    /// Executes an action if the result is successful
-    /// </summary>
-    public Result OnSuccess(Action action)
-    {
-        if (IsSuccess)
-            action();
-        return this;
-    }
-
-    /// <summary>
-    /// Executes an action if the result is failed
-    /// </summary>
-    public Result OnFailure(Action<Error> action)
-    {
-        if (IsFailure)
-            action(Error);
-        return this;
-    }
-
-    /// <summary>
-    /// Transforms the result based on success or failure
-    /// </summary>
-    public T Match<T>(Func<T> onSuccess, Func<Error, T> onFailure)
-    {
-        return IsSuccess ? onSuccess() : onFailure(Error);
-    }
-
-    /// <summary>
-    /// Implicit conversion from Error to Result
-    /// </summary>
-    public static implicit operator Result(Error error) => Failure(error);
-
-    public override string ToString() => IsSuccess ? "Success" : $"Failure: {Error}";
-}
-
-/// <summary>
-/// Represents the result of an operation that can either succeed with a value or fail.
-/// Supports method chaining and functional programming patterns.
-/// </summary>
-/// <typeparam name="T">The type of the success value</typeparam>
-[SuppressMessage("Design", "CA1000:Do not declare static members on generic types", Justification = "Result pattern requires static factory methods")]
-public readonly record struct Result<T>
+public readonly record struct Result<T> : IResult<T>
 {
     private readonly T? _value;
     private readonly Error? _error;
+    private readonly ResultState _state;
     
-    /// <summary>
-    /// Indicates whether the operation was successful
-    /// </summary>
-    public bool IsSuccess { get; }
-    
-    /// <summary>
-    /// Indicates whether the operation failed
-    /// </summary>
-    public bool IsFailure => !IsSuccess;
-    
-    /// <summary>
-    /// Gets the value if the operation was successful
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when accessing Value on a failed result</exception>
-    public T Value => IsSuccess ? _value! : throw new InvalidOperationException("Cannot access Value when Result is failed");
-    
-    /// <summary>
-    /// Gets the error if the operation failed
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when accessing Error on a successful result</exception>
-    public Error Error => IsFailure ? _error! : throw new InvalidOperationException("Cannot access Error when Result is successful");
-
-    private Result(bool isSuccess, T? value = default, Error? error = null)
+    private Result(T value)
     {
-        IsSuccess = isSuccess;
         _value = value;
-        _error = error;
+        _error = null;
+        _state = ResultState.Success;
     }
-
-    /// <summary>
-    /// Creates a successful result with the specified value
-    /// </summary>
-    public static Result<T> Success(T value) => new(true, value);
+    
+    private Result(Error error)
+    {
+        _value = default;
+        _error = error;
+        _state = ResultState.Failure;
+    }
+    
+    #region Properties
+    
+    public bool IsSuccess => _state == ResultState.Success;
+    public bool IsFailure => _state == ResultState.Failure;
+    
+    public T Value => IsSuccess 
+        ? _value! 
+        : throw new InvalidOperationException($"Cannot access value of failed result: {_error}");
+        
+    public Error Error => IsFailure 
+        ? _error! 
+        : throw new InvalidOperationException("Cannot access error of successful result");
+    
+    #endregion
+    
+    #region Factory Methods
+    
+    public static Result<T> Success(T value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new Result<T>(value);
+    }
+    
+    public static Result<T> Failure(Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return new Result<T>(error);
+    }
+    
+    public static Result<T> From(T? value, Error error)
+    {
+        return value is not null ? Success(value) : Failure(error);
+    }
+    
+    #endregion
+    
+    #region Pattern Matching
     
     /// <summary>
-    /// Creates a failed result with the specified error
+    /// Pattern matching with exhaustive checking
     /// </summary>
-    public static Result<T> Failure(Error error) => new(false, default, error);
-
-    /// <summary>
-    /// Gets the value if successful, otherwise returns the default value
-    /// </summary>
-    public T? ValueOrDefault => IsSuccess ? _value : default;
-
-    /// <summary>
-    /// Gets the value if successful, otherwise returns the specified default value
-    /// </summary>
-    public T GetValueOrDefault(T defaultValue) => IsSuccess ? _value! : defaultValue;
-
-    /// <summary>
-    /// Gets the value if successful, otherwise computes and returns a default value
-    /// </summary>
-    public T GetValueOrDefault(Func<Error, T> defaultValueFactory) => 
-        IsSuccess ? _value! : defaultValueFactory(Error);
-
-    /// <summary>
-    /// Transforms the value if the result is successful
-    /// </summary>
-    public Result<TOutput> Map<TOutput>(Func<T, TOutput> transform)
+    public TResult Match<TResult>(
+        Func<T, TResult> success,
+        Func<Error, TResult> failure) => _state switch
     {
-        return IsSuccess ? Result<TOutput>.Success(transform(_value!)) : Result<TOutput>.Failure(Error);
+        ResultState.Success => success(_value!),
+        ResultState.Failure => failure(_error!),
+        _ => throw new InvalidOperationException($"Invalid state: {_state}")
+    };
+    
+    /// <summary>
+    /// Async pattern matching with cancellation support
+    /// </summary>
+    public async Task<TResult> MatchAsync<TResult>(
+        Func<T, Task<TResult>> success,
+        Func<Error, Task<TResult>> failure,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        
+        return _state switch
+        {
+            ResultState.Success => await success(_value!).ConfigureAwait(false),
+            ResultState.Failure => await failure(_error!).ConfigureAwait(false),
+            _ => throw new InvalidOperationException($"Invalid state: {_state}")
+        };
     }
-
+    
+    #endregion
+    
+    #region Functor Operations (Map)
+    
     /// <summary>
-    /// Transforms the value if the result is successful, allowing the transform to return a Result
+    /// Transforms the success value while preserving the error
     /// </summary>
-    public Result<TOutput> Bind<TOutput>(Func<T, Result<TOutput>> transform)
+    public Result<TNew> Map<TNew>(Func<T, TNew> mapper)
     {
-        return IsSuccess ? transform(_value!) : Result<TOutput>.Failure(Error);
+        ArgumentNullException.ThrowIfNull(mapper);
+        return IsSuccess 
+            ? Result<TNew>.Success(mapper(_value!)) 
+            : Result<TNew>.Failure(_error!);
     }
-
+    
     /// <summary>
-    /// Transforms the error if the result is failed
+    /// Async map with proper exception handling
     /// </summary>
-    public Result<T> MapError(Func<Error, Error> transform)
+    public async Task<Result<TNew>> MapAsync<TNew>(
+        Func<T, Task<TNew>> mapper,
+        CancellationToken ct = default)
     {
-        return IsFailure ? Failure(transform(Error)) : this;
+        ArgumentNullException.ThrowIfNull(mapper);
+        
+        if (!IsSuccess)
+            return Result<TNew>.Failure(_error!);
+            
+        try
+        {
+            var result = await mapper(_value!).ConfigureAwait(false);
+            return Result<TNew>.Success(result);
+        }
+        catch (OperationCanceledException)
+        {
+            return Result<TNew>.Failure(Error.Cancelled());
+        }
+        catch (Exception ex)
+        {
+            return Result<TNew>.Failure(Error.FromException(ex));
+        }
     }
-
+    
+    #endregion
+    
+    #region LINQ Integration
+    
     /// <summary>
-    /// Provides a fallback value or operation if the result is failed
+    /// LINQ Select operator - delegates to Map for functional composition
     /// </summary>
-    public Result<T> OrElse(Func<Error, Result<T>> fallback)
+    public Result<TNew> Select<TNew>(Func<T, TNew> selector) => Map(selector);
+    
+    /// <summary>
+    /// LINQ Where operator - filters success values based on predicate.
+    /// Preserves original error context or allows custom error specification.
+    /// </summary>
+    public Result<T> Where(Func<T, bool> predicate, Error? customError = null)
     {
-        return IsFailure ? fallback(Error) : this;
+        ArgumentNullException.ThrowIfNull(predicate);
+        
+        if (IsFailure)
+            return this; // Preserve original error
+            
+        return predicate(_value!) 
+            ? this 
+            : Result<T>.Failure(customError ?? Error.Validation("Predicate condition not met"));
     }
-
+    
     /// <summary>
-    /// Provides a fallback value if the result is failed
+    /// LINQ Where operator overload with custom error message
     /// </summary>
-    public Result<T> OrElse(T fallbackValue)
+    public Result<T> Where(Func<T, bool> predicate, string errorMessage)
     {
-        return IsFailure ? Success(fallbackValue) : this;
+        return Where(predicate, Error.Validation(errorMessage));
     }
-
+    
     /// <summary>
-    /// Executes an action if the result is successful
+    /// LINQ Where operator overload with error factory
     /// </summary>
-    public Result<T> OnSuccess(Action<T> action)
+    public Result<T> Where(Func<T, bool> predicate, Func<T, Error> errorFactory)
     {
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        
+        if (IsFailure)
+            return this; // Preserve original error
+            
+        return predicate(_value!) 
+            ? this 
+            : Result<T>.Failure(errorFactory(_value!));
+    }
+    
+    #endregion
+    
+    #region Monad Operations (Bind/FlatMap)
+    
+    /// <summary>
+    /// Chains operations that return Result<T>
+    /// </summary>
+    public Result<TNew> Bind<TNew>(Func<T, Result<TNew>> binder)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+        return IsSuccess ? binder(_value!) : Result<TNew>.Failure(_error!);
+    }
+    
+    /// <summary>
+    /// Async bind with cancellation and exception handling
+    /// </summary>
+    public async Task<Result<TNew>> BindAsync<TNew>(
+        Func<T, Task<Result<TNew>>> binder,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+        
+        if (!IsSuccess)
+            return Result<TNew>.Failure(_error!);
+            
+        try
+        {
+            return await binder(_value!).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return Result<TNew>.Failure(Error.Cancelled());
+        }
+        catch (Exception ex)
+        {
+            return Result<TNew>.Failure(Error.FromException(ex));
+        }
+    }
+    
+    #endregion
+    
+    #region Error Recovery
+    
+    /// <summary>
+    /// Recover from failure with a fallback value
+    /// </summary>
+    public Result<T> Recover(Func<Error, T> recovery)
+    {
+        ArgumentNullException.ThrowIfNull(recovery);
+        return IsFailure 
+            ? Result<T>.Success(recovery(_error!)) 
+            : this;
+    }
+    
+    /// <summary>
+    /// Recover with another Result
+    /// </summary>
+    public Result<T> RecoverWith(Func<Error, Result<T>> recovery)
+    {
+        ArgumentNullException.ThrowIfNull(recovery);
+        return IsFailure ? recovery(_error!) : this;
+    }
+    
+    /// <summary>
+    /// Provide default value on failure
+    /// </summary>
+    public T GetOrElse(T defaultValue)
+    {
+        return IsSuccess ? _value! : defaultValue;
+    }
+    
+    /// <summary>
+    /// Provide default value from factory on failure
+    /// </summary>
+    public T GetOrElse(Func<Error, T> defaultFactory)
+    {
+        ArgumentNullException.ThrowIfNull(defaultFactory);
+        return IsSuccess ? _value! : defaultFactory(_error!);
+    }
+    
+    #endregion
+    
+    #region Side Effects
+    
+    /// <summary>
+    /// Execute action without breaking the chain
+    /// </summary>
+    public Result<T> Tap(Action<T> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        
         if (IsSuccess)
             action(_value!);
+            
         return this;
     }
-
+    
     /// <summary>
-    /// Executes an action if the result is failed
+    /// Execute action on failure
     /// </summary>
-    public Result<T> OnFailure(Action<Error> action)
+    public Result<T> TapError(Action<Error> action)
     {
+        ArgumentNullException.ThrowIfNull(action);
+        
         if (IsFailure)
-            action(Error);
+            action(_error!);
+            
         return this;
     }
-
+    
+    #endregion
+    
+    #region Conversions
+    
     /// <summary>
-    /// Transforms the result based on success or failure
+    /// Convert to Option - Success becomes Some, Failure becomes None
     /// </summary>
-    public TOutput Match<TOutput>(Func<T, TOutput> onSuccess, Func<Error, TOutput> onFailure)
+    public Option<T> ToOption()
     {
-        return IsSuccess ? onSuccess(_value!) : onFailure(Error);
+        return IsSuccess ? Option<T>.Some(_value!) : Option<T>.None();
     }
-
-    /// <summary>
-    /// Converts a Result&lt;T&gt; to a non-generic Result
-    /// </summary>
-    public Result ToResult() => IsSuccess ? Result.Success() : Result.Failure(Error);
-
-    /// <summary>
-    /// Implicit conversion from value to successful Result
-    /// </summary>
-    public static implicit operator Result<T>(T value) => Success(value);
     
     /// <summary>
-    /// Implicit conversion from Error to failed Result
+    /// Convert to Option with error handling callback
     /// </summary>
-    public static implicit operator Result<T>(Error error) => Failure(error);
+    public Option<T> ToOption(Action<Error> onError)
+    {
+        ArgumentNullException.ThrowIfNull(onError);
+        
+        if (IsFailure)
+            onError(_error!);
+            
+        return ToOption();
+    }
     
     /// <summary>
-    /// Implicit conversion from Result&lt;T&gt; to non-generic Result
+    /// Convert to nullable
     /// </summary>
-    public static implicit operator Result(Result<T> result) => 
-        result.IsSuccess ? Result.Success() : Result.Failure(result.Error);
+    public T? ToNullable()
+    {
+        return IsSuccess ? _value : default;
+    }
+    
+    #endregion
+    
+    #region Operators
+    
+    public static implicit operator Result<T>(T value)
+    {
+        return Success(value);
+    }
+    
+    public static implicit operator Result<T>(Error error)
+    {
+        return Failure(error);
+    }
+    
+    public static bool operator true(Result<T> result)
+    {
+        return result.IsSuccess;
+    }
+    
+    public static bool operator false(Result<T> result)
+    {
+        return result.IsFailure;
+    }
+    
+    #endregion
+}
 
-    public override string ToString() => IsSuccess ? $"Success: {_value}" : $"Failure: {Error}";
+/// <summary>
+/// Non-generic Result for operations that don't return values
+/// </summary>
+public readonly record struct Result : IResult
+{
+    private readonly Error? _error;
+    private readonly bool _isSuccess;
+    
+    private Result(bool isSuccess, Error? error = null)
+    {
+        _isSuccess = isSuccess;
+        _error = error;
+    }
+    
+    public bool IsSuccess => _isSuccess;
+    public bool IsFailure => !_isSuccess;
+    
+    public Error Error => IsFailure 
+        ? _error! 
+        : throw new InvalidOperationException("Cannot access error of successful result");
+    
+    public static Result Success() => new(true);
+    public static Result Failure(Error error) => new(false, error);
+    
+    public TResult Match<TResult>(
+        Func<TResult> success,
+        Func<Error, TResult> failure)
+    {
+        return IsSuccess ? success() : failure(_error!);
+    }
+    
+    public async Task<TResult> MatchAsync<TResult>(
+        Func<Task<TResult>> success,
+        Func<Error, Task<TResult>> failure,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        
+        return IsSuccess 
+            ? await success().ConfigureAwait(false)
+            : await failure(_error!).ConfigureAwait(false);
+    }
+    
+    public Result<T> Map<T>(Func<T> mapper)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        return IsSuccess 
+            ? Result<T>.Success(mapper()) 
+            : Result<T>.Failure(_error!);
+    }
+    
+    public Result<T> Bind<T>(Func<Result<T>> binder)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+        return IsSuccess ? binder() : Result<T>.Failure(_error!);
+    }
+    
+    public static implicit operator Result(Error error)
+    {
+        return Failure(error);
+    }
+}
+
+/// <summary>
+/// Result state enumeration for pattern matching
+/// </summary>
+internal enum ResultState : byte
+{
+    Success = 1,
+    Failure = 2
 }

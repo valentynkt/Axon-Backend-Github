@@ -7,6 +7,29 @@
 
 ---
 
+## 🚨 Critical Fixes Applied
+
+### 1. Fixed Manual Version Management
+**Issue**: Entity.Touch() manually incremented Version, which is dangerous for optimistic concurrency.
+**Fix**: Version is now managed exclusively by the ORM (EF Core with [Timestamp] or .IsRowVersion()).
+
+### 2. Fixed Unsafe ApplyChange Pattern  
+**Issue**: ApplyChange() applied state changes THEN checked invariants, leaving aggregates in invalid states on failure.
+**Fix**: Business rules must be checked BEFORE calling ApplyChange(). Method now assumes preconditions are valid.
+
+### 3. Fixed ValueObject Creation Inconsistency
+**Issue**: Constructors threw exceptions AND factory methods returned Results, violating functional principles.
+**Fix**: All constructors are now private/protected. Only Result-based Create() factory methods are exposed.
+
+### 4. Proper State Management Flow
+The corrected flow for aggregate operations:
+1. **Check Business Rules** (with RuleBuilder)  
+2. **Validate Value Objects** (with Result-based factories)
+3. **Apply State Changes** (with ApplyChange - assumes all preconditions met)
+4. **Raise Domain Events** (after successful state change)
+
+---
+
 ## 📋 Executive Summary
 
 This epic transforms the domain layer from anemic models to **rich domain models** following tactical DDD patterns:
@@ -108,7 +131,8 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     public DateTime? DeletedAt { get; protected set; }
     
     /// <summary>
-    /// Version for optimistic locking
+    /// Version for optimistic locking - managed by ORM only
+    /// Should be configured with [Timestamp] attribute or .IsRowVersion() in EF Core
     /// </summary>
     public uint Version { get; protected set; }
     
@@ -149,11 +173,13 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     
     /// <summary>
     /// Update the entity's modification timestamp
+    /// Version is managed automatically by the ORM for optimistic concurrency
     /// </summary>
     protected void Touch()
     {
         UpdatedAt = DateTime.UtcNow;
-        Version++;
+        // Version is managed by ORM (e.g., [Timestamp] or .IsRowVersion())
+        // Manual increment is dangerous and leads to state mismatch
     }
     
     /// <summary>
@@ -344,8 +370,10 @@ public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
     }
     
     /// <summary>
-    /// Ensure all invariants are satisfied
+    /// Check invariants for validation purposes (not for enforcement)
+    /// Use Validate() method directly instead of this helper
     /// </summary>
+    [Obsolete("Use Validate() method directly. Invariants should not be used for enforcement after state changes.")]
     protected Result<Unit> EnsureInvariants()
     {
         var validation = Validate();
@@ -359,48 +387,58 @@ public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
     #region State Management
     
     /// <summary>
-    /// Apply state changes with invariant checking
+    /// Apply state changes safely - business rules must be checked BEFORE calling this
+    /// This method assumes all preconditions have been validated
     /// </summary>
     protected Result<Unit> ApplyChange(Action stateChange)
     {
         ArgumentNullException.ThrowIfNull(stateChange);
         
-        // Apply the change
+        // Apply the state change (preconditions must be checked by caller)
         stateChange();
-        
-        // Check invariants
-        var invariantResult = EnsureInvariants();
-        if (invariantResult.IsFailure)
-        {
-            // Invariants failed - this should not happen if business rules are correct
-            throw new DomainException("Invariant violation after state change", invariantResult.Error);
-        }
         
         // Update modification tracking
         Touch();
+        
+        // Invariants should always be satisfied if business rules were checked properly
+        // We can optionally validate in DEBUG builds for development safety
+#if DEBUG
+        var validation = Validate();
+        if (validation.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                $"Invariant violation detected after state change. This indicates incorrect business rule validation. " +
+                $"Errors: {string.Join("; ", validation.Errors.Select(e => e.Message))}");
+        }
+#endif
         
         return Result<Unit>.Success(Unit.Value);
     }
     
     /// <summary>
-    /// Apply async state changes with invariant checking
+    /// Apply async state changes safely - business rules must be checked BEFORE calling this
+    /// This method assumes all preconditions have been validated
     /// </summary>
     protected async Task<Result<Unit>> ApplyChangeAsync(Func<Task> stateChangeAsync)
     {
         ArgumentNullException.ThrowIfNull(stateChangeAsync);
         
-        // Apply the change
+        // Apply the async state change (preconditions must be checked by caller)
         await stateChangeAsync().ConfigureAwait(false);
-        
-        // Check invariants
-        var invariantResult = EnsureInvariants();
-        if (invariantResult.IsFailure)
-        {
-            throw new DomainException("Invariant violation after async state change", invariantResult.Error);
-        }
         
         // Update modification tracking
         Touch();
+        
+        // Invariants should always be satisfied if business rules were checked properly
+#if DEBUG
+        var validation = Validate();
+        if (validation.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                $"Invariant violation detected after async state change. This indicates incorrect business rule validation. " +
+                $"Errors: {string.Join("; ", validation.Errors.Select(e => e.Message))}");
+        }
+#endif
         
         return Result<Unit>.Success(Unit.Value);
     }
@@ -497,8 +535,10 @@ public abstract record ValueObject
     }
     
     /// <summary>
-    /// Ensure the value object is valid after creation
+    /// OBSOLETE: Use Result-based factory methods instead of exception-throwing validation
+    /// This method breaks the functional programming principles established in Epic 1
     /// </summary>
+    [Obsolete("Use Result-based Create() factory methods. Exception-based validation violates functional principles.")]
     protected void EnsureValid()
     {
         var validation = Validate();
@@ -512,15 +552,21 @@ public abstract record ValueObject
 
 /// <summary>
 /// Base class for single-value value objects
+/// All value objects must be created via Result-based factory methods
 /// </summary>
 public abstract record SingleValueObject<T> : ValueObject
 {
     public T Value { get; }
     
+    /// <summary>
+    /// Protected constructor - use static Create methods for instantiation
+    /// Value objects should only be created through validated factory methods
+    /// </summary>
     protected SingleValueObject(T value)
     {
         Value = value;
-        EnsureValid(); // Validate immediately upon creation
+        // No validation here - validation is responsibility of the factory method
+        // This ensures consistent Result-based creation pattern
     }
     
     protected override IEnumerable<object?> GetEqualityComponents()
@@ -618,11 +664,15 @@ public sealed record Money : ValueObject
     public decimal Amount { get; }
     public Currency Currency { get; }
     
+    /// <summary>
+    /// Private constructor - use Create() factory method for instantiation
+    /// No validation here - validation is responsibility of the factory method
+    /// </summary>
     private Money(decimal amount, Currency currency)
     {
         Amount = amount;
         Currency = currency;
-        EnsureValid();
+        // No EnsureValid() call - validation done in Create() method
     }
     
     /// <summary>
@@ -1514,6 +1564,82 @@ Epic 2 is complete when:
 
 ## 🚀 Usage Examples
 
+### Corrected Patterns Guide
+
+#### ❌ WRONG: Manual Version Management
+```csharp
+protected void Touch()
+{
+    UpdatedAt = DateTime.UtcNow;
+    Version++; // DANGEROUS - causes state mismatch with database
+}
+```
+
+#### ✅ CORRECT: ORM-Managed Versioning
+```csharp
+protected void Touch()
+{
+    UpdatedAt = DateTime.UtcNow;
+    // Version managed by EF Core with [Timestamp] attribute
+}
+```
+
+#### ❌ WRONG: Post-Change Invariant Checking
+```csharp
+protected Result<Unit> ApplyChange(Action stateChange)
+{
+    stateChange(); // State changed first
+    
+    if (EnsureInvariants().IsFailure) // Then check invariants
+    {
+        // TOO LATE - object is already in invalid state!
+        throw new DomainException("Invariant violated");
+    }
+}
+```
+
+#### ✅ CORRECT: Pre-Change Business Rule Validation
+```csharp
+public Result<Unit> SomeOperation(parameters...)
+{
+    // 1. Check business rules FIRST
+    var rules = new RuleBuilder()
+        .Must(condition, "CODE", "message")
+        .Build();
+    if (rules.IsFailure) return rules;
+    
+    // 2. Apply change (all preconditions met)
+    return ApplyChange(() => {
+        // Safe state modification
+    });
+}
+```
+
+#### ❌ WRONG: Exception-Based Value Object Creation
+```csharp
+public Email(string value)
+{
+    Value = value;
+    EnsureValid(); // Throws exceptions - violates functional principles
+}
+```
+
+#### ✅ CORRECT: Result-Based Value Object Creation  
+```csharp
+private Email(string value) // Private constructor
+{
+    Value = value; // No validation here
+}
+
+public static Result<Email> Create(string value)
+{
+    // Validation returns Result, never throws
+    if (string.IsNullOrEmpty(value))
+        return Result<Email>.Failure(Error.Validation("Email required"));
+    return Result<Email>.Success(new Email(value));
+}
+```
+
 ### Rich Aggregate Example
 ```csharp
 public sealed class Order : AggregateRoot<OrderId>
@@ -1542,7 +1668,7 @@ public sealed class Order : AggregateRoot<OrderId>
     
     public Result<Unit> AddItem(ProductId productId, Money unitPrice, int quantity)
     {
-        // Check business rules
+        // 1. Check all business rules FIRST (before any state changes)
         var ruleResult = new RuleBuilder()
             .Must(Status == OrderStatus.Draft, "ORDER_NOT_DRAFT", "Cannot modify confirmed order")
             .Must(quantity > 0, "INVALID_QUANTITY", "Quantity must be positive")
@@ -1551,14 +1677,19 @@ public sealed class Order : AggregateRoot<OrderId>
             
         if (ruleResult.IsFailure)
             return ruleResult;
+        
+        // 2. Create value objects with validation
+        var itemResult = OrderItem.Create(productId, unitPrice, quantity);
+        if (itemResult.IsFailure)
+            return itemResult.Error;
             
-        // Apply state change
+        // 3. Apply state change (all preconditions validated)
         return ApplyChange(() =>
         {
-            var item = OrderItem.Create(productId, unitPrice, quantity).Value;
-            _items.Add(item);
+            _items.Add(itemResult.Value);
             RecalculateTotal();
             
+            // 4. Raise domain events after successful state change
             RaiseDomainEvent(new OrderItemAddedEvent(Id, productId, quantity));
         });
     }
@@ -1640,4 +1771,32 @@ public class OrdersByUserSpecification : Specification<Order>
 
 ---
 
-**END OF EPIC 2: DOMAIN ENHANCEMENT**
+## 🎯 Implementation Principles (Corrected)
+
+### Aggregate State Management
+1. **Never modify state before validating business rules**
+2. **Use ApplyChange() only after all preconditions are met**  
+3. **Invariants are for validation, not enforcement**
+4. **Version is managed by ORM, never manually**
+
+### Value Object Creation
+1. **All constructors must be private/protected**
+2. **Only expose Result-based static Create() methods**
+3. **Never use exceptions for control flow**
+4. **Validation happens in factory, not constructor**
+
+### Business Rule Validation
+1. **Check rules BEFORE state changes, not after**
+2. **Use RuleBuilder for composable validation**
+3. **Return Result/Validation, never throw**
+4. **Invariants check current state, don't enforce changes**
+
+### Domain Events
+1. **Raise events AFTER successful state changes**
+2. **Events represent facts, not intentions**  
+3. **No event sourcing in MVP - events are for integration**
+4. **Clear events after dispatch**
+
+---
+
+**END OF EPIC 2: DOMAIN ENHANCEMENT (CORRECTED)**

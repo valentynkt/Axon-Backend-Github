@@ -1,6 +1,6 @@
 #pragma warning disable CA1031 // Do not catch general exception types - intentional for ToResultAsync methods
 
-namespace BuildingBlocks.Core.Results;
+namespace BuildingBlocks.Core.Functional.Results;
 
 /// <summary>
 /// Extension methods for Result types to support async operations and enhanced functionality

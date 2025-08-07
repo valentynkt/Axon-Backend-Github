@@ -1,7 +1,7 @@
 // This file serves as a module index for the Results namespace
 // It provides global using statements and type aliases for convenience
 
-namespace BuildingBlocks.Core.Results;
+namespace BuildingBlocks.Core.Functional.Results;
 
 /// <summary>
 /// Module marker and utilities for the Results namespace.

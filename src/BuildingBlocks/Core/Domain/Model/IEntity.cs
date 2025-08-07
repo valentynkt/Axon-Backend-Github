@@ -1,28 +1,35 @@
+using BuildingBlocks.Core.Domain.Primitives;
+
 namespace BuildingBlocks.Core.Model;
 
 /// <summary>
-/// Base interface for all entities with strongly-typed identifier.
-/// Minimal interface following ISP - only identity concern.
+/// Interface for entities with strongly-typed identifiers following Epic 2 specifications.
+/// Integrates with IStrongId system for type safety.
 /// </summary>
-/// <typeparam name="T">The type of the entity identifier</typeparam>
-public interface IBaseEntity<T> : IIdentifiable<T> where T : struct, IEquatable<T>
+/// <typeparam name="TId">The type of the entity identifier implementing IStrongId</typeparam>
+public interface IEntity<TId> : IEntity
+    where TId : IStrongId
 {
+    TId Id { get; }
 }
 
 /// <summary>
-/// Interface for entities that support versioning and soft deletion.
-/// Extends base entity with concurrency and deletion concerns.
+/// Non-generic entity interface with core entity concerns.
+/// Provides audit trail, versioning, and soft delete capabilities.
 /// </summary>
-/// <typeparam name="T">The type of the entity identifier</typeparam>
-public interface IEntity<T> : IBaseEntity<T>, IVersioned, ISoftDeletable where T : struct, IEquatable<T>
+public interface IEntity : IAuditable
 {
+    uint Version { get; }
+    bool IsDeleted { get; }
+    DateTime? DeletedAt { get; }
 }
 
 /// <summary>
-/// Interface for entities that support audit tracking.
-/// Composes base entity with audit trail concerns following ISP.
+/// Interface for auditable entities with timestamp tracking.
+/// Follows Single Responsibility Principle for audit concerns.
 /// </summary>
-/// <typeparam name="T">The type of the entity identifier</typeparam>
-public interface IAuditableEntity<T> : IBaseEntity<T>, IAuditable where T : struct, IEquatable<T>
+public interface IAuditable
 {
+    DateTime CreatedAt { get; }
+    DateTime UpdatedAt { get; }
 }

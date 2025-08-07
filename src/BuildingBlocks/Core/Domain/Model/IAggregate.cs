@@ -1,42 +1,35 @@
-using BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Domain.Primitives;
+using BuildingBlocks.Core.Domain.Rules;
+using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Functional.Validation;
 
 namespace BuildingBlocks.Core.Model;
 
 /// <summary>
-/// Base interface for all aggregate roots.
-/// Defines domain event handling capabilities required by all aggregates.
-/// Follows Interface Segregation Principle by focusing solely on domain events.
+/// Interface for aggregate roots following Epic 2 specifications.
+/// Integrates with IStrongId system and Epic 1 functional foundation.
 /// </summary>
-public interface IBaseAggregate
+/// <typeparam name="TId">The type of the aggregate identifier implementing IStrongId</typeparam>
+public interface IAggregateRoot<TId> : IEntity<TId>
+    where TId : IStrongId
 {
     /// <summary>
-    /// Gets the list of domain events that have occurred on this aggregate.
+    /// Domain events to be dispatched after persistence
     /// </summary>
     IReadOnlyList<IDomainEvent> DomainEvents { get; }
     
     /// <summary>
-    /// Clears and returns all domain events from this aggregate.
-    /// Should be called after events are dispatched.
+    /// Clear all domain events (called after dispatch)
     /// </summary>
-    IEvent[] ClearDomainEvents();
-}
-
-/// <summary>
-/// Interface for aggregate roots with identity, versioning, and soft deletion support.
-/// Composes base aggregate capabilities with entity lifecycle management.
-/// This is the standard interface that most aggregates should implement.
-/// </summary>
-/// <typeparam name="T">The type of the aggregate identifier</typeparam>
-public interface IAggregate<T> : IBaseAggregate, IEntity<T> where T : struct, IEquatable<T>
-{
-}
-
-/// <summary>
-/// Interface for aggregate roots that require full audit trail capabilities.
-/// Extends base aggregate with comprehensive audit tracking.
-/// Use this for aggregates that need to track who created/modified them.
-/// </summary>
-/// <typeparam name="T">The type of the aggregate identifier</typeparam>
-public interface IAuditableAggregate<T> : IBaseAggregate, IAuditableEntity<T>, IVersioned, ISoftDeletable where T : struct, IEquatable<T>
-{
+    void ClearDomainEvents();
+    
+    /// <summary>
+    /// Validate aggregate state against all invariants
+    /// </summary>
+    Validation<Unit> Validate();
+    
+    /// <summary>
+    /// Get all broken business rules
+    /// </summary>
+    IReadOnlyList<IBusinessRule> GetBrokenRules();
 }

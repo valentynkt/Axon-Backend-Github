@@ -1,228 +1,240 @@
-using Ardalis.GuardClauses;
-
-namespace BuildingBlocks.Core.Results;
+namespace BuildingBlocks.Core.Functional;
 
 /// <summary>
-/// Represents an error that can occur during operation execution.
-/// Provides a comprehensive error model with categorization, context, and metadata support.
+/// Immutable error record with comprehensive factory methods.
+/// Designed for railway-oriented programming and error accumulation.
 /// </summary>
 public sealed record Error
 {
-    /// <summary>
-    /// Unique error code for programmatic identification
-    /// </summary>
     public string Code { get; }
-    
-    /// <summary>
-    /// Human-readable error message
-    /// </summary>
     public string Message { get; }
-    
-    /// <summary>
-    /// Category/type of the error for proper handling
-    /// </summary>
+    public string? Details { get; }
     public ErrorType Type { get; }
-    
-    /// <summary>
-    /// Optional inner exception that caused this error
-    /// </summary>
-    public System.Exception? InnerException { get; }
-    
-    /// <summary>
-    /// Optional metadata for additional error context
-    /// </summary>
-    public IReadOnlyDictionary<string, object>? Metadata { get; }
+    public Exception? Exception { get; }
+    public Dictionary<string, object> Metadata { get; }
 
-    private Error(string code, string message, ErrorType type, System.Exception? innerException = null, IReadOnlyDictionary<string, object>? metadata = null)
+    private Error(
+        string code,
+        string message,
+        ErrorType type,
+        string? details = null,
+        Exception? exception = null,
+        Dictionary<string, object>? metadata = null)
     {
-        Code = Guard.Against.NullOrWhiteSpace(code, nameof(code));
-        Message = Guard.Against.NullOrWhiteSpace(message, nameof(message));
+        Code = code ?? throw new ArgumentNullException(nameof(code));
+        Message = message ?? throw new ArgumentNullException(nameof(message));
         Type = type;
-        InnerException = innerException;
-        Metadata = metadata;
+        Details = details;
+        Exception = exception;
+        Metadata = metadata ?? new Dictionary<string, object>();
     }
 
-    /// <summary>
-    /// Creates a validation error
-    /// </summary>
-    public static Error Validation(string message, string code = "VALIDATION_ERROR", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Validation, metadata: metadata);
+    #region Factory Methods
 
     /// <summary>
-    /// Creates a not found error
+    /// Create a validation error
     /// </summary>
-    public static Error NotFound(string message, string code = "NOT_FOUND", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.NotFound, metadata: metadata);
-
-    /// <summary>
-    /// Creates a conflict error
-    /// </summary>
-    public static Error Conflict(string message, string code = "CONFLICT", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Conflict, metadata: metadata);
-
-    /// <summary>
-    /// Creates an internal/system error
-    /// </summary>
-    public static Error InternalError(string message, string code = "INTERNAL_ERROR", System.Exception? innerException = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.InternalError, innerException, metadata);
-
-    /// <summary>
-    /// Creates an external service error
-    /// </summary>
-    public static Error ExternalService(string message, string code = "EXTERNAL_SERVICE_ERROR", System.Exception? innerException = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.ExternalService, innerException, metadata);
-
-    /// <summary>
-    /// Creates an unauthorized error
-    /// </summary>
-    public static Error Unauthorized(string message, string code = "UNAUTHORIZED", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Unauthorized, metadata: metadata);
-
-    /// <summary>
-    /// Creates a forbidden error
-    /// </summary>
-    public static Error Forbidden(string message, string code = "FORBIDDEN", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Forbidden, metadata: metadata);
-
-    /// <summary>
-    /// Creates a persistence/database error
-    /// </summary>
-    public static Error Persistence(string message, string code = "PERSISTENCE_ERROR", System.Exception? innerException = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Persistence, innerException, metadata);
-
-    /// <summary>
-    /// Creates a business rule violation error
-    /// </summary>  
-    public static Error BusinessRule(string message, string code = "BUSINESS_RULE_VIOLATION", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.BusinessRule, metadata: metadata);
-
-    /// <summary>
-    /// Creates a concurrency error
-    /// </summary>
-    public static Error Concurrency(string message, string code = "CONCURRENCY_ERROR", IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Concurrency, metadata: metadata);
-
-    /// <summary>
-    /// Creates a timeout error
-    /// </summary>
-    public static Error Timeout(string message, string code = "TIMEOUT_ERROR", System.Exception? innerException = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.Timeout, innerException, metadata);
-
-    /// <summary>
-    /// Creates a custom error with specified type
-    /// </summary>
-    public static Error Custom(string code, string message, ErrorType type, System.Exception? innerException = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, type, innerException, metadata);
-
-    /// <summary>
-    /// Creates an error from an exception
-    /// </summary>
-    public static Error FromException(System.Exception exception, string? code = null, ErrorType type = ErrorType.InternalError)
+    public static Error Validation(string message, string? code = null, string? details = null)
     {
-        var errorCode = code ?? exception.GetType().Name.Replace("Exception", "").ToUpperInvariant();
-        return new(errorCode, exception.Message, type, exception);
+        return new Error(
+            code ?? "VALIDATION_FAILED",
+            message,
+            ErrorType.Validation,
+            details);
     }
 
     /// <summary>
-    /// Adds metadata to the error
+    /// Create a business rule violation error
+    /// </summary>
+    public static Error BusinessRule(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "BUSINESS_RULE_VIOLATION",
+            message,
+            ErrorType.BusinessRule,
+            details);
+    }
+
+    /// <summary>
+    /// Create an aggregate/domain error
+    /// </summary>
+    public static Error Aggregate(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "AGGREGATE_ERROR",
+            message,
+            ErrorType.Aggregate,
+            details);
+    }
+
+    /// <summary>
+    /// Create a not found error
+    /// </summary>
+    public static Error NotFound(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "NOT_FOUND",
+            message,
+            ErrorType.NotFound,
+            details);
+    }
+
+    /// <summary>
+    /// Create a conflict error
+    /// </summary>
+    public static Error Conflict(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "CONFLICT",
+            message,
+            ErrorType.Conflict,
+            details);
+    }
+
+    /// <summary>
+    /// Create a cancellation error
+    /// </summary>
+    public static Error Cancelled(string message = "Operation was cancelled", string? code = null)
+    {
+        return new Error(
+            code ?? "OPERATION_CANCELLED",
+            message,
+            ErrorType.Cancellation);
+    }
+
+    /// <summary>
+    /// Create an authorization error
+    /// </summary>
+    public static Error Unauthorized(string message = "Access denied", string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "UNAUTHORIZED",
+            message,
+            ErrorType.Authorization,
+            details);
+    }
+
+    /// <summary>
+    /// Create a system/infrastructure error
+    /// </summary>
+    public static Error System(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "SYSTEM_ERROR",
+            message,
+            ErrorType.System,
+            details);
+    }
+
+    /// <summary>
+    /// Create error from exception with proper categorization
+    /// </summary>
+    public static Error FromException(Exception exception, string? code = null)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var errorType = exception switch
+        {
+            ArgumentException or ArgumentNullException => ErrorType.Validation,
+            UnauthorizedAccessException => ErrorType.Authorization,
+            OperationCanceledException => ErrorType.Cancellation,
+            NotImplementedException => ErrorType.System,
+            _ => ErrorType.System
+        };
+
+        return new Error(
+            code ?? exception.GetType().Name.Replace("Exception", "").ToUpperInvariant(),
+            exception.Message,
+            errorType,
+            exception.StackTrace,
+            exception);
+    }
+
+    /// <summary>
+    /// Create an aggregated error from multiple errors
+    /// </summary>
+    public static Error Aggregate(params Error[] errors)
+    {
+        if (errors == null || errors.Length == 0)
+            throw new ArgumentException("At least one error is required", nameof(errors));
+
+        if (errors.Length == 1)
+            return errors[0];
+
+        var messages = errors.Select(e => e.Message).ToArray();
+        var combinedMessage = string.Join("; ", messages);
+
+        var metadata = new Dictionary<string, object>
+        {
+            ["ErrorCount"] = errors.Length,
+            ["Errors"] = errors.Select(e => new { e.Code, e.Message, e.Type }).ToArray()
+        };
+
+        return new Error(
+            "AGGREGATE_ERROR",
+            $"Multiple errors occurred: {combinedMessage}",
+            ErrorType.Aggregate,
+            string.Join("\n", errors.Select(e => $"- {e.Code}: {e.Message}")),
+            metadata: metadata);
+    }
+
+    /// <summary>
+    /// Create error with custom metadata
+    /// </summary>
+    public static Error WithMetadata(
+        string code,
+        string message,
+        ErrorType type,
+        Dictionary<string, object> metadata)
+    {
+        return new Error(code, message, type, metadata: metadata);
+    }
+
+    #endregion
+
+    #region Fluent Configuration
+
+    /// <summary>
+    /// Add details to the error
+    /// </summary>
+    public Error WithDetails(string details)
+    {
+        return this with { Details = details };
+    }
+
+    /// <summary>
+    /// Add metadata to the error
     /// </summary>
     public Error WithMetadata(string key, object value)
     {
-        var existingMetadata = Metadata ?? new Dictionary<string, object>();
-        var newMetadata = new Dictionary<string, object>(existingMetadata) { [key] = value };
-        return new Error(Code, Message, Type, InnerException, newMetadata);
+        var newMetadata = new Dictionary<string, object>(Metadata) { [key] = value };
+        return this with { Metadata = newMetadata };
     }
 
     /// <summary>
-    /// Adds multiple metadata entries to the error
+    /// Add exception context to the error
     /// </summary>
-    public Error WithMetadata(IReadOnlyDictionary<string, object> metadata)
+    public Error WithException(Exception exception)
     {
-        if (metadata.Count == 0) return this;
-        
-        var existingMetadata = Metadata ?? new Dictionary<string, object>();
-        var newMetadata = new Dictionary<string, object>(existingMetadata);
-        foreach (var kvp in metadata)
-        {
-            newMetadata[kvp.Key] = kvp.Value;
-        }
-        return new Error(Code, Message, Type, InnerException, newMetadata);
+        return this with { Exception = exception };
     }
 
-    /// <summary>
-    /// Gets metadata value by key
-    /// </summary>
-    public T? GetMetadata<T>(string key) where T : class
-    {
-        return Metadata?.TryGetValue(key, out var value) == true ? value as T : null;
-    }
-
-    /// <summary>
-    /// Checks if metadata contains a specific key
-    /// </summary>
-    public bool HasMetadata(string key) => Metadata?.ContainsKey(key) == true;
+    #endregion
 
     public override string ToString() => $"[{Type}] {Code}: {Message}";
 }
 
 /// <summary>
-/// Represents the type/category of error that occurred.
-/// Used for proper error handling and response mapping.
+/// Error type enumeration for categorization and handling
 /// </summary>
 public enum ErrorType
 {
-    /// <summary>
-    /// Input validation failed
-    /// </summary>
-    Validation,
-    
-    /// <summary>
-    /// Requested resource was not found
-    /// </summary>
-    NotFound,
-    
-    /// <summary>
-    /// Operation conflicts with current state
-    /// </summary>
-    Conflict,
-    
-    /// <summary>
-    /// Internal system error
-    /// </summary>
-    InternalError,
-    
-    /// <summary>
-    /// External service/dependency error
-    /// </summary>
-    ExternalService,
-    
-    /// <summary>
-    /// Authentication required
-    /// </summary>
-    Unauthorized,
-    
-    /// <summary>
-    /// Access denied
-    /// </summary>
-    Forbidden,
-    
-    /// <summary>
-    /// Database/persistence error
-    /// </summary>
-    Persistence,
-    
-    /// <summary>
-    /// Business rule violation
-    /// </summary>
-    BusinessRule,
-    
-    /// <summary>
-    /// Concurrency/optimistic locking error
-    /// </summary>
-    Concurrency,
-    
-    /// <summary>
-    /// Operation timeout
-    /// </summary>
-    Timeout
+    Validation = 1,
+    BusinessRule = 2,
+    Aggregate = 3,
+    NotFound = 4,
+    Conflict = 5,
+    Authorization = 6,
+    Cancellation = 7,
+    System = 8
 }

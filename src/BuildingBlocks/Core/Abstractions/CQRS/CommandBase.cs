@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Results;
+using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using MassTransit;
 

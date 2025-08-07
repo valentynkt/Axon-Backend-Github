@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BuildingBlocks.Core.Results;
+namespace BuildingBlocks.Core.Functional.Results;
 
 /// <summary>
 /// Extension methods for Result types that provide common validation patterns

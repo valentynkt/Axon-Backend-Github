@@ -16,6 +16,7 @@ This epic establishes the **complete functional programming foundation** for the
 - ✅ **Unit Type** - Functional equivalent of void
 - ✅ **Validation<T>** - Error accumulation for complex validation
 - ✅ **Enhanced StrongId** - Type-safe identifiers
+- ✅ **Error Contract** - Complete error type system
 - ✅ **MediatR Integration** - Functional behaviors and pipelines
 
 ---
@@ -26,6 +27,7 @@ This epic establishes the **complete functional programming foundation** for the
 ```
 Core/Functional/
 ├── Unit.cs                    # Unit type for void operations
+├── Error.cs                   # Complete error contract
 ├── Results/                   # Complete Result<T> implementation
 │   ├── Result.cs             # Main Result<T> monad
 │   ├── IResult.cs            # Result interface
@@ -43,6 +45,259 @@ Core/Functional/
 ---
 
 ## 🔧 Implementation Details
+
+### 1.0 Error Contract
+
+**File:** `Core/Functional/Error.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Functional;
+
+/// <summary>
+/// Immutable error record with comprehensive factory methods.
+/// Designed for railway-oriented programming and error accumulation.
+/// </summary>
+public sealed record Error
+{
+    public string Code { get; }
+    public string Message { get; }
+    public string? Details { get; }
+    public ErrorType Type { get; }
+    public Exception? Exception { get; }
+    public Dictionary<string, object> Metadata { get; }
+
+    private Error(
+        string code,
+        string message,
+        ErrorType type,
+        string? details = null,
+        Exception? exception = null,
+        Dictionary<string, object>? metadata = null)
+    {
+        Code = code ?? throw new ArgumentNullException(nameof(code));
+        Message = message ?? throw new ArgumentNullException(nameof(message));
+        Type = type;
+        Details = details;
+        Exception = exception;
+        Metadata = metadata ?? new Dictionary<string, object>();
+    }
+
+    #region Factory Methods
+
+    /// <summary>
+    /// Create a validation error
+    /// </summary>
+    public static Error Validation(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "VALIDATION_FAILED",
+            message,
+            ErrorType.Validation,
+            details);
+    }
+
+    /// <summary>
+    /// Create a business rule violation error
+    /// </summary>
+    public static Error BusinessRule(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "BUSINESS_RULE_VIOLATION",
+            message,
+            ErrorType.BusinessRule,
+            details);
+    }
+
+    /// <summary>
+    /// Create an aggregate/domain error
+    /// </summary>
+    public static Error Aggregate(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "AGGREGATE_ERROR",
+            message,
+            ErrorType.Aggregate,
+            details);
+    }
+
+    /// <summary>
+    /// Create a not found error
+    /// </summary>
+    public static Error NotFound(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "NOT_FOUND",
+            message,
+            ErrorType.NotFound,
+            details);
+    }
+
+    /// <summary>
+    /// Create a conflict error
+    /// </summary>
+    public static Error Conflict(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "CONFLICT",
+            message,
+            ErrorType.Conflict,
+            details);
+    }
+
+    /// <summary>
+    /// Create a cancellation error
+    /// </summary>
+    public static Error Cancelled(string message = "Operation was cancelled", string? code = null)
+    {
+        return new Error(
+            code ?? "OPERATION_CANCELLED",
+            message,
+            ErrorType.Cancellation);
+    }
+
+    /// <summary>
+    /// Create an authorization error
+    /// </summary>
+    public static Error Unauthorized(string message = "Access denied", string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "UNAUTHORIZED",
+            message,
+            ErrorType.Authorization,
+            details);
+    }
+
+    /// <summary>
+    /// Create a system/infrastructure error
+    /// </summary>
+    public static Error System(string message, string? code = null, string? details = null)
+    {
+        return new Error(
+            code ?? "SYSTEM_ERROR",
+            message,
+            ErrorType.System,
+            details);
+    }
+
+    /// <summary>
+    /// Create error from exception with proper categorization
+    /// </summary>
+    public static Error FromException(Exception exception, string? code = null)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var errorType = exception switch
+        {
+            ArgumentException or ArgumentNullException => ErrorType.Validation,
+            UnauthorizedAccessException => ErrorType.Authorization,
+            OperationCanceledException => ErrorType.Cancellation,
+            NotImplementedException => ErrorType.System,
+            _ => ErrorType.System
+        };
+
+        return new Error(
+            code ?? exception.GetType().Name.Replace("Exception", "").ToUpperInvariant(),
+            exception.Message,
+            errorType,
+            exception.StackTrace,
+            exception);
+    }
+
+    /// <summary>
+    /// Create an aggregated error from multiple errors
+    /// </summary>
+    public static Error Aggregate(params Error[] errors)
+    {
+        if (errors == null || errors.Length == 0)
+            throw new ArgumentException("At least one error is required", nameof(errors));
+
+        if (errors.Length == 1)
+            return errors[0];
+
+        var messages = errors.Select(e => e.Message).ToArray();
+        var combinedMessage = string.Join("; ", messages);
+
+        var metadata = new Dictionary<string, object>
+        {
+            ["ErrorCount"] = errors.Length,
+            ["Errors"] = errors.Select(e => new { e.Code, e.Message, e.Type }).ToArray()
+        };
+
+        return new Error(
+            "AGGREGATE_ERROR",
+            $"Multiple errors occurred: {combinedMessage}",
+            ErrorType.Aggregate,
+            string.Join("\n", errors.Select(e => $"- {e.Code}: {e.Message}")),
+            metadata: metadata);
+    }
+
+    /// <summary>
+    /// Create error with custom metadata
+    /// </summary>
+    public static Error WithMetadata(
+        string code,
+        string message,
+        ErrorType type,
+        Dictionary<string, object> metadata)
+    {
+        return new Error(code, message, type, metadata: metadata);
+    }
+
+    #endregion
+
+    #region Fluent Configuration
+
+    /// <summary>
+    /// Add details to the error
+    /// </summary>
+    public Error WithDetails(string details)
+    {
+        return this with { Details = details };
+    }
+
+    /// <summary>
+    /// Add metadata to the error
+    /// </summary>
+    public Error WithMetadata(string key, object value)
+    {
+        var newMetadata = new Dictionary<string, object>(Metadata) { [key] = value };
+        return this with { Metadata = newMetadata };
+    }
+
+    /// <summary>
+    /// Add exception context to the error
+    /// </summary>
+    public Error WithException(Exception exception)
+    {
+        return this with { Exception = exception };
+    }
+
+    #endregion
+
+    public override string ToString()
+    {
+        var result = $"[{Type}] {Code}: {Message}";
+        if (!string.IsNullOrEmpty(Details))
+            result += $" (Details: {Details})";
+        return result;
+    }
+}
+
+/// <summary>
+/// Error type enumeration for categorization and handling
+/// </summary>
+public enum ErrorType
+{
+    Validation = 1,
+    BusinessRule = 2,
+    Aggregate = 3,
+    NotFound = 4,
+    Conflict = 5,
+    Authorization = 6,
+    Cancellation = 7,
+    System = 8
+}
+```
 
 ### 1.1 Unit Type Implementation
 
@@ -338,14 +593,43 @@ public readonly record struct Result<T> : IResult<T>
     public Result<TNew> Select<TNew>(Func<T, TNew> selector) => Map(selector);
     
     /// <summary>
-    /// LINQ Where operator - filters success values based on predicate
+    /// LINQ Where operator - filters success values based on predicate.
+    /// Preserves original error context or allows custom error specification.
     /// </summary>
-    public Result<T> Where(Func<T, bool> predicate)
+    public Result<T> Where(Func<T, bool> predicate, Error? customError = null)
     {
         ArgumentNullException.ThrowIfNull(predicate);
-        return IsSuccess && !predicate(_value!) 
-            ? Result<T>.Failure(Error.Validation("Predicate failed"))
-            : this;
+        
+        if (IsFailure)
+            return this; // Preserve original error
+            
+        return predicate(_value!) 
+            ? this 
+            : Result<T>.Failure(customError ?? Error.Validation("Predicate condition not met"));
+    }
+    
+    /// <summary>
+    /// LINQ Where operator overload with custom error message
+    /// </summary>
+    public Result<T> Where(Func<T, bool> predicate, string errorMessage)
+    {
+        return Where(predicate, Error.Validation(errorMessage));
+    }
+    
+    /// <summary>
+    /// LINQ Where operator overload with error factory
+    /// </summary>
+    public Result<T> Where(Func<T, bool> predicate, Func<T, Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        
+        if (IsFailure)
+            return this; // Preserve original error
+            
+        return predicate(_value!) 
+            ? this 
+            : Result<T>.Failure(errorFactory(_value!));
     }
     
     #endregion
@@ -463,11 +747,24 @@ public readonly record struct Result<T> : IResult<T>
     #region Conversions
     
     /// <summary>
-    /// Convert to Option
+    /// Convert to Option - Success becomes Some, Failure becomes None
     /// </summary>
     public Option<T> ToOption()
     {
         return IsSuccess ? Option<T>.Some(_value!) : Option<T>.None();
+    }
+    
+    /// <summary>
+    /// Convert to Option with error handling callback
+    /// </summary>
+    public Option<T> ToOption(Action<Error> onError)
+    {
+        ArgumentNullException.ThrowIfNull(onError);
+        
+        if (IsFailure)
+            onError(_error!);
+            
+        return ToOption();
     }
     
     /// <summary>
@@ -534,6 +831,18 @@ public readonly record struct Result : IResult
         Func<Error, TResult> failure)
     {
         return IsSuccess ? success() : failure(_error!);
+    }
+    
+    public async Task<TResult> MatchAsync<TResult>(
+        Func<Task<TResult>> success,
+        Func<Error, Task<TResult>> failure,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        
+        return IsSuccess 
+            ? await success().ConfigureAwait(false)
+            : await failure(_error!).ConfigureAwait(false);
     }
     
     public Result<T> Map<T>(Func<T> mapper)
@@ -799,7 +1108,7 @@ public readonly record struct Option<T> : IOption<T>
     #region Conversions
     
     /// <summary>
-    /// Convert to Result
+    /// Convert to Result with default error
     /// </summary>
     public Result<T> ToResult(Error error)
     {
@@ -807,6 +1116,36 @@ public readonly record struct Option<T> : IOption<T>
         return _hasValue 
             ? Result<T>.Success(_value!) 
             : Result<T>.Failure(error);
+    }
+    
+    /// <summary>
+    /// Convert to Result with error message
+    /// </summary>
+    public Result<T> ToResult(string errorMessage)
+    {
+        return ToResult(Error.Validation(errorMessage));
+    }
+    
+    /// <summary>
+    /// Convert to Result with error factory
+    /// </summary>
+    public Result<T> ToResult(Func<Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        return _hasValue 
+            ? Result<T>.Success(_value!) 
+            : Result<T>.Failure(errorFactory());
+    }
+    
+    /// <summary>
+    /// Convert to Result with conditional error
+    /// </summary>
+    public Result<T> ToResult<TContext>(TContext context, Func<TContext, Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        return _hasValue 
+            ? Result<T>.Success(_value!) 
+            : Result<T>.Failure(errorFactory(context));
     }
     
     /// <summary>
@@ -822,7 +1161,7 @@ public readonly record struct Option<T> : IOption<T>
     /// </summary>
     public T[] ToArray()
     {
-        return _hasValue ? new[] { _value! } : Array.Empty<T>();
+        return _hasValue ? [_value!] : [];
     }
     
     /// <summary>
@@ -830,7 +1169,7 @@ public readonly record struct Option<T> : IOption<T>
     /// </summary>
     public List<T> ToList()
     {
-        return _hasValue ? new List<T> { _value! } : new List<T>();
+        return _hasValue ? [_value!] : [];
     }
     
     #endregion
@@ -870,7 +1209,244 @@ public interface IOption<T>
 }
 ```
 
-### 1.4 Validation<T> for Error Accumulation
+### 1.4 Result ⇄ Option Bridge Extensions
+
+**File:** `Core/Functional/Extensions/ConversionExtensions.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Functional.Extensions;
+
+/// <summary>
+/// Bridge extensions for seamless Result ⇄ Option conversions
+/// </summary>
+public static class ConversionExtensions
+{
+    #region Result<T> Extensions
+
+    /// <summary>
+    /// Convert Result<T> to Option<T> (Success → Some, Failure → None)
+    /// </summary>
+    public static Option<T> ToOption<T>(this Result<T> result)
+    {
+        return result.IsSuccess ? Option<T>.Some(result.Value) : Option<T>.None();
+    }
+
+    /// <summary>
+    /// Convert Result<T> to Option<T> with error callback
+    /// </summary>
+    public static Option<T> ToOption<T>(this Result<T> result, Action<Error> onError)
+    {
+        ArgumentNullException.ThrowIfNull(onError);
+        
+        if (result.IsFailure)
+            onError(result.Error);
+            
+        return result.ToOption();
+    }
+
+    /// <summary>
+    /// Convert Result<T> to Option<T> with error logging
+    /// </summary>
+    public static Option<T> ToOption<T>(this Result<T> result, ILogger logger, string? message = null)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        
+        if (result.IsFailure)
+            logger.LogWarning("Result conversion to Option failed: {Message} - {Error}", 
+                message ?? "Conversion", result.Error);
+            
+        return result.ToOption();
+    }
+
+    #endregion
+
+    #region Option<T> Extensions
+
+    /// <summary>
+    /// Convert Option<T> to Result<T> with default error
+    /// </summary>
+    public static Result<T> ToResult<T>(this Option<T> option, Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return option.IsSome 
+            ? Result<T>.Success(option.Value) 
+            : Result<T>.Failure(error);
+    }
+
+    /// <summary>
+    /// Convert Option<T> to Result<T> with error message
+    /// </summary>
+    public static Result<T> ToResult<T>(this Option<T> option, string errorMessage)
+    {
+        return option.ToResult(Error.Validation(errorMessage));
+    }
+
+    /// <summary>
+    /// Convert Option<T> to Result<T> with error factory
+    /// </summary>
+    public static Result<T> ToResult<T>(this Option<T> option, Func<Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        return option.IsSome 
+            ? Result<T>.Success(option.Value) 
+            : Result<T>.Failure(errorFactory());
+    }
+
+    /// <summary>
+    /// Convert Option<T> to Result<T> with contextual error
+    /// </summary>
+    public static Result<T> ToResult<T, TContext>(
+        this Option<T> option, 
+        TContext context, 
+        Func<TContext, Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        return option.IsSome 
+            ? Result<T>.Success(option.Value) 
+            : Result<T>.Failure(errorFactory(context));
+    }
+
+    /// <summary>
+    /// Convert Option<T> to Result<T> with NotFound error for entities
+    /// </summary>
+    public static Result<T> ToResultNotFound<T>(
+        this Option<T> option, 
+        string entityName, 
+        object? identifier = null)
+    {
+        var message = identifier != null 
+            ? $"{entityName} with identifier '{identifier}' was not found"
+            : $"{entityName} was not found";
+            
+        return option.ToResult(Error.NotFound(message));
+    }
+
+    #endregion
+
+    #region Async Extensions
+
+    /// <summary>
+    /// Convert Task<Result<T>> to Task<Option<T>>
+    /// </summary>
+    public static async Task<Option<T>> ToOptionAsync<T>(this Task<Result<T>> resultTask)
+    {
+        ArgumentNullException.ThrowIfNull(resultTask);
+        var result = await resultTask.ConfigureAwait(false);
+        return result.ToOption();
+    }
+
+    /// <summary>
+    /// Convert Task<Option<T>> to Task<Result<T>>
+    /// </summary>
+    public static async Task<Result<T>> ToResultAsync<T>(this Task<Option<T>> optionTask, Error error)
+    {
+        ArgumentNullException.ThrowIfNull(optionTask);
+        ArgumentNullException.ThrowIfNull(error);
+        
+        var option = await optionTask.ConfigureAwait(false);
+        return option.ToResult(error);
+    }
+
+    /// <summary>
+    /// Convert Task<Option<T>> to Task<Result<T>> with error factory
+    /// </summary>
+    public static async Task<Result<T>> ToResultAsync<T>(
+        this Task<Option<T>> optionTask, 
+        Func<Error> errorFactory)
+    {
+        ArgumentNullException.ThrowIfNull(optionTask);
+        ArgumentNullException.ThrowIfNull(errorFactory);
+        
+        var option = await optionTask.ConfigureAwait(false);
+        return option.ToResult(errorFactory);
+    }
+
+    #endregion
+
+    #region Validation Extensions
+
+    /// <summary>
+    /// Convert Result<T> to Validation<T>
+    /// </summary>
+    public static Validation<T> ToValidation<T>(this Result<T> result)
+    {
+        return result.IsSuccess 
+            ? Validation<T>.Valid(result.Value)
+            : Validation<T>.Invalid(result.Error);
+    }
+
+    /// <summary>
+    /// Convert Option<T> to Validation<T>
+    /// </summary>
+    public static Validation<T> ToValidation<T>(this Option<T> option, Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return option.IsSome 
+            ? Validation<T>.Valid(option.Value)
+            : Validation<T>.Invalid(error);
+    }
+
+    #endregion
+
+    #region Collection Extensions
+
+    /// <summary>
+    /// Convert sequence of Results to Option of sequence (fail-fast)
+    /// </summary>
+    public static Option<IEnumerable<T>> Sequence<T>(this IEnumerable<Result<T>> results)
+    {
+        var list = new List<T>();
+        foreach (var result in results)
+        {
+            if (result.IsFailure)
+                return Option<IEnumerable<T>>.None();
+            list.Add(result.Value);
+        }
+        return Option<IEnumerable<T>>.Some(list);
+    }
+
+    /// <summary>
+    /// Convert sequence of Options to Option of sequence (fail-fast)
+    /// </summary>
+    public static Option<IEnumerable<T>> Sequence<T>(this IEnumerable<Option<T>> options)
+    {
+        var list = new List<T>();
+        foreach (var option in options)
+        {
+            if (option.IsNone)
+                return Option<IEnumerable<T>>.None();
+            list.Add(option.Value);
+        }
+        return Option<IEnumerable<T>>.Some(list);
+    }
+
+    /// <summary>
+    /// Traverse with Result (map then sequence)
+    /// </summary>
+    public static Option<IEnumerable<TResult>> Traverse<T, TResult>(
+        this IEnumerable<T> source, 
+        Func<T, Result<TResult>> mapper)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        return source.Select(mapper).Sequence();
+    }
+
+    /// <summary>
+    /// Traverse with Option (map then sequence)
+    /// </summary>
+    public static Option<IEnumerable<TResult>> Traverse<T, TResult>(
+        this IEnumerable<T> source, 
+        Func<T, Option<TResult>> mapper)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        return source.Select(mapper).Sequence();
+    }
+
+    #endregion
+}
+```
+
+### 1.5 Validation<T> for Error Accumulation
 
 **File:** `Core/Functional/Validation/Validation.cs`
 
@@ -1043,7 +1619,7 @@ public readonly record struct Validation<T>
 }
 ```
 
-### 1.5 Enhanced StrongId Implementation
+### 1.6 Enhanced StrongId Implementation
 
 **File:** `Core/Domain/Primitives/IStrongId.cs`
 
@@ -1200,7 +1776,7 @@ public abstract record IntStrongId : StrongId<int>
 }
 ```
 
-### 1.5.1 StrongId JSON Converter Enhancement
+### 1.6.1 Enhanced StrongId JSON Converter
 
 **File:** `Core/Domain/Primitives/StrongIdJsonConverterFactory.cs`
 
@@ -1208,8 +1784,8 @@ public abstract record IntStrongId : StrongId<int>
 namespace BuildingBlocks.Core.Domain.Primitives;
 
 /// <summary>
-/// JSON converter factory for strongly-typed identifiers
-/// Provides seamless serialization/deserialization for all StrongId types
+/// Robust JSON converter factory for strongly-typed identifiers.
+/// Handles null values, complex constructors, and provides comprehensive error handling.
 /// </summary>
 public class StrongIdJsonConverterFactory : JsonConverterFactory
 {
@@ -1254,15 +1830,88 @@ public class StrongIdJsonConverter<TStrongId, TValue> : JsonConverter<TStrongId>
     where TStrongId : StrongId<TValue>
     where TValue : struct
 {
+    private static readonly ConcurrentDictionary<Type, Func<TValue, TStrongId>> _factoryCache = new();
+    
     public override TStrongId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var value = JsonSerializer.Deserialize<TValue>(ref reader, options);
-        return (TStrongId)Activator.CreateInstance(typeToConvert, value)!;
+        // Handle null values gracefully
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            throw new JsonException($"Cannot deserialize null value to StrongId type {typeToConvert.Name}");
+        }
+        
+        try
+        {
+            var value = JsonSerializer.Deserialize<TValue>(ref reader, options);
+            return CreateInstance(typeToConvert, value);
+        }
+        catch (JsonException)
+        {
+            throw; // Re-throw JSON exceptions
+        }
+        catch (Exception ex)
+        {
+            throw new JsonException($"Failed to deserialize {typeToConvert.Name}: {ex.Message}", ex);
+        }
     }
 
     public override void Write(Utf8JsonWriter writer, TStrongId value, JsonSerializerOptions options)
     {
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+        
         JsonSerializer.Serialize(writer, value.Value, options);
+    }
+
+    /// <summary>
+    /// Creates StrongId instance using cached factory with robust constructor resolution
+    /// </summary>
+    private static TStrongId CreateInstance(Type strongIdType, TValue value)
+    {
+        var factory = _factoryCache.GetOrAdd(strongIdType, type =>
+        {
+            // Try multiple constructor resolution strategies
+            var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Where(c => c.GetParameters().Length == 1)
+                .Where(c => c.GetParameters()[0].ParameterType == typeof(TValue))
+                .OrderBy(c => c.IsPublic ? 0 : 1) // Prefer public constructors
+                .ToArray();
+
+            if (constructors.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"No suitable constructor found for {type.Name} that accepts {typeof(TValue).Name}");
+            }
+
+            var constructor = constructors[0];
+            
+            // Create compiled factory for performance
+            var parameter = Expression.Parameter(typeof(TValue), "value");
+            var newExpression = Expression.New(constructor, parameter);
+            var lambda = Expression.Lambda<Func<TValue, TStrongId>>(newExpression, parameter);
+            
+            return lambda.Compile();
+        });
+
+        return factory(value);
+    }
+}
+
+/// <summary>
+/// Extension methods for StrongId JSON configuration
+/// </summary>
+public static class StrongIdJsonExtensions
+{
+    /// <summary>
+    /// Configure JSON options to use StrongId converters
+    /// </summary>
+    public static JsonSerializerOptions AddStrongIdSupport(this JsonSerializerOptions options)
+    {
+        options.Converters.Add(new StrongIdJsonConverterFactory());
+        return options;
     }
 }
 ```
@@ -1278,12 +1927,12 @@ public static class ServiceCollectionExtensions
     {
         services.ConfigureHttpJsonOptions(options =>
         {
-            options.SerializerOptions.Converters.Add(new StrongIdJsonConverterFactory());
+            options.SerializerOptions.AddStrongIdSupport();
         });
         
         services.Configure<JsonSerializerOptions>(options =>
         {
-            options.Converters.Add(new StrongIdJsonConverterFactory());
+            options.AddStrongIdSupport();
         });
         
         return services;
@@ -1291,27 +1940,7 @@ public static class ServiceCollectionExtensions
 }
 ```
 
-**Before/After JSON Example:**
-
-Before (primitive obsession):
-```json
-{
-  "userId": "550e8400-e29b-41d4-a716-446655440000",
-  "conversationId": "7d444840-9dc0-11d1-b245-5ffdce74fad2"
-}
-```
-
-After (with StrongId converter):
-```json
-{
-  "userId": "550e8400-e29b-41d4-a716-446655440000",
-  "conversationId": "7d444840-9dc0-11d1-b245-5ffdce74fad2"
-}
-```
-
-*Note: JSON remains the same, but now type-safe with compile-time guarantees*
-
-### 1.6 MediatR Integration Enhancements
+### 1.7 MediatR Integration Enhancements
 
 **File:** `Core/Application/Behaviors/ResultPipelineBehavior.cs`
 
@@ -1339,7 +1968,7 @@ public class ResultPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
     {
         try
         {
-            var response = await next();
+            var response = await next().ConfigureAwait(false);
             
             // Log successful operations using cached delegates
             if (FailureCache<TResponse>.IsResult && FailureCache<TResponse>.IsSuccess(response))
@@ -1392,7 +2021,7 @@ public static class FailureCache<T>
             
             if (failureMethod != null)
             {
-                FailureFactory = error => (T)failureMethod.Invoke(null, new object[] { error })!;
+                FailureFactory = error => (T)failureMethod.Invoke(null, [error])!;
             }
             
             // Cache IsSuccess property getter
@@ -1411,21 +2040,6 @@ public static class FailureCache<T>
     }
 }
 ```
-
-### Reflection-Free Performance Enhancement
-
-**Before** (per-call reflection):
-```diff
-- var failureMethod = typeof(TResponse).GetMethod("Failure");
-- var result = failureMethod?.Invoke(null, new object[] { error });
-```
-
-**After** (static cached delegates):
-```diff
-+ return FailureCache<TResponse>.FailureFactory?.Invoke(error) ?? throw;
-```
-
-This optimization eliminates reflection overhead by pre-computing failure factory delegates at type initialization.
 
 ## ⚡ Performance Guard-Rails
 
@@ -1472,20 +2086,23 @@ public class ResultBenchmarks
 ## 📊 Implementation Roadmap
 
 ### Week 1: Core Types
+- [ ] Implement Error contract with all factory methods
 - [ ] Implement Unit type
-- [ ] Complete Result<T> with all operations
+- [ ] Complete Result<T> with enhanced Where logic and all operations
 - [ ] Implement Option<T> monad
+- [ ] Add comprehensive Option ⇄ Result bridge helpers
 - [ ] Add Validation<T> for error accumulation
 - [ ] Update all existing code to use new types
 
 ### Week 2: StrongId Enhancement
 - [ ] Enhanced StrongId base classes
-- [ ] JSON serialization support
+- [ ] Robust JSON serialization support with null handling
+- [ ] Constructor resolution improvements
 - [ ] Example implementations (ConversationId, UserId, etc.)
 - [ ] Migration of existing IDs
 
 ### Week 3: MediatR Integration
-- [ ] ResultPipelineBehavior implementation
+- [ ] ResultPipelineBehavior implementation with ConfigureAwait(false)
 - [ ] ValidationBehavior updates
 - [ ] Extension methods for configuration
 - [ ] Complete pipeline testing
@@ -1496,14 +2113,16 @@ public class ResultBenchmarks
 
 Epic 1 is complete when:
 
-1. ✅ **All functional types** implement complete monadic operations
+1. ✅ **All functional types** implement complete monadic operations with ConfigureAwait(false)
 2. ✅ **Zero null references** in Result/Option usage
-3. ✅ **All async operations** properly configured
-4. ✅ **StrongId types** replace primitive obsession
-5. ✅ **MediatR behaviors** integrate seamlessly
-6. ✅ **100% test coverage** for functional operations
-7. ✅ **Performance benchmarks** meet requirements
-8. ✅ **Monad laws** verified through property-based testing
+3. ✅ **Complete Error contract** with comprehensive factory methods
+4. ✅ **Enhanced Where logic** preserving error context
+5. ✅ **Complete Option ⇄ Result bridge** helpers implemented
+6. ✅ **StrongId types** replace primitive obsession with robust JSON handling
+7. ✅ **MediatR behaviors** integrate seamlessly
+8. ✅ **100% test coverage** for functional operations
+9. ✅ **Performance benchmarks** meet requirements
+10. ✅ **Monad laws** verified through property-based testing
 
 ### Property-based Tests
 
@@ -1543,15 +2162,28 @@ public Property Option_Functor_Identity_Law()
         return option.Equals(mapped);
     });
 }
+
+[Property]
+public Property Result_Where_Error_Preservation()
+{
+    return Prop.ForAll<string>(errorMessage =>
+    {
+        var originalError = Error.Validation(errorMessage);
+        var result = Result<int>.Failure(originalError);
+        var filtered = result.Where(x => x > 0);
+        
+        return filtered.IsFailure && filtered.Error.Equals(originalError);
+    });
+}
 ```
 
 ---
 
 ## 🚀 Usage Examples
 
-### Railway-Oriented Programming
+### Railway-Oriented Programming with Enhanced Error Handling
 ```csharp
-// Command handler with complete error handling
+// Command handler with complete error handling and proper async patterns
 public async Task<Result<ConversationId>> Handle(
     CreateConversationCommand command,
     CancellationToken ct)
@@ -1560,32 +2192,55 @@ public async Task<Result<ConversationId>> Handle(
         .Bind(title => Conversation.Create(command.UserId, title))
         .BindAsync(async conv => 
         {
-            await _repository.AddAsync(conv, ct);
+            await _repository.AddAsync(conv, ct).ConfigureAwait(false);
             return Result<Conversation>.Success(conv);
-        })
+        }, ct)
         .Map(conv => conv.Id)
         .TapError(error => _logger.LogError("Creation failed: {Error}", error));
 }
 ```
 
-### Option<T> for Null Safety
+### Option<T> for Null Safety with Enhanced Conversions
 ```csharp
 // Repository with Option<T> returns
 public async Task<Option<User>> FindByEmailAsync(Email email, CancellationToken ct)
 {
     var user = await _context.Users
-        .FirstOrDefaultAsync(u => u.Email == email, ct);
+        .FirstOrDefaultAsync(u => u.Email == email, ct)
+        .ConfigureAwait(false);
         
     return Option<User>.From(user);
 }
 
-// Query handler with safe null handling
+// Query handler with safe null handling and enhanced conversion
 public async Task<Result<UserDto>> Handle(GetUserQuery query, CancellationToken ct)
 {
     return await _repository
         .FindByEmailAsync(query.Email, ct)
-        .ToResult(Error.NotFound($"User with email {query.Email} not found"))
-        .MapAsync(async user => await MapToDto(user, ct));
+        .ToResultNotFound("User", query.Email.Value)
+        .MapAsync(async user => await MapToDto(user, ct).ConfigureAwait(false), ct);
+}
+```
+
+### Enhanced Where Logic with Error Context
+```csharp
+// Using enhanced Where with custom error context
+public Result<User> ValidateUserAge(User user)
+{
+    return Result<User>.Success(user)
+        .Where(
+            u => u.Age >= 18, 
+            user => Error.BusinessRule(
+                $"User {user.Name} is {user.Age} years old, must be 18+",
+                "MINIMUM_AGE_VIOLATION"));
+}
+
+// Preserving original error context
+public Result<string> ProcessData(Result<string> input)
+{
+    return input
+        .Where(data => data.Length > 0) // Uses default validation error
+        .Where(data => !data.Contains("invalid")); // Chain multiple conditions
 }
 ```
 
@@ -1602,13 +2257,54 @@ public static Validation<CreateUserCommand> Validate(CreateUserCommand command)
         
     var ageValidation = command.Age >= 18
         ? Validation<int>.Valid(command.Age)
-        : Validation<int>.Invalid(Error.Validation("User must be 18 or older"));
+        : Validation<int>.Invalid(Error.BusinessRule("User must be 18 or older"));
     
     return Validation<CreateUserCommand>.Combine(
         emailValidation,
         nameValidation,
         ageValidation)
         .Map(_ => command);
+}
+```
+
+### Complete Error Contract Usage
+```csharp
+// Comprehensive error handling with typed error contract
+public async Task<Result<Order>> ProcessOrderAsync(ProcessOrderCommand command)
+{
+    try
+    {
+        var validationResult = await ValidateOrderAsync(command);
+        if (validationResult.IsFailure)
+            return validationResult.Error; // Validation errors
+            
+        var order = await _repository.GetByIdAsync(command.OrderId);
+        if (order is null)
+            return Error.NotFound($"Order {command.OrderId} not found");
+            
+        if (order.Status != OrderStatus.Pending)
+            return Error.BusinessRule(
+                "Order cannot be processed", 
+                "ORDER_INVALID_STATE",
+                $"Order is in {order.Status} state");
+            
+        await ProcessPaymentAsync(order);
+        return Result<Order>.Success(order);
+    }
+    catch (OperationCanceledException)
+    {
+        return Error.Cancelled("Order processing was cancelled");
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        return Error.Unauthorized("Insufficient permissions", details: ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Error.FromException(ex)
+            .WithMetadata("OrderId", command.OrderId)
+            .WithMetadata("UserId", command.UserId);
+    }
 }
 ```
 
