@@ -1110,23 +1110,47 @@ public sealed class ArchivePolicy : IArchivePolicy
 
 ```csharp
 // Modules/Chat/Domain/Conversation/Repositories/IConversationWriteRepository.cs
+// TODO: consider ValueTask<TResult> for hot paths / high-QPS
 namespace Axon.Modules.Chat.Domain.Conversation.Repositories;
 
 public interface IConversationWriteRepository
 {
-    Task<Result<Unit>> AddAsync(Conversation conversation, CancellationToken cancellationToken = default);
-    Task<Result<Conversation>> GetByIdAsync(ConversationId id, CancellationToken cancellationToken = default);
-    Task<Result<Unit>> UpdateAsync(Conversation conversation, CancellationToken cancellationToken = default);
-    Task<Result<Unit>> DeleteAsync(ConversationId id, CancellationToken cancellationToken = default);
+    Task<Result<Unit>> AddAsync(
+        Conversation conversation,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<Conversation>> GetByIdAsync(
+        ConversationId id,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<Unit>> UpdateAsync(
+        Conversation conversation,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<Unit>> DeleteAsync(
+        ConversationId id,
+        CancellationToken cancellationToken = default);
 }
 
 // Modules/Chat/Domain/Conversation/Repositories/IConversationReadRepository.cs
+// TODO: consider ValueTask<TResult> for hot paths / high-QPS
 public interface IConversationReadRepository
 {
-    Task<Result<ConversationReadModel>> GetByIdAsync(ConversationId id, CancellationToken cancellationToken = default);
-    Task<Result<IEnumerable<ConversationReadModel>>> GetByUserIdAsync(UserId userId, CancellationToken cancellationToken = default);
-    Task<Result<PagedResult<ConversationReadModel>>> GetPagedAsync(ISpecification<ConversationReadModel> specification, CancellationToken cancellationToken = default);
-    Task<Result<bool>> ExistsAsync(ConversationId id, CancellationToken cancellationToken = default);
+    Task<Result<ConversationReadModel>> GetByIdAsync(
+        ConversationId id,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<IEnumerable<ConversationReadModel>>> GetByUserIdAsync(
+        UserId userId,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<PagedResult<ConversationReadModel>>> GetPagedAsync(
+        ISpecification<ConversationReadModel> specification,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<bool>> ExistsAsync(
+        ConversationId id,
+        CancellationToken cancellationToken = default);
 }
 
 // Modules/Chat/Domain/Conversation/ReadModels/ConversationReadModel.cs
@@ -1152,6 +1176,7 @@ public sealed class ParticipantReadModel
 }
 ```
 
+
 ## 9. Domain Errors
 
 ```csharp
@@ -1160,49 +1185,52 @@ namespace Axon.Modules.Chat.Domain.Conversation.Errors;
 
 public static class ConversationErrors
 {
+    // 04xx = NOT-FOUND / FORBIDDEN, 09 = CONFLICT, 22 = VALIDATION, 29 = LIMIT
+
     public static Error ConversationNotFound(Guid id) =>
-        Error.NotFound("Conversation.NotFound", $"Conversation with ID {id} was not found");
+        Error.NotFound("CON-0404", $"Conversation with ID {id} was not found");
 
     public static Error MessageNotFound(Guid id) =>
-        Error.NotFound("Message.NotFound", $"Message with ID {id} was not found");
+        Error.NotFound("MSG-0404", $"Message with ID {id} was not found");
 
     public static Error ParticipantNotFound(Guid userId) =>
-        Error.NotFound("Participant.NotFound", $"Participant with user ID {userId} was not found");
+        Error.NotFound("PAR-0404", $"Participant with user ID {userId} was not found");
 
     public static Error UnauthorizedAccess(Guid conversationId) =>
-        Error.Forbidden("Conversation.UnauthorizedAccess", $"User does not have access to conversation {conversationId}");
+        Error.Forbidden("CON-0403", $"User does not have access to conversation {conversationId}");
 
     public static Error UnauthorizedMessageEdit() =>
-        Error.Forbidden("Message.UnauthorizedEdit", "User cannot edit messages from other users");
+        Error.Forbidden("MSG-0403", "User cannot edit messages from other users");
 
     public static Error CannotAddMessageToInactiveConversation() =>
-        Error.Validation("Conversation.Inactive", "Cannot add messages to inactive conversation");
+        Error.Validation("CON-0422", "Cannot add messages to inactive conversation");
 
     public static Error MessageLimitExceeded(int limit) =>
-        Error.Validation("Conversation.MessageLimitExceeded", $"Conversation has reached the maximum of {limit} messages");
+        Error.Validation("CON-0429", $"Conversation has reached the maximum of {limit} messages");
 
     public static Error ParticipantLimitExceeded(int limit) =>
-        Error.Validation("Conversation.ParticipantLimitExceeded", $"Conversation has reached the maximum of {limit} participants");
+        Error.Validation("PAR-0429", $"Conversation has reached the maximum of {limit} participants");
 
     public static Error ParticipantAlreadyExists(Guid userId) =>
-        Error.Conflict("Participant.AlreadyExists", $"User {userId} is already a participant");
+        Error.Conflict("PAR-0409", $"User {userId} is already a participant");
 
     public static Error CannotRemoveLastOwner() =>
-        Error.Validation("Participant.CannotRemoveLastOwner", "Cannot remove the last owner from conversation");
+        Error.Validation("PAR-0422", "Cannot remove the last owner from conversation");
 
     public static Error EditWindowExpired() =>
-        Error.Validation("Message.EditWindowExpired", "Message edit window has expired");
+        Error.Validation("MSG-0422", "Message edit window has expired");
 
     public static Error AlreadyArchived() =>
-        Error.Conflict("Conversation.AlreadyArchived", "Conversation is already archived");
+        Error.Conflict("CON-0409", "Conversation is already archived");
 
     public static Error NotArchived() =>
-        Error.Validation("Conversation.NotArchived", "Conversation is not archived");
+        Error.Validation("CON-0422", "Conversation is not archived");
 
     public static Error CannotArchiveEmptyConversation() =>
-        Error.Validation("Conversation.CannotArchiveEmpty", "Cannot archive conversation with no messages");
+        Error.Validation("CON-0422", "Cannot archive conversation with no messages");
 }
 ```
+
 
 ## 10. Specifications
 
