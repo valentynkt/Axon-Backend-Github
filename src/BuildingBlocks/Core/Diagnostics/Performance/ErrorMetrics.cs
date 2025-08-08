@@ -566,11 +566,11 @@ public sealed class ErrorMetricsOptions
     /// Maximum time series entries to keep in memory (default: 10000)
     /// </summary>
     public int MaxTimeSeriesEntries { get; set; } = 10000;
-    
+
     /// <summary>
     /// Enable periodic logging of statistics (default: false)
     /// </summary>
-    public bool EnablePeriodicLogging { get; set; } = false;
+    public bool EnablePeriodicLogging { get; set; }
 }
 
 /// <summary>

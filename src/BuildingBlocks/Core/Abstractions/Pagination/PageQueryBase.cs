@@ -9,7 +9,7 @@ public abstract record PageQueryBase<TResponse> : IPageQuery<TResponse>, ISortab
     // ---- Canonical names ----
     public int Page { get; init; } = 1;            // preferred going forward
     public int PageSize { get; init; } = 25;
-    public bool IncludeTotalCount { get; init; } = false;
+    public bool IncludeTotalCount { get; init; }
 
     // ---- Legacy alias (still required by IPageRequest) ----
     [Obsolete("Use Page instead of PageNumber.")]

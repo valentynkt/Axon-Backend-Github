@@ -78,7 +78,7 @@ public sealed class CacheKeyGenerator : ICacheKeyGenerator
 public sealed class CacheConfiguration
 {
     public TimeSpan Duration { get; init; } = TimeSpan.FromMinutes(5);
-    public bool UseSlidingExpiration { get; init; } = false;
+    public bool UseSlidingExpiration { get; init; }
     public TimeSpan L1Duration { get; init; } = TimeSpan.FromSeconds(30);
     public string[] Tags { get; init; } = Array.Empty<string>();
 }
@@ -98,7 +98,7 @@ public interface ICacheable
 public sealed class CacheableAttribute : Attribute
 {
     public int DurationSeconds { get; init; } = 300;  // 5 minutes default
-    public bool UseSlidingExpiration { get; init; } = false;
+    public bool UseSlidingExpiration { get; init; }
     public int L1DurationSeconds { get; init; } = 30;  // 30 seconds L1
     public string[]? Tags { get; init; }
 }
@@ -173,12 +173,12 @@ public sealed class CacheOptions
     /// Default cache duration when not specified by query.
     /// </summary>
     public TimeSpan DefaultDuration { get; set; } = TimeSpan.FromMinutes(5);
-    
+
     /// <summary>
     /// Whether to include W3C TraceContext in cache keys for isolation.
     /// </summary>
-    public bool IncludeTraceInKey { get; set; } = false;
-    
+    public bool IncludeTraceInKey { get; set; }
+
     /// <summary>
     /// Compression threshold for distributed cache entries (in bytes).
     /// </summary>
@@ -193,12 +193,12 @@ public sealed class CacheOptions
     /// Redis instance name for key prefixing.
     /// </summary>
     public string InstanceName { get; set; } = "axon";
-    
+
     /// <summary>
     /// Redis database number to use.
     /// </summary>
-    public int DefaultDatabase { get; set; } = 0;
-    
+    public int DefaultDatabase { get; set; }
+
     /// <summary>
     /// Memory cache size limit in MB.
     /// </summary>

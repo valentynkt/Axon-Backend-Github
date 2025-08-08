@@ -4,37 +4,47 @@ using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Application.Behaviors;
 
-public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+/// <summary>
+/// Fallback lightweight logger. It only logs when there is NO current Activity
+/// (i.e., ObservabilityPipelineBehavior is not active). Otherwise it's a no-op.
+/// This avoids duplicate logs/metrics and keeps tests/dev simple.
+/// </summary>
+public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull, IRequest<TResponse>
     where TResponse : notnull
 {
     private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
+    private const int SlowMsThreshold = 1000; // warn when over 1s
 
     public LoggingBehavior(ILogger<LoggingBehavior<TRequest, TResponse>> logger)
     {
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        const string prefix = nameof(LoggingBehavior<TRequest, TResponse>);
+        // If an Activity exists (Observability is active), skip to avoid duplicate logging.
+        if (Activity.Current is not null)
+            return await next();
 
-        _logger.LogInformation("[{Prefix}] Handle request={X-RequestData} and response={X-ResponseData}",
-            prefix, typeof(TRequest).Name, typeof(TResponse).Name);
+        var reqType = typeof(TRequest).Name;
+        var sw = Stopwatch.StartNew();
 
-        var timer = new Stopwatch();
-        timer.Start();
+        _logger.LogInformation("Handling {RequestType}", reqType);
 
-        var response = await next(cancellationToken);
+        var response = await next();
 
-        timer.Stop();
-        var timeTaken = timer.Elapsed;
-        if (timeTaken.Seconds > 3) // if the request is greater than 3 seconds, then log the warnings
-            _logger.LogWarning("[{Perf-Possible}] The request {X-RequestData} took {TimeTaken} seconds.",
-                prefix, typeof(TRequest).Name, timeTaken.Seconds);
+        sw.Stop();
+        var elapsedMs = sw.ElapsedMilliseconds;
 
-        _logger.LogInformation("[{Prefix}] Handled {X-RequestData}", prefix, typeof(TRequest).Name);
+        if (elapsedMs > SlowMsThreshold)
+            _logger.LogWarning("Slow {RequestType}: {ElapsedMs} ms", reqType, elapsedMs);
+        else
+            _logger.LogInformation("Handled {RequestType} in {ElapsedMs} ms", reqType, elapsedMs);
+
         return response;
     }
 }

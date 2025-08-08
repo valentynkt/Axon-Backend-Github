@@ -115,8 +115,6 @@
 
   <ItemGroup>
     <Folder Include="Core\Abstractions\Messaging\" />
-    <Folder Include="Core\Application\" />
-    <Folder Include="Core\Utils\" />
     <Folder Include="Web\Endpoints\" />
     <Folder Include="Web\Middleware\" />
   </ItemGroup>

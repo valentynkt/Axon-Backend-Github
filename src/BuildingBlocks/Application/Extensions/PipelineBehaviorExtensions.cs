@@ -41,10 +41,7 @@ public static class PipelineBehaviorExtensions
         // 3. Resilience. This wraps the core logic to allow for retries of the
         // entire unit of work on transient failures.
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RetryBehavior<,>));
-
-        // 4. Validation. This fails fast on invalid requests *before* starting a
-        // database transaction or hitting the cache, saving resources.
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        
         
         // 5. Caching. This is for queries. If a result is found in the cache,
         // subsequent behaviors (like Transaction) will be skipped.

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

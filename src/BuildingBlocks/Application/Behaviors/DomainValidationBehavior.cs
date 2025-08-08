@@ -1,28 +1,26 @@
+using System.Linq.Expressions;
 using BuildingBlocks.Core.Domain.CQRS;
-using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Unit = BuildingBlocks.Core.Functional.Unit;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Epic 2 + Epic 5 integration behavior for domain validation.
-/// Executes domain business rules validation for commands that implement DomainCommandBase.
-/// Runs after structural validation (ValidationBehavior) but before business logic execution.
+/// Envelope-only domain validation for commands implementing <see cref="DomainCommandBase"/>.
+/// Runs AFTER FluentValidation (ResultValidationBehavior) and BEFORE handler logic.
+/// Pure pre-execution checks only (no I/O, no aggregate mutation).
+/// Converts failures to the unified Result/Result&lt;T&gt; shape; uses compiled delegates (no reflection on hot path).
 /// </summary>
-/// <typeparam name="TRequest">The request type</typeparam>
-/// <typeparam name="TResponse">The response type</typeparam>
 public sealed class DomainValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
-    where TResponse : notnull
+    where TResponse : IResult
 {
     private readonly ILogger<DomainValidationBehavior<TRequest, TResponse>> _logger;
 
     public DomainValidationBehavior(ILogger<DomainValidationBehavior<TRequest, TResponse>> logger)
     {
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<TResponse> Handle(
@@ -32,60 +30,76 @@ public sealed class DomainValidationBehavior<TRequest, TResponse> : IPipelineBeh
     {
         // Only validate domain commands with pre-execution, envelope-only checks
         if (request is not DomainCommandBase domainCommand)
-            return await next(); // <-- FIX: no parameter
+            return await next(); // MediatR delegate has no token parameter
+
+        var commandType = typeof(TRequest).Name;
+        var aggregateType = domainCommand.GetAggregateType().Name;
 
         _logger.LogDebug("Executing domain validation for {CommandType} on aggregate {AggregateType}",
-            request.GetType().Name,
-            domainCommand.GetAggregateType().Name);
+            commandType, aggregateType);
 
-        var validation = domainCommand.ValidateDomainRules(); // MUST be pure, no state
+        // MUST be pure (no DB calls / side effects)
+        var validation = domainCommand.ValidateDomainRules();
 
         if (validation.IsInvalid)
         {
+            var errorsArray = validation.Errors.ToArray();
+
             _logger.LogWarning("Domain validation failed for {CommandType}: {Errors}",
-                request.GetType().Name,
-                string.Join(", ", validation.Errors.Select(e => $"{e.Code}: {e.Message}")));
+                commandType,
+                string.Join(", ", errorsArray.Select(e => $"{e.Code}: {e.Message}")));
 
-            // Prefer a unified result interface or factory to avoid reflection
-            if (typeof(TResponse).IsGenericType &&
-                typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>))
-            {
-                // TODO: Replace with a non-reflection factory if available
-                var resultType = typeof(TResponse).GetGenericArguments()[0];
-                var failureMethod = typeof(Result<>)
-                    .MakeGenericType(resultType)
-                    .GetMethod(nameof(Result<Unit>.Failure), new[] { typeof(Error) });
+            var aggregated = errorsArray.Length == 1
+                ? errorsArray[0]
+                : Error.Aggregate(errorsArray);
 
-                // If you keep aggregation, at least add details to metadata
-                var error = Error.Aggregate(validation.Errors.ToArray());
-                var failureResult = failureMethod!.Invoke(null, new object[] { error });
-                return (TResponse)failureResult!;
-            }
-
-            throw new DomainValidationException("Domain validation failed", validation.Errors.ToArray());
+            // Return failed Result/Result<T> via compiled factory (no reflection per call)
+            return ResultFailureFactory<TResponse>.FromError(aggregated);
         }
 
-        _logger.LogDebug("Domain validation passed for {CommandType}", request.GetType().Name);
-        return await next(); // <-- FIX: no parameter
+        _logger.LogDebug("Domain validation passed for {CommandType}", commandType);
+        return await next(); // MediatR delegate has no token parameter
+    }
+
+    private static class ResultFailureFactory<T>
+        where T : IResult
+    {
+        public static readonly Func<Error, T> FromError = Build();
+
+        private static Func<Error, T> Build()
+        {
+            if (typeof(T) == typeof(Result))
+            {
+                return e => (T)(object)Result.Failure(e);
+            }
+
+            if (typeof(T).IsGenericType && typeof(T).GetGenericTypeDefinition() == typeof(Result<>))
+            {
+                var method = typeof(T).GetMethod("Failure", new[] { typeof(Error) })
+                             ?? throw new InvalidOperationException($"{typeof(T).Name}.Failure(Error) missing");
+
+                var e = Expression.Parameter(typeof(Error), "e");
+                var call = Expression.Call(method, e);
+                var lambda = Expression.Lambda<Func<Error, T>>(call, e);
+                return lambda.Compile();
+            }
+
+            throw new InvalidOperationException($"DomainValidationBehavior requires TResponse : IResult. Found {typeof(T).Name}");
+        }
     }
 }
 
 /// <summary>
-/// Exception thrown when domain validation fails for non-Result responses.
+/// Exception kept for completeness if you ever run non-Result responses outside this behavior.
+/// Not used when TResponse : IResult (current pipeline contract).
 /// </summary>
 public sealed class DomainValidationException : Exception
 {
     public Error[] ValidationErrors { get; }
 
-    public DomainValidationException(string message, Error[] validationErrors) 
-        : base(message)
-    {
-        ValidationErrors = validationErrors;
-    }
+    public DomainValidationException(string message, Error[] validationErrors)
+        : base(message) => ValidationErrors = validationErrors;
 
-    public DomainValidationException(string message, Error[] validationErrors, Exception innerException) 
-        : base(message, innerException)
-    {
-        ValidationErrors = validationErrors;
-    }
+    public DomainValidationException(string message, Error[] validationErrors, Exception innerException)
+        : base(message, innerException) => ValidationErrors = validationErrors;
 }

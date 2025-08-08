@@ -1,57 +1,51 @@
 using System.Diagnostics;
-using MediatR;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Options;
-using System.Text.Json;
 using System.Diagnostics.Metrics;
-using BuildingBlocks.Core.Functional.Results;
+using System.Text.Json;
 using BuildingBlocks.Application.Caching;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
+using MediatR;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Caching pipeline behavior for Epic 04 Story 02 - Declarative Query Caching.
-/// Integrates with IQuery declarative properties for simplified, performant caching.
-/// Supports both memory and distributed caching with W3C TraceContext integration.
+/// Declarative query caching (L1 IMemoryCache + L2 IDistributedCache).
+/// - Uses IQuery declarative flags (UseCache, CacheDuration, CacheKeyPrefix).
+/// - Optional tag index for later invalidation by commands.
+/// - Low-cardinality metrics, W3C-friendly (no custom correlation in here).
 /// </summary>
 public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IQuery<TResponse>
     where TResponse : class
 {
-    private readonly IMemoryCache _memoryCache;
-    private readonly IDistributedCache _distributedCache;
-    private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly IMemoryCache _memory;
+    private readonly IDistributedCache _distributed;
+    private readonly ICacheKeyGenerator _keys;
     private readonly ILogger<CachingBehavior<TRequest, TResponse>> _logger;
-    private readonly CacheOptions _options;
-
-    // OpenTelemetry metrics
-    private static readonly Counter<long> CacheHitCounter = TelemetryTags.Metrics.CreateCounter<long>(
-        "axon.query.cache.hits",
-        description: "Query cache hit count");
-    private static readonly Counter<long> CacheMissCounter = TelemetryTags.Metrics.CreateCounter<long>(
-        "axon.query.cache.misses", 
-        description: "Query cache miss count");
-    private static readonly Histogram<double> CacheLatency = TelemetryTags.Metrics.CreateHistogram<double>(
-        "axon.query.cache.latency",
-        unit: "ms",
-        description: "Query cache operation latency");
+    private readonly CacheOptions _opts;
+    private readonly JsonSerializerOptions _json;
+    private readonly ICacheTagIndex? _tagIndex; // optional, enables true tag invalidation
 
     public CachingBehavior(
         IMemoryCache memoryCache,
         IDistributedCache distributedCache,
         ICacheKeyGenerator keyGenerator,
         ILogger<CachingBehavior<TRequest, TResponse>> logger,
-        IOptions<CacheOptions> options)
+        IOptions<CacheOptions> options,
+        IOptions<JsonSerializerOptions>? jsonOptions = null,
+        ICacheTagIndex? tagIndex = null)
     {
-        _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
-        _distributedCache = distributedCache ?? throw new ArgumentNullException(nameof(distributedCache));
-        _keyGenerator = keyGenerator ?? throw new ArgumentNullException(nameof(keyGenerator));
+        _memory = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+        _distributed = distributedCache ?? throw new ArgumentNullException(nameof(distributedCache));
+        _keys = keyGenerator ?? throw new ArgumentNullException(nameof(keyGenerator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _opts = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _json = jsonOptions?.Value ?? new JsonSerializerOptions();
+        _tagIndex = tagIndex;
     }
 
     public async Task<TResponse> Handle(
@@ -59,170 +53,241 @@ public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(next);
-
-        // Skip caching if disabled for this query
         if (!request.UseCache)
+            return await next(); // MediatR delegate has no token param
+
+        var key = _keys.GenerateKey(request);
+        var sw = Stopwatch.StartNew();
+
+        // L1
+        if (_memory.TryGetValue(key, out var l1) && l1 is TResponse hit1)
         {
-            _logger.LogDebug("Caching disabled for {QueryType}", typeof(TRequest).Name);
-            return await next(cancellationToken);
+            sw.Stop();
+            CacheInstrumentation.Hits.Add(1, Tags("hit"));
+            CacheInstrumentation.Latency.Record(sw.ElapsedMilliseconds, Tags("hit"));
+            _logger.LogDebug("L1 cache hit: {Key}", key);
+            return hit1;
         }
 
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var cacheKey = _keyGenerator.GenerateKey(request);
-        
-        _logger.LogDebug("Attempting cache lookup for {QueryType} with key: {CacheKey}",
-            typeof(TRequest).Name, cacheKey);
-
-        try
-        {
-            // Try memory cache first
-            var cachedResponse = await TryGetFromCache(cacheKey);
-            if (cachedResponse != null)
-            {
-                stopwatch.Stop();
-                RecordCacheHit(stopwatch.ElapsedMilliseconds);
-                return cachedResponse;
-            }
-
-            // Cache miss - execute handler
-            stopwatch.Stop();
-            RecordCacheMiss(stopwatch.ElapsedMilliseconds);
-            
-            _logger.LogDebug("Cache miss for {QueryType}, executing handler", typeof(TRequest).Name);
-            
-            var response = await next(cancellationToken);
-
-            // Cache successful results only
-            if (ShouldCacheResponse(response))
-            {
-                var duration = GetCacheDuration(request);
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await SetCache(cacheKey, response, duration, cancellationToken);
-                        _logger.LogDebug("Cached response for {QueryType} with duration {Duration}",
-                            typeof(TRequest).Name, duration);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to cache response for {QueryType}", typeof(TRequest).Name);
-                    }
-                }, cancellationToken);
-            }
-
-            return response;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Cache operation failed for {QueryType}, proceeding without cache",
-                typeof(TRequest).Name);
-            return await next(cancellationToken);
-        }
-    }
-
-    private async Task<TResponse?> TryGetFromCache(string cacheKey)
-    {
-        // Try memory cache first (fast L1)
-        if (_memoryCache.TryGetValue(cacheKey, out var cachedValue) && cachedValue is TResponse memoryResult)
-        {
-            _logger.LogDebug("Memory cache hit for key: {CacheKey}", cacheKey);
-            return memoryResult;
-        }
-
-        // Try distributed cache (L2)
-        var cachedBytes = await _distributedCache.GetAsync(cacheKey);
-        if (cachedBytes != null)
+        // L2
+        var bytes = await _distributed.GetAsync(key, cancellationToken);
+        if (bytes is not null && bytes.Length > 0)
         {
             try
             {
-                var distributedResult = JsonSerializer.Deserialize<TResponse>(cachedBytes);
-                if (distributedResult != null)
+                var obj = JsonSerializer.Deserialize<TResponse>(bytes, _json);
+                if (obj is not null)
                 {
-                    // Populate memory cache from distributed cache hit
-                    var memoryOptions = new MemoryCacheEntryOptions
+                    // promote to L1 with short TTL
+                    var l1Ttl = TimeSpan.FromMinutes(Math.Min(5, Math.Max(1, GetCacheDuration(request).TotalMinutes)));
+                    _memory.Set(key, obj, new MemoryCacheEntryOptions
                     {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5), // Short L1 duration
-                        Size = cachedBytes.Length
-                    };
-                    _memoryCache.Set(cacheKey, distributedResult, memoryOptions);
-                    
-                    _logger.LogDebug("Distributed cache hit for key: {CacheKey}", cacheKey);
-                    return distributedResult;
+                        AbsoluteExpirationRelativeToNow = l1Ttl
+                    });
+
+                    sw.Stop();
+                    CacheInstrumentation.Hits.Add(1, Tags("hit"));
+                    CacheInstrumentation.Latency.Record(sw.ElapsedMilliseconds, Tags("hit"));
+                    _logger.LogDebug("L2 cache hit (promoted to L1): {Key}", key);
+                    return obj;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to deserialize cached response for key: {CacheKey}", cacheKey);
-                // Remove corrupted cache entry
-                await _distributedCache.RemoveAsync(cacheKey);
+                _logger.LogWarning(ex, "Failed to deserialize L2 cache entry for {Key}. Removing.", key);
+                await _distributed.RemoveAsync(key, cancellationToken);
             }
         }
 
-        return null;
-    }
+        // MISS → execute
+        sw.Stop();
+        CacheInstrumentation.Misses.Add(1, Tags("miss"));
+        CacheInstrumentation.Latency.Record(sw.ElapsedMilliseconds, Tags("miss"));
+        _logger.LogDebug("Cache miss, executing handler: {Query}", typeof(TRequest).Name);
 
-    private async Task SetCache(string cacheKey, TResponse response, TimeSpan duration, CancellationToken cancellationToken)
-    {
-        // Set memory cache (L1)
-        var memoryOptions = new MemoryCacheEntryOptions
+        var response = await next();
+
+        if (!ShouldCache(response))
+            return response;
+
+        var ttl = GetCacheDuration(request);
+        if (ttl <= TimeSpan.Zero)
+            return response;
+
+        try
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(Math.Min(duration.TotalMinutes, 30)), // Max 30min for L1
-            Priority = CacheItemPriority.Normal
-        };
-        _memoryCache.Set(cacheKey, response, memoryOptions);
+            // store L1 first (shorter)
+            var l1Ttl = TimeSpan.FromMinutes(Math.Min(30, Math.Max(1, ttl.TotalMinutes)));
+            _memory.Set(key, response, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = l1Ttl
+            });
 
-        // Set distributed cache (L2)
-        var serializedResponse = JsonSerializer.SerializeToUtf8Bytes(response);
-        var distributedOptions = new DistributedCacheEntryOptions
+            // store L2
+            var payload = JsonSerializer.SerializeToUtf8Bytes(response, _json);
+            await _distributed.SetAsync(key,
+                payload,
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
+                cancellationToken);
+
+            // optional tag indexing for later invalidation
+            var tags = ResolveTags(request);
+            if (tags.Length > 0 && _tagIndex is not null)
+                await _tagIndex.IndexAsync(tags, key, ttl, cancellationToken);
+
+            _logger.LogDebug("Cached {Query} for {Ttl}", typeof(TRequest).Name, ttl);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            AbsoluteExpirationRelativeToNow = duration
-        };
-
-        await _distributedCache.SetAsync(cacheKey, serializedResponse, distributedOptions, cancellationToken);
-    }
-
-    private static bool ShouldCacheResponse(TResponse response)
-    {
-        // Only cache successful results
-        return response is IResult result && result.IsSuccess;
-    }
-
-    private TimeSpan GetCacheDuration(TRequest request)
-    {
-        return request.CacheDuration ?? _options.DefaultDuration;
-    }
-
-    private void RecordCacheHit(long elapsedMs)
-    {
-        var tags = new TagList
+            // let caller cancel; we already returned the response
+        }
+        catch (Exception ex)
         {
-            { "query.type", typeof(TRequest).Name },
-            { "outcome", "hit" }
-        };
+            _logger.LogWarning(ex, "Failed to write cache for {Key}", key);
+        }
 
-        CacheHitCounter.Add(1, tags);
-        CacheLatency.Record(elapsedMs, tags);
-
-        _logger.LogDebug("Cache hit for {QueryType} in {ElapsedMs}ms",
-            typeof(TRequest).Name, elapsedMs);
+        return response;
     }
 
-    private void RecordCacheMiss(long elapsedMs)
-    {
-        var tags = new TagList
+    private static bool ShouldCache(TResponse response) =>
+        response switch
         {
-            { "query.type", typeof(TRequest).Name },
-            { "outcome", "miss" }
+            IResult r => r.IsSuccess,   // cache only successful Results
+            _        => response is not null // cache DTOs if non-null
         };
 
-        CacheMissCounter.Add(1, tags);
-        CacheLatency.Record(elapsedMs, tags);
+    private static TagList Tags(string outcome) => new()
+    {
+        { "query.type", typeof(TRequest).Name },
+        { "outcome", outcome }
+    };
 
-        _logger.LogDebug("Cache miss for {QueryType} in {ElapsedMs}ms",
-            typeof(TRequest).Name, elapsedMs);
+    private static TimeSpan GetCacheDuration(IQuery<TResponse> request) =>
+        request.CacheDuration ?? TimeSpan.FromMinutes(5);
+
+    private static string[] ResolveTags(IQuery<TResponse> request)
+    {
+        // Priority: explicit interface; then attribute; finally prefix (coarse)
+        if (request is ICacheTaggable taggable && taggable.CacheTags is { Length: >0 })
+            return taggable.CacheTags;
+
+        var attr = request.GetType().GetCustomAttributes(typeof(CacheTagsAttribute), inherit: true)
+            .OfType<CacheTagsAttribute>()
+            .FirstOrDefault();
+
+        if (attr is not null && attr.Tags.Length > 0)
+            return attr.Tags;
+
+        // fallback: use prefix if present to enable coarse invalidation
+        return string.IsNullOrWhiteSpace(request.CacheKeyPrefix)
+            ? Array.Empty<string>()
+            : new[] { request.CacheKeyPrefix! };
+    }
+
+    private static class CacheInstrumentation
+    {
+        private static readonly Meter Meter = new(TelemetryTags.Metrics.Application.AppService);
+        public static readonly Counter<long> Hits   = Meter.CreateCounter<long>("axon.query.cache.hits",   description: "Query cache hits");
+        public static readonly Counter<long> Misses = Meter.CreateCounter<long>("axon.query.cache.misses", description: "Query cache misses");
+        public static readonly Histogram<double> Latency = Meter.CreateHistogram<double>("axon.query.cache.latency", unit: "ms", description: "Cache lookup latency");
     }
 }
 
+/// <summary> Optional: queries can expose tags to help invalidation. </summary>
+public interface ICacheTaggable
+{
+    string[] CacheTags { get; }
+}
+
+/// <summary> Attribute for declarative query cache tags. </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CacheTagsAttribute : Attribute
+{
+    public string[] Tags { get; }
+    public CacheTagsAttribute(params string[] tags) => Tags = tags ?? Array.Empty<string>();
+}
+
+/// <summary>
+/// Tag index that maps tags to cache keys in the distributed store,
+/// enabling reliable invalidation across nodes.
+/// </summary>
+public interface ICacheTagIndex
+{
+    Task IndexAsync(IEnumerable<string> tags, string cacheKey, TimeSpan ttl, CancellationToken ct);
+    Task<string[]> GetKeysAsync(IEnumerable<string> tags, CancellationToken ct);
+    Task RemoveAsync(IEnumerable<string> tags, CancellationToken ct);
+}
+
+/// <summary>
+/// Basic JSON-blob implementation over IDistributedCache.
+/// NOT for huge tag sets, but fine for MVP.
+/// </summary>
+public sealed class DistributedCacheTagIndex : ICacheTagIndex
+{
+    private readonly IDistributedCache _cache;
+    private readonly JsonSerializerOptions _json;
+
+    public DistributedCacheTagIndex(IDistributedCache cache, IOptions<JsonSerializerOptions>? jsonOptions = null)
+    {
+        _cache = cache;
+        _json = jsonOptions?.Value ?? new JsonSerializerOptions();
+    }
+
+    public async Task IndexAsync(IEnumerable<string> tags, string cacheKey, TimeSpan ttl, CancellationToken ct)
+    {
+        foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t)))
+        {
+            var key = IndexKey(tag);
+            var set = await ReadSet(key, ct);
+            if (set.Add(cacheKey))
+            {
+                await WriteSet(key, set, ttl, ct);
+            }
+        }
+    }
+
+    public async Task<string[]> GetKeysAsync(IEnumerable<string> tags, CancellationToken ct)
+    {
+        var union = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t)))
+        {
+            var set = await ReadSet(IndexKey(tag), ct);
+            union.UnionWith(set);
+        }
+        return union.ToArray();
+    }
+
+    public async Task RemoveAsync(IEnumerable<string> tags, CancellationToken ct)
+    {
+        foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t)))
+            await _cache.RemoveAsync(IndexKey(tag), ct);
+    }
+
+    private static string IndexKey(string tag) => $"cache:tag:{tag}";
+
+    private async Task<HashSet<string>> ReadSet(string key, CancellationToken ct)
+    {
+        var bytes = await _cache.GetAsync(key, ct);
+        if (bytes is null || bytes.Length == 0) return new HashSet<string>(StringComparer.Ordinal);
+
+        try
+        {
+            var arr = JsonSerializer.Deserialize<string[]>(bytes, _json) ?? Array.Empty<string>();
+            return new HashSet<string>(arr, StringComparer.Ordinal);
+        }
+        catch
+        {
+            await _cache.RemoveAsync(key, ct);
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+    }
+
+    private Task WriteSet(string key, HashSet<string> set, TimeSpan ttl, CancellationToken ct)
+    {
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(set.ToArray(), _json);
+        return _cache.SetAsync(key, bytes, new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = ttl
+        }, ct);
+    }
+}

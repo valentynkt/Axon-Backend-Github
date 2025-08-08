@@ -11,14 +11,14 @@ public sealed class CacheOptions
     /// Used when IQuery.CacheDuration is null.
     /// </summary>
     public TimeSpan DefaultDuration { get; set; } = TimeSpan.FromMinutes(5);
-    
+
     /// <summary>
     /// Whether to include W3C TraceContext in cache keys for request isolation.
     /// When true, each trace gets its own cache entries.
     /// When false, cache is shared globally (better hit rates).
     /// </summary>
-    public bool IncludeTraceInKey { get; set; } = false;
-    
+    public bool IncludeTraceInKey { get; set; }
+
     /// <summary>
     /// Compression threshold for distributed cache entries (in bytes).
     /// Entries larger than this will be compressed before storage.
@@ -36,13 +36,13 @@ public sealed class CacheOptions
     /// Allows multiple applications to share the same Redis instance.
     /// </summary>
     public string InstanceName { get; set; } = "axon";
-    
+
     /// <summary>
     /// Redis database number to use (0-15 typically).
     /// Provides logical separation within a Redis instance.
     /// </summary>
-    public int DefaultDatabase { get; set; } = 0;
-    
+    public int DefaultDatabase { get; set; }
+
     /// <summary>
     /// Memory cache size limit in megabytes.
     /// Controls L1 cache memory usage to prevent unbounded growth.
