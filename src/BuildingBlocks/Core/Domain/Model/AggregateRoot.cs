@@ -1,18 +1,17 @@
+using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Domain.Rules;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional.Validation;
+using Error = BuildingBlocks.Core.Diagnostics.Errors.Error;
 
 namespace BuildingBlocks.Core.Domain.Model;
 
 /// <summary>
-/// Base class for aggregate roots following tactical DDD and Epic 2 specifications.
+/// Base class for aggregate roots following tactical DDD.
 /// Provides domain event support without event sourcing (MVP approach).
 /// Encapsulates business logic and maintains invariants.
-/// Integrates with Epic 1 functional foundation.
 /// </summary>
-/// <typeparam name="TId">The type of the aggregate identifier implementing IStrongId</typeparam>
 public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
     where TId : IStrongId
 {
@@ -235,4 +234,16 @@ public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
     }
     
     #endregion
+}
+
+/// <summary>
+/// Interface for aggregate roots
+/// </summary>
+public interface IAggregateRoot<TId> : IEntity<TId>
+    where TId : IStrongId
+{
+    IReadOnlyList<IDomainEvent> DomainEvents { get; }
+    void ClearDomainEvents();
+    Validation<Unit> Validate();
+    IReadOnlyList<IBusinessRule> GetBrokenRules();
 }

@@ -1,3 +1,4 @@
+global using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Options;
 
 namespace BuildingBlocks.Core.Functional.Results;

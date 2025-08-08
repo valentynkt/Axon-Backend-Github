@@ -1,15 +1,9 @@
-using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional;
-
-namespace BuildingBlocks.Core.Domain.Model;
+namespace BuildingBlocks.Core.Domain.Primitives;
 
 /// <summary>
-/// Base class for all domain entities following Epic 2 specifications.
-/// Provides identity, audit trail, versioning, and soft delete capabilities.
-/// Integrates with IStrongId system and Epic 1 functional foundation.
+/// Base class for all domain entities.
+/// Provides identity, audit trail, and soft delete capabilities.
 /// </summary>
-/// <typeparam name="TId">The type of the entity identifier implementing IStrongId</typeparam>
 public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     where TId : IStrongId
 {
@@ -18,8 +12,7 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
         Id = id;
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
-        IsDeleted = false;
-        Version = 1; // Initial version for new entities
+        Version = 1;
     }
     
     protected Entity()
@@ -27,12 +20,11 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
         // For ORM frameworks that require parameterless constructor
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
-        IsDeleted = false;
         Version = 1;
     }
     
     /// <summary>
-    /// Entity identifier using strongly-typed ID
+    /// Entity identifier
     /// </summary>
     public TId Id { get; protected set; } = default!;
     
@@ -49,7 +41,7 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     /// <summary>
     /// Soft delete flag
     /// </summary>
-    public bool IsDeleted { get; set; }
+    public bool IsDeleted { get; protected set; }
     
     /// <summary>
     /// Soft delete timestamp
@@ -59,9 +51,8 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     /// <summary>
     /// Version for optimistic locking - managed by ORM only
     /// Should be configured with [Timestamp] attribute or .IsRowVersion() in EF Core
-    /// Manual increment is dangerous and leads to concurrency issues
     /// </summary>
-    public long Version { get; set; }
+    public uint Version { get; protected set; }
     
     #region Identity and Equality
     
@@ -99,9 +90,8 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     #region State Management
     
     /// <summary>
-    /// Update the entity's modification timestamp.
-    /// Version is managed automatically by the ORM for optimistic concurrency.
-    /// Manual version increment is dangerous and leads to state mismatch.
+    /// Update the entity's modification timestamp
+    /// Version is managed automatically by the ORM for optimistic concurrency
     /// </summary>
     protected void Touch()
     {
@@ -111,42 +101,52 @@ public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
     }
     
     /// <summary>
-    /// Mark entity as deleted (soft delete).
-    /// Returns Result to maintain functional programming patterns.
+    /// Mark entity as deleted (soft delete)
     /// </summary>
-    protected virtual Result<Unit> MarkAsDeleted()
+    protected virtual void MarkAsDeleted()
     {
-        if (IsDeleted)
-        {
-            return Result<Unit>.Failure(
-                Error.BusinessRule("Entity is already deleted", "ENTITY_ALREADY_DELETED"));
-        }
-        
         IsDeleted = true;
         DeletedAt = DateTime.UtcNow;
         Touch();
-        
-        return Result<Unit>.Success(Unit.Value);
     }
     
     /// <summary>
-    /// Restore a soft-deleted entity.
-    /// Returns Result to maintain functional programming patterns.
+    /// Restore a soft-deleted entity
     /// </summary>
-    protected virtual Result<Unit> Restore()
+    protected virtual void Restore()
     {
-        if (!IsDeleted)
-        {
-            return Result<Unit>.Failure(
-                Error.BusinessRule("Entity is not deleted", "ENTITY_NOT_DELETED"));
-        }
-        
         IsDeleted = false;
         DeletedAt = null;
         Touch();
-        
-        return Result<Unit>.Success(Unit.Value);
     }
     
     #endregion
+}
+
+/// <summary>
+/// Interface for entities with strongly-typed identifiers
+/// </summary>
+public interface IEntity<TId> : IEntity
+    where TId : IStrongId
+{
+    TId Id { get; }
+}
+
+/// <summary>
+/// Non-generic entity interface
+/// </summary>
+public interface IEntity : IAuditable
+{
+    uint Version { get; }
+    bool IsDeleted { get; }
+    DateTime? DeletedAt { get; }
+}
+
+/// <summary>
+/// Interface for auditable entities
+/// </summary>
+public interface IAuditable
+{
+    DateTime CreatedAt { get; }
+    DateTime UpdatedAt { get; }
 }

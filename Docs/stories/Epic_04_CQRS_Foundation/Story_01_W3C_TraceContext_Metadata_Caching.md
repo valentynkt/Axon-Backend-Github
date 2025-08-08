@@ -5,7 +5,23 @@
 **Priority:** P0 - Critical Foundation  
 **Estimated Effort:** 4 hours  
 **Dependencies:** Epic_01 (Functional Foundation)  
-**Target Sprint:** Current  
+**Status:** ❌ **NOT IMPLEMENTED**  
+**Target Sprint:** **NEEDS PRIORITIZATION**  
+
+---
+
+## 🚨 **IMPLEMENTATION STATUS**
+
+**Current Reality vs. Documentation:**
+- ❌ **W3C TraceContext properties**: Missing from `IAxonRequest` interface
+- ❌ **Metadata dictionary**: Not implemented in request contracts  
+- ❌ **Declarative caching**: No caching properties on queries
+- ⚠️ **Implementation guide**: Shows non-existent code
+
+**Actual Current State:**
+- ✅ Basic `IAxonRequest` with `RequestId` and `RequestedAt` 
+- ✅ W3C ActivityIdFormat configured in OpenTelemetry
+- ❌ No enhanced request contracts as documented
 
 ---
 
@@ -22,11 +38,12 @@
 ### Existing System Integration
 
 - **Current State:** 
-  - Basic `ICommand<T>` and `IQuery<T>` interfaces exist
-  - `RequestBase` provides `RequestId` and `RequestedAt` properties
-  - OpenTelemetry infrastructure with Activity support in place
-  - No correlation tracking or metadata support
-  - No declarative caching properties
+  - ✅ Basic `ICommand<T>` and `IQuery<T>` interfaces exist
+  - ✅ `RequestBase` provides `RequestId` and `RequestedAt` properties
+  - ✅ OpenTelemetry infrastructure with Activity support in place
+  - ❌ **MISSING**: W3C TraceContext properties in request contracts
+  - ❌ **MISSING**: Metadata dictionary support
+  - ❌ **MISSING**: Declarative caching properties on queries
 
 - **Integration Points:**
   - Existing MediatR pipeline behaviors
@@ -61,25 +78,27 @@ var traceId = activity?.TraceId.ToString();
 
 ## ✅ Acceptance Criteria
 
-### Functional Requirements
+### Functional Requirements - **❌ NOT IMPLEMENTED**
 
 1. **W3C TraceContext Integration**
-   - [ ] Commands/queries expose TraceId via `Activity.Current`
-   - [ ] SpanId and ParentSpanId accessible through helper properties
-   - [ ] No manual correlation ID generation required
-   - [ ] Automatic propagation through async context
+   - ❌ Commands/queries expose TraceId via `Activity.Current` - **MISSING PROPERTIES**
+   - ❌ SpanId and ParentSpanId accessible through helper properties - **NOT IN INTERFACE**
+   - ❌ No manual correlation ID generation required - **NO W3C INTEGRATION**
+   - ✅ Automatic propagation through async context - **Activity works, but not exposed**
 
 2. **Metadata Support**
-   - [ ] All requests expose `IReadOnlyDictionary<string, object> Metadata`
-   - [ ] Metadata is immutable after creation
-   - [ ] Helper method `WithMetadata<T>()` for fluent additions
-   - [ ] Support for tenant context, feature flags, etc.
+   - ❌ All requests expose `IReadOnlyDictionary<string, object> Metadata` - **MISSING PROPERTY**
+   - ❌ Metadata is immutable after creation - **NO METADATA SUPPORT**
+   - ❌ Helper method `WithMetadata<T>()` for fluent additions - **NOT IMPLEMENTED**
+   - ❌ Support for tenant context, feature flags, etc. - **NOT AVAILABLE**
 
 3. **Declarative Query Caching**
-   - [ ] Queries expose `bool UseCache` property (default: false)
-   - [ ] Queries expose `TimeSpan? CacheDuration` property
-   - [ ] Queries provide `string CacheKeyPrefix` property
-   - [ ] Helper method `AsCached<T>()` for dynamic cache enablement
+   - ❌ Queries expose `bool UseCache` property (default: false) - **MISSING FROM QUERY CONTRACTS**
+   - ❌ Queries expose `TimeSpan? CacheDuration` property - **NOT IMPLEMENTED**
+   - ❌ Queries provide `string CacheKeyPrefix` property - **NOT AVAILABLE**
+   - ❌ Helper method `AsCached<T>()` for dynamic cache enablement - **NOT IMPLEMENTED**
+
+**Note**: Current `ICacheRequest` interface exists but is separate from query contracts and lacks declarative properties.
 
 ### Non-Functional Requirements
 

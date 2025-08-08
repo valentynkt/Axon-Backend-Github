@@ -1,9 +1,8 @@
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Events;
 
 /// <summary>
-/// Marker interface for domain events following Epic 2 specifications.
-/// Domain events represent something important that happened in the domain.
-/// Processed without event sourcing - events are for integration, not state reconstruction.
+/// Marker interface for domain events
+/// Domain events represent something important that happened in the domain
 /// </summary>
 public interface IDomainEvent
 {

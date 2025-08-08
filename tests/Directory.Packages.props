@@ -27,7 +27,7 @@
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.0-preview.5.25277.114" />
     
     <!-- Domain/Application -->
-    <PackageVersion Include="MediatR" Version="12.4.1" />
+    <PackageVersion Include="MediatR" Version="13.0.0" />
     
     <!-- Additional Test Tools -->
     <PackageVersion Include="RichardSzalay.MockHttp" Version="7.0.0" />

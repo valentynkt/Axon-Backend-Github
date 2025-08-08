@@ -38,9 +38,9 @@ public readonly record struct Unit : IComparable<Unit>, IEquatable<Unit>
     public override int GetHashCode() => 0;
     
     /// <summary>
-    /// Unit constructor (private to ensure singleton pattern)
+    /// Implicit conversion from any value to Unit (discards the value)
     /// </summary>
-    private Unit() { }
+    public static implicit operator Unit(object? _) => Value;
     
     /// <summary>
     /// Task<Unit> factory for async operations that return no data
@@ -51,6 +51,26 @@ public readonly record struct Unit : IComparable<Unit>, IEquatable<Unit>
     /// ValueTask<Unit> factory for high-performance async operations
     /// </summary>
     public static ValueTask<Unit> ValueTask => System.Threading.Tasks.ValueTask.FromResult(Value);
+
+    public static bool operator <(Unit left, Unit right)
+    {
+        return left.CompareTo(right) < 0;
+    }
+
+    public static bool operator <=(Unit left, Unit right)
+    {
+        return left.CompareTo(right) <= 0;
+    }
+
+    public static bool operator >(Unit left, Unit right)
+    {
+        return left.CompareTo(right) > 0;
+    }
+
+    public static bool operator >=(Unit left, Unit right)
+    {
+        return left.CompareTo(right) >= 0;
+    }
 }
 
 /// <summary>
