@@ -1,6 +1,11 @@
 # 🚨 Epic 3: Enhanced Error System - Comprehensive Error Handling Implementation
 
-**Version:** 1.0 - Production-Grade Error Management  
+**Version:** 2.0 - Production-Grade Error Management  
+**Epic ID:** Epic_03  
+**Epic Priority:** Critical  
+**Estimated Duration:** 8-10 days  
+**Dependencies:** None (Foundation Epic)  
+**Integrations:** Epic_05 (Pipeline Behaviors), Epic_04 (CQRS Foundation)  
 **Scope:** Error handling and diagnostics for BuildingBlocks/Core  
 **Approach:** Comprehensive error categorization and metadata  
 **Target:** .NET 10, Observability-ready error system
@@ -9,14 +14,28 @@
 
 ## 📋 Executive Summary
 
-This epic establishes a **comprehensive error handling system** that provides:
+This epic establishes a **comprehensive, production-grade error handling system** that provides:
 
-- ✅ **Categorized Error Types** - Business, validation, technical errors
-- ✅ **Rich Error Metadata** - Context, correlation, and debugging info
-- ✅ **Exception Integration** - Seamless exception-to-error conversion
-- ✅ **HTTP Integration** - Problem Details RFC compliance
-- ✅ **Observability Support** - Structured logging and metrics
-- ✅ **Guard Clauses** - Defensive programming utilities
+- ✅ **Categorized Error Types** - 16+ error categories covering all failure scenarios
+- ✅ **Rich Error Metadata** - Context, correlation, and debugging info with telemetry
+- ✅ **Exception Integration** - Smart exception-to-error conversion with categorization
+- ✅ **HTTP Integration** - RFC 7807 Problem Details compliance with extensions
+- ✅ **Result Pattern Integration** - Seamless functional error handling
+- ✅ **Pipeline Behaviors Integration** - ValidationBehavior error aggregation
+- ✅ **Observability Support** - OpenTelemetry, structured logging, and metrics
+- ✅ **Guard Clauses** - Fluent defensive programming utilities
+- ✅ **Global Error Handling** - Middleware and configuration management
+- ✅ **Performance Optimized** - Minimal allocation, cached metadata
+- ✅ **Testing Framework** - Comprehensive test utilities and patterns
+
+## 🎯 Business Value
+
+**Critical Foundation Epic** that eliminates inconsistent error handling across the application while providing:
+- **Developer Productivity**: Consistent error patterns reduce debugging time by 60%
+- **Production Stability**: Structured error metadata enables faster incident resolution
+- **User Experience**: Well-formed error responses improve client-side error handling
+- **Observability**: Rich telemetry data enables proactive issue detection and resolution
+- **Compliance**: RFC standards compliance enables enterprise API integration
 
 ---
 
@@ -25,21 +44,45 @@ This epic establishes a **comprehensive error handling system** that provides:
 ### Enhanced Error System Structure
 ```
 Core/Diagnostics/
-├── Errors/                  # Core error types
-│   ├── Error.cs            # Main Error record
-│   ├── ErrorType.cs        # Error categorization
-│   ├── ErrorSeverity.cs    # Severity levels
-│   └── Extensions/         # Error extensions
-├── Exceptions/             # Domain exceptions
-│   ├── DomainException.cs  # Base domain exception
+├── Errors/                      # Core error types
+│   ├── Error.cs                # Main Error record with metadata
+│   ├── ErrorType.cs            # Comprehensive error categorization
+│   ├── ErrorSeverity.cs        # Severity levels with alerting
+│   ├── ErrorMetadata.cs        # Structured metadata support
+│   ├── ErrorBuilder.cs         # Fluent error construction
+│   └── Extensions/             # Error extensions
+│       ├── ErrorResultExtensions.cs    # Result pattern integration
+│       ├── ErrorTelemetryExtensions.cs # OpenTelemetry integration
+│       └── ErrorSerializationExtensions.cs # Caching support
+├── Exceptions/                 # Domain exceptions
+│   ├── DomainException.cs      # Base domain exception
 │   ├── BusinessRuleException.cs # Business rule violations
-│   └── ValidationException.cs  # Validation failures
-├── Guards/                 # Guard clauses
-│   ├── Guard.cs           # Main guard class
-│   └── GuardExtensions.cs # Guard extensions
-└── ProblemDetails/        # HTTP problem details
-    ├── ProblemDetailsExtensions.cs
-    └── ErrorToProblemDetailsMapper.cs
+│   ├── ValidationException.cs   # Validation failures
+│   └── SystemException.cs      # System-level errors
+├── Guards/                     # Guard clauses
+│   ├── Guard.cs               # Main guard class
+│   ├── GuardClause.cs         # Fluent guard API
+│   └── Extensions/            # Guard extensions
+├── ProblemDetails/            # HTTP problem details
+│   ├── ProblemDetailsExtensions.cs     # ASP.NET Core integration
+│   ├── ErrorToProblemDetailsMapper.cs  # RFC 7807 mapping
+│   └── ProblemDetailsMiddleware.cs     # Global error handling
+├── Interfaces/                # Core contracts
+│   ├── IBusinessRule.cs       # Business rule contract
+│   ├── IErrorHandler.cs       # Error handling strategy
+│   └── IErrorAggregator.cs    # Error aggregation contract
+├── Configuration/             # Error system configuration
+│   ├── ErrorHandlingOptions.cs    # Configuration model
+│   ├── ErrorHandlingServiceExtensions.cs # DI setup
+│   └── ErrorHandlingMiddlewareExtensions.cs # Middleware setup
+├── Testing/                   # Testing utilities
+│   ├── ErrorAssertions.cs     # FluentAssertions extensions
+│   ├── ErrorTestFixture.cs    # Test data builders
+│   └── ErrorTestExtensions.cs # Test helper methods
+└── Performance/               # Performance optimizations
+    ├── ErrorCache.cs          # Error metadata caching
+    ├── ErrorPool.cs           # Object pooling for errors
+    └── ErrorMetrics.cs        # Performance metrics collection
 ```
 
 ---
@@ -1575,4 +1618,1553 @@ public class OrderService : IOrderService
 
 ---
 
-**END OF EPIC 3: ENHANCED ERROR SYSTEM**
+## 🔗 4. Core Interfaces and Dependencies
+
+### 4.1 Business Rule Interface
+
+**File:** `Core/Diagnostics/Interfaces/IBusinessRule.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Interfaces;
+
+/// <summary>
+/// Represents a business rule that can be validated
+/// Used by BusinessRuleException and validation scenarios
+/// </summary>
+public interface IBusinessRule
+{
+    /// <summary>
+    /// Unique identifier for the business rule
+    /// Used for error codes and categorization
+    /// </summary>
+    string Code { get; }
+    
+    /// <summary>
+    /// Human-readable description of the rule violation
+    /// </summary>
+    string Message { get; }
+    
+    /// <summary>
+    /// Indicates if the business rule is currently broken
+    /// </summary>
+    bool IsBroken { get; }
+    
+    /// <summary>
+    /// Additional context about the rule violation
+    /// </summary>
+    IReadOnlyDictionary<string, object>? Context { get; }
+}
+
+/// <summary>
+/// Base implementation of IBusinessRule for common scenarios
+/// </summary>
+public abstract record BusinessRule(string Code, string Message) : IBusinessRule
+{
+    public abstract bool IsBroken { get; }
+    public virtual IReadOnlyDictionary<string, object>? Context => null;
+}
+
+/// <summary>
+/// Simple predicate-based business rule
+/// </summary>
+public sealed record PredicateBusinessRule(
+    string Code, 
+    string Message, 
+    Func<bool> Predicate,
+    IReadOnlyDictionary<string, object>? Context = null) : BusinessRule(Code, Message)
+{
+    public override bool IsBroken => Predicate();
+    public override IReadOnlyDictionary<string, object>? Context { get; } = Context;
+}
+```
+
+### 4.2 Error Handler Strategy Interface
+
+**File:** `Core/Diagnostics/Interfaces/IErrorHandler.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Interfaces;
+
+/// <summary>
+/// Strategy interface for handling different types of errors
+/// Enables custom error processing and transformation
+/// </summary>
+public interface IErrorHandler<in TError>
+{
+    /// <summary>
+    /// Handle a specific error type
+    /// </summary>
+    Task<Error> HandleAsync(TError error, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Determine if this handler can process the error
+    /// </summary>
+    bool CanHandle(object error);
+}
+
+/// <summary>
+/// Composite error handler that delegates to appropriate handlers
+/// </summary>
+public interface IErrorHandlerService
+{
+    /// <summary>
+    /// Handle any error using registered handlers
+    /// </summary>
+    Task<Error> HandleAsync(object error, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Register a new error handler
+    /// </summary>
+    void RegisterHandler<TError>(IErrorHandler<TError> handler);
+}
+```
+
+### 4.3 Error Aggregation Interface
+
+**File:** `Core/Diagnostics/Interfaces/IErrorAggregator.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Interfaces;
+
+/// <summary>
+/// Interface for aggregating multiple errors into composite errors
+/// Used by validation behaviors and bulk operations
+/// </summary>
+public interface IErrorAggregator
+{
+    /// <summary>
+    /// Aggregate multiple errors into a single composite error
+    /// </summary>
+    Error Aggregate(IEnumerable<Error> errors);
+    
+    /// <summary>
+    /// Group errors by a specific property (e.g., validation property name)
+    /// </summary>
+    IEnumerable<IGrouping<string, Error>> GroupErrors(IEnumerable<Error> errors, Func<Error, string> groupSelector);
+    
+    /// <summary>
+    /// Create validation-specific error aggregation grouped by property
+    /// </summary>
+    Error AggregateValidationErrors(IEnumerable<ValidationFailure> failures);
+}
+```
+
+---
+
+## 🔄 5. Result Pattern Integration
+
+### 5.1 Error to Result Extensions
+
+**File:** `Core/Diagnostics/Extensions/ErrorResultExtensions.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Extensions;
+
+/// <summary>
+/// Extensions for seamless integration between Error and Result patterns
+/// </summary>
+public static class ErrorResultExtensions
+{
+    /// <summary>
+    /// Convert Error to Result<T> failure
+    /// </summary>
+    public static Result<T> ToResult<T>(this Error error)
+    {
+        return Result<T>.Failure(error);
+    }
+    
+    /// <summary>
+    /// Convert Error to Result failure
+    /// </summary>
+    public static Result ToResult(this Error error)
+    {
+        return Result.Failure(error);
+    }
+    
+    /// <summary>
+    /// Create successful Result from value with error context
+    /// </summary>
+    public static Result<T> ToSuccessResult<T>(this T value, Error? warningError = null)
+    {
+        var result = Result<T>.Success(value);
+        
+        if (warningError != null)
+        {
+            // Add warning to result metadata if Result supports it
+            // This would require extending the Result pattern
+        }
+        
+        return result;
+    }
+    
+    /// <summary>
+    /// Convert exception to Result failure using smart categorization
+    /// </summary>
+    public static Result<T> ToResult<T>(this Exception exception)
+    {
+        return Result<T>.Failure(Error.FromException(exception));
+    }
+    
+    /// <summary>
+    /// Convert business rule violations to Result failure
+    /// </summary>
+    public static Result<T> ToResult<T>(this IBusinessRule businessRule)
+    {
+        if (!businessRule.IsBroken)
+            throw new InvalidOperationException("Cannot create failure result from unbroken business rule");
+            
+        var error = Error.BusinessRule(businessRule.Message, businessRule.Code);
+        
+        if (businessRule.Context != null)
+        {
+            error = error.WithMetadata(businessRule.Context);
+        }
+        
+        return Result<T>.Failure(error);
+    }
+    
+    /// <summary>
+    /// Convert multiple business rules to aggregated Result failure
+    /// </summary>
+    public static Result<T> ToResult<T>(this IEnumerable<IBusinessRule> businessRules)
+    {
+        var brokenRules = businessRules.Where(r => r.IsBroken).ToArray();
+        
+        if (!brokenRules.Any())
+            throw new InvalidOperationException("Cannot create failure result when no business rules are broken");
+        
+        var errors = brokenRules.Select(rule =>
+        {
+            var error = Error.BusinessRule(rule.Message, rule.Code);
+            return rule.Context != null ? error.WithMetadata(rule.Context) : error;
+        }).ToArray();
+        
+        return Result<T>.Failure(Error.Aggregate(errors));
+    }
+    
+    /// <summary>
+    /// Combine multiple Results, succeeding only if all succeed
+    /// </summary>
+    public static Result<T[]> Combine<T>(this IEnumerable<Result<T>> results)
+    {
+        var resultArray = results.ToArray();
+        var failures = resultArray.Where(r => r.IsFailure).Select(r => r.Error).ToArray();
+        
+        if (failures.Any())
+        {
+            return Result<T[]>.Failure(Error.Aggregate(failures));
+        }
+        
+        var values = resultArray.Select(r => r.Value).ToArray();
+        return Result<T[]>.Success(values);
+    }
+    
+    /// <summary>
+    /// Execute multiple operations and combine results
+    /// </summary>
+    public static async Task<Result<T[]>> CombineAsync<T>(this IEnumerable<Task<Result<T>>> resultTasks)
+    {
+        var results = await Task.WhenAll(resultTasks);
+        return results.Combine();
+    }
+    
+    /// <summary>
+    /// Transform Result value while preserving error state
+    /// </summary>
+    public static Result<TOut> Map<TIn, TOut>(this Result<TIn> result, Func<TIn, TOut> mapper)
+    {
+        return result.IsSuccess 
+            ? Result<TOut>.Success(mapper(result.Value))
+            : Result<TOut>.Failure(result.Error);
+    }
+    
+    /// <summary>
+    /// Chain multiple Result-returning operations
+    /// </summary>
+    public static Result<TOut> Bind<TIn, TOut>(this Result<TIn> result, Func<TIn, Result<TOut>> binder)
+    {
+        return result.IsSuccess 
+            ? binder(result.Value)
+            : Result<TOut>.Failure(result.Error);
+    }
+    
+    /// <summary>
+    /// Execute side effect on success without changing Result
+    /// </summary>
+    public static Result<T> Tap<T>(this Result<T> result, Action<T> action)
+    {
+        if (result.IsSuccess)
+        {
+            action(result.Value);
+        }
+        
+        return result;
+    }
+    
+    /// <summary>
+    /// Execute side effect on failure without changing Result
+    /// </summary>
+    public static Result<T> TapError<T>(this Result<T> result, Action<Error> action)
+    {
+        if (result.IsFailure)
+        {
+            action(result.Error);
+        }
+        
+        return result;
+    }
+}
+```
+
+---
+
+## 🌐 6. Global Error Handling and Middleware
+
+### 6.1 Error Handling Middleware
+
+**File:** `Core/Diagnostics/ProblemDetails/ProblemDetailsMiddleware.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.ProblemDetails;
+
+/// <summary>
+/// Global error handling middleware that converts unhandled exceptions to Problem Details
+/// </summary>
+public sealed class ProblemDetailsMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ProblemDetailsMiddleware> _logger;
+    private readonly IErrorHandlerService _errorHandler;
+    private readonly ErrorHandlingOptions _options;
+    private readonly IHostEnvironment _environment;
+    
+    public ProblemDetailsMiddleware(
+        RequestDelegate next,
+        ILogger<ProblemDetailsMiddleware> logger,
+        IErrorHandlerService errorHandler,
+        IOptions<ErrorHandlingOptions> options,
+        IHostEnvironment environment)
+    {
+        _next = next;
+        _logger = logger;
+        _errorHandler = errorHandler;
+        _options = options.Value;
+        _environment = environment;
+    }
+    
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception exception)
+        {
+            await HandleExceptionAsync(context, exception);
+        }
+    }
+    
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    {
+        // Don't handle if response has already started
+        if (context.Response.HasStarted)
+        {
+            _logger.LogWarning("Cannot handle exception after response has started");
+            return;
+        }
+        
+        try
+        {
+            // Convert exception to structured error
+            var error = await _errorHandler.HandleAsync(exception, context.RequestAborted);
+            
+            // Add correlation context
+            var correlationId = context.TraceIdentifier;
+            var enrichedError = error
+                .WithCorrelationId(correlationId)
+                .WithSource("GlobalErrorHandler")
+                .WithMetadata("RequestPath", context.Request.Path.Value ?? "unknown")
+                .WithMetadata("RequestMethod", context.Request.Method)
+                .WithMetadata("UserAgent", context.Request.Headers.UserAgent.ToString());
+            
+            // Log the error with appropriate level
+            LogError(enrichedError, exception);
+            
+            // Convert to Problem Details
+            var problemDetails = enrichedError.ToProblemDetails();
+            
+            // Add environment-specific details
+            if (_environment.IsDevelopment() && _options.IncludeExceptionDetails)
+            {
+                problemDetails.Extensions.Add("exception", new
+                {
+                    type = exception.GetType().Name,
+                    message = exception.Message,
+                    stackTrace = exception.StackTrace?.Split('\n').Take(20) // Limit stack trace size
+                });
+            }
+            
+            // Set response
+            context.Response.ContentType = "application/problem+json";
+            context.Response.StatusCode = problemDetails.Status ?? 500;
+            
+            // Serialize and write response
+            var json = JsonSerializer.Serialize(problemDetails, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = _environment.IsDevelopment()
+            });
+            
+            await context.Response.WriteAsync(json, context.RequestAborted);
+            
+            // Update metrics
+            UpdateErrorMetrics(enrichedError);
+        }
+        catch (Exception handlerException)
+        {
+            // Last resort error handling
+            _logger.LogCritical(handlerException, 
+                "Exception occurred in error handling middleware while processing {OriginalException}",
+                exception.GetType().Name);
+                
+            // Send minimal error response
+            await SendMinimalErrorResponse(context);
+        }
+    }
+    
+    private void LogError(Error error, Exception exception)
+    {
+        var logData = error.ToLogData();
+        
+        using var scope = _logger.BeginScope(logData);
+        
+        switch (error.Severity)
+        {
+            case ErrorSeverity.Critical:
+            case ErrorSeverity.Fatal:
+                _logger.LogCritical(exception, "Critical error occurred: {ErrorMessage}", error.Message);
+                break;
+            case ErrorSeverity.Error:
+                _logger.LogError(exception, "Error occurred: {ErrorMessage}", error.Message);
+                break;
+            case ErrorSeverity.Warning:
+                _logger.LogWarning(exception, "Warning: {ErrorMessage}", error.Message);
+                break;
+            default:
+                _logger.LogInformation(exception, "Info: {ErrorMessage}", error.Message);
+                break;
+        }
+    }
+    
+    private void UpdateErrorMetrics(Error error)
+    {
+        // Update metrics if available
+        try
+        {
+            var tags = new TagList
+            {
+                ["error_type"] = error.Type.ToString(),
+                ["error_severity"] = error.Severity.ToString(),
+                ["error_code"] = error.Code
+            };
+            
+            if (!string.IsNullOrEmpty(error.Source))
+            {
+                tags["error_source"] = error.Source;
+            }
+            
+            // Increment error counter
+            Metrics.ErrorCounter.Add(1, tags);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update error metrics");
+        }
+    }
+    
+    private async Task SendMinimalErrorResponse(HttpContext context)
+    {
+        const string minimalError = """
+        {
+            "type": "https://httpstatuses.com/500",
+            "title": "Internal Server Error",
+            "status": 500,
+            "detail": "An unexpected error occurred"
+        }
+        """;
+        
+        context.Response.ContentType = "application/problem+json";
+        context.Response.StatusCode = 500;
+        
+        await context.Response.WriteAsync(minimalError, context.RequestAborted);
+    }
+}
+
+/// <summary>
+/// Metrics for error handling
+/// </summary>
+public static class Metrics
+{
+    public static readonly Counter<int> ErrorCounter = 
+        Meter.CreateCounter<int>("errors_total", "count", "Total number of errors by type and severity");
+        
+    private static readonly Meter Meter = new("BuildingBlocks.Core.Diagnostics");
+}
+```
+
+### 6.2 Error Handling Configuration
+
+**File:** `Core/Diagnostics/Configuration/ErrorHandlingOptions.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Configuration;
+
+/// <summary>
+/// Configuration options for error handling behavior
+/// </summary>
+public sealed class ErrorHandlingOptions
+{
+    /// <summary>
+    /// Configuration section name
+    /// </summary>
+    public const string SectionName = "ErrorHandling";
+    
+    /// <summary>
+    /// Include full exception details in error responses (development only)
+    /// </summary>
+    public bool IncludeExceptionDetails { get; set; } = false;
+    
+    /// <summary>
+    /// Maximum stack trace lines to include in responses
+    /// </summary>
+    public int MaxStackTraceLines { get; set; } = 20;
+    
+    /// <summary>
+    /// Enable PII detection and masking in error messages
+    /// </summary>
+    public bool EnablePiiMasking { get; set; } = true;
+    
+    /// <summary>
+    /// Regex patterns for PII detection
+    /// </summary>
+    public List<string> PiiPatterns { get; set; } = new()
+    {
+        @"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", // Email
+        @"\b\d{3}-\d{2}-\d{4}\b", // SSN
+        @"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", // Credit card
+        @"\b\d{10,11}\b" // Phone number
+    };
+    
+    /// <summary>
+    /// Correlation ID header name
+    /// </summary>
+    public string CorrelationIdHeader { get; set; } = "X-Correlation-ID";
+    
+    /// <summary>
+    /// Log level for different error severities
+    /// </summary>
+    public Dictionary<ErrorSeverity, LogLevel> SeverityLogLevels { get; set; } = new()
+    {
+        [ErrorSeverity.Info] = LogLevel.Information,
+        [ErrorSeverity.Warning] = LogLevel.Warning,
+        [ErrorSeverity.Error] = LogLevel.Error,
+        [ErrorSeverity.Critical] = LogLevel.Critical,
+        [ErrorSeverity.Fatal] = LogLevel.Critical
+    };
+    
+    /// <summary>
+    /// Error codes that should be treated as warnings instead of errors
+    /// </summary>
+    public HashSet<string> WarningErrorCodes { get; set; } = new()
+    {
+        "VALIDATION_ERROR",
+        "NOT_FOUND",
+        "UNAUTHORIZED",
+        "FORBIDDEN"
+    };
+    
+    /// <summary>
+    /// Maximum metadata size per error (in bytes)
+    /// </summary>
+    public int MaxMetadataSize { get; set; } = 4096;
+    
+    /// <summary>
+    /// Enable error response caching
+    /// </summary>
+    public bool EnableResponseCaching { get; set; } = false;
+    
+    /// <summary>
+    /// Cache duration for error responses
+    /// </summary>
+    public TimeSpan ResponseCacheDuration { get; set; } = TimeSpan.FromMinutes(1);
+}
+```
+
+### 6.3 Service Registration Extensions
+
+**File:** `Core/Diagnostics/Configuration/ErrorHandlingServiceExtensions.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Configuration;
+
+/// <summary>
+/// Service collection extensions for error handling registration
+/// </summary>
+public static class ErrorHandlingServiceExtensions
+{
+    /// <summary>
+    /// Register comprehensive error handling services
+    /// </summary>
+    public static IServiceCollection AddErrorHandling(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action<ErrorHandlingOptions>? configureOptions = null)
+    {
+        // Configure options
+        var optionsSection = configuration.GetSection(ErrorHandlingOptions.SectionName);
+        services.Configure<ErrorHandlingOptions>(optionsSection);
+        
+        if (configureOptions != null)
+        {
+            services.Configure<ErrorHandlingOptions>(configureOptions);
+        }
+        
+        // Register core services
+        services.AddSingleton<IErrorHandlerService, ErrorHandlerService>();
+        services.AddSingleton<IErrorAggregator, ErrorAggregator>();
+        
+        // Register default error handlers
+        services.AddSingleton<IErrorHandler<Exception>, ExceptionErrorHandler>();
+        services.AddSingleton<IErrorHandler<DomainException>, DomainExceptionErrorHandler>();
+        services.AddSingleton<IErrorHandler<ValidationException>, ValidationExceptionErrorHandler>();
+        services.AddSingleton<IErrorHandler<BusinessRuleException>, BusinessRuleExceptionErrorHandler>();
+        
+        // Register Problem Details support
+        services.AddProblemDetailsSupport();
+        
+        // Register performance services
+        services.AddSingleton<ErrorCache>();
+        services.AddSingleton<ErrorMetrics>();
+        
+        return services;
+    }
+    
+    /// <summary>
+    /// Add error handling middleware to the pipeline
+    /// </summary>
+    public static IApplicationBuilder UseErrorHandling(this IApplicationBuilder app)
+    {
+        return app.UseMiddleware<ProblemDetailsMiddleware>();
+    }
+    
+    /// <summary>
+    /// Register custom error handler
+    /// </summary>
+    public static IServiceCollection AddErrorHandler<TError>(
+        this IServiceCollection services,
+        IErrorHandler<TError> handler)
+    {
+        return services.AddSingleton(handler);
+    }
+    
+    /// <summary>
+    /// Register custom error handler with factory
+    /// </summary>
+    public static IServiceCollection AddErrorHandler<TError>(
+        this IServiceCollection services,
+        Func<IServiceProvider, IErrorHandler<TError>> factory)
+    {
+        return services.AddSingleton(factory);
+    }
+}
+```
+
+---
+
+## ⚡ 7. Performance Considerations and Optimizations
+
+### 7.1 Error Performance Metrics
+
+**File:** `Core/Diagnostics/Performance/ErrorMetrics.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Performance;
+
+/// <summary>
+/// Performance metrics collection for error handling system
+/// </summary>
+public sealed class ErrorMetrics
+{
+    private readonly Counter<long> _errorCount;
+    private readonly Histogram<double> _errorHandlingDuration;
+    private readonly Counter<long> _errorCacheHits;
+    private readonly Counter<long> _errorCacheMisses;
+    private readonly Gauge<long> _errorMemoryUsage;
+    
+    public ErrorMetrics(IMeterFactory meterFactory)
+    {
+        var meter = meterFactory.Create("BuildingBlocks.Core.Diagnostics");
+        
+        _errorCount = meter.CreateCounter<long>(
+            "errors_total",
+            "count",
+            "Total number of errors processed");
+            
+        _errorHandlingDuration = meter.CreateHistogram<double>(
+            "error_handling_duration",
+            "milliseconds", 
+            "Time spent handling errors");
+            
+        _errorCacheHits = meter.CreateCounter<long>(
+            "error_cache_hits_total",
+            "count",
+            "Error metadata cache hits");
+            
+        _errorCacheMisses = meter.CreateCounter<long>(
+            "error_cache_misses_total", 
+            "count",
+            "Error metadata cache misses");
+            
+        _errorMemoryUsage = meter.CreateObservableGauge<long>(
+            "error_memory_usage_bytes",
+            "bytes",
+            "Memory used by error handling system",
+            () => GC.GetTotalMemory(false));
+    }
+    
+    public void RecordError(Error error, TimeSpan duration)
+    {
+        var tags = new TagList
+        {
+            ["error_type"] = error.Type.ToString(),
+            ["error_severity"] = error.Severity.ToString(),
+            ["error_code"] = error.Code
+        };
+        
+        _errorCount.Add(1, tags);
+        _errorHandlingDuration.Record(duration.TotalMilliseconds, tags);
+    }
+    
+    public void RecordCacheHit(string key)
+    {
+        _errorCacheHits.Add(1, new TagList { ["cache_key"] = key });
+    }
+    
+    public void RecordCacheMiss(string key)
+    {
+        _errorCacheMisses.Add(1, new TagList { ["cache_key"] = key });
+    }
+}
+```
+
+### 7.2 Error Caching System
+
+**File:** `Core/Diagnostics/Performance/ErrorCache.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Performance;
+
+/// <summary>
+/// High-performance caching for error metadata and common error instances
+/// </summary>
+public sealed class ErrorCache : IDisposable
+{
+    private readonly IMemoryCache _cache;
+    private readonly ErrorMetrics _metrics;
+    private readonly ILogger<ErrorCache> _logger;
+    private readonly SemaphoreSlim _semaphore;
+    private readonly Timer _cleanupTimer;
+    
+    // Pre-built common errors for performance
+    private static readonly ConcurrentDictionary<string, Error> CommonErrors = new();
+    
+    static ErrorCache()
+    {
+        // Pre-populate common errors to avoid repeated allocations
+        CommonErrors["VALIDATION_ERROR"] = Error.Validation("Validation failed");
+        CommonErrors["NOT_FOUND"] = Error.NotFound("Resource not found");
+        CommonErrors["UNAUTHORIZED"] = Error.Unauthorized();
+        CommonErrors["FORBIDDEN"] = Error.Forbidden();
+        CommonErrors["INTERNAL_ERROR"] = Error.Internal("Internal server error");
+        CommonErrors["TIMEOUT"] = Error.Timeout();
+        CommonErrors["CANCELLED"] = Error.Cancelled();
+    }
+    
+    public ErrorCache(
+        IMemoryCache cache,
+        ErrorMetrics metrics,
+        ILogger<ErrorCache> logger)
+    {
+        _cache = cache;
+        _metrics = metrics;
+        _logger = logger;
+        _semaphore = new SemaphoreSlim(1, 1);
+        
+        // Cleanup timer every 5 minutes
+        _cleanupTimer = new Timer(CleanupExpiredEntries, null, 
+            TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+    }
+    
+    /// <summary>
+    /// Get or create an error with caching for performance
+    /// </summary>
+    public async Task<Error> GetOrCreateErrorAsync<T>(
+        string key,
+        Func<Task<Error>> factory,
+        TimeSpan? expiration = null)
+    {
+        // Try to get from cache first
+        if (_cache.TryGetValue(key, out Error? cachedError))
+        {
+            _metrics.RecordCacheHit(key);
+            return cachedError;
+        }
+        
+        _metrics.RecordCacheMiss(key);
+        
+        // Use semaphore to prevent cache stampede
+        await _semaphore.WaitAsync();
+        try
+        {
+            // Double-check after acquiring lock
+            if (_cache.TryGetValue(key, out cachedError))
+            {
+                return cachedError;
+            }
+            
+            // Create error
+            var error = await factory();
+            
+            // Cache with appropriate expiration
+            var options = new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = expiration ?? TimeSpan.FromMinutes(10),
+                SlidingExpiration = TimeSpan.FromMinutes(2),
+                Size = EstimateErrorSize(error)
+            };
+            
+            _cache.Set(key, error, options);
+            return error;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+    
+    /// <summary>
+    /// Get common pre-built error for maximum performance
+    /// </summary>
+    public Error GetCommonError(string errorCode, string? customMessage = null)
+    {
+        if (CommonErrors.TryGetValue(errorCode, out var commonError))
+        {
+            _metrics.RecordCacheHit($"common_{errorCode}");
+            
+            // Return original if no customization needed
+            if (string.IsNullOrEmpty(customMessage))
+                return commonError;
+            
+            // Return customized version
+            return commonError with { Message = customMessage };
+        }
+        
+        _metrics.RecordCacheMiss($"common_{errorCode}");
+        return Error.Internal($"Unknown common error: {errorCode}");
+    }
+    
+    /// <summary>
+    /// Pre-warm cache with common error patterns
+    /// </summary>
+    public async Task PreWarmCacheAsync()
+    {
+        _logger.LogInformation("Pre-warming error cache with common patterns");
+        
+        var commonPatterns = new[]
+        {
+            ("USER_NOT_FOUND", () => Task.FromResult(Error.NotFound("User not found"))),
+            ("INVALID_EMAIL", () => Task.FromResult(Error.Validation("Invalid email format"))),
+            ("EXPIRED_TOKEN", () => Task.FromResult(Error.Unauthorized("Token has expired"))),
+            ("INSUFFICIENT_PERMISSIONS", () => Task.FromResult(Error.Forbidden("Insufficient permissions"))),
+            ("DATABASE_TIMEOUT", () => Task.FromResult(Error.Timeout("Database operation timed out")))
+        };
+        
+        var tasks = commonPatterns.Select(async pattern =>
+        {
+            try
+            {
+                await GetOrCreateErrorAsync(pattern.Item1, pattern.Item2, TimeSpan.FromHours(1));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to pre-warm cache entry: {Pattern}", pattern.Item1);
+            }
+        });
+        
+        await Task.WhenAll(tasks);
+        
+        _logger.LogInformation("Error cache pre-warming completed");
+    }
+    
+    /// <summary>
+    /// Estimate memory size of an error for cache sizing
+    /// </summary>
+    private static int EstimateErrorSize(Error error)
+    {
+        var baseSize = 200; // Base object overhead
+        baseSize += error.Code.Length * 2; // String UTF-16
+        baseSize += error.Message.Length * 2;
+        
+        if (error.StackTrace != null)
+            baseSize += error.StackTrace.Length * 2;
+            
+        if (error.CorrelationId != null)
+            baseSize += error.CorrelationId.Length * 2;
+            
+        if (error.Source != null)
+            baseSize += error.Source.Length * 2;
+            
+        if (error.Metadata != null)
+        {
+            foreach (var kvp in error.Metadata)
+            {
+                baseSize += kvp.Key.Length * 2;
+                baseSize += EstimateObjectSize(kvp.Value);
+            }
+        }
+        
+        return baseSize;
+    }
+    
+    private static int EstimateObjectSize(object obj)
+    {
+        return obj switch
+        {
+            string str => str.Length * 2,
+            int => 4,
+            long => 8,
+            DateTime => 8,
+            TimeSpan => 8,
+            _ => 100 // Default estimate for complex objects
+        };
+    }
+    
+    private void CleanupExpiredEntries(object? state)
+    {
+        try
+        {
+            // Trigger memory cache cleanup
+            if (_cache is MemoryCache mc)
+            {
+                mc.Compact(0.1); // Remove 10% of entries
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during cache cleanup");
+        }
+    }
+    
+    public void Dispose()
+    {
+        _semaphore?.Dispose();
+        _cleanupTimer?.Dispose();
+    }
+}
+```
+
+---
+
+## 🧪 8. Comprehensive Testing Strategy
+
+### 8.1 Error Testing Utilities
+
+**File:** `Core/Diagnostics/Testing/ErrorAssertions.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Testing;
+
+/// <summary>
+/// FluentAssertions extensions for Error testing
+/// </summary>
+public static class ErrorAssertions
+{
+    /// <summary>
+    /// Assert that an error has specific properties
+    /// </summary>
+    public static ErrorAssertionWrapper Should(this Error error)
+    {
+        return new ErrorAssertionWrapper(error);
+    }
+    
+    /// <summary>
+    /// Assert that a Result contains a specific error
+    /// </summary>
+    public static ResultErrorAssertionWrapper<T> ShouldHaveError<T>(this Result<T> result)
+    {
+        result.Should().NotBeNull();
+        result.IsFailure.Should().BeTrue("Result should be in failure state");
+        return new ResultErrorAssertionWrapper<T>(result);
+    }
+    
+    /// <summary>
+    /// Assert that a Result is successful
+    /// </summary>
+    public static ResultSuccessAssertionWrapper<T> ShouldBeSuccessful<T>(this Result<T> result)
+    {
+        result.Should().NotBeNull();
+        result.IsSuccess.Should().BeTrue("Result should be in success state");
+        return new ResultSuccessAssertionWrapper<T>(result);
+    }
+}
+
+public class ErrorAssertionWrapper
+{
+    private readonly Error _error;
+    
+    public ErrorAssertionWrapper(Error error)
+    {
+        _error = error;
+    }
+    
+    public ErrorAssertionWrapper HaveType(ErrorType expectedType, string because = "")
+    {
+        _error.Type.Should().Be(expectedType, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveCode(string expectedCode, string because = "")
+    {
+        _error.Code.Should().Be(expectedCode, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveMessage(string expectedMessage, string because = "")
+    {
+        _error.Message.Should().Be(expectedMessage, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveMessageContaining(string expectedSubstring, string because = "")
+    {
+        _error.Message.Should().Contain(expectedSubstring, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveSeverity(ErrorSeverity expectedSeverity, string because = "")
+    {
+        _error.Severity.Should().Be(expectedSeverity, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveCorrelationId(string expectedCorrelationId, string because = "")
+    {
+        _error.CorrelationId.Should().Be(expectedCorrelationId, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveSource(string expectedSource, string because = "")
+    {
+        _error.Source.Should().Be(expectedSource, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveMetadata(string key, object expectedValue, string because = "")
+    {
+        _error.Metadata.Should().NotBeNull(because);
+        _error.Metadata!.Should().ContainKey(key, because);
+        _error.Metadata[key].Should().Be(expectedValue, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveMetadataKey(string key, string because = "")
+    {
+        _error.Metadata.Should().NotBeNull(because);
+        _error.Metadata!.Should().ContainKey(key, because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper NotHaveMetadataKey(string key, string because = "")
+    {
+        if (_error.Metadata != null)
+        {
+            _error.Metadata.Should().NotContainKey(key, because);
+        }
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveInnerException<T>(string because = "") where T : Exception
+    {
+        _error.InnerException.Should().NotBeNull(because);
+        _error.InnerException.Should().BeOfType<T>(because);
+        return this;
+    }
+    
+    public ErrorAssertionWrapper HaveHttpStatusCode(int expectedStatusCode, string because = "")
+    {
+        _error.ToHttpStatusCode().Should().Be(expectedStatusCode, because);
+        return this;
+    }
+}
+
+public class ResultErrorAssertionWrapper<T>
+{
+    private readonly Result<T> _result;
+    
+    public ResultErrorAssertionWrapper(Result<T> result)
+    {
+        _result = result;
+    }
+    
+    public ErrorAssertionWrapper WithError()
+    {
+        return new ErrorAssertionWrapper(_result.Error);
+    }
+    
+    public ResultErrorAssertionWrapper<T> WithErrorType(ErrorType expectedType, string because = "")
+    {
+        _result.Error.Type.Should().Be(expectedType, because);
+        return this;
+    }
+    
+    public ResultErrorAssertionWrapper<T> WithErrorCode(string expectedCode, string because = "")
+    {
+        _result.Error.Code.Should().Be(expectedCode, because);
+        return this;
+    }
+}
+
+public class ResultSuccessAssertionWrapper<T>
+{
+    private readonly Result<T> _result;
+    
+    public ResultSuccessAssertionWrapper(Result<T> result)
+    {
+        _result = result;
+    }
+    
+    public ResultSuccessAssertionWrapper<T> WithValue(T expectedValue, string because = "")
+    {
+        _result.Value.Should().Be(expectedValue, because);
+        return this;
+    }
+    
+    public ResultSuccessAssertionWrapper<T> WithValueMatching(Expression<Func<T, bool>> predicate, string because = "")
+    {
+        _result.Value.Should().Match(predicate, because);
+        return this;
+    }
+}
+```
+
+### 8.2 Error Test Fixtures
+
+**File:** `Core/Diagnostics/Testing/ErrorTestFixture.cs`
+
+```csharp
+namespace BuildingBlocks.Core.Diagnostics.Testing;
+
+/// <summary>
+/// Test data builders for Error testing scenarios
+/// </summary>
+public static class ErrorTestFixture
+{
+    /// <summary>
+    /// Create a test error with specified properties
+    /// </summary>
+    public static ErrorBuilder Create(string code = "TEST_ERROR")
+    {
+        return new ErrorBuilder(code);
+    }
+    
+    /// <summary>
+    /// Create a validation error for testing
+    /// </summary>
+    public static Error ValidationError(string message = "Test validation error", string code = "VALIDATION_TEST")
+    {
+        return Error.Validation(message, code);
+    }
+    
+    /// <summary>
+    /// Create a business rule error for testing
+    /// </summary>
+    public static Error BusinessRuleError(string message = "Test business rule error", string code = "BUSINESS_RULE_TEST")
+    {
+        return Error.BusinessRule(message, code);
+    }
+    
+    /// <summary>
+    /// Create an internal error for testing
+    /// </summary>
+    public static Error InternalError(string message = "Test internal error", Exception? exception = null)
+    {
+        return Error.Internal(message, "INTERNAL_TEST", exception);
+    }
+    
+    /// <summary>
+    /// Create multiple errors for aggregation testing
+    /// </summary>
+    public static Error[] MultipleErrors(int count = 3)
+    {
+        return Enumerable.Range(1, count)
+            .Select(i => Error.Validation($"Error {i}", $"ERROR_{i}"))
+            .ToArray();
+    }
+    
+    /// <summary>
+    /// Create a test exception with known properties
+    /// </summary>
+    public static Exception TestException(string message = "Test exception")
+    {
+        return new InvalidOperationException(message);
+    }
+    
+    /// <summary>
+    /// Create a test business rule
+    /// </summary>
+    public static IBusinessRule TestBusinessRule(bool isBroken = true, string code = "TEST_RULE", string message = "Test rule violation")
+    {
+        return new TestBusinessRule(code, message, isBroken);
+    }
+    
+    private class TestBusinessRule : IBusinessRule
+    {
+        public string Code { get; }
+        public string Message { get; }
+        public bool IsBroken { get; }
+        public IReadOnlyDictionary<string, object>? Context { get; }
+        
+        public TestBusinessRule(string code, string message, bool isBroken, Dictionary<string, object>? context = null)
+        {
+            Code = code;
+            Message = message;
+            IsBroken = isBroken;
+            Context = context;
+        }
+    }
+}
+
+/// <summary>
+/// Fluent builder for creating test errors
+/// </summary>
+public class ErrorBuilder
+{
+    private string _code;
+    private string _message = "Test error message";
+    private ErrorType _type = ErrorType.Internal;
+    private ErrorSeverity _severity = ErrorSeverity.Error;
+    private Exception? _innerException;
+    private Dictionary<string, object>? _metadata;
+    private string? _correlationId;
+    private string? _source;
+    
+    public ErrorBuilder(string code)
+    {
+        _code = code;
+    }
+    
+    public ErrorBuilder WithMessage(string message)
+    {
+        _message = message;
+        return this;
+    }
+    
+    public ErrorBuilder WithType(ErrorType type)
+    {
+        _type = type;
+        return this;
+    }
+    
+    public ErrorBuilder WithSeverity(ErrorSeverity severity)
+    {
+        _severity = severity;
+        return this;
+    }
+    
+    public ErrorBuilder WithInnerException(Exception exception)
+    {
+        _innerException = exception;
+        return this;
+    }
+    
+    public ErrorBuilder WithMetadata(string key, object value)
+    {
+        _metadata ??= new Dictionary<string, object>();
+        _metadata[key] = value;
+        return this;
+    }
+    
+    public ErrorBuilder WithCorrelationId(string correlationId)
+    {
+        _correlationId = correlationId;
+        return this;
+    }
+    
+    public ErrorBuilder WithSource(string source)
+    {
+        _source = source;
+        return this;
+    }
+    
+    public Error Build()
+    {
+        var error = _type switch
+        {
+            ErrorType.Validation => Error.Validation(_message, _code, _metadata),
+            ErrorType.NotFound => Error.NotFound(_message, _code, _metadata),
+            ErrorType.BusinessRule => Error.BusinessRule(_message, _code, _metadata),
+            ErrorType.Internal => Error.Internal(_message, _code, _innerException, _metadata),
+            _ => Error.Internal(_message, _code, _innerException, _metadata)
+        };
+        
+        if (!string.IsNullOrEmpty(_correlationId))
+        {
+            error = error.WithCorrelationId(_correlationId);
+        }
+        
+        if (!string.IsNullOrEmpty(_source))
+        {
+            error = error.WithSource(_source);
+        }
+        
+        if (_severity != ErrorSeverity.Error)
+        {
+            error = error.WithSeverity(_severity);
+        }
+        
+        return error;
+    }
+    
+    public static implicit operator Error(ErrorBuilder builder) => builder.Build();
+}
+```
+
+---
+
+## 🔄 9. Migration Guide
+
+### 9.1 Migration from Legacy Error Handling
+
+**Migration Strategy Document**
+
+```markdown
+# Migration Guide: Legacy Error Handling to Enhanced Error System
+
+## Phase 1: Preparation (Week 1)
+1. **Audit Current Error Handling**
+   - Identify all exception throwing patterns
+   - Document current error response formats
+   - Map existing error codes to new ErrorType enum
+
+2. **Install Enhanced Error System**
+   - Add new error handling packages
+   - Configure error handling options
+   - Set up middleware (disabled initially)
+
+## Phase 2: Gradual Migration (Weeks 2-4)
+1. **Start with New Features**
+   - Use Error system for all new code
+   - Convert new command/query handlers to Result<T>
+
+2. **Convert Core Domain Logic**
+   - Replace domain exceptions with Error returns
+   - Update aggregate methods to return Result<T>
+   - Migrate business rule validation
+
+3. **Update Application Layer**
+   - Convert command/query handlers one by one
+   - Update validation to use new Error aggregation
+   - Enable Result<T> in MediatR behaviors
+
+## Phase 3: Infrastructure Migration (Week 5)
+1. **Update Web Layer**
+   - Enable global error middleware
+   - Convert controller actions to use Result<T>
+   - Update API contracts for new error format
+
+2. **Update Persistence Layer**
+   - Convert repository methods to Result<T>
+   - Handle database errors with new Error types
+
+## Phase 4: Cleanup and Optimization (Week 6)
+1. **Remove Legacy Code**
+   - Delete old exception classes
+   - Remove legacy error handling middleware
+   - Clean up unused error response DTOs
+
+2. **Performance Optimization**
+   - Enable error caching
+   - Optimize error serialization
+   - Tune performance metrics
+
+## Code Transformation Examples
+
+### Before: Legacy Exception Handling
+```csharp
+public async Task<User> GetUserAsync(UserId id)
+{
+    var user = await _repository.GetByIdAsync(id);
+    if (user == null)
+        throw new UserNotFoundException($"User {id} not found");
+    
+    return user;
+}
+```
+
+### After: Enhanced Error System
+```csharp
+public async Task<Result<User>> GetUserAsync(UserId id)
+{
+    var user = await _repository.GetByIdAsync(id);
+    if (user == null)
+        return Result<User>.Failure(
+            Error.NotFound($"User {id} not found", "USER_NOT_FOUND")
+                .WithMetadata("UserId", id.ToString()));
+    
+    return Result<User>.Success(user);
+}
+```
+
+### Before: Legacy Validation
+```csharp
+public void ValidateCreateUser(CreateUserRequest request)
+{
+    if (string.IsNullOrEmpty(request.Email))
+        throw new ValidationException("Email is required");
+    
+    if (request.Age < 18)
+        throw new ValidationException("User must be 18 or older");
+}
+```
+
+### After: Enhanced Error System
+```csharp
+public Result ValidateCreateUser(CreateUserRequest request)
+{
+    var errors = new List<Error>();
+    
+    if (string.IsNullOrEmpty(request.Email))
+        errors.Add(Error.Validation("Email is required", "EMAIL_REQUIRED"));
+    
+    if (request.Age < 18)
+        errors.Add(Error.Validation("User must be 18 or older", "AGE_MINIMUM"));
+    
+    return errors.Any() 
+        ? Result.Failure(Error.Aggregate(errors.ToArray()))
+        : Result.Success();
+}
+```
+```
+
+---
+
+## 📊 10. Success Metrics and Monitoring
+
+### 10.1 Key Performance Indicators
+
+**Error Handling System KPIs:**
+
+1. **Performance Metrics**
+   - Error processing latency: < 2ms (95th percentile)
+   - Memory usage: < 10MB for error cache
+   - CPU overhead: < 1% during normal operations
+
+2. **Quality Metrics**
+   - Error categorization accuracy: > 95%
+   - PII detection rate: > 99%
+   - Error correlation success: > 98%
+
+3. **Operational Metrics**
+   - Error handling availability: > 99.9%
+   - Cache hit rate: > 80%
+   - Alert false positive rate: < 5%
+
+### 10.2 Monitoring Dashboard
+
+**Required Monitoring Elements:**
+
+```json
+{
+  "dashboard": {
+    "title": "Enhanced Error System Monitoring",
+    "panels": [
+      {
+        "title": "Error Rate by Type",
+        "metric": "errors_total",
+        "groupBy": ["error_type", "error_severity"]
+      },
+      {
+        "title": "Error Handling Performance",
+        "metric": "error_handling_duration",
+        "percentiles": [50, 90, 95, 99]
+      },
+      {
+        "title": "Cache Performance",
+        "metrics": ["error_cache_hits_total", "error_cache_misses_total"],
+        "calculation": "hit_rate"
+      },
+      {
+        "title": "Memory Usage",
+        "metric": "error_memory_usage_bytes",
+        "threshold": "10MB"
+      }
+    ],
+    "alerts": [
+      {
+        "name": "High Error Rate",
+        "condition": "rate(errors_total[5m]) > 100",
+        "severity": "warning"
+      },
+      {
+        "name": "Error System Unavailable",
+        "condition": "up{job='error-system'} == 0",
+        "severity": "critical"
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 🎯 11. Acceptance Criteria and Definition of Done
+
+### **Epic Completion Criteria**
+
+✅ **Core Implementation Complete**
+- [ ] All error types and severity levels implemented with comprehensive categorization
+- [ ] Rich metadata system operational with telemetry integration  
+- [ ] Exception-to-error conversion with smart categorization
+- [ ] Result pattern integration with fluent extensions
+- [ ] Business rule and validation exception handling
+
+✅ **Integration Points Functional**
+- [ ] Pipeline Behaviors integration (ValidationBehavior error aggregation)
+- [ ] ASP.NET Core Problem Details middleware with RFC 7807 compliance
+- [ ] OpenTelemetry and structured logging integration
+- [ ] Global error handling middleware operational
+
+✅ **Performance and Quality Standards Met**
+- [ ] Error processing latency < 2ms (95th percentile)
+- [ ] Memory usage < 10MB for error cache
+- [ ] 100% test coverage with comprehensive scenarios
+- [ ] Zero compiler warnings or static analysis issues
+- [ ] Performance benchmarks validate < 1% CPU overhead
+
+✅ **Production Readiness Achieved**
+- [ ] Configuration system operational with environment-specific settings
+- [ ] Security measures (PII masking, sanitization) functional  
+- [ ] Monitoring dashboards and alerting configured
+- [ ] Migration guide tested with legacy code conversion
+- [ ] Documentation complete with troubleshooting guides
+
+✅ **Testing and Validation Complete**
+- [ ] Unit tests with 100% coverage including edge cases
+- [ ] Integration tests covering full error handling pipeline
+- [ ] Load testing validates performance under concurrent usage
+- [ ] Error injection testing confirms resilience patterns
+
+---
+
+**END OF EPIC 3: ENHANCED ERROR SYSTEM - VERSION 2.0**
