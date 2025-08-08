@@ -76,7 +76,7 @@ public class RuleBuilder
     {
         var brokenRules = _rules.Where(r => r.IsBroken()).ToList();
         
-        if (brokenRules.Any())
+        if (brokenRules.Count != 0)
         {
             var errors = brokenRules.Select(r => 
                 Error.BusinessRule(r.Message, r.Code)).ToArray();
@@ -93,7 +93,7 @@ public class RuleBuilder
     {
         var brokenRules = _rules.Where(r => r.IsBroken()).ToList();
         
-        if (brokenRules.Any())
+        if (brokenRules.Count != 0)
         {
             var errors = brokenRules.Select(r => 
                 Error.BusinessRule(r.Message, r.Code)).ToArray();

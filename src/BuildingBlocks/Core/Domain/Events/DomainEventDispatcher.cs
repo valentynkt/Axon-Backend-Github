@@ -54,7 +54,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
         ArgumentNullException.ThrowIfNull(domainEvents);
 
         var events = domainEvents.ToList();
-        if (!events.Any())
+        if (events.Count == 0)
         {
             return Result<Unit>.Success(Unit.Value);
         }
@@ -80,7 +80,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
             }
         }
 
-        if (errors.Any())
+        if (errors.Count != 0)
         {
             _logger.LogError(
                 "Domain event dispatch completed with {ErrorCount} failures out of {EventCount} events",
@@ -208,7 +208,7 @@ public static class DomainEventExtensions
         ArgumentNullException.ThrowIfNull(dispatcher);
 
         var aggregateList = aggregates.ToList();
-        if (!aggregateList.Any())
+        if (aggregateList.Count == 0)
         {
             return Result<Unit>.Success(Unit.Value);
         }

@@ -73,7 +73,7 @@ public sealed record Money : ValueObject
         if (Currency == Currency.None)
             errors.Add(Error.Validation("Currency must be specified", "MONEY_NO_CURRENCY"));
         
-        return errors.Any() 
+        return errors.Count != 0
             ? Validation<Unit>.Invalid(errors)
             : Validation<Unit>.Valid(Unit.Value);
     }

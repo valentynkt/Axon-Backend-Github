@@ -1,114 +1,52 @@
-namespace BuildingBlocks.Core.Pagination;
+using System;
+using System.Collections.Generic;
 
-/// <summary>
-/// Value object containing pagination metadata following Clean Architecture principles
-/// Immutable and encapsulates all pagination-related calculations and navigation information
-/// </summary>
-public sealed record PaginationMeta
+namespace BuildingBlocks.Core.Abstractions.Pagination;
+
+public sealed record PaginationMeta(
+    long TotalCount,
+    int Page,
+    int PageSize,
+    long TotalPages,
+    bool HasPrevious,
+    bool HasNext,
+    int CurrentPageSize,
+    int CurrentStartIndex,
+    int CurrentEndIndex,
+    IReadOnlyDictionary<string, object>? Metadata = null)
 {
-    /// <summary>
-    /// Current page number (1-based)
-    /// </summary>
-    public int PageNumber { get; }
-    
-    /// <summary>
-    /// Number of items per page
-    /// </summary>
-    public int PageSize { get; }
-    
-    /// <summary>
-    /// Total number of items across all pages
-    /// </summary>
-    public int TotalCount { get; }
-    
-    /// <summary>
-    /// Total number of pages
-    /// </summary>
-    public int TotalPages { get; }
-    
-    /// <summary>
-    /// Number of items in the current page
-    /// </summary>
-    public int CurrentPageSize { get; }
-    
-    /// <summary>
-    /// Starting index of the current page (1-based)
-    /// </summary>
-    public int CurrentStartIndex { get; }
-    
-    /// <summary>
-    /// Ending index of the current page (1-based)
-    /// </summary>
-    public int CurrentEndIndex { get; }
-    
-    /// <summary>
-    /// Indicates if there is a previous page
-    /// </summary>
-    public bool HasPrevious { get; }
-    
-    /// <summary>
-    /// Indicates if there is a next page
-    /// </summary>
-    public bool HasNext { get; }
-    
-    /// <summary>
-    /// Indicates if this is the first page
-    /// </summary>
-    public bool IsFirstPage => PageNumber == 1;
-    
-    /// <summary>
-    /// Indicates if this is the last page
-    /// </summary>
-    public bool IsLastPage => PageNumber == TotalPages;
-    
-    /// <summary>
-    /// Creates pagination metadata with validation and calculations
-    /// </summary>
-    /// <param name="pageNumber">Current page number (1-based)</param>
-    /// <param name="pageSize">Number of items per page</param>
-    /// <param name="totalCount">Total number of items</param>
-    /// <param name="currentPageSize">Number of items in current page</param>
-    public PaginationMeta(int pageNumber, int pageSize, int totalCount, int currentPageSize)
+    // Exact totals path (IncludeTotalCount=true)
+    public static PaginationMeta CreateWithTotals(
+        long totalCount, int page, int pageSize, int currentPageSize, IReadOnlyDictionary<string, object>? metadata = null)
     {
-        if (pageNumber < 1)
-            throw new ArgumentException("Page number must be greater than 0", nameof(pageNumber));
-        
-        if (pageSize < 1)
-            throw new ArgumentException("Page size must be greater than 0", nameof(pageSize));
-        
-        if (totalCount < 0)
-            throw new ArgumentException("Total count cannot be negative", nameof(totalCount));
-        
-        if (currentPageSize < 0)
-            throw new ArgumentException("Current page size cannot be negative", nameof(currentPageSize));
-        
-        PageNumber = pageNumber;
-        PageSize = pageSize;
-        TotalCount = totalCount;
-        CurrentPageSize = currentPageSize;
-        
-        // Calculate derived properties
-        TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
-        CurrentStartIndex = totalCount == 0 ? 0 : ((pageNumber - 1) * pageSize) + 1;
-        CurrentEndIndex = totalCount == 0 ? 0 : CurrentStartIndex + currentPageSize - 1;
-        HasPrevious = pageNumber > 1;
-        HasNext = pageNumber < TotalPages;
+        if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
+        if (pageSize < 1) throw new ArgumentOutOfRangeException(nameof(pageSize));
+
+        var totalPages = totalCount == 0 ? 0 : (totalCount + pageSize - 1) / pageSize;
+        var hasPrev = page > 1;
+        var hasNext = totalPages > 0 && page < totalPages;
+
+        var (start, end) = currentPageSize == 0
+            ? (0, 0)
+            : (((page - 1) * pageSize + 1), ((page - 1) * pageSize + currentPageSize));
+
+        return new PaginationMeta(totalCount, page, pageSize, totalPages, hasPrev, hasNext,
+            currentPageSize, start, end, metadata);
     }
-    
-    /// <summary>
-    /// Creates empty pagination metadata for no results
-    /// </summary>
-    public static PaginationMeta Empty => new(1, 0, 0, 0);
-    
-    /// <summary>
-    /// Creates pagination metadata from basic parameters
-    /// </summary>
-    /// <param name="pageNumber">Current page number</param>
-    /// <param name="pageSize">Items per page</param>
-    /// <param name="totalCount">Total items</param>
-    /// <param name="actualItemsCount">Actual items in current page</param>
-    public static PaginationMeta Create(int pageNumber, int pageSize, int totalCount, int actualItemsCount)
+
+    // Countless path (IncludeTotalCount=false). Caller must provide hasNext (via PageSize+1 read).
+    public static PaginationMeta CreateWithoutTotals(
+        int page, int pageSize, int currentPageSize, bool hasNext, IReadOnlyDictionary<string, object>? metadata = null)
     {
-        return new PaginationMeta(pageNumber, pageSize, totalCount, actualItemsCount);
+        if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
+        if (pageSize < 1) throw new ArgumentOutOfRangeException(nameof(pageSize));
+
+        var hasPrev = page > 1;
+        var (start, end) = currentPageSize == 0
+            ? (0, 0)
+            : (((page - 1) * pageSize + 1), ((page - 1) * pageSize + currentPageSize));
+
+        return new PaginationMeta(0, page, pageSize, 0, hasPrev, hasNext,
+            currentPageSize, start, end, metadata);
     }
 }

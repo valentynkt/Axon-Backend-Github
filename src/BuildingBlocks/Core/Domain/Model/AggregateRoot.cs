@@ -87,7 +87,7 @@ public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
             }
         }
         
-        if (errors.Any())
+        if (errors.Count != 0)
         {
             return Result<Unit>.Failure(Error.Aggregate(errors.ToArray()));
         }
@@ -121,7 +121,7 @@ public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
             }
         }
         
-        return errors.Any() 
+        return errors.Count != 0
             ? Validation<Unit>.Invalid(errors)
             : Validation<Unit>.Valid(Unit.Value);
     }

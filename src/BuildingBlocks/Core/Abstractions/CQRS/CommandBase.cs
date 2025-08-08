@@ -1,6 +1,7 @@
 using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using MassTransit;
+using Unit = BuildingBlocks.Core.Functional.Unit;
 
 namespace BuildingBlocks.Core.CQRS;
 

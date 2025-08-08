@@ -18,18 +18,18 @@ public sealed record Error
     public string Code { get; }
     public string Message { get; }
     public ErrorType Type { get; }
-    public ErrorSeverity Severity { get; }
-    public Exception? InnerException { get; }
-    public IReadOnlyDictionary<string, object>? Metadata { get; }
-    
+    public ErrorSeverity Severity { get; init; }
+    public Exception? InnerException { get; init; }
+    public IReadOnlyDictionary<string, object>? Metadata { get; init; }
+
 #if DEBUG
     public string? StackTrace { get; }
 #endif
     
     public DateTime OccurredAt { get; }
-    public string? CorrelationId { get; }
-    public string? Source { get; }
-    
+    public string? CorrelationId { get; init; }
+    public string? Source { get; init; }
+
     #endregion    
     #region Static Members
     
@@ -305,6 +305,51 @@ public sealed record Error
             ["ErrorCount"] = errors.Length,
             ["Errors"] = errors.Select(e => new { e.Code, e.Message, e.Type }).ToArray()
         };
+
+        return new Error(
+            "AGGREGATE_ERROR",
+            $"Multiple errors occurred: {combinedMessage}",
+            ErrorType.Aggregate,
+            metadata: metadata);
+    }
+    
+    /// <summary>
+    /// Create an aggregated error from multiple errors with additional metadata.
+    /// Combines errors into a single aggregate while preserving additional context information.
+    /// </summary>
+    /// <param name="errors">Array of errors to aggregate</param>
+    /// <param name="additionalMetadata">Additional metadata to include in the aggregate error</param>
+    /// <returns>Aggregated error with combined metadata</returns>
+    public static Error Aggregate(Error[] errors, IReadOnlyDictionary<string, object>? additionalMetadata)
+    {
+        if (errors == null || errors.Length == 0)
+            throw new ArgumentException("At least one error is required", nameof(errors));
+
+        if (errors.Length == 1)
+        {
+            // For single error, add additional metadata if provided
+            return additionalMetadata?.Count > 0 
+                ? errors[0].WithMetadata(additionalMetadata)
+                : errors[0];
+        }
+
+        var messages = errors.Select(e => e.Message).ToArray();
+        var combinedMessage = string.Join("; ", messages);
+
+        var metadata = new Dictionary<string, object>
+        {
+            ["ErrorCount"] = errors.Length,
+            ["Errors"] = errors.Select(e => new { e.Code, e.Message, e.Type }).ToArray()
+        };
+
+        // Merge additional metadata
+        if (additionalMetadata?.Count > 0)
+        {
+            foreach (var (key, value) in additionalMetadata)
+            {
+                metadata[key] = value;
+            }
+        }
 
         return new Error(
             "AGGREGATE_ERROR",

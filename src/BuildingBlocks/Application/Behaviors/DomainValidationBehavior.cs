@@ -32,7 +32,7 @@ public sealed class DomainValidationBehavior<TRequest, TResponse> : IPipelineBeh
         // Only validate domain commands
         if (request is not DomainCommandBase domainCommand)
         {
-            return await next();
+            return await next(cancellationToken);
         }
 
         _logger.LogDebug(
@@ -75,7 +75,7 @@ public sealed class DomainValidationBehavior<TRequest, TResponse> : IPipelineBeh
             "Domain validation passed for {CommandType}",
             request.GetType().Name);
 
-        return await next();
+        return await next(cancellationToken);
     }
 }
 

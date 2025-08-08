@@ -66,7 +66,7 @@ public sealed record Email : SingleValueObject<string>
                 errors.Add(Error.Validation("Invalid email format", "EMAIL_INVALID_FORMAT"));
         }
         
-        return errors.Any() 
+        return errors.Count != 0
             ? Validation<Unit>.Invalid(errors)
             : Validation<Unit>.Valid(Unit.Value);
     }

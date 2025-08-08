@@ -377,7 +377,7 @@ public static class AsyncResultExtensions
                     errors.Add(result.Error);
             }
 
-            if (errors.Any())
+            if (errors.Count != 0)
             {
                 var aggregatedError = errors.Count == 1 
                     ? errors[0] 

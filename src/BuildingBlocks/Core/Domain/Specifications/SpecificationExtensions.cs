@@ -181,7 +181,7 @@ public static class SpecificationExtensions
             }
         }
         
-        return errors.Any() 
+        return errors.Count != 0
             ? Validation<IReadOnlyList<T>>.Invalid(errors)
             : Validation<IReadOnlyList<T>>.Valid(items.AsReadOnly());
     }

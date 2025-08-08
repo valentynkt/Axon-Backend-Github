@@ -48,7 +48,7 @@ where TResponse : notnull
             typeof(TRequest).FullName,
             JsonSerializer.Serialize(request));
 
-        var response = await next();
+        var response = await next(cancellationToken);
 
         _logger.LogInformation(
             "{Prefix} Executed the {MediatrRequest} request",

@@ -24,7 +24,7 @@ public static class BusinessRuleExtensions
     /// <param name="businessRule">The business rule to convert</param>
     /// <param name="metadata">Additional metadata to include</param>
     /// <returns>Error representing the business rule violation with metadata</returns>
-    public static Error ToError(this IBusinessRule businessRule, IDictionary<string, object> metadata)
+    public static Error ToError(this IBusinessRule businessRule, IReadOnlyDictionary<string, object>? metadata)
     {
         return Error.BusinessRule(businessRule.Message, businessRule.Code, metadata);
     }

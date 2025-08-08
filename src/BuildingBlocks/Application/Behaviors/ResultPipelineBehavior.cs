@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace BuildingBlocks.Core.Application.Behaviors;
 
 /// <summary>
-/// Pipeline behavior that ensures all command/query handlers return Result<T>
+/// Pipeline behavior that ensures all command/query handlers return Result&lt;T&gt;
 /// Wraps exceptions in Result.Failure automatically using reflection-free caching
 /// </summary>
 public class ResultPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
@@ -51,7 +51,7 @@ public class ResultPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
 }
 
 /// <summary>
-/// Static cache for Result<T> failure creation - eliminates per-call reflection
+/// Static cache for Result&lt;T&gt; failure creation - eliminates per-call reflection
 /// </summary>
 public static class FailureCache<T>
 {

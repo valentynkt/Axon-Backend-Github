@@ -33,12 +33,15 @@ public record InternalCommand : IInternalCommand, ICommand
     /// Timestamp when the request was created.
     /// </summary>
     public DateTime RequestedAt { get; } = DateTime.UtcNow;
-    
+
+    public IReadOnlyDictionary<string, object> Metadata { get; }
+
     /// <summary>
     /// Protected constructor that sets the event type based on the concrete implementation.
     /// </summary>
-    protected InternalCommand()
+    protected InternalCommand(IReadOnlyDictionary<string, object> metadata = null)
     {
+        Metadata = metadata;
         EventType = GetType().AssemblyQualifiedName ?? GetType().FullName ?? GetType().Name;
     }
 }

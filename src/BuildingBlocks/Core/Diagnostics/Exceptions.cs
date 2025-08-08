@@ -47,7 +47,7 @@ public class AppException : System.Exception
             return storedError;
 
         // Create a new Error from this exception
-        return BuildingBlocks.Core.Functional.Error.FromException(this);
+        return Error.FromException(this);
     }
 }
 
@@ -67,7 +67,7 @@ public class BadRequestException : AppException
         if (Error != null)
             return Error;
 
-        return BuildingBlocks.Core.Functional.Error.BusinessRule(Message, "BAD_REQUEST");
+        return Error.BusinessRule(Message, "BAD_REQUEST");
     }
 }
 
@@ -87,7 +87,7 @@ public class NotFoundException : AppException
         if (Error != null)
             return Error;
 
-        return BuildingBlocks.Core.Functional.Error.NotFound(Message, "NOT_FOUND");
+        return Error.NotFound(Message, "NOT_FOUND");
     }
 }
 
@@ -107,7 +107,7 @@ public class ConflictException : AppException
         if (Error != null)
             return Error;
 
-        return BuildingBlocks.Core.Functional.Error.Conflict(Message, "CONFLICT");
+        return Error.Conflict(Message, "CONFLICT");
     }
 }
 
@@ -138,7 +138,7 @@ public class ValidationException : AppException
         if (Error != null)
             return Error;
 
-        return BuildingBlocks.Core.Functional.Error.Validation(Message, "VALIDATION_ERROR");
+        return Error.Validation(Message, "VALIDATION_ERROR");
     }
 }
 
@@ -157,7 +157,7 @@ public static class ExceptionExtensions
         return exception switch
         {
             AppException appException => appException.ToError(),
-            _ => BuildingBlocks.Core.Functional.Error.FromException(exception)
+            _ => Error.FromException(exception)
         };
     }
 

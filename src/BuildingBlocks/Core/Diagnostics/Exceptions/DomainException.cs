@@ -55,7 +55,7 @@ public class DomainException : Exception
         : base(CreateAggregateMessage(errors))
     {
         var errorList = errors.ToList();
-        if (!errorList.Any())
+        if (errorList.Count == 0)
             throw new ArgumentException("At least one error is required", nameof(errors));
             
         Error = errorList.Count == 1 
@@ -68,7 +68,7 @@ public class DomainException : Exception
         : base(message)
     {
         var errorList = errors.ToList();
-        if (!errorList.Any())
+        if (errorList.Count == 0)
             throw new ArgumentException("At least one error is required", nameof(errors));
             
         Error = errorList.Count == 1 
@@ -80,7 +80,7 @@ public class DomainException : Exception
     private static string CreateAggregateMessage(IEnumerable<Error> errors)
     {
         var errorList = errors.ToList();
-        if (!errorList.Any())
+        if (errorList.Count == 0)
             return "Multiple errors occurred";
             
         if (errorList.Count == 1)
