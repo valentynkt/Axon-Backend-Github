@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.PersistMessageProcessor;
 using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Http;

@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using BuildingBlocks.Core.Domain.Specifications;
+using BuildingBlocks.Core.Domain.Specifications.CommonSpecs;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 

@@ -1,3 +1,4 @@
+using BuildingBlocks.Caching;
 using BuildingBlocks.Core.CQRS;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;

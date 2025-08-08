@@ -3,6 +3,7 @@ using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
 using Microsoft.Extensions.Logging;
 using Moq;
+using NSubstitute;
 using NUnit.Framework;
 using Shouldly;
 

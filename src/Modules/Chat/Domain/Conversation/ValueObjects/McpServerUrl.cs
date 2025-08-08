@@ -1,5 +1,6 @@
 using System;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects
 {

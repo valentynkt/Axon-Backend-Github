@@ -1,5 +1,6 @@
 using System.Reflection;
 using BuildingBlocks.Persistence.Common;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.Persistence.Read;
 using Identity.Identity.Models;
 using Microsoft.EntityFrameworkCore;

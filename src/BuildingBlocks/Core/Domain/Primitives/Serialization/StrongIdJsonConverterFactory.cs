@@ -51,7 +51,7 @@ public class StrongIdJsonConverterFactory : JsonConverterFactory
 
 public class StrongIdJsonConverter<TStrongId, TValue> : JsonConverter<TStrongId>
     where TStrongId : StrongId<TValue>
-    where TValue : struct
+    where TValue : struct, IComparable<TValue>, IEquatable<TValue>
 {
     private static readonly ConcurrentDictionary<Type, Func<TValue, TStrongId>> _factoryCache = new();
     

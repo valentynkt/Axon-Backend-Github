@@ -1,6 +1,7 @@
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
 using Axon.Shared.Domain;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace Axon.Modules.Chat.Domain.Services;
 

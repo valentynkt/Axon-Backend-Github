@@ -1,4 +1,5 @@
 using System;
+using BuildingBlocks.Core.Domain.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Persistence.Common.Interfaces;

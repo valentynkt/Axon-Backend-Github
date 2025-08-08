@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Core.CQRS;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional;
 

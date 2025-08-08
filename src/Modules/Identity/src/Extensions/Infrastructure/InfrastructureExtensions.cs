@@ -2,6 +2,8 @@ using BuildingBlocks.Persistence;
 using BuildingBlocks.Mapster;
 using BuildingBlocks.Web;
 using BuildingBlocks.Persistence.Common;
+using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Persistence.Infrastructure;
 using BuildingBlocks.Persistence.Write;
 using FluentValidation;
 using Identity.Data;

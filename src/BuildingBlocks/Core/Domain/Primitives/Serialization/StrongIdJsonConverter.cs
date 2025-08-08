@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Model;
 

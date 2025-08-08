@@ -2,10 +2,10 @@ namespace BuildingBlocks.Core.Functional;
 
 /// <summary>
 /// Represents a value that carries no information - functional equivalent of void.
-/// Used in Result<Unit> and Option<Unit> for operations that return no meaningful data.
+/// Used in Result&lt;Unit&gt; and Option&lt;Unit&gt; for operations that return no meaningful data.
 /// Follows F#'s unit type pattern.
 /// </summary>
-public readonly record struct Unit : IComparable<Unit>, IEquatable<Unit>
+public readonly record struct Unit : IComparable<Unit>
 {
     /// <summary>
     /// The single instance of Unit type
@@ -38,17 +38,17 @@ public readonly record struct Unit : IComparable<Unit>, IEquatable<Unit>
     public override int GetHashCode() => 0;
     
     /// <summary>
-    /// Implicit conversion from any value to Unit (discards the value)
+    /// Factory method to create Unit from any value (discards the value)
     /// </summary>
-    public static implicit operator Unit(object? _) => Value;
+    public static Unit From<T>(T _) => Value;
     
     /// <summary>
-    /// Task<Unit> factory for async operations that return no data
+    /// Task&lt;Unit&gt; factory for async operations that return no data
     /// </summary>
     public static Task<Unit> Task => System.Threading.Tasks.Task.FromResult(Value);
     
     /// <summary>
-    /// ValueTask<Unit> factory for high-performance async operations
+    /// ValueTask&lt;Unit&gt; factory for high-performance async operations
     /// </summary>
     public static ValueTask<Unit> ValueTask => System.Threading.Tasks.ValueTask.FromResult(Value);
 
@@ -84,7 +84,7 @@ public static class UnitExtensions
     public static Unit ToUnit<T>(this T _) => Unit.Value;
     
     /// <summary>
-    /// Converts Task<T> to Task<Unit>, discarding the result
+    /// Converts Task&lt;T&gt; to Task&lt;Unit&gt;, discarding the result
     /// </summary>
     public static async Task<Unit> ToUnit<T>(this Task<T> task)
     {
@@ -93,7 +93,7 @@ public static class UnitExtensions
     }
     
     /// <summary>
-    /// Converts ValueTask<T> to ValueTask<Unit>, discarding the result
+    /// Converts ValueTask&lt;T&gt; to ValueTask&lt;Unit&gt;, discarding the result
     /// </summary>
     public static async ValueTask<Unit> ToUnit<T>(this ValueTask<T> task)
     {
@@ -102,7 +102,7 @@ public static class UnitExtensions
     }
     
     /// <summary>
-    /// Converts Task to Task<Unit>
+    /// Converts Task to Task&lt;Unit&gt;
     /// </summary>
     public static async Task<Unit> ToUnit(this Task task)
     {
@@ -111,7 +111,7 @@ public static class UnitExtensions
     }
     
     /// <summary>
-    /// Converts ValueTask to ValueTask<Unit>
+    /// Converts ValueTask to ValueTask&lt;Unit&gt;
     /// </summary>
     public static async ValueTask<Unit> ToUnit(this ValueTask task)
     {

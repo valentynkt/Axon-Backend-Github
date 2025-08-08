@@ -7,6 +7,7 @@ using BuildingBlocks.Web;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
 using System.Collections.Immutable;
+using BuildingBlocks.Core.Domain.Events;
 
 namespace BuildingBlocks.Persistence.Write;
 

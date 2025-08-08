@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Domain.ValueObjects;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;

@@ -1,4 +1,5 @@
 using BuildingBlocks.Persistence.Common;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using Identity.Identity.Models;
 
 namespace Identity.Repositories;

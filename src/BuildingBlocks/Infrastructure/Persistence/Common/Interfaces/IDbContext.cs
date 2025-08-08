@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Domain.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using BuildingBlocks.Core.Event;

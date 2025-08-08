@@ -1,18 +1,30 @@
-# Story 05: RetryBehavior - Advanced Resilience
+# Story 05: RetryBehavior - ❌ NEEDS FULL IMPLEMENTATION
 
 ## Story Overview
 **Story ID**: Epic_05_Story_05  
 **Story Name**: RetryBehavior - Advanced Resilience  
-**Estimated Duration**: 1-2 days  
+**Estimated Duration**: **1-2 days**  
+**Status**: **❌ STUB EXISTS - FULL IMPLEMENTATION REQUIRED**
 **Dependencies**: 
-- Epic_04 (CQRS Foundation)
-- Microsoft.Extensions.Resilience (Polly integration)
-- Result pattern from Epic_03
+- ✅ Epic_04 (CQRS Foundation)
+- ❌ Microsoft.Extensions.Resilience (Polly integration) - needs installation
+- ✅ Result pattern from Epic_03
+
+## Current Implementation Status
+**Location**: `src/BuildingBlocks/Infrastructure/Resilience/RetryBehavior.cs` (stub only)
+
+**❌ CURRENT STATE:**
+- Basic stub class exists ❌
+- No Polly integration implemented ❌
+- Missing all resilience functionality ❌
+- No circuit breaker implementation ❌
+
+**🎯 IMPLEMENTATION REQUIRED:**
 
 ## User Story
 **As a developer**, I want sophisticated retry logic with circuit breakers so that transient failures are handled gracefully while preventing cascade failures.
 
-## Acceptance Criteria
+## Acceptance Criteria - FULL IMPLEMENTATION NEEDED
 - [ ] RetryBehavior class created with Polly integration
 - [ ] Configurable retry policies per request type
 - [ ] Intelligent transient vs permanent error detection

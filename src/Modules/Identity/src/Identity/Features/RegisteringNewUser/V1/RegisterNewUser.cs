@@ -1,6 +1,7 @@
 using BuildingBlocks.Constants;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Persistence.Common;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using BuildingBlocks.Persistence.Write;
 using Duende.IdentityServer.EntityFramework.Entities;
 using Identity.Data;

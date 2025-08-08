@@ -1,4 +1,5 @@
 using BuildingBlocks.Core;
+using BuildingBlocks.Core.Domain.Events;
 
 namespace Identity.Identity.Events;
 

@@ -1,9 +1,11 @@
+using System.Diagnostics;
+
 namespace BuildingBlocks.Core.CQRS;
 
 /// <summary>
 /// Base interface for all requests in CQRS pattern.
-/// Provides common behavior for both commands and queries.
-/// Follows SRP by focusing solely on request identification.
+/// Provides common behavior for both commands and queries with W3C TraceContext support and metadata.
+/// Follows SRP by focusing solely on request identification, tracing, and metadata.
 /// </summary>
 public interface IAxonRequest
 {
@@ -16,6 +18,30 @@ public interface IAxonRequest
     /// Timestamp when the request was created.
     /// </summary>
     DateTime RequestedAt { get; }
+    
+    /// <summary>
+    /// W3C TraceContext trace identifier.
+    /// Returns current activity's trace ID or null if no activity is active.
+    /// </summary>
+    string? TraceId => Activity.Current?.TraceId.ToString();
+    
+    /// <summary>
+    /// W3C TraceContext span identifier.
+    /// Returns current activity's span ID or null if no activity is active.
+    /// </summary>
+    string? SpanId => Activity.Current?.SpanId.ToString();
+    
+    /// <summary>
+    /// W3C TraceContext parent span identifier.
+    /// Returns current activity's parent span ID or null if no parent or activity is active.
+    /// </summary>
+    string? ParentSpanId => Activity.Current?.ParentSpanId.ToString();
+    
+    /// <summary>
+    /// Immutable metadata dictionary for request context and custom properties.
+    /// Enables extensible request enrichment without breaking existing contracts.
+    /// </summary>
+    IReadOnlyDictionary<string, object> Metadata { get; }
 }
 
 /// <summary>

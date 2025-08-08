@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Exception;
 
 namespace Identity.Identity.Exceptions;

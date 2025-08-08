@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Domain.Events;
 using MassTransit;
 
 namespace BuildingBlocks.Core.Event;

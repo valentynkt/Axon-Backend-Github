@@ -1,5 +1,6 @@
 using System;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;

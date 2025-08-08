@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using Ardalis.GuardClauses;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
 using BuildingBlocks.Persistence;

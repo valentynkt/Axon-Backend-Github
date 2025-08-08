@@ -1,4 +1,5 @@
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 
 namespace Axon.Modules.Chat.Application.Commands.ProcessMessage;

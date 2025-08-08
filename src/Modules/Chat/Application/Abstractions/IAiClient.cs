@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace Axon.Modules.Chat.Application.Abstractions;
 

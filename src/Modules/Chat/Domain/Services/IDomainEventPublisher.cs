@@ -1,4 +1,6 @@
 using Axon.Shared.Domain;
+using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Domain.Model;
 
 namespace Axon.Modules.Chat.Domain.Services;
 

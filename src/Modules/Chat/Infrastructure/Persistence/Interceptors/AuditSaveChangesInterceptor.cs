@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.Services;
 using Axon.Shared.Domain;
+using BuildingBlocks.Core.Domain.Primitives;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;

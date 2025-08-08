@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
 

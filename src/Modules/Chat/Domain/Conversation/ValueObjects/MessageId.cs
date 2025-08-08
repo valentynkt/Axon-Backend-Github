@@ -1,5 +1,8 @@
 using System;
 using System.Text.Json.Serialization;
+using BuildingBlocks.Core.Domain.Primitives;
+using BuildingBlocks.Core.Domain.Primitives.Serialization;
+using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Model;
 using BuildingBlocks.Core.Results;
 

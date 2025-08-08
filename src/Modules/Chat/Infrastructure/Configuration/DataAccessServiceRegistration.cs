@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Axon.BuildingBlocks.Persistence.Interfaces;
 using Axon.BuildingBlocks.Postgres;
 using Axon.Modules.Chat.Application.Repositories;
+using BuildingBlocks.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Infrastructure.Configuration;

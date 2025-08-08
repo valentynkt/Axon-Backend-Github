@@ -24,7 +24,7 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(results);
 
         var resultsList = results.ToList();
-        if (!resultsList.Any())
+        if (resultsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
 
         var values = new List<T>();
@@ -53,7 +53,7 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(results);
 
         var resultsList = results.ToList();
-        if (!resultsList.Any())
+        if (resultsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
 
         var values = new List<T>();
@@ -67,7 +67,7 @@ public static class RailwayExtensions
                 errors.Add(result.Error);
         }
 
-        if (errors.Any())
+        if (errors.Count != 0)
         {
             var aggregatedError = errors.Count == 1 
                 ? errors[0] 
@@ -140,18 +140,21 @@ public static class RailwayExtensions
     /// <returns>A Result containing all success values or the first failure</returns>
     public static async Task<Result<IReadOnlyList<T>>> ParallelSequence<T>(
         this IEnumerable<Func<CancellationToken, Task<Result<T>>>> operations,
-        int maxDegreeOfParallelism = Environment.ProcessorCount,
+        int maxDegreeOfParallelism = -1,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operations);
 
         var operationsList = operations.ToList();
-        if (!operationsList.Any())
+        if (operationsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
+
+        // Use processor count if -1 is specified
+        var actualMaxDegree = maxDegreeOfParallelism == -1 ? Environment.ProcessorCount : maxDegreeOfParallelism;
 
         try
         {
-            var semaphore = new SemaphoreSlim(maxDegreeOfParallelism, maxDegreeOfParallelism);
+            var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
             var tasks = operationsList.Select(async operation =>
             {
                 await semaphore.WaitAsync(cancellationToken);
@@ -185,18 +188,21 @@ public static class RailwayExtensions
     /// <returns>A Result containing all success values or aggregated failures</returns>
     public static async Task<Result<IReadOnlyList<T>>> ParallelSequenceWithAllErrors<T>(
         this IEnumerable<Func<CancellationToken, Task<Result<T>>>> operations,
-        int maxDegreeOfParallelism = Environment.ProcessorCount,
+        int maxDegreeOfParallelism = -1,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operations);
 
         var operationsList = operations.ToList();
-        if (!operationsList.Any())
+        if (operationsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
+
+        // Use processor count if -1 is specified
+        var actualMaxDegree = maxDegreeOfParallelism == -1 ? Environment.ProcessorCount : maxDegreeOfParallelism;
 
         try
         {
-            var semaphore = new SemaphoreSlim(maxDegreeOfParallelism, maxDegreeOfParallelism);
+            var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
             var tasks = operationsList.Select(async operation =>
             {
                 await semaphore.WaitAsync(cancellationToken);
@@ -230,19 +236,22 @@ public static class RailwayExtensions
     /// <returns>A Result containing all successful values</returns>
     public static async Task<Result<IReadOnlyList<T>>> ParallelPartial<T>(
         this IEnumerable<Func<CancellationToken, Task<Result<T>>>> operations,
-        int maxDegreeOfParallelism = Environment.ProcessorCount,
+        int maxDegreeOfParallelism = -1,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operations);
 
         var operationsList = operations.ToList();
-        if (!operationsList.Any())
+        if (operationsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
+
+        // Use processor count if -1 is specified
+        var actualMaxDegree = maxDegreeOfParallelism == -1 ? Environment.ProcessorCount : maxDegreeOfParallelism;
 
         try
         {
             var results = new ConcurrentBag<T>();
-            var semaphore = new SemaphoreSlim(maxDegreeOfParallelism, maxDegreeOfParallelism);
+            var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
             
             var tasks = operationsList.Select(async operation =>
             {

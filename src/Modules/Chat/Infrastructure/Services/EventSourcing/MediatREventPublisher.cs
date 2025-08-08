@@ -1,4 +1,5 @@
 using Axon.Shared.Domain;
+using BuildingBlocks.Core.Domain.Events;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

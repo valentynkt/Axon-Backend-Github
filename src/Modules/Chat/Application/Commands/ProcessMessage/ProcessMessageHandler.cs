@@ -5,6 +5,7 @@ using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

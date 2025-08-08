@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.Json;
+using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Domain.Model;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Interceptors;
 
@@ -154,7 +156,7 @@ public sealed class DomainEventInterceptor : SaveChangesInterceptor
     /// </summary>
     private List<IDomainEvent> CollectDomainEvents(DbContext context)
     {
-        var aggregateEntries = context.ChangeTracker.Entries<IAggregateRoot>()
+        var aggregateEntries = context.ChangeTracker.Entries<IAggregateRoot<>>()
             .Where(entry => entry.Entity.DomainEvents.Any())
             .ToList();
 

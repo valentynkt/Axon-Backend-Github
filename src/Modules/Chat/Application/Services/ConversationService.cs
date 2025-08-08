@@ -1,10 +1,13 @@
-using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.Repositories;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;
+using AiRequest = Axon.Modules.Chat.Application.DTOs.AiRequest;
+using IAiClient = Axon.Modules.Chat.Application.Abstractions.IAiClient;
 
 namespace Axon.Modules.Chat.Application.Services;
 

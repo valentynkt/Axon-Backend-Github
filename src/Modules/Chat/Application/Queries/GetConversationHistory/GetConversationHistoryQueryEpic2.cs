@@ -4,9 +4,12 @@ using Axon.Modules.Chat.Domain.Specifications;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Domain.CQRS;
 using BuildingBlocks.Core.Domain.Specifications;
+using BuildingBlocks.Core.Domain.Specifications.CommonSpecs;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Pagination;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversationHistory;
 

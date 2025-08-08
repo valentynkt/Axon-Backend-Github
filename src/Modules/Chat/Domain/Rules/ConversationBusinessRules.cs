@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using BuildingBlocks.Core.Domain.Rules;

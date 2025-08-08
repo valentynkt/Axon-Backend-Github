@@ -3,7 +3,11 @@ using MediatR;
 using BuildingBlocks.Core.Domain.Integration;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
+using BuildingBlocks.Core.CQRS;
+using BuildingBlocks.Application.Validation;
 using Microsoft.Extensions.Logging;
+using IValidationContext = BuildingBlocks.Application.Validation.IValidationContext;
+using Unit = BuildingBlocks.Core.Functional.Unit;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -50,8 +54,17 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
 
         _logger.LogDebug("Starting validation for {RequestType}", typeof(TRequest).Name);
 
-        // 1. Structural validation using FluentValidation
-        var structuralValidation = await ValidateStructureAsync(request, cancellationToken);
+        // Epic 04: Create validation context from request metadata if available
+        ValidationContext? validationContext = null;
+        if (request is IAxonRequest axonRequest)
+        {
+            validationContext = new ValidationContext(axonRequest);
+            _logger.LogDebug("Created validation context with TraceId: {TraceId}, TenantId: {TenantId}", 
+                validationContext.TraceId, validationContext.TenantId);
+        }
+
+        // 1. Structural validation using FluentValidation with context injection
+        var structuralValidation = await ValidateStructureAsync(request, validationContext, cancellationToken);
         
         // 2. Domain business rules validation (Epic 2 integration)
         var domainValidation = await ValidateDomainRulesAsync(request, cancellationToken);
@@ -67,9 +80,9 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
                 combinedValidation.Errors.Count,
                 string.Join("; ", combinedValidation.Errors.Select(e => e.Message)));
 
-            // Convert validation errors to grouped Result format
+            // Enhanced error creation with metadata context
             var groupedErrors = GroupValidationErrors(combinedValidation.Errors);
-            var aggregatedError = Error.Aggregate(groupedErrors);
+            var aggregatedError = CreateValidationErrorWithMetadata(groupedErrors, validationContext);
             
             return CreateFailureResponse<TResponse>(aggregatedError);
         }
@@ -77,23 +90,41 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
         _logger.LogDebug("Validation successful for {RequestType}", typeof(TRequest).Name);
         
         // Validation passed, proceed to next behavior
-        return await next();
+        return await next(cancellationToken);
     }
 
     /// <summary>
-    /// Perform structural validation using FluentValidation validators.
+    /// Perform structural validation using FluentValidation validators with Epic 04 context injection.
     /// </summary>
     private async Task<Validation<Unit>> ValidateStructureAsync(
         TRequest request, 
+        IValidationContext? validationContext,
         CancellationToken cancellationToken)
     {
         var validators = _validators.ToList();
-        if (!validators.Any())
+        if (validators.Count == 0)
         {
             return Validation<Unit>.Valid(Unit.Value);
         }
 
         _logger.LogDebug("Running {ValidatorCount} FluentValidation validators", validators.Count);
+
+        // Epic 04: Inject validation context into metadata-aware validators
+        var metadataValidators = 0;
+        if (validationContext != null)
+        {
+            foreach (var validator in validators.OfType<IMetadataValidator>())
+            {
+                validator.SetContext(validationContext);
+                metadataValidators++;
+            }
+            
+            if (metadataValidators > 0)
+            {
+                _logger.LogDebug("Injected validation context into {MetadataValidatorCount} metadata-aware validators", 
+                    metadataValidators);
+            }
+        }
 
         var errors = new List<Error>();
 
@@ -111,7 +142,7 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
             }
         }
 
-        return errors.Any()
+        return errors.Count != 0
             ? Validation<Unit>.Invalid(errors)
             : Validation<Unit>.Valid(Unit.Value);
     }
@@ -159,7 +190,7 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
             allErrors.AddRange(domainValidation.Errors);
         }
 
-        return allErrors.Any()
+        return allErrors.Count != 0
             ? Validation<Unit>.Invalid(allErrors)
             : Validation<Unit>.Valid(Unit.Value);
     }
@@ -195,8 +226,49 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
     }
 
     /// <summary>
+    /// Create validation error with enhanced metadata context for Epic 04.
+    /// Includes trace context, tenant information, and validation metadata.
+    /// </summary>
+    private static Error CreateValidationErrorWithMetadata(
+        Error[] groupedErrors, 
+        IValidationContext? validationContext)
+    {
+        var metadata = new Dictionary<string, object>
+        {
+            ["ValidationErrors"] = groupedErrors.Select(e => new { e.Code, e.Message, e.Type }).ToArray(),
+            ["ErrorCount"] = groupedErrors.Length
+        };
+
+        // Add trace context if available
+        if (validationContext != null)
+        {
+            metadata["TraceId"] = validationContext.TraceId ?? "unknown";
+            metadata["RequestId"] = validationContext.RequestId.ToString();
+            
+            if (!string.IsNullOrEmpty(validationContext.TenantId))
+            {
+                metadata["TenantId"] = validationContext.TenantId;
+            }
+            
+            if (!string.IsNullOrEmpty(validationContext.UserId))
+            {
+                metadata["UserId"] = validationContext.UserId;
+            }
+            
+            // Add feature flags that were checked during validation
+            if (validationContext.FeatureFlags.Count > 0)
+            {
+                metadata["FeatureFlags"] = validationContext.FeatureFlags
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            }
+        }
+
+        return Error.Aggregate(groupedErrors, metadata);
+    }
+
+    /// <summary>
     /// Create a failure response with the appropriate type.
-    /// Uses reflection to create the correct Result<T> failure response.
+    /// Uses reflection to create the correct Result&lt;T&gt; failure response.
     /// </summary>
     private static TResponse CreateFailureResponse<T>(Error error) where T : IResult
     {

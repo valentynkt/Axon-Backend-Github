@@ -1,4 +1,5 @@
 using BuildingBlocks.Caching;
+using BuildingBlocks.Infrastructure.Caching;
 using BuildingBlocks.Logging;
 using BuildingBlocks.Validation;
 using Identity.Data;

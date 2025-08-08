@@ -1,7 +1,10 @@
+using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.Repositories;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Pagination;
 using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;

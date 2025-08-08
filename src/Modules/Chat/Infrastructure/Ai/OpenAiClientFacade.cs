@@ -6,6 +6,7 @@ using Axon.Modules.Chat.Domain.Errors;
 using Axon.Modules.Chat.Infrastructure.Ai.Abstractions;
 using Axon.Modules.Chat.Infrastructure.Ai.Models;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;
 using InfraActivityTracker = Axon.Modules.Chat.Infrastructure.Ai.Abstractions.IActivityTracker;
 

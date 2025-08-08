@@ -1,7 +1,10 @@
+using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.Repositories;
 using Axon.Shared.Common;
 using Axon.Shared.Common.Abstractions;
+using BuildingBlocks.Core.Functional.Results;
+using MediatR;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversation;
 

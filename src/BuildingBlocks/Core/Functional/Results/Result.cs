@@ -191,7 +191,7 @@ public readonly record struct Result<T> : IResult<T>
     #region Monad Operations (Bind/FlatMap)
     
     /// <summary>
-    /// Chains operations that return Result<T>
+    /// Chains operations that return Result&lt;T&gt;
     /// </summary>
     public Result<TNew> Bind<TNew>(Func<T, Result<TNew>> binder)
     {

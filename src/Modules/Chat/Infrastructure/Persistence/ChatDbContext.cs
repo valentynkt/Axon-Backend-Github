@@ -11,6 +11,12 @@ using Axon.BuildingBlocks.Persistence.Common;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
+using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
+using BuildingBlocks.Persistence.Read;
+using BuildingBlocks.Persistence.Write;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
 
@@ -472,7 +478,7 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatReadDbContext>
     /// </summary>
     private IReadOnlyList<IDomainEvent> GetDomainEvents()
     {
-        return ChangeTracker.Entries<IAggregateRoot>()
+        return ChangeTracker.Entries<IAggregateRoot<>>()
             .Where(entry => entry.Entity.DomainEvents.Any())
             .SelectMany(entry => entry.Entity.DomainEvents)
             .ToList();

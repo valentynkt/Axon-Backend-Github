@@ -1,9 +1,14 @@
 using Axon.BuildingBlocks.Core.Pagination;
 using Axon.BuildingBlocks.Postgres;
+using Axon.Modules.Chat.Domain.Conversation;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Conversations;
 using Axon.Modules.Chat.Domain.Conversations.Enums;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
+using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Pagination;
 using BuildingBlocks.Core.Results;
+using MassTransit.Internals;
 using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;

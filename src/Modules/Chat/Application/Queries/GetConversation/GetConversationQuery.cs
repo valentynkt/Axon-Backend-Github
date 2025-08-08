@@ -2,6 +2,8 @@ using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
 using Axon.Shared.Common.Abstractions;
+using BuildingBlocks.Core.Functional.Results;
+using MediatR;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversation;
 

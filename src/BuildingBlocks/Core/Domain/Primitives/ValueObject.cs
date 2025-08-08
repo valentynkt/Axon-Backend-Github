@@ -1,3 +1,8 @@
+using System.Text.RegularExpressions;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
+using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Functional.Results;
+
 namespace BuildingBlocks.Core.Domain.Primitives;
 
 /// <summary>
@@ -42,21 +47,6 @@ public abstract record ValueObject
             
         return GetEqualityComponents()
             .SequenceEqual(other.GetEqualityComponents());
-    }
-    
-    /// <summary>
-    /// OBSOLETE: Use Result-based factory methods instead of exception-throwing validation
-    /// This method breaks the functional programming principles established in Epic 1
-    /// </summary>
-    [Obsolete("Use Result-based Create() factory methods. Exception-based validation violates functional principles.")]
-    protected void EnsureValid()
-    {
-        var validation = Validate();
-        if (validation.IsInvalid)
-        {
-            var message = string.Join("; ", validation.Errors.Select(e => e.Message));
-            throw new DomainException($"Invalid {GetType().Name}: {message}");
-        }
     }
 }
 
@@ -141,7 +131,7 @@ public sealed record Email : SingleValueObject<string>
                 errors.Add(Error.Validation("Invalid email format", "EMAIL_INVALID_FORMAT"));
         }
         
-        return errors.Any() 
+        return errors.Count != 0
             ? Validation<Unit>.Invalid(errors)
             : Validation<Unit>.Valid(Unit.Value);
     }
@@ -215,7 +205,7 @@ public sealed record Money : ValueObject
         if (Currency == Currency.None)
             errors.Add(Error.Validation("Currency must be specified", "MONEY_NO_CURRENCY"));
         
-        return errors.Any() 
+        return errors.Count != 0
             ? Validation<Unit>.Invalid(errors)
             : Validation<Unit>.Valid(Unit.Value);
     }

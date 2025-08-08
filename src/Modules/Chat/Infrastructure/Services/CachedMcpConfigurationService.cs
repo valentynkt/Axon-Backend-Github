@@ -1,6 +1,7 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 

@@ -7,6 +7,7 @@ using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Commands.ProcessMessage;
 

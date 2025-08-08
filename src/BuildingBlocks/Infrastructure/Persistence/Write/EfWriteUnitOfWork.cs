@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Event;
 using BuildingBlocks.Core.Model;
 using BuildingBlocks.Persistence.Common.Interfaces;

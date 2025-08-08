@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
+using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Core.Event;
 
 namespace Axon.Modules.Chat.Domain.Conversation.Events;

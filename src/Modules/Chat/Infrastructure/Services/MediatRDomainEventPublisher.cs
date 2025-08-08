@@ -3,6 +3,7 @@ using Axon.Shared.Domain;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using BuildingBlocks.Core.Domain.Events;
 
 namespace Axon.Modules.Chat.Infrastructure.Services;
 
