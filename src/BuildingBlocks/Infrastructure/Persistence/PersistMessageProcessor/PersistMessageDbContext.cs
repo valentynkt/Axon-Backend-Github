@@ -1,12 +1,9 @@
 using Ardalis.GuardClauses;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using IsolationLevel = System.Data.IsolationLevel;
 
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 public class PersistMessageDbContext : DbContext, IPersistMessageDbContext
 {

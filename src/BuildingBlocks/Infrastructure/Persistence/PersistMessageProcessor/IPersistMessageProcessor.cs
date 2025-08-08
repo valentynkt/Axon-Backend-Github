@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
-using BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Abstractions.Events;
 
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 // Ref: http://www.kamilgrzybek.com/design/the-outbox-pattern/
 // Ref: https://event-driven.io/en/outbox_inbox_patterns_and_delivery_guarantees_explained/

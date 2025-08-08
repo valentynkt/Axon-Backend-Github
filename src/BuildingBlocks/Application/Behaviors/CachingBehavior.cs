@@ -7,10 +7,10 @@ using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Diagnostics.Metrics;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.CQRS;
 using BuildingBlocks.Application.Caching;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
-namespace BuildingBlocks.Infrastructure.Caching;
+namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
 /// Caching pipeline behavior for Epic 04 Story 02 - Declarative Query Caching.

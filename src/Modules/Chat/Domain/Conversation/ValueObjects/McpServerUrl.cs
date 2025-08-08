@@ -1,8 +1,6 @@
-using System;
-using Axon.Shared.Common;
 using BuildingBlocks.Core.Functional.Results;
 
-namespace Axon.Modules.Chat.Domain.ValueObjects
+namespace Axon.Modules.Chat.Domain.Conversation.ValueObjects
 {
     /// <summary>
     /// Represents the base URL of our MCP server, validated as an absolute URI.

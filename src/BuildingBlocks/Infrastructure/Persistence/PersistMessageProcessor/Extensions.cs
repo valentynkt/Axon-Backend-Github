@@ -2,12 +2,11 @@ using Ardalis.GuardClauses;
 using BuildingBlocks.Web;
 using Humanizer;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 public static class Extensions
 {

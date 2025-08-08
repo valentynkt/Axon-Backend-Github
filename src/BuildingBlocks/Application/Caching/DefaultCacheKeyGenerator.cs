@@ -2,8 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using Microsoft.Extensions.Options;
-using BuildingBlocks.Core.CQRS;
 
 namespace BuildingBlocks.Application.Caching;
 
@@ -54,7 +54,7 @@ public sealed class DefaultCacheKeyGenerator : ICacheKeyGenerator
         return $"axon:query:{prefix}:{contentHash}:{contextPart}";
     }
 
-    private string GenerateFallbackKey<TQuery>(TQuery query)
+    private static string GenerateFallbackKey<TQuery>(TQuery query)
     {
         var typeName = typeof(TQuery).Name;
         var contentHash = ComputeContentHash(query);

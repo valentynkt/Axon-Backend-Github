@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Persistence.Common;
+namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
 /// Transaction handler for explicit transaction management

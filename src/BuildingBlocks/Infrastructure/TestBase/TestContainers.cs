@@ -1,10 +1,11 @@
-namespace BuildingBlocks.TestBase;
-
+using BuildingBlocks.Web;
 using Testcontainers.EventStoreDb;
-// using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
-using Web;
+
+namespace BuildingBlocks.Infrastructure.TestBase;
+
+// using Testcontainers.MongoDb;
 
 public static class TestContainers
 {

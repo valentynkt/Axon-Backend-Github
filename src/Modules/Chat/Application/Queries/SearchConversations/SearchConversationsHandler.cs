@@ -4,8 +4,8 @@ using Axon.Modules.Chat.Application.Repositories;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Shared.Common;
 using Axon.Shared.Common.Abstractions;
+using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Pagination;
 using MediatR;
 
 namespace Axon.Modules.Chat.Application.Queries.SearchConversations;

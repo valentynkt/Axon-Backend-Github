@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Identity;
-using BuildingBlocks.Core.Model;
 using BuildingBlocks.Core;
 using BuildingBlocks.Core.Domain.Events;
-using BuildingBlocks.Core.Event;
 using Identity.Identity.Events;
 
 namespace Identity.Identity.Models;

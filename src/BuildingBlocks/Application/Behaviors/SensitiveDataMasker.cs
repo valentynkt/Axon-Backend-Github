@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -39,7 +40,7 @@ public enum MaskingStrategy
 /// <summary>
 /// Implementation of sensitive data masker with comprehensive PII protection.
 /// </summary>
-public sealed class SensitiveDataMasker : ISensitiveDataMasker
+public sealed partial class SensitiveDataMasker : ISensitiveDataMasker
 {
     private static readonly HashSet<string> SensitivePropertyNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -102,7 +103,7 @@ public sealed class SensitiveDataMasker : ISensitiveDataMasker
                    property.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase));
     }
 
-    private string MaskStringValue(string value)
+    private static string MaskStringValue(string value)
     {
         if (string.IsNullOrEmpty(value))
             return value;
@@ -255,22 +256,28 @@ public sealed class SensitiveDataMasker : ISensitiveDataMasker
 
     private static string HashValue(string value)
     {
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hashedBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value));
+        var hashedBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(hashedBytes)[..16]; // First 16 chars for correlation
     }
 
     // Pattern detection helpers
     private static bool IsEmail(string value) =>
-        Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.IgnoreCase);
+        EmailRegex().IsMatch(value);
 
     private static bool IsPhone(string value) =>
-        Regex.IsMatch(value, @"^[\+]?[\d\s\-\(\)\.]{7,15}$");
+        PhoneRegex().IsMatch(value);
 
     private static bool IsCreditCard(string value)
     {
         var digits = new string(value.Where(char.IsDigit).ToArray());
-        return digits.Length >= 13 && digits.Length <= 19 && 
-               Regex.IsMatch(digits, @"^\d{13,19}$");
+        return digits.Length >= 13 && digits.Length <= 19 &&
+               CreditCardRegex().IsMatch(digits);
     }
+
+    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.IgnoreCase, "en-US")]
+    private static partial Regex EmailRegex();
+    [GeneratedRegex(@"^[\+]?[\d\s\-\(\)\.]{7,15}$")]
+    private static partial Regex PhoneRegex();
+    [GeneratedRegex(@"^\d{13,19}$")]
+    private static partial Regex CreditCardRegex();
 }

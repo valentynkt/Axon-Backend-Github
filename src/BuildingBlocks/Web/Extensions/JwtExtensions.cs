@@ -1,11 +1,10 @@
-using BuildingBlocks.Constants;
-using BuildingBlocks.Web;
+using BuildingBlocks.Core.Constants;
 using Duende.IdentityServer.EntityFramework.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
-namespace BuildingBlocks.Jwt
+namespace BuildingBlocks.Web.Extensions
 {
     public static class JwtExtensions
     {

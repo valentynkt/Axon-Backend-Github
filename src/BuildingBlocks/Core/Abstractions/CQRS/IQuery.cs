@@ -1,7 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
-using MediatR;
-
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Interface for queries that return data without modifying system state wrapped in Result pattern.

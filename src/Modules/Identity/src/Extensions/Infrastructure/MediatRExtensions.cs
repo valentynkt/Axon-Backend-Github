@@ -1,7 +1,4 @@
-using BuildingBlocks.Caching;
-using BuildingBlocks.Infrastructure.Caching;
-using BuildingBlocks.Logging;
-using BuildingBlocks.Validation;
+using BuildingBlocks.Application.Extensions;
 using Identity.Data;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,13 +12,11 @@ public static class MediatRExtensions
     public static IServiceCollection AddCustomMediatR(this IServiceCollection services)
     {
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblies(typeof(IdentityRoot).Assembly));
-        // Pipeline order: Validation → Authorization → Retry → Transaction → Caching → Observability
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-        // Note: Authorization and Retry behaviors not yet implemented
+        
+        // Register Identity-specific transaction behavior
+        // Note: Pipeline behaviors are centrally registered in API layer
+        // This Identity-specific behavior will be used for Identity commands/queries
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(EfTxIdentityBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(InvalidateCachingBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>)); // Observability at the end
 
         return services;
     }

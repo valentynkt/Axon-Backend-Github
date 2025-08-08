@@ -14,8 +14,8 @@ using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Persistence.Read;
-using BuildingBlocks.Persistence.Write;
+using BuildingBlocks.Infrastructure.Persistence.Read;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;

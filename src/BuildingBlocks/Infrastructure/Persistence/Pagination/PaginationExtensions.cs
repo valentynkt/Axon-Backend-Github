@@ -1,8 +1,10 @@
+using BuildingBlocks.Core.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Sieve.Models;
 using Sieve.Services;
+using Error = BuildingBlocks.Core.Diagnostics.Error;
 
-namespace BuildingBlocks.Core.Pagination;
+namespace BuildingBlocks.Infrastructure.Persistence.Pagination;
 
 /// <summary>
 /// Extension methods for efficient pagination with optimized query patterns

@@ -6,9 +6,8 @@ using Axon.Modules.Chat.Domain.Conversations;
 using Axon.Modules.Chat.Domain.Conversations.Enums;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Pagination;
 using BuildingBlocks.Core.Results;
-using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 namespace Axon.Modules.Chat.Application.Repositories;
 

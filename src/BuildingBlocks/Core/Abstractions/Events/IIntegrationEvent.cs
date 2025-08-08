@@ -1,6 +1,7 @@
+using BuildingBlocks.Core.Domain.Events;
 using MassTransit;
 
-namespace BuildingBlocks.Core.Event;
+namespace BuildingBlocks.Core.Abstractions.Events;
 
 /// <summary>
 /// Interface for integration events that cross bounded context boundaries.

@@ -1,6 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
-
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Abstract base record for queries that return data wrapped in Result pattern.

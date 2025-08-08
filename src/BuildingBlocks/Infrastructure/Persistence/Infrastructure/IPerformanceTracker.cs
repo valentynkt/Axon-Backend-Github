@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace BuildingBlocks.Persistence.Infrastructure;
+namespace BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 
 /// <summary>
 /// Performance tracking interface for database operations

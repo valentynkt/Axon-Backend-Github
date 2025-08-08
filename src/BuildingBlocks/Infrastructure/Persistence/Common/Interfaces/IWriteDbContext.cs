@@ -1,8 +1,6 @@
 using BuildingBlocks.Core.Domain.Events;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.Core.Model;
 
-namespace BuildingBlocks.Persistence.Common.Interfaces;
+namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
 /// Write-side database context for CQRS command operations

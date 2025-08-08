@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
+using Polly;
 
-namespace BuildingBlocks.Polly;
+namespace BuildingBlocks.Infrastructure.Resilience;
 
-using global::Polly;
 using Exception = System.Exception;
 
 public static class PollyExtensions

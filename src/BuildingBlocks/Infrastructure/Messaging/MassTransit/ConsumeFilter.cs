@@ -1,8 +1,8 @@
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.PersistMessageProcessor;
+using BuildingBlocks.Core.Abstractions.Events;
+using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 using MassTransit;
 
-namespace BuildingBlocks.MassTransit;
+namespace BuildingBlocks.Infrastructure.Messaging.MassTransit;
 
 // Handle inbox messages with masstransit pipeline
 public class ConsumeFilter<T> : IFilter<ConsumeContext<T>>

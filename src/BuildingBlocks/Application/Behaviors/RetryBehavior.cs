@@ -12,7 +12,7 @@ using System.Net;
 using System.Reflection;
 using BuildingBlocks.Core.Functional.Results;
 
-namespace BuildingBlocks.Infrastructure.Resilience;
+namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
 /// Advanced retry behavior with Polly integration for Epic 05.

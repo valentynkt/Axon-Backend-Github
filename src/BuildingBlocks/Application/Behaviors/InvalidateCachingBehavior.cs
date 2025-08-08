@@ -5,9 +5,8 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Abstractions.CQRS;
-using BuildingBlocks.Core.CQRS;
 
-namespace BuildingBlocks.Infrastructure.Caching;
+namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
 /// Pipeline behavior that invalidates caches for commands in Epic 05.
@@ -92,10 +91,10 @@ public sealed class InvalidateCachingBehavior<TRequest, TResponse> : IPipelineBe
         }
 
         // 3. Default behavior based on command type
-        return GetDefaultInvalidationTags();
+        return InvalidateCachingBehavior<TRequest, TResponse>.GetDefaultInvalidationTags();
     }
 
-    private string[] GetDefaultInvalidationTags()
+    private static string[] GetDefaultInvalidationTags()
     {
         var commandType = typeof(TRequest);
         var commandName = commandType.Name;

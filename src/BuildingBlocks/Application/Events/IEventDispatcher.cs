@@ -1,4 +1,6 @@
-namespace BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Domain.Events;
+
+namespace BuildingBlocks.Application.Events;
 
 public interface IEventDispatcher
 {

@@ -1,15 +1,12 @@
-using System;
+using System.Collections.Immutable;
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Web;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.Core.Model;
-using System.Collections.Immutable;
-using BuildingBlocks.Core.Domain.Events;
 
-namespace BuildingBlocks.Persistence.Write;
+namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
 /// <summary>
 /// Base class for write-side database contexts in CQRS architecture

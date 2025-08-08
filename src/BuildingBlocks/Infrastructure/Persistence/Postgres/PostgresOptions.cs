@@ -1,8 +1,6 @@
-using BuildingBlocks.Persistence;
-using BuildingBlocks.Persistence.Common;
-using BuildingBlocks.Persistence.Infrastructure;
+using BuildingBlocks.Infrastructure.Persistence.Common;
 
-namespace BuildingBlocks.Postgres;
+namespace BuildingBlocks.Infrastructure.Persistence.Postgres;
 
 /// <summary>
 /// PostgreSQL-specific configuration options that extend the base persistence configuration

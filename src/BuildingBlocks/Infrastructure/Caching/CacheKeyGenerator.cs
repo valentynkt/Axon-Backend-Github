@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using Microsoft.Extensions.Options;
 
 namespace BuildingBlocks.Infrastructure.Caching;
@@ -33,7 +34,7 @@ public sealed class CacheKeyGenerator : ICacheKeyGenerator
 
     public string GenerateKey<TQuery>(TQuery query) where TQuery : notnull
     {
-        if (query is BuildingBlocks.Core.CQRS.IQuery<object> typedQuery)
+        if (query is IQuery<object> typedQuery)
         {
             var prefix = typedQuery.CacheKeyPrefix;
             var queryHash = ComputeQueryHash(query);
@@ -124,7 +125,7 @@ public sealed class CacheConfigurationProvider : ICacheConfigurationProvider
         return _configurations.TryGetValue(requestTypeName, out var config) ? config : null;
     }
 
-    private Dictionary<string, CacheConfiguration> InitializeDefaultConfigurations()
+    private static Dictionary<string, CacheConfiguration> InitializeDefaultConfigurations()
     {
         return new Dictionary<string, CacheConfiguration>
         {

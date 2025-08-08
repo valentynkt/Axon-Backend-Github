@@ -1,13 +1,11 @@
-using BuildingBlocks.Persistence;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Web;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace BuildingBlocks.Postgres;
+namespace BuildingBlocks.Infrastructure.Persistence.Postgres;
 
 /// <summary>
 /// PostgreSQL-specific extensions that provide enterprise features

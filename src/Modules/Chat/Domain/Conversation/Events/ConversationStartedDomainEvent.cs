@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
-using BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Domain.Events;
+using UserId = Axon.Modules.Chat.Domain.Conversation.ValueObjects.UserId;
 
 namespace Axon.Modules.Chat.Domain.Conversation.Events;
 

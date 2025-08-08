@@ -1,4 +1,4 @@
-namespace BuildingBlocks.MassTransit;
+namespace BuildingBlocks.Infrastructure.Messaging.MassTransit;
 
 public enum TransportType
 {

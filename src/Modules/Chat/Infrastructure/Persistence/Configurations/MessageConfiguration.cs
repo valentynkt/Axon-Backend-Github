@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

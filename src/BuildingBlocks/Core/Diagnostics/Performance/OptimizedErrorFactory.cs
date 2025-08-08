@@ -382,7 +382,7 @@ public sealed class OptimizedErrorFactory : IDisposable
                     _creationCache.TryRemove(key, out _);
                 }
             }
-            
+
             // Limit string interning caches
             CompactStringCache(_internedCodes, _options.MaxInternedStrings);
             CompactStringCache(_internedMessages, _options.MaxInternedStrings);
@@ -490,7 +490,7 @@ public sealed class OptimizedErrorFactory : IDisposable
         return cache.GetOrAdd(value, v => string.Intern(v));
     }
     
-    private void CompactStringCache(ConcurrentDictionary<string, string> cache, int maxSize)
+    private static void CompactStringCache(ConcurrentDictionary<string, string> cache, int maxSize)
     {
         if (cache.Count <= maxSize) return;
         

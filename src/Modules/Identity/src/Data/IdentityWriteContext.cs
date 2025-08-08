@@ -1,9 +1,7 @@
 using System.Reflection;
 using BuildingBlocks.Core;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence.Infrastructure;
-using BuildingBlocks.Persistence.Write;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using Identity.Identity.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;

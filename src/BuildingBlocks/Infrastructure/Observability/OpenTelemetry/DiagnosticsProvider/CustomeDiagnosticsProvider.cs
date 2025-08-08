@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Reflection;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics;
 using Microsoft.Extensions.Options;
 
-namespace BuildingBlocks.OpenTelemetryCollector.DiagnosticsProvider;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
 public class CustomeDiagnosticsProvider(IMeterFactory meterFactory, IOptions<ObservabilityOptions> options)
     : IDiagnosticsProvider

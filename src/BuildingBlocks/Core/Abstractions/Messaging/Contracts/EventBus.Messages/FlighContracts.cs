@@ -1,6 +1,6 @@
-using BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Domain.Events;
 
-namespace BuildingBlocks.Contracts.EventBus.Messages;
+namespace BuildingBlocks.Core.Abstractions.Messaging.Contracts.EventBus.Messages;
 
 public record FlightCreated(Guid Id) : IntegrationEventBase;
 public record FlightUpdated(Guid Id) : IntegrationEventBase;

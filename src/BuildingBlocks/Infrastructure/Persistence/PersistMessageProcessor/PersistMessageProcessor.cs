@@ -1,15 +1,14 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using Ardalis.GuardClauses;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.Utils;
+using BuildingBlocks.Core.Abstractions.Events;
+using BuildingBlocks.Core.Domain.Events;
 using MassTransit;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.PersistMessageProcessor;
-
-using Microsoft.EntityFrameworkCore;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 public class PersistMessageProcessor : IPersistMessageProcessor
 {

@@ -1,7 +1,6 @@
 using Axon.Shared.Common;
 using Axon.Shared.Domain;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Pagination;
 
 namespace Axon.Modules.Chat.Application.Repositories;
 

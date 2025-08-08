@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.OpenTelemetryCollector;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 namespace BuildingBlocks.Core.Functional.Extensions;
 

@@ -1,12 +1,9 @@
-using System;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Read;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence.Read;
-using BuildingBlocks.Persistence.Write;
-using BuildingBlocks.Core.Model;
 
-namespace BuildingBlocks.Persistence.Caching;
+namespace BuildingBlocks.Infrastructure.Persistence.Caching;
 
 /// <summary>
 /// Extension methods for configuring caching repository decorators

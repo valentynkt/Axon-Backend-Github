@@ -3,6 +3,7 @@ using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Unit = BuildingBlocks.Core.Functional.Unit;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -25,57 +26,47 @@ public sealed class DomainValidationBehavior<TRequest, TResponse> : IPipelineBeh
     }
 
     public async Task<TResponse> Handle(
-        TRequest request, 
-        RequestHandlerDelegate<TResponse> next, 
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        // Only validate domain commands
+        // Only validate domain commands with pre-execution, envelope-only checks
         if (request is not DomainCommandBase domainCommand)
-        {
-            return await next(cancellationToken);
-        }
+            return await next(); // <-- FIX: no parameter
 
-        _logger.LogDebug(
-            "Executing domain validation for {CommandType} on aggregate {AggregateType}",
+        _logger.LogDebug("Executing domain validation for {CommandType} on aggregate {AggregateType}",
             request.GetType().Name,
             domainCommand.GetAggregateType().Name);
 
-        // Execute domain business rules validation
-        var validation = domainCommand.ValidateDomainRules();
-        
+        var validation = domainCommand.ValidateDomainRules(); // MUST be pure, no state
+
         if (validation.IsInvalid)
         {
-            _logger.LogWarning(
-                "Domain validation failed for {CommandType}: {Errors}",
+            _logger.LogWarning("Domain validation failed for {CommandType}: {Errors}",
                 request.GetType().Name,
                 string.Join(", ", validation.Errors.Select(e => $"{e.Code}: {e.Message}")));
 
-            // For Result-based responses, convert validation errors
-            if (typeof(TResponse).IsGenericType && 
+            // Prefer a unified result interface or factory to avoid reflection
+            if (typeof(TResponse).IsGenericType &&
                 typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>))
             {
+                // TODO: Replace with a non-reflection factory if available
                 var resultType = typeof(TResponse).GetGenericArguments()[0];
                 var failureMethod = typeof(Result<>)
                     .MakeGenericType(resultType)
                     .GetMethod(nameof(Result<Unit>.Failure), new[] { typeof(Error) });
 
-                var error = Error.Multiple(validation.Errors.ToArray());
+                // If you keep aggregation, at least add details to metadata
+                var error = Error.Aggregate(validation.Errors.ToArray());
                 var failureResult = failureMethod!.Invoke(null, new object[] { error });
-                
                 return (TResponse)failureResult!;
             }
 
-            // For non-Result responses, throw validation exception
-            throw new DomainValidationException(
-                "Domain validation failed", 
-                validation.Errors.ToArray());
+            throw new DomainValidationException("Domain validation failed", validation.Errors.ToArray());
         }
 
-        _logger.LogDebug(
-            "Domain validation passed for {CommandType}",
-            request.GetType().Name);
-
-        return await next(cancellationToken);
+        _logger.LogDebug("Domain validation passed for {CommandType}", request.GetType().Name);
+        return await next(); // <-- FIX: no parameter
     }
 }
 

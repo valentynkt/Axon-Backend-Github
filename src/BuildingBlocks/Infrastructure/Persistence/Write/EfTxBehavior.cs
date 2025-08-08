@@ -1,14 +1,13 @@
 using System.Text.Json;
 using System.Transactions;
-using BuildingBlocks.Core;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.PersistMessageProcessor;
-using BuildingBlocks.Polly;
+using BuildingBlocks.Application.Events;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
+using BuildingBlocks.Infrastructure.Resilience;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Persistence.Common.Interfaces;
 
-namespace BuildingBlocks.Persistence.Write;
+namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
 
 public class EfTxBehavior<TRequest, TResponse>(

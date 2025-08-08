@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Caching;
+namespace BuildingBlocks.Infrastructure.Caching;
 
 public interface ICacheRequest
 {

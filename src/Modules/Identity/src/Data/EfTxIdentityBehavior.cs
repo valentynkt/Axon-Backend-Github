@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Transactions;
+using BuildingBlocks.Application.Events;
 using BuildingBlocks.Core;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.PersistMessageProcessor;
-using BuildingBlocks.Polly;
+using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
+using BuildingBlocks.Infrastructure.Resilience;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

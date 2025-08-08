@@ -1,4 +1,4 @@
-namespace BuildingBlocks.OpenTelemetryCollector;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 /// <summary>
 /// Telemetry tags use for adding tags to activities as tag name

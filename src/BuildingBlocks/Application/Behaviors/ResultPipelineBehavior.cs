@@ -1,10 +1,8 @@
-using System.Collections.Concurrent;
 using System.Reflection;
-using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Core.Application.Behaviors;
+namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
 /// Pipeline behavior that ensures all command/query handlers return Result&lt;T&gt;

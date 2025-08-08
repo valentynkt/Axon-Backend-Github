@@ -1,9 +1,7 @@
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Shared.Common;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
-using BuildingBlocks.Core.Model;
 
 namespace Axon.Modules.Chat.Domain.Conversation.Entities;
 

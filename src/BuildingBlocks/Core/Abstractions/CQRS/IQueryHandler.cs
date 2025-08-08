@@ -1,7 +1,6 @@
-using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Interface for query handlers that return data wrapped in Result pattern.

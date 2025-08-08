@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Persistence.Common;
+namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
 /// Defines different transaction behavior patterns for persistence operations

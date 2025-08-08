@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 public class PersistMessageBackgroundService(
     ILogger<PersistMessageBackgroundService> logger,

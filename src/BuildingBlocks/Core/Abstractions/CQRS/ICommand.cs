@@ -1,8 +1,6 @@
-using BuildingBlocks.Core.Functional.Results;
-using MediatR;
 using Unit = BuildingBlocks.Core.Functional.Unit;
 
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Interface for commands that don't return a value.

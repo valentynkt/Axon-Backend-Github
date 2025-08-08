@@ -1,10 +1,10 @@
 using System;
 using System.Threading.Tasks;
-using BuildingBlocks.Constants;
-using BuildingBlocks.Contracts.EventBus.Messages;
+using BuildingBlocks.Application.Events;
 using BuildingBlocks.Core;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.Persistence.Infrastructure;
+using BuildingBlocks.Core.Abstractions.Messaging.Contracts.EventBus.Messages;
+using BuildingBlocks.Core.Constants;
+using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using Identity.Identity.Constants;
 using Identity.Identity.Models;
 using Microsoft.AspNetCore.Identity;

@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.CQRS;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace BuildingBlocks.Application.Validation;
 

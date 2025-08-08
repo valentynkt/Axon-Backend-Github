@@ -1,4 +1,6 @@
-namespace BuildingBlocks.Core.Event;
+using BuildingBlocks.Core.Domain.Events;
+
+namespace BuildingBlocks.Core.Abstractions.Events;
 
 /// <summary>
 /// Interface for internal commands that are processed within the same bounded context.

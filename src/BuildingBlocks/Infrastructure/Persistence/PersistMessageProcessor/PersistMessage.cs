@@ -1,7 +1,6 @@
 using Ardalis.GuardClauses;
-using BuildingBlocks.Core.Model;
 
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 public class PersistMessage : IVersioned
 {

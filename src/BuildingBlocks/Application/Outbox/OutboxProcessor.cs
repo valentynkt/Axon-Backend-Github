@@ -121,9 +121,9 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
             _logger.LogError(ex, "Failed to process pending outbox events");
             
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.RecordException(ex);
+            activity?.AddException(ex);
 
-            return Result<OutboxProcessingResult>.Failure(Error.Failure(
+            return Result<OutboxProcessingResult>.Failure(Error.Internal(
                 "Outbox processor failed to process pending events",
                 "OUTBOX_PROCESSOR_FAILED",
                 ex));
@@ -160,9 +160,9 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
                 transactionId);
 
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.RecordException(ex);
+            activity?.AddException(ex);
 
-            return Result<OutboxProcessingResult>.Failure(Error.Failure(
+            return Result<OutboxProcessingResult>.Failure(Error.Internal(
                 $"Outbox processor failed to process events for transaction {transactionId}",
                 "OUTBOX_PROCESSOR_TRANSACTION_FAILED",
                 ex));
@@ -207,7 +207,7 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
         {
             _logger.LogError(ex, "Failed to get outbox processor health");
 
-            return Result<OutboxProcessorHealth>.Failure(Error.Failure(
+            return Result<OutboxProcessorHealth>.Failure(Error.Internal(
                 "Failed to get outbox processor health",
                 "OUTBOX_PROCESSOR_HEALTH_FAILED",
                 ex));
@@ -265,11 +265,11 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
             AddRecentError($"Cleanup error: {ex.Message}");
             
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.RecordException(ex);
+            activity?.AddException(ex);
         }
     }
 
-    private bool ShouldRunCleanup()
+    private static bool ShouldRunCleanup()
     {
         // Simple time-based cleanup trigger
         // In a production environment, you might want more sophisticated scheduling

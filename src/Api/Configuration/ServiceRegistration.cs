@@ -1,6 +1,7 @@
 using Axon.Api.Common.ErrorHandling;
 using Axon.Modules.Chat.Infrastructure.Configuration;
 using Axon.Modules.Chat.Infrastructure.Extensions;
+using BuildingBlocks.Application.Extensions;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using FluentValidation;
@@ -49,6 +50,9 @@ public static class ServiceRegistration
         {
             config.RegisterServicesFromAssembly(typeof(Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageCommand).Assembly);
         });
+        
+        // Register pipeline behaviors in correct Epic 5 order
+        services.AddPipelineBehaviors();
         
         // Add FluentValidation
         services.AddValidatorsFromAssembly(

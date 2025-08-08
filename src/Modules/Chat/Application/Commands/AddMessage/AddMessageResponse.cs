@@ -1,5 +1,4 @@
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
-using Axon.Modules.Chat.Domain.ValueObjects;
 
 namespace Axon.Modules.Chat.Application.Commands.AddMessage;
 

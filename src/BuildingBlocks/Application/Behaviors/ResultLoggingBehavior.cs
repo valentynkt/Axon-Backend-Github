@@ -1,20 +1,18 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using Microsoft.ApplicationInsights;
+using System.Diagnostics.Metrics;
 using BuildingBlocks.Core.Abstractions.CQRS;
-using BuildingBlocks.Core.CQRS;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Extensions;
-using BuildingBlocks.Infrastructure.Observability;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Result-aware logging behavior for MediatR pipeline.
-/// Provides structured logging for Result-based operations with performance metrics.
-/// Logs success/failure states, timing, and error details without breaking the railway pattern.
+/// Modern Result-aware logging behavior for MediatR pipeline using OpenTelemetry.
+/// Provides structured logging with W3C TraceContext support, performance metrics,
+/// and comprehensive telemetry without Application Insights dependencies.
 /// </summary>
 /// <typeparam name="TRequest">The request type</typeparam>
 /// <typeparam name="TResponse">The response type - optimized for Result types</typeparam>
@@ -22,17 +20,30 @@ public sealed class ResultLoggingBehavior<TRequest, TResponse> : IPipelineBehavi
     where TRequest : class, IAxonRequest<TResponse>
 {
     private readonly ILogger<ResultLoggingBehavior<TRequest, TResponse>> _logger;
-    private readonly TelemetryClient? _telemetryClient;
     private readonly ISensitiveDataMasker _sensitiveDataMasker;
+    
+    // OpenTelemetry instrumentation
+    private static readonly ActivitySource ActivitySource = new(TelemetryTags.Tracing.Application.AppService);
+    private static readonly Meter Meter = new(TelemetryTags.Metrics.Application.AppService);
+    
+    // Metrics instruments with W3C semantic conventions
+    private static readonly Counter<long> RequestCounter = Meter.CreateCounter<long>(
+        "axon.pipeline.requests.total",
+        description: "Total number of pipeline requests processed");
+    private static readonly Histogram<double> RequestDuration = Meter.CreateHistogram<double>(
+        "axon.pipeline.request.duration",
+        unit: "ms",
+        description: "Duration of pipeline request processing");
+    private static readonly Counter<long> RequestErrors = Meter.CreateCounter<long>(
+        "axon.pipeline.requests.errors.total",
+        description: "Total number of failed pipeline requests");
 
     public ResultLoggingBehavior(
         ILogger<ResultLoggingBehavior<TRequest, TResponse>> logger,
-        ISensitiveDataMasker sensitiveDataMasker,
-        TelemetryClient? telemetryClient = null)
+        ISensitiveDataMasker sensitiveDataMasker)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _sensitiveDataMasker = sensitiveDataMasker ?? throw new ArgumentNullException(nameof(sensitiveDataMasker));
-        _telemetryClient = telemetryClient;
     }
 
     public async Task<TResponse> Handle(
@@ -45,278 +56,274 @@ public sealed class ResultLoggingBehavior<TRequest, TResponse> : IPipelineBehavi
 
         var requestName = typeof(TRequest).Name;
         var requestId = request.RequestId;
-
-        // Create masked version of request for logging
+        var requestCategory = GetRequestCategory(request);
         var maskedRequest = _sensitiveDataMasker.MaskSensitiveData(request);
         
-        using var scope = _logger.BeginScope(new Dictionary<string, object>
-        {
-            ["RequestType"] = requestName,
-            ["RequestId"] = requestId,
-            ["RequestedAt"] = request.RequestedAt,
-            ["MaskedRequest"] = maskedRequest
-        });
-
-        _logger.LogInformation("Starting request {RequestName} with ID {RequestId} - Request: {MaskedRequest}", 
-            requestName, requestId, maskedRequest);
-
+        // Start OpenTelemetry Activity with W3C TraceContext
+        using var activity = ActivitySource.StartActivity($"Pipeline.{requestCategory}.{requestName}");
         var stopwatch = Stopwatch.StartNew();
         var startTime = DateTimeOffset.UtcNow;
+
+        // Enrich Activity with request context
+        EnrichActivityWithRequest(activity, request, requestName, requestCategory, startTime);
+        
+        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["RequestType"] = requestName,
+            ["RequestCategory"] = requestCategory,
+            ["RequestId"] = requestId,
+            ["TraceId"] = Activity.Current?.TraceId.ToString(),
+            ["SpanId"] = Activity.Current?.SpanId.ToString(),
+            ["StartTime"] = startTime
+        });
+
+        _logger.LogInformation("Starting {RequestCategory} {RequestName} with ID {RequestId}", 
+            requestCategory, requestName, requestId);
 
         try
         {
             var response = await next(cancellationToken);
             stopwatch.Stop();
 
-            // Enhanced logging with new observability extensions
-            LogResultWithObservability(response, requestName, requestId, stopwatch, startTime);
+            // Record telemetry and log results
+            RecordSuccessfulRequest(response, request, requestName, requestCategory, stopwatch, activity);
 
             return response;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
-            _logger.LogWarning("Request {RequestName} with ID {RequestId} was cancelled after {ElapsedMs}ms", 
-                requestName, requestId, stopwatch.ElapsedMilliseconds);
+            RecordCancelledRequest(requestName, requestCategory, requestId, stopwatch, activity);
             throw;
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            _logger.LogError(ex, 
-                "Request {RequestName} with ID {RequestId} failed with exception after {ElapsedMs}ms", 
-                requestName, requestId, stopwatch.ElapsedMilliseconds);
+            RecordFailedRequest(requestName, requestCategory, requestId, ex, stopwatch, activity);
             throw;
         }
     }
 
-    /// <summary>
-    /// Enhanced logging with observability extensions for comprehensive telemetry.
-    /// </summary>
-    private void LogResultWithObservability<T>(
-        T response, 
-        string requestName, 
-        Guid requestId, 
-        Stopwatch stopwatch,
-        DateTimeOffset startTime)
+    #region Request Category and Activity Enrichment
+    
+    private static string GetRequestCategory<T>(T request) where T : IAxonRequest<TResponse>
     {
-        var elapsedMs = stopwatch.ElapsedMilliseconds;
-        var duration = stopwatch.Elapsed;
-        
-        // Base telemetry properties
-        var telemetryProperties = new Dictionary<string, string>
+        return request switch
         {
-            ["RequestName"] = requestName,
-            ["RequestId"] = requestId.ToString(),
-            ["RequestType"] = typeof(T).Name,
-            ["StartTime"] = startTime.ToString("O"),
-            ["CompletedAt"] = DateTimeOffset.UtcNow.ToString("O")
+            ICommand<TResponse> => "Command",
+            IQuery<TResponse> => "Query",
+            _ => "Request"
         };
-        
-        var telemetryMetrics = new Dictionary<string, double>
-        {
-            ["DurationMs"] = elapsedMs,
-            ["DurationSeconds"] = duration.TotalSeconds
-        };
-
-        // Handle Result<T> response types with enhanced observability
-        if (response is IResult result)
-        {
-            // Create a typed Result for logging extensions
-            if (TryCreateTypedResult(response, out var typedResult))
-            {
-                // Use the new logging extensions
-                typedResult
-                    .LogResult(_logger, 
-                        $"Request {requestName} completed", 
-                        $"Request {requestName} failed")
-                    .EnrichActivity(requestName)
-                    .RecordMetrics(requestName, duration)
-                    .WithActivityCorrelationId();
-
-                // Application Insights telemetry
-                if (_telemetryClient != null)
-                {
-                    _telemetryClient.TrackResultOperation(
-                        typedResult,
-                        requestName,
-                        duration,
-                        telemetryProperties,
-                        telemetryMetrics);
-                }
-            }
-            else
-            {
-                // Fallback to original logging for non-typed results
-                LogLegacyResult(response, requestName, requestId, elapsedMs, startTime);
-            }
-        }
-        else
-        {
-            // Handle non-Result responses
-            _logger.LogInformation("Request {RequestName} with ID {RequestId} completed in {ElapsedMs}ms",
-                requestName, requestId, elapsedMs);
-            
-            telemetryProperties["ResponseType"] = response?.GetType().Name ?? "null";
-            telemetryProperties["IsResult"] = "false";
-            
-            // Application Insights telemetry for non-Result responses
-            if (_telemetryClient != null)
-            {
-                _telemetryClient.TrackEvent($"Request.{requestName}.NonResult", telemetryProperties, telemetryMetrics);
-            }
-        }
-
-        // Performance warnings using new extensions
-        if (elapsedMs > 1000) // More than 1 second
-        {
-            _logger.LogWarning("Slow operation detected: {RequestName} with ID {RequestId} took {ElapsedMs}ms",
-                requestName, requestId, elapsedMs);
-                
-            // Track slow operations in Application Insights
-            if (_telemetryClient != null)
-            {
-                var slowOpProperties = new Dictionary<string, string>(telemetryProperties)
-                {
-                    ["PerformanceIssue"] = "SlowOperation",
-                    ["ThresholdMs"] = "1000"
-                };
-                
-                _telemetryClient.TrackEvent($"Performance.SlowOperation.{requestName}", 
-                    slowOpProperties, telemetryMetrics);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Attempts to create a typed Result from a response for use with observability extensions.
-    /// </summary>
-    private static bool TryCreateTypedResult<T>(T response, out IResult typedResult)
-    {
-        typedResult = null!;
-        
-        if (response is IResult result)
-        {
-            typedResult = result;
-            return true;
-        }
-        
-        return false;
     }
     
-    /// <summary>
-    /// Fallback to legacy logging for non-typed results or when observability extensions fail.
-    /// </summary>
-    private void LogLegacyResult<T>(
-        T response,
+    private static void EnrichActivityWithRequest<T>(
+        Activity? activity,
+        T request,
         string requestName,
-        Guid requestId,
-        long elapsedMs,
-        DateTimeOffset startTime)
+        string requestCategory,
+        DateTimeOffset startTime) where T : IAxonRequest<TResponse>
     {
-        if (response is not IResult result) return;
+        if (activity == null) return;
         
-        var logData = new Dictionary<string, object>
+        // Standard W3C semantic conventions
+        activity.SetTag("operation.name", $"{requestCategory}.{requestName}");
+        activity.SetTag("axon.request.type", requestName);
+        activity.SetTag("axon.request.category", requestCategory);
+        activity.SetTag("axon.request.id", request.RequestId.ToString());
+        activity.SetTag("axon.request.timestamp", request.RequestedAt.ToString("O"));
+        activity.SetTag("axon.start.time", startTime.ToString("O"));
+        
+        // W3C TraceContext integration
+        if (!string.IsNullOrEmpty(request.TraceId))
         {
-            ["RequestName"] = requestName,
-            ["RequestId"] = requestId,
-            ["ElapsedMs"] = elapsedMs,
-            ["StartTime"] = startTime,
-            ["CompletedAt"] = DateTimeOffset.UtcNow
-        };
-
-        logData["IsSuccess"] = result.IsSuccess;
-        logData["IsFailure"] = result.IsFailure;
-
-        if (result.IsSuccess)
+            activity.SetTag("axon.trace.id", request.TraceId);
+            activity.SetTag("axon.span.id", request.SpanId);
+            activity.SetTag("axon.parent_span.id", request.ParentSpanId);
+        }
+        
+        // Add metadata context
+        if (request.Metadata.Any())
         {
-            _logger.LogInformation("Request {RequestName} with ID {RequestId} completed successfully in {ElapsedMs}ms",
-                requestName, requestId, elapsedMs);
-
-            // Log additional details for generic Result<T>
-            if (TryGetResultValue(response, out var value))
+            activity.SetTag("axon.metadata.count", request.Metadata.Count);
+            
+            // Add safe metadata as tags (limited for performance)
+            foreach (var (key, value) in request.Metadata.Take(5))
             {
-                logData["ResultType"] = value?.GetType().Name ?? "null";
-                if (ShouldLogResultValue(value))
+                if (IsSafeForTelemetry(key, value))
                 {
-                    // Mask sensitive data in response value
-                    var maskedValue = _sensitiveDataMasker.MaskSensitiveData(value);
-                    logData["MaskedResultValue"] = maskedValue;
+                    activity.SetTag($"axon.metadata.{SanitizeTagName(key)}", SanitizeTagValue(value));
                 }
             }
+        }
+    }
+    
+    #endregion
+
+    #region Telemetry Recording Methods
+    
+    private void RecordSuccessfulRequest<T>(
+        T response,
+        TRequest request,
+        string requestName,
+        string requestCategory,
+        Stopwatch stopwatch,
+        Activity? activity)
+    {
+        var elapsedMs = stopwatch.ElapsedMilliseconds;
+        var outcome = "success";
+        
+        if (response is IResult result)
+        {
+            outcome = result.IsSuccess ? "success" : "failure";
+            
+            // Use Result telemetry extensions for OpenTelemetry integration
+            if (result is Result<object> typedResult)
+            {
+                typedResult
+                    .EnrichActivity(requestName)
+                    .LogResult(_logger,
+                        $"{requestCategory} {requestName} completed successfully",
+                        $"{requestCategory} {requestName} failed");
+            }
+            
+            LogResultOutcome(result, requestName, requestCategory, request.RequestId, elapsedMs, outcome);
         }
         else
         {
-            var error = GetResultError(result);
-            logData["ErrorCode"] = error?.Code;
-            logData["ErrorType"] = error?.Type.ToString();
-            logData["ErrorMessage"] = error?.Message;
+            _logger.LogInformation("{RequestCategory} {RequestName} completed successfully in {ElapsedMs}ms",
+                requestCategory, requestName, elapsedMs);
+        }
 
-            // Log at different levels based on error type
+        // Record OpenTelemetry metrics
+        ResultLoggingBehavior<TRequest, TResponse>.RecordMetrics(requestName, requestCategory, outcome, elapsedMs, null, request.Metadata);
+        
+        // Complete Activity with success status
+        if (activity != null)
+        {
+            activity.SetTag("axon.outcome", outcome);
+            activity.SetTag("axon.duration.ms", elapsedMs);
+            activity.SetStatus(outcome == "success" ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
+        }
+        
+        // Performance warning
+        if (elapsedMs > 1000)
+        {
+            _logger.LogWarning("Slow operation detected: {RequestCategory} {RequestName} took {ElapsedMs}ms",
+                requestCategory, requestName, elapsedMs);
+        }
+    }
+    
+    private void RecordCancelledRequest(
+        string requestName,
+        string requestCategory,
+        Guid requestId,
+        Stopwatch stopwatch,
+        Activity? activity)
+    {
+        var elapsedMs = stopwatch.ElapsedMilliseconds;
+        var outcome = "cancelled";
+        
+        if (activity != null)
+        {
+            activity.SetTag("axon.outcome", outcome);
+            activity.SetTag("axon.duration.ms", elapsedMs);
+            activity.SetStatus(ActivityStatusCode.Error, "Request was cancelled");
+        }
+
+        ResultLoggingBehavior<TRequest, TResponse>.RecordMetrics(requestName, requestCategory, outcome, elapsedMs, "cancellation", new Dictionary<string, object>());
+        
+        _logger.LogWarning("{RequestCategory} {RequestName} with ID {RequestId} was cancelled after {ElapsedMs}ms",
+            requestCategory, requestName, requestId, elapsedMs);
+    }
+    
+    private void RecordFailedRequest(
+        string requestName,
+        string requestCategory,
+        Guid requestId,
+        Exception exception,
+        Stopwatch stopwatch,
+        Activity? activity)
+    {
+        var elapsedMs = stopwatch.ElapsedMilliseconds;
+        var outcome = "exception";
+        var exceptionType = exception.GetType().Name;
+        
+        if (activity != null)
+        {
+            activity.SetTag("axon.outcome", outcome);
+            activity.SetTag("axon.duration.ms", elapsedMs);
+            activity.SetTag("axon.exception.type", exceptionType);
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            
+            // Add exception event following W3C conventions
+            activity.AddEvent(new ActivityEvent(TelemetryTags.Tracing.Exception.EventName, DateTimeOffset.UtcNow, new ActivityTagsCollection
+            {
+                [TelemetryTags.Tracing.Exception.Type] = exception.GetType().FullName,
+                [TelemetryTags.Tracing.Exception.Message] = exception.Message,
+                [TelemetryTags.Tracing.Exception.Stacktrace] = exception.StackTrace
+            }));
+        }
+
+        ResultLoggingBehavior<TRequest, TResponse>.RecordMetrics(requestName, requestCategory, outcome, elapsedMs, exceptionType, new Dictionary<string, object>());
+        
+        _logger.LogError(exception, 
+            "{RequestCategory} {RequestName} with ID {RequestId} failed with {ExceptionType} after {ElapsedMs}ms",
+            requestCategory, requestName, requestId, exceptionType, elapsedMs);
+    }
+
+    private void LogResultOutcome(
+        IResult result,
+        string requestName,
+        string requestCategory,
+        Guid requestId,
+        long elapsedMs,
+        string outcome)
+    {
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("{RequestCategory} {RequestName} with ID {RequestId} completed with outcome {Outcome} in {ElapsedMs}ms",
+                requestCategory, requestName, requestId, outcome, elapsedMs);
+        }
+        else
+        {
+            var error = result.Error;
             var logLevel = GetLogLevelForError(error);
             
-            _logger.Log(logLevel, 
-                "Request {RequestName} with ID {RequestId} failed in {ElapsedMs}ms - {ErrorCode}: {ErrorMessage}",
-                requestName, requestId, elapsedMs, error?.Code, error?.Message);
+            _logger.Log(logLevel,
+                "{RequestCategory} {RequestName} with ID {RequestId} completed with outcome {Outcome} in {ElapsedMs}ms - {ErrorCode}: {ErrorMessage}",
+                requestCategory, requestName, requestId, outcome, elapsedMs, error.Code, error.Message);
         }
     }
-
-    /// <summary>
-    /// Attempts to extract the value from a Result{T} using reflection.
-    /// </summary>
-    private static bool TryGetResultValue<T>(T response, out object? value)
+    
+    private static void RecordMetrics(
+        string requestName,
+        string requestCategory,
+        string outcome,
+        long elapsedMs,
+        string? errorType,
+        IReadOnlyDictionary<string, object> metadata)
     {
-        value = null;
-
-        if (response == null)
-            return false;
-
-        var responseType = response.GetType();
-        
-        // Check if it's a generic Result<T>
-        if (responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(Result<>))
+        var tags = new TagList
         {
-            var valueProperty = responseType.GetProperty(nameof(Result<object>.Value));
-            var isSuccessProperty = responseType.GetProperty(nameof(Result<object>.IsSuccess));
-            
-            if (valueProperty != null && isSuccessProperty != null)
-            {
-                var isSuccess = (bool)isSuccessProperty.GetValue(response)!;
-                if (isSuccess)
-                {
-                    value = valueProperty.GetValue(response);
-                    return true;
-                }
-            }
-        }
+            { "axon.request.type", requestName },
+            { "axon.request.category", requestCategory },
+            { "axon.outcome", outcome },
+            { "axon.error.type", errorType ?? "none" },
+            { "axon.metadata.has_data", metadata.Any() ? "true" : "false" }
+        };
 
-        return false;
-    }
+        RequestCounter.Add(1, tags);
+        RequestDuration.Record(elapsedMs, tags);
 
-    /// <summary>
-    /// Extracts the error from a failed Result.
-    /// </summary>
-    private static Error? GetResultError(IResult result)
-    {
-        if (!result.IsFailure)
-            return null;
-
-        try
+        if (outcome != "success")
         {
-            return result.Error;
-        }
-        catch
-        {
-            return null; // Error property might not be accessible
+            RequestErrors.Add(1, tags);
         }
     }
-
-    /// <summary>
-    /// Determines the appropriate log level based on error type.
-    /// </summary>
-    private static LogLevel GetLogLevelForError(Error? error)
+    
+    private static LogLevel GetLogLevelForError(Error error)
     {
-        return error?.Type switch
+        return error.Type switch
         {
             ErrorType.Validation => LogLevel.Warning,
             ErrorType.NotFound => LogLevel.Information,
@@ -331,27 +338,36 @@ public sealed class ResultLoggingBehavior<TRequest, TResponse> : IPipelineBehavi
             _ => LogLevel.Error
         };
     }
-
-    /// <summary>
-    /// Determines if the result value should be logged based on its type and size.
-    /// </summary>
-    private static bool ShouldLogResultValue(object? value)
+    
+    #endregion
+    
+    #region Helper Methods for Safety and Sanitization
+    
+    private static bool IsSafeForTelemetry(string key, object? value)
     {
-        if (value == null)
-            return true;
+        var sensitiveKeys = new[] { "password", "secret", "token", "key", "auth", "credential" };
+        if (sensitiveKeys.Any(sensitive => key.Contains(sensitive, StringComparison.OrdinalIgnoreCase)))
+            return false;
 
-        var valueType = value.GetType();
-
-        // Log primitive types and strings (if not too long)
-        if (valueType.IsPrimitive || valueType == typeof(string))
-        {
-            if (value is string str && str.Length > 200)
-                return false; // Don't log very long strings
-            
-            return true;
-        }
-
-        // Don't log complex objects to avoid verbose logs
-        return false;
+        if (value == null) return false;
+        
+        var valueString = value.ToString();
+        return !string.IsNullOrEmpty(valueString) && valueString.Length <= 100;
     }
+    
+    private static string SanitizeTagName(string key)
+    {
+        return key.ToLowerInvariant()
+            .Replace(" ", "_")
+            .Replace("-", "_")
+            .Replace(".", "_");
+    }
+    
+    private static string SanitizeTagValue(object value)
+    {
+        var stringValue = value?.ToString() ?? "";
+        return stringValue.Length > 100 ? stringValue[..100] + "..." : stringValue;
+    }
+    
+    #endregion
 }

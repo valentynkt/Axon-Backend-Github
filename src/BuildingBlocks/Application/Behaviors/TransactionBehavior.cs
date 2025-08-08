@@ -9,6 +9,7 @@ using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Application.Outbox;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -70,7 +71,7 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         }
 
         // Extract metadata and trace context for enhanced transaction handling
-        var (traceId, requestId, metadata) = ExtractRequestContext(request);
+        var (traceId, requestId, metadata) = TransactionBehavior<TRequest, TResponse>.ExtractRequestContext(request);
         var transactionId = Guid.NewGuid();
 
         using var scope = _logger.BeginScope(new Dictionary<string, object>
@@ -200,7 +201,7 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.SetTag("transaction.duration_ms", stopwatch.ElapsedMilliseconds);
             activity?.SetTag("transaction.failed", true);
-            activity?.RecordException(ex);
+            activity?.AddException(ex);
 
             try
             {
@@ -215,7 +216,7 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
             }
 
             // Convert exception to Result failure response
-            var error = Error.Failure(
+            var error = Error.Internal(
                 $"Transaction failed for {typeof(TRequest).Name}: {ex.Message}",
                 "TRANSACTION_FAILED",
                 ex);
@@ -257,7 +258,7 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
 
         // Get all tracked entities that are aggregate roots
         var aggregates = _dbContext.ChangeTracker
-            .Entries<IAggregateRoot>()
+            .Entries<IAggregateRoot<>>()
             .Where(e => e.Entity.DomainEvents.Any())
             .Select(e => e.Entity)
             .ToList();
@@ -337,7 +338,7 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
     private void ClearDomainEventsFromAggregates()
     {
         var aggregates = _dbContext.ChangeTracker
-            .Entries<IAggregateRoot>()
+            .Entries<IAggregateRoot<>>()
             .Where(e => e.Entity.DomainEvents.Any())
             .Select(e => e.Entity)
             .ToList();
@@ -354,7 +355,7 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
     /// Extract request context information for enhanced transaction handling.
     /// Attempts to extract trace ID, request ID, and metadata from the request.
     /// </summary>
-    private (string? TraceId, Guid? RequestId, IReadOnlyDictionary<string, object>? Metadata) ExtractRequestContext(TRequest request)
+    private static (string? TraceId, Guid? RequestId, IReadOnlyDictionary<string, object>? Metadata) ExtractRequestContext(TRequest request)
     {
         string? traceId = null;
         Guid? requestId = null;

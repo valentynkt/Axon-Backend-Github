@@ -1,7 +1,7 @@
-using BuildingBlocks.Core.CQRS;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using MassTransit;
 
-namespace BuildingBlocks.Core.Event;
+namespace BuildingBlocks.Core.Abstractions.Events;
 
 /// <summary>
 /// Base record for internal commands that combine event and command characteristics.

@@ -1,12 +1,14 @@
 using System.Security.Claims;
+using BuildingBlocks.Core.Abstractions.Events;
 using BuildingBlocks.Core.Domain.Events;
-using BuildingBlocks.PersistMessageProcessor;
+using BuildingBlocks.Infrastructure.Messaging.Outbox;
+using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Core.Event;
+namespace BuildingBlocks.Application.Events;
 
 public sealed class EventDispatcher(
     IServiceScopeFactory serviceScopeFactory,

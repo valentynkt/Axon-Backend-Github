@@ -3,7 +3,6 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Abstractions.CQRS;
-using BuildingBlocks.Core.CQRS;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional;
 
@@ -76,7 +75,11 @@ public sealed class ResultValidationBehavior<TRequest, TResponse> : IPipelineBeh
             .Select(failure => Error.Validation(
                 failure.ErrorMessage, 
                 failure.ErrorCode ?? "VALIDATION_ERROR",
-                $"Property: {failure.PropertyName}, AttemptedValue: {failure.AttemptedValue}"))
+                new Dictionary<string, object>
+                {
+                    ["Property"] = failure.PropertyName,
+                    ["AttemptedValue"] = failure.AttemptedValue ?? "<null>"
+                }))
             .ToArray();
 
         var aggregatedError = errors.Length == 1 
@@ -92,14 +95,14 @@ public sealed class ResultValidationBehavior<TRequest, TResponse> : IPipelineBeh
                 .GetMethod(nameof(Result<object>.Failure), new[] { typeof(Error) });
             
             var failedResult = failureMethod!.Invoke(null, new object[] { aggregatedError });
-            return (T)failedResult!;
+            return (TResponse)failedResult!;
         }
 
         // Handle non-generic Result response type
-        if (typeof(T) == typeof(Result))
+        if (typeof(TResponse) == typeof(Result))
         {
             var failedResult = Result.Failure(aggregatedError);
-            return (T)(object)failedResult;
+            return (TResponse)(object)failedResult;
         }
 
         // If response type is not Result-based, we have a configuration issue

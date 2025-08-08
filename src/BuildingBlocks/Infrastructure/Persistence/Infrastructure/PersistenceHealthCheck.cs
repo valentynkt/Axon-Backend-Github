@@ -1,14 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Persistence.Common.Interfaces;
 
-namespace BuildingBlocks.Persistence.Infrastructure;
+namespace BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 
 /// <summary>
 /// Database-agnostic health check implementation for persistence layer

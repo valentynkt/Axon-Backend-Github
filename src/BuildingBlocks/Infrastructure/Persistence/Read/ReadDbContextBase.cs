@@ -1,11 +1,9 @@
-using System;
 using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Core.Event;
 
-namespace BuildingBlocks.Persistence.Read;
+namespace BuildingBlocks.Infrastructure.Persistence.Read;
 
 /// <summary>
 /// Base class for read-side database contexts in CQRS architecture

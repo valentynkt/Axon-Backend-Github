@@ -5,9 +5,8 @@ using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Messages;
 using Axon.Modules.Chat.Domain.Messages.ValueObjects;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Pagination;
 using BuildingBlocks.Core.Results;
 using Microsoft.EntityFrameworkCore;
 

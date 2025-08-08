@@ -1,7 +1,4 @@
-using BuildingBlocks.Core.Pagination;
-using System.Linq.Expressions;
-
-namespace BuildingBlocks.Persistence.Common.Interfaces;
+namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
 /// Read-side database context for CQRS query operations

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 
-namespace BuildingBlocks.OpenTelemetryCollector;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics;
 
 internal static class ActivityExtensions
 {

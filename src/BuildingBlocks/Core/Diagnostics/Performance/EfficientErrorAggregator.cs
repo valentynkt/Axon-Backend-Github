@@ -528,7 +528,7 @@ public sealed class EfficientErrorAggregator : IDisposable
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private string GetMessagePattern(string message)
+    private static string GetMessagePattern(string message)
     {
         if (string.IsNullOrEmpty(message)) return "empty";
         
@@ -545,7 +545,7 @@ public sealed class EfficientErrorAggregator : IDisposable
         return pattern;
     }
     
-    private double CalculateCorrelationStrength(ErrorAggregate aggregate1, ErrorAggregate aggregate2)
+    private static double CalculateCorrelationStrength(ErrorAggregate aggregate1, ErrorAggregate aggregate2)
     {
         // Simple correlation strength calculation
         var timeSimilarity = 1.0 / (1.0 + Math.Abs((aggregate1.LastOccurrence - aggregate2.LastOccurrence).TotalMinutes));

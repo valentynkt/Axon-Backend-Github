@@ -328,7 +328,7 @@ public sealed class ErrorMetrics : IDisposable
     /// <summary>
     /// Extract pattern from error message for analysis
     /// </summary>
-    private string GetMessagePattern(string message)
+    private static string GetMessagePattern(string message)
     {
         if (string.IsNullOrEmpty(message)) return "empty";
         

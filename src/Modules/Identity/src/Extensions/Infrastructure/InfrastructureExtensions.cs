@@ -1,10 +1,9 @@
-using BuildingBlocks.Persistence;
-using BuildingBlocks.Mapster;
+using BuildingBlocks.Infrastructure.Persistence;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Web;
-using BuildingBlocks.Persistence.Common;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence.Infrastructure;
-using BuildingBlocks.Persistence.Write;
+using BuildingBlocks.Web.Extensions;
 using FluentValidation;
 using Identity.Data;
 using Identity.Data.Seed;

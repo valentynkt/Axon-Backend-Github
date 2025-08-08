@@ -1,4 +1,4 @@
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 [Flags]
 public enum MessageDeliveryType

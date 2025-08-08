@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Scalar.AspNetCore;
 
-namespace BuildingBlocks.OpenApi
+namespace BuildingBlocks.Web.OpenApi
 {
     public static class OpenApiExtensions
     {

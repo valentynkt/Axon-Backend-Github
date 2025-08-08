@@ -1,9 +1,8 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using BuildingBlocks.Core.Domain.Primitives;
 
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Primitives.Serialization;
 
 /// <summary>
 /// High-performance JSON converter for StrongId pattern (non-nullable).

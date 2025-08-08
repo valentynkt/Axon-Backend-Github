@@ -1,12 +1,9 @@
-using System;
 using System.Text.Json.Serialization;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Domain.Primitives.Serialization;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Core.Results;
 
-namespace Axon.Modules.Chat.Domain.ValueObjects
+namespace Axon.Modules.Chat.Domain.Conversation.ValueObjects
 {
     /// <summary>
     /// Strongly-typed identifier for a User.

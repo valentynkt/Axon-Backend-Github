@@ -1,6 +1,6 @@
 using BuildingBlocks.Core.Domain.Events;
 
-namespace BuildingBlocks.Core.Event;
+namespace BuildingBlocks.Infrastructure.Messaging.Outbox;
 
 /// <summary>
 /// Wrapper for domain events that need to be published as integration events.

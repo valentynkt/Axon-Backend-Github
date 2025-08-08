@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace BuildingBlocks.PersistMessageProcessor;
+namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 
 public interface IPersistMessageDbContext
 {

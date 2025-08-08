@@ -1,4 +1,4 @@
-using BuildingBlocks.Persistence.Write;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using Identity.Data;
 using Identity.Identity.Models;
 using Microsoft.EntityFrameworkCore;

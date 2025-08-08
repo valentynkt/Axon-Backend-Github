@@ -1,25 +1,20 @@
-using System;
 using System.Linq.Expressions;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Persistence.Caching;
-using BuildingBlocks.Persistence.Common;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence.Infrastructure;
-using BuildingBlocks.Persistence.Read;
-using BuildingBlocks.Persistence.Write;
-using BuildingBlocks.Web;
+using BuildingBlocks.Infrastructure.Persistence.Caching;
+using BuildingBlocks.Infrastructure.Persistence.Common;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
+using BuildingBlocks.Infrastructure.Persistence.Read;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using Humanizer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace BuildingBlocks.Persistence;
+namespace BuildingBlocks.Infrastructure.Persistence;
 
 /// <summary>
 /// Persistence layer dependency injection extensions

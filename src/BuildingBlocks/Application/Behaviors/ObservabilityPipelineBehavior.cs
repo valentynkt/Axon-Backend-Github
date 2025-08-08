@@ -1,315 +1,277 @@
-using MediatR;
-using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.CQRS;
-using Microsoft.AspNetCore.Http;
-using IResult = BuildingBlocks.Core.Functional.Results.IResult;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
+using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Epic 04 Story 03 - Enhanced ObservabilityPipelineBehavior with W3C TraceContext and Metadata Integration.
-/// Provides comprehensive telemetry with Result<T> awareness, metadata enrichment,
-/// W3C Trace Context support, cache information tracking, and comprehensive metrics.
-/// Integrates with Epic 04 Story 01 metadata support and Story 02 caching.
+/// Observability pipeline with pure W3C TraceContext:
+/// - CorrelationId == Activity.TraceId (no custom provider)
+/// - OpenTelemetry spans + low-cardinality metrics
+/// - Result-aware tagging (IResult)
 /// </summary>
 public sealed class ObservabilityBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IAxonRequest<TResponse>
     where TResponse : IResult
 {
     private readonly ILogger<ObservabilityBehavior<TRequest, TResponse>> _logger;
-    private readonly ICorrelationIdProvider _correlationIdProvider;
-    
-    // OpenTelemetry instrumentation
-    private static readonly ActivitySource ActivitySource = new("Axon.Application");
-    private static readonly Meter Meter = new("Axon.Application");
-    
-    // Metrics instruments - Epic 05 specifications with enhanced metadata support
-    private static readonly Counter<long> RequestCounter = Meter.CreateCounter<long>(
-        "axon.requests.total",
-        description: "Total number of requests");
-    private static readonly Histogram<double> RequestDuration = Meter.CreateHistogram<double>(
-        "axon.requests.duration",
-        unit: "ms",
-        description: "Request duration in milliseconds");
-    private static readonly Counter<long> RequestErrors = Meter.CreateCounter<long>(
-        "axon.requests.errors",
-        description: "Total number of request errors");
-    private static readonly Counter<long> CacheHits = Meter.CreateCounter<long>(
-        "axon.cache.hits",
-        description: "Total number of cache hits");
-    private static readonly Counter<long> CacheMisses = Meter.CreateCounter<long>(
-        "axon.cache.misses",
-        description: "Total number of cache misses");
 
     public ObservabilityBehavior(
-        ILogger<ObservabilityBehavior<TRequest, TResponse>> logger,
-        ICorrelationIdProvider correlationIdProvider)
+        ILogger<ObservabilityBehavior<TRequest, TResponse>> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _correlationIdProvider = correlationIdProvider ?? throw new ArgumentNullException(nameof(correlationIdProvider));
     }
 
     public async Task<TResponse> Handle(
-        TRequest request, 
-        RequestHandlerDelegate<TResponse> next, 
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(next);
 
         var requestName = typeof(TRequest).Name;
-        var correlationId = _correlationIdProvider.GetOrGenerate();
-        var stopwatch = Stopwatch.StartNew();
-        var startTime = DateTimeOffset.UtcNow;
-
-        // Start OpenTelemetry Activity with enhanced naming
-        using var activity = ActivitySource.StartActivity($"CQRS.{GetRequestCategory(request)}.{requestName}", ActivityKind.Internal);
-        
-        if (activity != null)
+        var requestCategory = request switch
         {
-            // Epic 04 Story 03: Enhanced activity enrichment with metadata and W3C TraceContext
-            EnrichActivityWithRequest(activity, request, correlationId, startTime);
+            ICommand<TResponse> => "Command",
+            IQuery<TResponse> => "Query",
+            _ => "Request"
+        };
+
+        var startTime = DateTimeOffset.UtcNow;
+        var sw = Stopwatch.StartNew();
+
+        // Create an INTERNAL child span if a parent exists; otherwise root span.
+        using var activity = ObservabilityInstrumentation.ActivitySource.StartActivity(
+            $"Observability.{requestCategory}.{requestName}",
+            ActivityKind.Internal);
+
+        // CorrelationId is ALWAYS the W3C TraceId
+        var correlationId = (activity ?? Activity.Current)?.TraceId.ToString() ?? "none";
+        var spanId = (activity ?? Activity.Current)?.SpanId.ToString() ?? "none";
+
+        if (activity is not null)
+        {
+            EnrichActivityWithRequest(activity, request, correlationId, startTime, requestCategory);
             EnrichActivityWithMetadata(activity, request.Metadata);
-            
-            // Epic 04 Story 02: Add cache information for queries
-            if (request is IQuery<object> query)
-            {
-                EnrichActivityWithCacheInfo(activity, query);
-            }
+            TryEnrichActivityWithCacheInfo(activity, request);
         }
 
-        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        using var scope = _logger.BeginScope(new Dictionary<string, object>
         {
             ["RequestType"] = requestName,
-            ["CorrelationId"] = correlationId,
+            ["RequestCategory"] = requestCategory,
+            ["CorrelationId"] = correlationId,                // == TraceId
+            ["TraceId"] = correlationId,
+            ["SpanId"] = spanId,
             ["StartTime"] = startTime,
-            ["RequestId"] = request.RequestId,
-            ["TraceId"] = request.TraceId ?? "none",
-            ["SpanId"] = request.SpanId ?? "none"
+            ["RequestId"] = request.RequestId
         });
 
-        _logger.LogDebug("Starting {RequestType} execution with correlation ID {CorrelationId} and request ID {RequestId}",
-            requestName, correlationId, request.RequestId);
+        _logger.LogDebug("Starting {Category} {Type} (TraceId={TraceId}, SpanId={SpanId}, RequestId={RequestId})",
+            requestCategory, requestName, correlationId, spanId, request.RequestId);
 
         try
         {
-            var response = await next(cancellationToken);
-            stopwatch.Stop();
+            var response = await next(); // MediatR delegate has no token arg (CA2016 suppressed globally)
+            sw.Stop();
 
-            // Record enhanced telemetry with metadata context
-            RecordTelemetry(response, request, requestName, stopwatch, activity, startTime);
-
+            RecordTelemetry(response, request, requestName, requestCategory, sw.ElapsedMilliseconds, activity);
             return response;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            stopwatch.Stop();
-            RecordCancelledRequest(requestName, stopwatch, activity);
+            sw.Stop();
+            RecordCancelled(requestName, requestCategory, sw.ElapsedMilliseconds, activity);
             throw;
         }
         catch (Exception ex)
         {
-            stopwatch.Stop();
-            RecordExceptionRequest(requestName, ex, stopwatch, activity, request.Metadata);
+            sw.Stop();
+            RecordException(requestName, requestCategory, ex, sw.ElapsedMilliseconds, activity, request.Metadata);
             throw;
         }
     }
 
-    private static string GetRequestCategory(TRequest request)
+    private static void EnrichActivityWithRequest(Activity activity, TRequest request, string correlationId, DateTimeOffset startTime, string category)
     {
-        return request switch
-        {
-            ICommand<TResponse> => "Command",
-            IQuery<TResponse> => "Query", 
-            _ => "Request"
-        };
-    }
-
-    private void EnrichActivityWithRequest(Activity activity, TRequest request, string correlationId, DateTimeOffset startTime)
-    {
-        // Basic request information
+        activity.SetTag("operation.name", $"{category}.{typeof(TRequest).Name}");
         activity.SetTag("axon.request.id", request.RequestId.ToString());
         activity.SetTag("axon.request.type", typeof(TRequest).Name);
-        activity.SetTag("axon.request.namespace", typeof(TRequest).Namespace);
-        activity.SetTag("axon.request.category", GetRequestCategory(request));
+        activity.SetTag("axon.request.namespace", typeof(TRequest).Namespace ?? "unknown");
+        activity.SetTag("axon.request.category", category);
         activity.SetTag("axon.request.timestamp", request.RequestedAt.ToString("O"));
-        activity.SetTag("axon.correlation.id", correlationId);
-        activity.SetTag("axon.start.time", startTime.ToString("O"));
 
-        // Epic 04 Story 01: W3C TraceContext integration
-        if (!string.IsNullOrEmpty(request.TraceId))
+        // W3C correlation identifiers
+        activity.SetTag("axon.correlation.id", correlationId); // == trace_id
+        activity.SetTag("trace.trace_id", activity.TraceId.ToString());
+        activity.SetTag("trace.span_id", activity.SpanId.ToString());
+
+        // If request carried prior IDs (e.g., from external systems), keep as tags
+        if (!string.IsNullOrWhiteSpace(request.TraceId))
         {
-            activity.SetTag("axon.trace.id", request.TraceId);
-            activity.SetTag("axon.span.id", request.SpanId);
-            activity.SetTag("axon.parent_span.id", request.ParentSpanId);
+            activity.SetTag("axon.upstream.trace_id", request.TraceId);
+            activity.SetTag("axon.upstream.span_id", request.SpanId);
+            activity.SetTag("axon.upstream.parent_span_id", request.ParentSpanId);
         }
+
+        activity.SetTag("axon.start.time", startTime.ToString("O"));
     }
 
-    private void EnrichActivityWithMetadata(Activity activity, IReadOnlyDictionary<string, object> metadata)
+    private static void EnrichActivityWithMetadata(Activity activity, IReadOnlyDictionary<string, object>? metadata)
     {
-        if (metadata == null || !metadata.Any()) return;
+        if (metadata is null || metadata.Count == 0) return;
 
-        // Add count of metadata items
         activity.SetTag("axon.metadata.count", metadata.Count);
 
-        // Add sanitized metadata as activity tags
-        foreach (var (key, value) in metadata)
+        foreach (var kv in metadata)
         {
-            if (IsSafeForTelemetry(key, value))
+            if (IsSafeForTelemetry(kv.Key, kv.Value))
             {
-                activity.SetTag($"axon.metadata.{SanitizeTagName(key)}", SanitizeTagValue(value));
+                activity.SetTag($"axon.metadata.{SanitizeTagName(kv.Key)}", SanitizeTagValue(kv.Value));
             }
         }
 
-        // Special handling for common metadata keys
         if (metadata.TryGetValue("TenantId", out var tenantId))
-        {
             activity.SetTag("axon.tenant.id", tenantId?.ToString());
-        }
-
-        if (metadata.TryGetValue("UserId", out var userId))
-        {
-            activity.SetTag("axon.user.id", userId?.ToString());
-        }
-
-        if (metadata.TryGetValue("ClientId", out var clientId))
-        {
-            activity.SetTag("axon.client.id", clientId?.ToString());
-        }
 
         if (metadata.TryGetValue("Version", out var version))
-        {
             activity.SetTag("axon.version", version?.ToString());
-        }
     }
 
-    private void EnrichActivityWithCacheInfo(Activity activity, IQuery<object> query)
+    private static void TryEnrichActivityWithCacheInfo(Activity activity, TRequest request)
     {
-        activity.SetTag("axon.query.cache.enabled", query.UseCache);
-        
-        if (query.UseCache)
-        {
-            activity.SetTag("axon.query.cache.duration", query.CacheDuration?.TotalMinutes);
-            activity.SetTag("axon.query.cache.key_prefix", query.CacheKeyPrefix);
-        }
+        // Reflection-based "duck typing" to avoid taking a dependency on a marker interface
+        var t = request.GetType();
+        var useCacheProp = t.GetProperty("UseCache");
+        if (useCacheProp is null) return;
+
+        var enabled = useCacheProp.GetValue(request) as bool? ?? false;
+        activity.SetTag("axon.query.cache.enabled", enabled);
+
+        if (!enabled) return;
+
+        if (t.GetProperty("CacheDuration")?.GetValue(request) is TimeSpan ttl)
+            activity.SetTag("axon.query.cache.duration", ttl.TotalMinutes);
+
+        if (t.GetProperty("CacheKeyPrefix")?.GetValue(request) is string prefix)
+            activity.SetTag("axon.query.cache.key_prefix", prefix);
     }
 
-    private void RecordTelemetry(TResponse response, TRequest request, string requestName, Stopwatch stopwatch, Activity? activity, DateTimeOffset startTime)
+    private void RecordTelemetry(TResponse response, TRequest request, string name, string category, long elapsedMs, Activity? activity)
     {
-        var elapsedMs = stopwatch.ElapsedMilliseconds;
         var outcome = response.IsSuccess ? "success" : "failure";
         var errorType = response.IsFailure ? response.Error?.Type.ToString() : null;
         var errorCode = response.IsFailure ? response.Error?.Code : null;
-        var requestCategory = GetRequestCategory(request);
 
-        // Enhanced OpenTelemetry Activity tags
-        if (activity != null)
+        if (activity is not null)
         {
             activity.SetTag("axon.outcome", outcome);
             activity.SetTag("axon.duration.ms", elapsedMs);
             activity.SetTag("axon.completed.at", DateTimeOffset.UtcNow.ToString("O"));
-            
+            activity.SetTag(TelemetryTags.Tracing.Otel.StatusCode, response.IsSuccess ? "OK" : "ERROR");
+
             if (response.IsFailure)
             {
                 activity.SetTag("axon.error.type", errorType);
                 activity.SetTag("axon.error.code", errorCode);
+                activity.SetTag("error.type", errorType);
+                activity.SetTag("error.message", response.Error?.Message);
                 activity.SetStatus(ActivityStatusCode.Error, response.Error?.Message);
+                activity.SetTag(TelemetryTags.Tracing.Otel.StatusDescription, response.Error?.Message);
             }
             else
             {
                 activity.SetStatus(ActivityStatusCode.Ok);
             }
 
-            // Add metadata context for error correlation
-            if (response.IsFailure && request.Metadata.Any())
+            // Generic IResult enrichment
+            activity.SetTag("axon.result.is_success", response.IsSuccess);
+            if (response.IsFailure && response.Error is not null)
             {
-                activity.SetTag("axon.error.has_metadata", true);
-                activity.SetTag("axon.error.metadata_count", request.Metadata.Count);
+                activity.SetTag("axon.result.error.code", response.Error.Code);
+                activity.SetTag("axon.result.error.type", response.Error.Type.ToString());
             }
         }
 
-        // Enhanced metrics with metadata context
-        var tags = CreateMetricTags(requestName, requestCategory, outcome, errorType, request.Metadata);
-
-        RequestCounter.Add(1, tags);
-        RequestDuration.Record(elapsedMs, tags);
-
-        if (response.IsFailure)
+        // Low-cardinality metric tags (NO tenant/user ids)
+        var tags = new TagList
         {
-            RequestErrors.Add(1, tags);
-        }
-
-        // Enhanced structured logging with metadata context
-        var logData = new Dictionary<string, object>
-        {
-            ["RequestType"] = requestName,
-            ["RequestCategory"] = requestCategory,
-            ["Outcome"] = outcome,
-            ["ElapsedMs"] = elapsedMs,
-            ["ErrorCode"] = errorCode ?? "none",
-            ["RequestId"] = request.RequestId,
-            ["MetadataCount"] = request.Metadata.Count
+            { "axon.request.type", name },
+            { "axon.request.category", category },
+            { "axon.outcome", outcome },
+            { "axon.error.type", errorType ?? "none" },
+            { "axon.metadata.has_data", (request.Metadata?.Count > 0) ? "true" : "false" }
         };
 
-        // Add safe metadata to log context
-        foreach (var (key, value) in request.Metadata.Take(5)) // Limit to avoid log pollution
-        {
-            if (IsSafeForTelemetry(key, value))
-            {
-                logData[$"Metadata_{SanitizeTagName(key)}"] = SanitizeTagValue(value);
-            }
-        }
+        ObservabilityInstrumentation.RequestCounter.Add(1, tags);
+        ObservabilityInstrumentation.RequestDuration.Record(elapsedMs, tags);
 
-        using var logScope = _logger.BeginScope(logData);
-        _logger.LogInformation(
-            "Request {RequestType} ({RequestCategory}) completed with outcome {Outcome} in {ElapsedMs}ms - Error: {ErrorCode}",
-            requestName, requestCategory, outcome, elapsedMs, errorCode);
+        if (response.IsFailure)
+            ObservabilityInstrumentation.RequestErrors.Add(1, tags);
+
+        _logger.LogInformation("Request {RequestType} ({RequestCategory}) completed with {Outcome} in {ElapsedMs}ms - Error: {ErrorCode}",
+            name, category, outcome, elapsedMs, errorCode ?? "none");
     }
 
-    private void RecordCancelledRequest(string requestName, Stopwatch stopwatch, Activity? activity)
+    private void RecordCancelled(string name, string category, long elapsedMs, Activity? activity)
     {
-        var elapsedMs = stopwatch.ElapsedMilliseconds;
-
-        if (activity != null)
+        if (activity is not null)
         {
             activity.SetTag("axon.outcome", "cancelled");
             activity.SetTag("axon.duration.ms", elapsedMs);
+            activity.SetTag(TelemetryTags.Tracing.Otel.StatusCode, "ERROR");
+            activity.SetTag(TelemetryTags.Tracing.Otel.StatusDescription, "Request was cancelled");
             activity.SetStatus(ActivityStatusCode.Error, "Request was cancelled");
         }
 
         var tags = new TagList
         {
-            { "axon.request.type", requestName },
+            { "axon.request.type", name },
+            { "axon.request.category", category },
             { "axon.outcome", "cancelled" },
             { "axon.error.type", "cancellation" }
         };
 
-        RequestCounter.Add(1, tags);
-        RequestDuration.Record(elapsedMs, tags);
-        RequestErrors.Add(1, tags);
+        ObservabilityInstrumentation.RequestCounter.Add(1, tags);
+        ObservabilityInstrumentation.RequestDuration.Record(elapsedMs, tags);
+        ObservabilityInstrumentation.RequestCancelled.Add(1, tags);
 
-        _logger.LogWarning("Request {RequestType} was cancelled after {ElapsedMs}ms",
-            requestName, elapsedMs);
+        _logger.LogWarning("{RequestCategory} {RequestType} was cancelled after {ElapsedMs}ms",
+            category, name, elapsedMs);
     }
 
-    private void RecordExceptionRequest(string requestName, Exception exception, Stopwatch stopwatch, Activity? activity, IReadOnlyDictionary<string, object> metadata)
+    private void RecordException(string name, string category, Exception ex, long elapsedMs, Activity? activity, IReadOnlyDictionary<string, object>? metadata)
     {
-        var elapsedMs = stopwatch.ElapsedMilliseconds;
-        var exceptionType = exception.GetType().Name;
+        var exceptionType = ex.GetType().Name;
 
-        if (activity != null)
+        if (activity is not null)
         {
             activity.SetTag("axon.outcome", "exception");
             activity.SetTag("axon.duration.ms", elapsedMs);
             activity.SetTag("axon.exception.type", exceptionType);
-            activity.SetTag("axon.exception.message", exception.Message);
-            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
-            
-            // Add metadata context for exception correlation
-            if (metadata.Any())
+            activity.SetTag("axon.exception.message", ex.Message);
+            activity.SetTag("error.type", exceptionType);
+            activity.SetTag("error.message", ex.Message);
+            activity.SetTag(TelemetryTags.Tracing.Otel.StatusCode, "ERROR");
+            activity.SetTag(TelemetryTags.Tracing.Otel.StatusDescription, ex.Message);
+            activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+
+            activity.AddEvent(new ActivityEvent(
+                TelemetryTags.Tracing.Exception.EventName,
+                DateTimeOffset.UtcNow,
+                new ActivityTagsCollection
+                {
+                    [TelemetryTags.Tracing.Exception.Type] = ex.GetType().FullName,
+                    [TelemetryTags.Tracing.Exception.Message] = ex.Message,
+                    [TelemetryTags.Tracing.Exception.Stacktrace] = ex.StackTrace ?? string.Empty
+                }));
+
+            if (metadata is not null && metadata.Count > 0)
             {
                 activity.SetTag("axon.exception.has_metadata", true);
                 activity.SetTag("axon.exception.metadata_count", metadata.Count);
@@ -318,119 +280,61 @@ public sealed class ObservabilityBehavior<TRequest, TResponse> : IPipelineBehavi
 
         var tags = new TagList
         {
-            { "axon.request.type", requestName },
+            { "axon.request.type", name },
+            { "axon.request.category", category },
             { "axon.outcome", "exception" },
             { "axon.error.type", exceptionType }
         };
 
-        RequestCounter.Add(1, tags);
-        RequestDuration.Record(elapsedMs, tags);
-        RequestErrors.Add(1, tags);
+        ObservabilityInstrumentation.RequestCounter.Add(1, tags);
+        ObservabilityInstrumentation.RequestDuration.Record(elapsedMs, tags);
+        ObservabilityInstrumentation.RequestErrors.Add(1, tags);
 
-        _logger.LogError(exception, "Request {RequestType} failed with exception after {ElapsedMs}ms",
-            requestName, elapsedMs);
-    }
-
-    private TagList CreateMetricTags(string requestName, string requestCategory, string outcome, string? errorType, IReadOnlyDictionary<string, object> metadata)
-    {
-        var tags = new TagList
-        {
-            { "axon.request.type", requestName },
-            { "axon.request.category", requestCategory },
-            { "axon.outcome", outcome },
-            { "axon.error.type", errorType ?? "none" },
-            { "axon.metadata.has_data", metadata.Any() ? "true" : "false" }
-        };
-
-        // Add tenant context if available
-        if (metadata.TryGetValue("TenantId", out var tenantId))
-        {
-            tags.Add("axon.tenant.id", tenantId?.ToString() ?? "unknown");
-        }
-
-        return tags;
+        _logger.LogError(ex, "{RequestCategory} {RequestType} failed after {ElapsedMs}ms", category, name, elapsedMs);
     }
 
     private static bool IsSafeForTelemetry(string key, object? value)
     {
-        // Exclude sensitive keys
-        var sensitiveKeys = new[] { "password", "secret", "token", "key", "auth", "credential" };
-        if (sensitiveKeys.Any(sensitive => key.Contains(sensitive, StringComparison.OrdinalIgnoreCase)))
-            return false;
+        if (value is null) return false;
 
-        // Exclude null or very large values
-        if (value == null) return false;
-        
-        var valueString = value.ToString();
-        if (string.IsNullOrEmpty(valueString) || valueString.Length > 100)
-            return false;
+        var sensitive = new[] { "password", "secret", "token", "key", "auth", "credential" };
+        if (sensitive.Any(s => key.Contains(s, StringComparison.OrdinalIgnoreCase))) return false;
 
-        return true;
+        var s = value.ToString();
+        return !string.IsNullOrEmpty(s) && s.Length <= 100;
     }
 
-    private static string SanitizeTagName(string key)
-    {
-        // Ensure tag names are valid for OpenTelemetry
-        return key.ToLowerInvariant()
+    private static string SanitizeTagName(string key) =>
+        (key ?? string.Empty).ToLowerInvariant()
             .Replace(" ", "_")
             .Replace("-", "_")
             .Replace(".", "_");
-    }
 
     private static string SanitizeTagValue(object value)
     {
-        var stringValue = value?.ToString() ?? "";
-        return stringValue.Length > 100 ? stringValue[..100] + "..." : stringValue;
+        var s = value?.ToString() ?? string.Empty;
+        return s.Length > 100 ? s[..100] + "..." : s;
     }
-}
 
-/// <summary>
-/// Correlation ID provider interface for Epic 05 ObservabilityBehavior.
-/// </summary>
-public interface ICorrelationIdProvider
-{
-    string GetOrGenerate();
-    void Set(string correlationId);
-}
-
-/// <summary>
-/// Implementation of correlation ID provider with HTTP context integration.
-/// </summary>
-public sealed class CorrelationIdProvider : ICorrelationIdProvider
-{
-    private readonly IHttpContextAccessor? _httpContextAccessor;
-    private readonly AsyncLocal<string?> _correlationId = new();
-
-    public CorrelationIdProvider(IHttpContextAccessor? httpContextAccessor = null)
+    /// <summary> Single, shared instrumentation (no per-generic duplication). </summary>
+    private static class ObservabilityInstrumentation
     {
-        _httpContextAccessor = httpContextAccessor;
+        public static readonly ActivitySource ActivitySource =
+            new(TelemetryTags.Tracing.Application.AppService);
+
+        public static readonly Meter Meter =
+            new(TelemetryTags.Metrics.Application.AppService);
+
+        public static readonly Counter<long> RequestCounter =
+            Meter.CreateCounter<long>("axon.observability.requests.total", description: "Total number of requests processed");
+
+        public static readonly Histogram<double> RequestDuration =
+            Meter.CreateHistogram<double>("axon.observability.request.duration", unit: "ms", description: "Request duration in ms");
+
+        public static readonly Counter<long> RequestErrors =
+            Meter.CreateCounter<long>("axon.observability.requests.errors.total", description: "Total number of failed requests");
+
+        public static readonly Counter<long> RequestCancelled =
+            Meter.CreateCounter<long>("axon.observability.requests.cancelled.total", description: "Total number of cancelled requests");
     }
-
-    public string GetOrGenerate()
-    {
-        // Check HTTP header first, then AsyncLocal, then generate
-        var httpCorrelationId = _httpContextAccessor?.HttpContext?.Request.Headers["X-Correlation-ID"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(httpCorrelationId))
-        {
-            _correlationId.Value = httpCorrelationId;
-            return httpCorrelationId;
-        }
-
-        if (!string.IsNullOrEmpty(_correlationId.Value))
-        {
-            return _correlationId.Value;
-        }
-
-        var newCorrelationId = GenerateCorrelationId();
-        _correlationId.Value = newCorrelationId;
-        return newCorrelationId;
-    }
-
-    public void Set(string correlationId)
-    {
-        _correlationId.Value = correlationId;
-    }
-
-    private static string GenerateCorrelationId() =>
-        $"axon-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}";
 }

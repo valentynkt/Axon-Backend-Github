@@ -1,14 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Threading;
-using System.Threading.Tasks;
-using BuildingBlocks.Core.Pagination;
-using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace BuildingBlocks.Persistence.Read;
+namespace BuildingBlocks.Infrastructure.Persistence.Read;
 
 /// <summary>
 /// Generic Entity Framework read repository implementation

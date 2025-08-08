@@ -1,7 +1,7 @@
-using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Abstractions.Events;
 using MassTransit;
 
-namespace BuildingBlocks.Core.Event;
+namespace BuildingBlocks.Core.Domain.Events;
 
 /// <summary>
 /// Abstract base record for all events in the system.

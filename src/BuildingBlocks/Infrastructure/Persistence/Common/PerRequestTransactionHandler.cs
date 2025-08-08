@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Persistence.Common;
+namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
 /// Transaction handler that manages one transaction per request/operation scope

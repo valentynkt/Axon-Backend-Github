@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using BuildingBlocks.Core.CQRS;
-using BuildingBlocks.OpenTelemetryCollector.DiagnosticsProvider;
+using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
-namespace BuildingBlocks.OpenTelemetryCollector.CoreDiagnostics.Query;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Query;
 
 public class QueryHandlerActivity(IDiagnosticsProvider diagnosticsProvider)
 {

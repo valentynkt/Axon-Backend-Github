@@ -1,9 +1,9 @@
-using BuildingBlocks.Caching;
-using BuildingBlocks.Core.CQRS;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
 using BuildingBlocks.Core.Infrastructure.Caching;
+using BuildingBlocks.Infrastructure.Caching;
 
 namespace BuildingBlocks.Core.Domain.CQRS;
 
@@ -171,7 +171,7 @@ public static class DomainCqrsExtensions
     {
         return validation.IsValid
             ? Result<Unit>.Success(Unit.Value)
-            : Result<Unit>.Failure(Error.Multiple(validation.Errors.ToArray()));
+            : Result<Unit>.Failure(Error.Aggregate(validation.Errors.ToArray()));
     }
 
     /// <summary>
@@ -181,6 +181,6 @@ public static class DomainCqrsExtensions
     {
         return validation.IsValid
             ? Result<T>.Success(validation.Value)
-            : Result<T>.Failure(Error.Multiple(validation.Errors.ToArray()));
+            : Result<T>.Failure(Error.Aggregate(validation.Errors.ToArray()));
     }
 }

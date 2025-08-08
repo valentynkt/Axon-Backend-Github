@@ -1,7 +1,6 @@
 using System.Reflection;
-using BuildingBlocks.Persistence.Common;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence.Read;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Read;
 using Identity.Identity.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

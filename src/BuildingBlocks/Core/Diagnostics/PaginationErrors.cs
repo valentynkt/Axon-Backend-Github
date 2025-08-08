@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Core.Pagination;
+namespace BuildingBlocks.Core.Diagnostics;
 
 /// <summary>
 /// Static class containing standardized pagination error definitions
@@ -58,51 +58,15 @@ public static class PaginationErrors
     /// <summary>
     /// Error for query timeout during pagination
     /// </summary>
-    public static readonly Error QueryTimeout = Error.Failure(
+    public static readonly Error QueryTimeout = Error.Timeout(
         "Pagination.QueryTimeout",
         "The pagination query exceeded the allowed execution time");
     
     /// <summary>
     /// Error for database connection issues during pagination
     /// </summary>
-    public static readonly Error DatabaseConnectionError = Error.Failure(
+    public static readonly Error DatabaseConnectionError = Error.Internal(
         "Pagination.DatabaseConnectionError",
         "Database connection failed during pagination query");
 }
 
-/// <summary>
-/// Represents an error with code and message
-/// Used for structured error handling in pagination operations
-/// </summary>
-public sealed record Error
-{
-    public string Code { get; }
-    public string Message { get; }
-    public ErrorType Type { get; }
-    
-    private Error(string code, string message, ErrorType type)
-    {
-        Code = code;
-        Message = message;
-        Type = type;
-    }
-    
-    public static Error Validation(string code, string message) =>
-        new(code, message, ErrorType.Validation);
-    
-    public static Error Failure(string code, string message) =>
-        new(code, message, ErrorType.Failure);
-    
-    public static Error NotFound(string code, string message) =>
-        new(code, message, ErrorType.NotFound);
-}
-
-/// <summary>
-/// Enumeration of error types for proper categorization
-/// </summary>
-public enum ErrorType
-{
-    Validation,
-    Failure,
-    NotFound
-}

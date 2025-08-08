@@ -1,8 +1,6 @@
 using MediatR;
 
-namespace BuildingBlocks.Core.Event;
-
-using global::MassTransit;
+namespace BuildingBlocks.Core.Domain.Events;
 
 /// <summary>
 /// Base interface for all events in the system.

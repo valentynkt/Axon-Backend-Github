@@ -1,10 +1,9 @@
-using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Persistence.Infrastructure;
+namespace BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 
 /// <summary>
 /// Database-agnostic performance tracker for persistence operations

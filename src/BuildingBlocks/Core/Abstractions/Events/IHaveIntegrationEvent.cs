@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Core.Event;
+namespace BuildingBlocks.Core.Abstractions.Events;
 
 /// <summary>
 /// Marker interface for domain events that should generate integration events.

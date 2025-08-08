@@ -1,9 +1,6 @@
-using BuildingBlocks.Core.Functional.Results;
-using MediatR;
-using MassTransit;
 using Unit = BuildingBlocks.Core.Functional.Unit;
 
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Abstract base record for commands without return values.

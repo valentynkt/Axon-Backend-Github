@@ -1,7 +1,6 @@
 using System.Linq.Expressions;
-using BuildingBlocks.Core.Model;
 
-namespace BuildingBlocks.Persistence.Common.Interfaces;
+namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
 /// Write-side repository (aggregate roots with full tracking).

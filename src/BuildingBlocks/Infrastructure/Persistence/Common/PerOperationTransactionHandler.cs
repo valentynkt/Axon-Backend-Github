@@ -1,7 +1,7 @@
-using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Persistence.Common;
+namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
 /// Transaction handler that creates a new transaction for each operation

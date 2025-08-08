@@ -1,9 +1,8 @@
 using BuildingBlocks.Core.Domain.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using BuildingBlocks.Core.Event;
 
-namespace BuildingBlocks.Persistence.Common.Interfaces;
+namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
 /// Unified database context interface for all modules

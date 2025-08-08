@@ -3,7 +3,7 @@ using Mapster;
 using MapsterMapper;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BuildingBlocks.Mapster;
+namespace BuildingBlocks.Web.Extensions;
 
 public static class MapsterExtensions
 {

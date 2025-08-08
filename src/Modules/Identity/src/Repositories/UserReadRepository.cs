@@ -1,9 +1,8 @@
-using BuildingBlocks.Core.Pagination;
-using BuildingBlocks.Persistence.Read;
 using Identity.Data;
 using Identity.Identity.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
+using BuildingBlocks.Infrastructure.Persistence.Read;
 
 namespace Identity.Repositories;
 

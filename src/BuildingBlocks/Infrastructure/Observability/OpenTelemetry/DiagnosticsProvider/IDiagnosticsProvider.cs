@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics;
 
-namespace BuildingBlocks.OpenTelemetryCollector.DiagnosticsProvider;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
 public interface IDiagnosticsProvider : IDisposable
 {

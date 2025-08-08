@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Persistence.Infrastructure;
+namespace BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 
 public interface ISeedManager
 {

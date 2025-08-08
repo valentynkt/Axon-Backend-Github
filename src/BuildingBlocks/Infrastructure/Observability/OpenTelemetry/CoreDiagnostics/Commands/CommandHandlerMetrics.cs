@@ -1,10 +1,9 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using BuildingBlocks.Core.CQRS;
-using BuildingBlocks.OpenTelemetryCollector;
-using BuildingBlocks.OpenTelemetryCollector.DiagnosticsProvider;
+using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
-namespace BuildingBlocks.OpenTelemetryCollector.CoreDiagnostics.Commands;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Commands;
 
 public class CommandHandlerMetrics
 {

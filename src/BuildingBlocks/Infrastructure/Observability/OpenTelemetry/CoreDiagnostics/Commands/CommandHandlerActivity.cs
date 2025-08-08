@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using BuildingBlocks.Core.CQRS;
-using BuildingBlocks.OpenTelemetryCollector.DiagnosticsProvider;
+using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
-namespace BuildingBlocks.OpenTelemetryCollector.CoreDiagnostics.Commands;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Commands;
 
 public class CommandHandlerActivity(IDiagnosticsProvider diagnosticsProvider)
 {

@@ -1,9 +1,7 @@
-using System;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Core.Model;
 
-namespace BuildingBlocks.Persistence.Common;
+namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
 /// Abstract base class providing shared caching functionality for repository decorators

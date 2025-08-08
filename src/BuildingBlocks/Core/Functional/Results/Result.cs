@@ -7,7 +7,7 @@ namespace BuildingBlocks.Core.Functional.Results;
 /// Complete Result monad for railway-oriented programming.
 /// Thread-safe, immutable, and performance-optimized.
 /// </summary>
-public readonly record struct Result<T> : IResult<T>
+public readonly record struct Result<T> : IResult<T>, IResult
 {
     private readonly T? _value;
     private readonly Error? _error;
@@ -91,6 +91,19 @@ public readonly record struct Result<T> : IResult<T>
         {
             ResultState.Success => await success(_value!).ConfigureAwait(false),
             ResultState.Failure => await failure(_error!).ConfigureAwait(false),
+            _ => throw new InvalidOperationException($"Invalid state: {_state}")
+        };
+    }
+    
+    /// <summary>
+    /// Explicit implementation of IResult.Match for non-generic interface compatibility
+    /// </summary>
+    TResult IResult.Match<TResult>(Func<TResult> success, Func<Error, TResult> failure)
+    {
+        return _state switch
+        {
+            ResultState.Success => success(),
+            ResultState.Failure => failure(_error!),
             _ => throw new InvalidOperationException($"Invalid state: {_state}")
         };
     }

@@ -1,8 +1,8 @@
 using Axon.BuildingBlocks.Postgres;
 using Axon.Modules.Chat.Application.Repositories;
+using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Messages;
 using Axon.Modules.Chat.Domain.Messages.ValueObjects;
-using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Results;
 using Microsoft.EntityFrameworkCore;

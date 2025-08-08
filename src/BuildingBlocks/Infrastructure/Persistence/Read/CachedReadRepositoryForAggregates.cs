@@ -1,17 +1,10 @@
-using System;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
+using BuildingBlocks.Infrastructure.Persistence.Common;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Core.Pagination;
-using BuildingBlocks.Persistence.Common;
-using BuildingBlocks.Persistence.Common.Interfaces;
 
-namespace BuildingBlocks.Persistence.Read;
+namespace BuildingBlocks.Infrastructure.Persistence.Read;
 
 /// <summary>
 /// Decorator for IReadRepository that adds caching functionality specifically for aggregates

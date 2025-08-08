@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 using Axon.Shared.Common;
 using BuildingBlocks.Core.Domain.Primitives.Serialization;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Model;
 
 // StrongIdJsonConverter (if defined here) or your shared converter
 

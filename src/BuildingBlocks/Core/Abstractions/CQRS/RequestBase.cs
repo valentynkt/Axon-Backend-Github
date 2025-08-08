@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using MassTransit;
 
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Abstract base record for all CQRS requests.

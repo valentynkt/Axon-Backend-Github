@@ -240,7 +240,7 @@ public sealed class ProcessMessageCommandEpic2Handler : IRequestHandler<ProcessM
         }
     }
 
-    private string GenerateConversationTitle(string firstMessage)
+    private static string GenerateConversationTitle(string firstMessage)
     {
         // Generate a smart title from the first message
         var words = firstMessage.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -253,7 +253,7 @@ public sealed class ProcessMessageCommandEpic2Handler : IRequestHandler<ProcessM
         return string.IsNullOrWhiteSpace(title) ? "New Conversation" : title;
     }
 
-    private AiRequest BuildAiRequest(Conversation conversation)
+    private static AiRequest BuildAiRequest(Conversation conversation)
     {
         var messages = conversation.Messages
             .Select(m => new AiMessage

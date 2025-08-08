@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi.Models;
 
-namespace BuildingBlocks.OpenApi;
+namespace BuildingBlocks.Web.OpenApi;
 
 public class SecuritySchemeDocumentTransformer : IOpenApiDocumentTransformer
 {

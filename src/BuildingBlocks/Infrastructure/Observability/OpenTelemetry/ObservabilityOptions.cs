@@ -1,4 +1,4 @@
-namespace BuildingBlocks.OpenTelemetryCollector;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 public class ObservabilityOptions
 {

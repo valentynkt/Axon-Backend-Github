@@ -1,8 +1,8 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using Microsoft.EntityFrameworkCore;
 using BuildingBlocks.Core.Abstractions.Pagination;
-using BuildingBlocks.Core.Pagination;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Pagination;
 
@@ -247,7 +247,7 @@ public static class EnhancedPaginationExtensions
         };
         
         // Add metadata from the query if available
-        if (pageQuery is BuildingBlocks.Core.CQRS.IAxonRequest axonRequest && 
+        if (pageQuery is IAxonRequest axonRequest && 
             axonRequest.Metadata != null)
         {
             if (axonRequest.Metadata.TryGetValue("TenantId", out var tenantId))
@@ -271,7 +271,7 @@ public static class EnhancedPaginationExtensions
     /// <returns>Trace ID if available</returns>
     private static string? GetTraceIdFromQuery<T>(object query)
     {
-        if (query is BuildingBlocks.Core.CQRS.IAxonRequest axonRequest)
+        if (query is IAxonRequest axonRequest)
         {
             return axonRequest.Metadata?.TryGetValue("TraceId", out var traceId) == true 
                 ? traceId?.ToString() 

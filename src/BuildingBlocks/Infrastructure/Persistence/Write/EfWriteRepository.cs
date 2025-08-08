@@ -1,14 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Threading;
-using System.Threading.Tasks;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace BuildingBlocks.Persistence.Write;
+namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
 /// <summary>
 /// Generic Entity Framework write repository implementation

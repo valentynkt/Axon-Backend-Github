@@ -1,8 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using BuildingBlocks.Core.Domain.Primitives;
 
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Primitives.Serialization;
 
 /// <summary>
 /// JSON converter for Nullable&lt;TStrongId&gt;.

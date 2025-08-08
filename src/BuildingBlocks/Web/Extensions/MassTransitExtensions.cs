@@ -1,12 +1,12 @@
 using System.Reflection;
-using BuildingBlocks.Web;
+using BuildingBlocks.Infrastructure.Messaging.MassTransit;
 using MassTransit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace BuildingBlocks.MassTransit;
+namespace BuildingBlocks.Web.Extensions;
 
 public static class MassTransitExtensions
 {

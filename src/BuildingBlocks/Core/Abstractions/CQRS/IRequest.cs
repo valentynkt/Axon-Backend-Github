@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace BuildingBlocks.Core.CQRS;
+namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>
 /// Base interface for all requests in CQRS pattern.

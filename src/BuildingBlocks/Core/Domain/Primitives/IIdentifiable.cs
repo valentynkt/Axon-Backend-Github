@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Primitives;
 
 /// <summary>
 /// Represents an entity that has a unique identifier.

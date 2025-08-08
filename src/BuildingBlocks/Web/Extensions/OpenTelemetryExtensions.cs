@@ -1,20 +1,18 @@
 using System.Diagnostics;
 using System.Reflection;
-using BuildingBlocks.OpenTelemetryCollector.CoreDiagnostics.Commands;
-using BuildingBlocks.OpenTelemetryCollector.CoreDiagnostics.Query;
-using BuildingBlocks.OpenTelemetryCollector.DiagnosticsProvider;
-using BuildingBlocks.Web;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Commands;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Query;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 using Grafana.OpenTelemetry;
 using MassTransit.Logging;
 using MassTransit.Monitoring;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Npgsql;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -22,7 +20,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
-namespace BuildingBlocks.OpenTelemetryCollector;
+namespace BuildingBlocks.Web.Extensions;
 
 // https://learn.microsoft.com/en-us/dotnet/core/diagnostics/observability-otlp-example
 // https://learn.microsoft.com/en-us/dotnet/core/diagnostics/observability-prgrja-example

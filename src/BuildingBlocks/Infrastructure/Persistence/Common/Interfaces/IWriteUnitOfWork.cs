@@ -1,10 +1,7 @@
 using System.Data;
 using BuildingBlocks.Core.Domain.Events;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
-namespace BuildingBlocks.Persistence.Common.Interfaces;
+namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
 /// Write-side Unit-of-Work (transaction + domain-events).

@@ -513,7 +513,7 @@ public sealed class OutboxService : IOutboxService
             }
 
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.RecordException(ex);
+            activity?.AddException(ex);
 
             return Result.Failure(Error.Failure($"Exception processing outbox entry: {ex.Message}", "OUTBOX_PROCESSING_EXCEPTION", ex));
         }

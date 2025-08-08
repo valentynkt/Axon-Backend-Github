@@ -1,14 +1,14 @@
+using System.Globalization;
 using System.Net;
 using System.Security.Claims;
 using Ardalis.GuardClauses;
+using BuildingBlocks.Core.Abstractions.Events;
+using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Event;
-using BuildingBlocks.Core.Model;
-using BuildingBlocks.Persistence;
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.Persistence.Infrastructure;
-using BuildingBlocks.Postgres;
-using BuildingBlocks.PersistMessageProcessor;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
+using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
+using BuildingBlocks.Infrastructure.Persistence.Postgres;
 using BuildingBlocks.Web;
 using Duende.IdentityServer.EntityFramework.Entities;
 using EasyNetQ.Management.Client;
@@ -16,7 +16,6 @@ using Grpc.Net.Client;
 using MassTransit;
 using MassTransit.Testing;
 using MediatR;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -24,20 +23,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using NSubstitute;
 using Respawn;
+using Testcontainers.EventStoreDb;
+using Testcontainers.PostgreSql;
+using Testcontainers.RabbitMq;
 using WebMotions.Fake.Authentication.JwtBearer;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace BuildingBlocks.TestBase;
+namespace BuildingBlocks.Infrastructure.TestBase;
 
-using System.Globalization;
-using Npgsql;
-using Testcontainers.EventStoreDb;
 // using Testcontainers.MongoDb;
-using Testcontainers.PostgreSql;
-using Testcontainers.RabbitMq;
 
 public class TestFixture<TEntryPoint> : IAsyncLifetime, IDisposable
 where TEntryPoint : class

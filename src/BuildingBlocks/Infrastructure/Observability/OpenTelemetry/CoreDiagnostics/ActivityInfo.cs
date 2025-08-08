@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace BuildingBlocks.OpenTelemetryCollector;
+namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics;
 
 public class ActivityInfo
 {

@@ -2,11 +2,11 @@ using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Specifications;
 using BuildingBlocks.Core.Abstractions.Pagination;
+using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Core.Domain.CQRS;
 using BuildingBlocks.Core.Domain.Specifications;
 using BuildingBlocks.Core.Domain.Specifications.CommonSpecs;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Pagination;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -156,7 +156,7 @@ public sealed class GetConversationHistoryQueryEpic2Handler : IRequestHandler<Ge
     /// Builds Epic 2 specification using composition pattern.
     /// Demonstrates proper use of specification chaining.
     /// </summary>
-    private Specification<Conversation> BuildSpecification(GetConversationHistoryQueryEpic2 request)
+    private static Specification<Conversation> BuildSpecification(GetConversationHistoryQueryEpic2 request)
     {
         // Start with user filter (always required)
         var spec = new ConversationsByOwnerSpec(request.UserId);
@@ -208,7 +208,7 @@ public sealed class GetConversationHistoryQueryEpic2Handler : IRequestHandler<Ge
     /// <summary>
     /// Gets preview of last message for display in history.
     /// </summary>
-    private string? GetLastMessagePreview(Conversation conversation)
+    private static string? GetLastMessagePreview(Conversation conversation)
     {
         var lastMessage = conversation.Messages.LastOrDefault();
         return lastMessage?.GetPreview(100);

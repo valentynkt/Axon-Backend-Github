@@ -1,11 +1,9 @@
-using BuildingBlocks.Persistence.Infrastructure;
-using BuildingBlocks.Postgres;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Persistence.Infrastructure;
+namespace BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 
 public class SeedManager(
     ILogger<SeedManager> logger,

@@ -1,8 +1,6 @@
-using BuildingBlocks.Persistence.Common.Interfaces;
-using BuildingBlocks.MassTransit;
-using BuildingBlocks.Persistence;
-using BuildingBlocks.Postgres;
-using BuildingBlocks.Web;
+using BuildingBlocks.Infrastructure.Messaging.MassTransit;
+using BuildingBlocks.Infrastructure.Observability.HealthChecks;
+using BuildingBlocks.Infrastructure.Persistence.Postgres;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 
-namespace BuildingBlocks.HealthCheck;
+namespace BuildingBlocks.Web.Extensions;
 
 public static class HealthCheckExtensions
 {

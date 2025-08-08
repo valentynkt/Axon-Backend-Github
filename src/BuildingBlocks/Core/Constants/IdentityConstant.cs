@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Constants;
+namespace BuildingBlocks.Core.Constants;
 
 public static class IdentityConstant
 {
