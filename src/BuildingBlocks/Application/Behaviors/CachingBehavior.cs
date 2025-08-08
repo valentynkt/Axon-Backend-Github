@@ -9,6 +9,7 @@ using System.Diagnostics.Metrics;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Application.Caching;
 using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -28,13 +29,13 @@ public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
     private readonly CacheOptions _options;
 
     // OpenTelemetry metrics
-    private static readonly Counter<long> CacheHitCounter = Metrics.CreateCounter<long>(
+    private static readonly Counter<long> CacheHitCounter = TelemetryTags.Metrics.CreateCounter<long>(
         "axon.query.cache.hits",
         description: "Query cache hit count");
-    private static readonly Counter<long> CacheMissCounter = Metrics.CreateCounter<long>(
+    private static readonly Counter<long> CacheMissCounter = TelemetryTags.Metrics.CreateCounter<long>(
         "axon.query.cache.misses", 
         description: "Query cache miss count");
-    private static readonly Histogram<double> CacheLatency = Metrics.CreateHistogram<double>(
+    private static readonly Histogram<double> CacheLatency = TelemetryTags.Metrics.CreateHistogram<double>(
         "axon.query.cache.latency",
         unit: "ms",
         description: "Query cache operation latency");

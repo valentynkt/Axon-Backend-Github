@@ -34,7 +34,7 @@ public sealed class TransientFaultDetector : ITransientFaultDetector
         HttpStatusCode.GatewayTimeout
     };
 
-    public bool IsTransient(Exception exception)
+    public static bool IsTransient(Exception exception)
     {
         return exception switch
         {

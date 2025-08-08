@@ -7,7 +7,7 @@ namespace BuildingBlocks.Core.Functional.Results;
 /// Complete Result monad for railway-oriented programming.
 /// Thread-safe, immutable, and performance-optimized.
 /// </summary>
-public readonly record struct Result<T> : IResult<T>, IResult
+public readonly record struct Result<T> : IResult<T>
 {
     private readonly T? _value;
     private readonly Error? _error;
@@ -95,18 +95,7 @@ public readonly record struct Result<T> : IResult<T>, IResult
         };
     }
     
-    /// <summary>
-    /// Explicit implementation of IResult.Match for non-generic interface compatibility
-    /// </summary>
-    TResult IResult.Match<TResult>(Func<TResult> success, Func<Error, TResult> failure)
-    {
-        return _state switch
-        {
-            ResultState.Success => success(),
-            ResultState.Failure => failure(_error!),
-            _ => throw new InvalidOperationException($"Invalid state: {_state}")
-        };
-    }
+
     
     #endregion
     
@@ -375,30 +364,32 @@ public readonly record struct Result<T> : IResult<T>, IResult
 public readonly record struct Result : IResult
 {
     private readonly Error? _error;
-    private readonly bool _isSuccess;
+    private readonly ResultState _state;
     
-    private Result(bool isSuccess, Error? error = null)
+    private Result(ResultState state, Error? error = null)
     {
-        _isSuccess = isSuccess;
+        _state = state;
         _error = error;
     }
     
-    public bool IsSuccess => _isSuccess;
-    public bool IsFailure => !_isSuccess;
+    public bool IsSuccess => _state == ResultState.Success;
+    public bool IsFailure => _state == ResultState.Failure;
     
     public Error Error => IsFailure 
         ? _error! 
         : throw new InvalidOperationException("Cannot access error of successful result");
     
-    public static Result Success() => new(true);
-    public static Result Failure(Error error) => new(false, error);
+    public static Result Success() => new(ResultState.Success);
+    public static Result Failure(Error error) => new(ResultState.Failure, error);
     
     public TResult Match<TResult>(
         Func<TResult> success,
-        Func<Error, TResult> failure)
+        Func<Error, TResult> failure) => _state switch
     {
-        return IsSuccess ? success() : failure(_error!);
-    }
+        ResultState.Success => success(),
+        ResultState.Failure => failure(_error!),
+        _ => throw new InvalidOperationException($"Invalid state: {_state}")
+    };
     
     public async Task<TResult> MatchAsync<TResult>(
         Func<Task<TResult>> success,
@@ -407,9 +398,12 @@ public readonly record struct Result : IResult
     {
         ct.ThrowIfCancellationRequested();
         
-        return IsSuccess 
-            ? await success().ConfigureAwait(false)
-            : await failure(_error!).ConfigureAwait(false);
+        return _state switch
+        {
+            ResultState.Success => await success().ConfigureAwait(false),
+            ResultState.Failure => await failure(_error!).ConfigureAwait(false),
+            _ => throw new InvalidOperationException($"Invalid state: {_state}")
+        };
     }
     
     public Result<T> Map<T>(Func<T> mapper)
@@ -424,6 +418,49 @@ public readonly record struct Result : IResult
     {
         ArgumentNullException.ThrowIfNull(binder);
         return IsSuccess ? binder() : Result<T>.Failure(_error!);
+    }
+    
+    /// <summary>
+    /// Execute action on failure without breaking the chain
+    /// </summary>
+    public Result TapError(Action<Error> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        
+        if (IsFailure)
+            action(_error!);
+            
+        return this;
+    }
+    
+    /// <summary>
+    /// Execute action without breaking the chain
+    /// </summary>
+    public Result Tap(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        
+        if (IsSuccess)
+            action();
+            
+        return this;
+    }
+    
+    /// <summary>
+    /// Recover from failure with success
+    /// </summary>
+    public Result Recover()
+    {
+        return IsFailure ? Result.Success() : this;
+    }
+    
+    /// <summary>
+    /// Recover with another Result based on the error
+    /// </summary>
+    public Result RecoverWith(Func<Error, Result> recovery)
+    {
+        ArgumentNullException.ThrowIfNull(recovery);
+        return IsFailure ? recovery(_error!) : this;
     }
     
     public static implicit operator Result(Error error)

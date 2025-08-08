@@ -4,6 +4,7 @@ using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 namespace BuildingBlocks.Infrastructure.Observability;
 
@@ -106,7 +107,7 @@ public static class ResultApplicationInsightsExtensions
                 
                 foreach (var (key, value) in telemetryMetrics)
                 {
-                    exceptionTelemetry.Metrics[key] = value;
+                    TelemetryTags.Metrics[key] = value;
                 }
                 
                 telemetryClient.TrackException(exceptionTelemetry);

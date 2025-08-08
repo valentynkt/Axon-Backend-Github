@@ -11,6 +11,7 @@ using System.Diagnostics.Metrics;
 using System.Net;
 using System.Reflection;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -29,14 +30,14 @@ public sealed class RetryBehavior<TRequest, TResponse> : IPipelineBehavior<TRequ
     private readonly IOptions<RetryOptions> _options;
     
     // OpenTelemetry metrics
-    private static readonly Counter<long> RetryAttempts = Metrics.CreateCounter<long>(
+    private static readonly Counter<long> RetryAttempts = TelemetryTags.Metrics.CreateCounter<long>(
         "axon.retry.attempts",
         description: "Total retry attempts");
-    private static readonly Histogram<double> RetryDelay = Metrics.CreateHistogram<double>(
+    private static readonly Histogram<double> RetryDelay = TelemetryTags.Metrics.CreateHistogram<double>(
         "axon.retry.delay",
         unit: "ms", 
         description: "Delay between retry attempts");
-    private static readonly Counter<long> CircuitBreakerOpens = Metrics.CreateCounter<long>(
+    private static readonly Counter<long> CircuitBreakerOpens = TelemetryTags.Metrics.CreateCounter<long>(
         "axon.circuit_breaker.opens",
         description: "Circuit breaker open events");
 

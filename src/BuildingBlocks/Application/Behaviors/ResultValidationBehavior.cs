@@ -1,113 +1,109 @@
 using FluentValidation;
 using MediatR;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Result-aware validation behavior for MediatR pipeline.
-/// Converts FluentValidation failures to Result pattern errors instead of throwing exceptions.
-/// Maintains railway-oriented programming flow by returning failed Results.
+/// Runs all FluentValidation validators for the request and converts failures to the unified Result error shape.
+/// - No service locator: validators are injected as IEnumerable<IValidator<TRequest>>.
+/// - Groups errors by Property for cleaner client payloads.
+/// - Uses compiled delegates to create Result/Result&lt;T&gt; failures (no reflection on hot path).
+/// - Calls next() correctly (MediatR delegate has no CancellationToken parameter).
 /// </summary>
-/// <typeparam name="TRequest">The request type</typeparam>
-/// <typeparam name="TResponse">The response type - must be Result or Result{T}</typeparam>
 public sealed class ResultValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IAxonRequest<TResponse>
+    where TResponse : IResult
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IEnumerable<IValidator<TRequest>> _validators;
     private readonly ILogger<ResultValidationBehavior<TRequest, TResponse>> _logger;
 
     public ResultValidationBehavior(
-        IServiceProvider serviceProvider,
+        IEnumerable<IValidator<TRequest>> validators,
         ILogger<ResultValidationBehavior<TRequest, TResponse>> logger)
     {
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _validators = validators ?? [];
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<TResponse> Handle(
-        TRequest request, 
+        TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(next);
-
-        // Get validator if available
-        var validator = _serviceProvider.GetService<IValidator<TRequest>>();
-        if (validator is null)
+        if (_validators.Any())
         {
-            _logger.LogDebug("No validator found for {RequestType}, proceeding without validation", 
-                typeof(TRequest).Name);
-            return await next(cancellationToken);
+            _logger.LogDebug("Validating {RequestType} with {Count} validators", typeof(TRequest).Name, _validators.Count());
+            var context = new ValidationContext<TRequest>(request);
+            var failures = new List<FluentValidation.Results.ValidationFailure>();
+
+            foreach (var v in _validators)
+            {
+                var result = await v.ValidateAsync(context, cancellationToken);
+                if (!result.IsValid) failures.AddRange(result.Errors);
+            }
+
+            if (failures.Count > 0)
+            {
+                _logger.LogWarning("{RequestType} validation failed with {ErrorCount} errors", typeof(TRequest).Name, failures.Count);
+
+                // Group by Property for a cleaner client contract and lower payload noise
+                var groupedErrors = failures
+                    .GroupBy(f => string.IsNullOrWhiteSpace(f.PropertyName) ? "VALIDATION" : f.PropertyName)
+                    .Select(g =>
+                    {
+                        var message = string.Join("; ", g.Select(x => x.ErrorMessage));
+                        var codes = g.Select(x => string.IsNullOrWhiteSpace(x.ErrorCode) ? "VALIDATION_ERROR" : x.ErrorCode)
+                                     .Distinct()
+                                     .ToArray();
+
+                        return Error.Validation(
+                            message: message,
+                            code: g.Key, // property name or "VALIDATION"
+                            metadata: new Dictionary<string, object>
+                            {
+                                ["Count"] = g.Count(),
+                                ["Codes"] = codes,
+                                // show a few attempted values for diagnostics (avoid large dumps)
+                                ["AttemptedValuesSample"] = g.Select(x => x.AttemptedValue ?? "<null>").Take(3).ToArray()
+                            });
+                    })
+                    .ToArray();
+
+                var aggregated = groupedErrors.Length == 1 ? groupedErrors[0] : Error.Aggregate(groupedErrors);
+                return ResultFailureFactory<TResponse>.FromError(aggregated);
+            }
         }
 
-        _logger.LogDebug("Validating request {RequestType} with RequestId {RequestId}", 
-            typeof(TRequest).Name, request.RequestId);
-
-        // Perform validation
-        var validationResult = await validator.ValidateAsync(request, cancellationToken);
-        
-        if (validationResult.IsValid)
-        {
-            _logger.LogDebug("Request {RequestType} validation passed", typeof(TRequest).Name);
-            return await next(cancellationToken);
-        }
-
-        // Convert validation failures to Result pattern
-        _logger.LogWarning("Request {RequestType} validation failed with {ErrorCount} errors", 
-            typeof(TRequest).Name, validationResult.Errors.Count);
-
-        return CreateValidationFailureResult<TResponse>(validationResult);
+        // MediatR delegate has no token parameter
+        return await next();
     }
 
-    /// <summary>
-    /// Creates a failed Result from FluentValidation failures.
-    /// Handles both Result and Result{T} response types.
-    /// </summary>
-    private static TResponse CreateValidationFailureResult<T>(FluentValidation.Results.ValidationResult validationResult)
+    private static class ResultFailureFactory<T>
+        where T : IResult
     {
-        var errors = validationResult.Errors
-            .Select(failure => Error.Validation(
-                failure.ErrorMessage, 
-                failure.ErrorCode ?? "VALIDATION_ERROR",
-                new Dictionary<string, object>
-                {
-                    ["Property"] = failure.PropertyName,
-                    ["AttemptedValue"] = failure.AttemptedValue ?? "<null>"
-                }))
-            .ToArray();
+        public static readonly Func<Error, T> FromError = Build();
 
-        var aggregatedError = errors.Length == 1 
-            ? errors[0]
-            : Error.Aggregate(errors);
-
-        // Handle Result{T} response types
-        if (typeof(T).IsGenericType && typeof(T).GetGenericTypeDefinition() == typeof(Result<>))
+        private static Func<Error, T> Build()
         {
-            var resultType = typeof(T).GetGenericArguments()[0];
-            var failureMethod = typeof(Result<>)
-                .MakeGenericType(resultType)
-                .GetMethod(nameof(Result<object>.Failure), new[] { typeof(Error) });
-            
-            var failedResult = failureMethod!.Invoke(null, new object[] { aggregatedError });
-            return (TResponse)failedResult!;
-        }
+            if (typeof(T) == typeof(Result))
+            {
+                return e => (T)(object)Result.Failure(e);
+            }
 
-        // Handle non-generic Result response type
-        if (typeof(TResponse) == typeof(Result))
-        {
-            var failedResult = Result.Failure(aggregatedError);
-            return (TResponse)(object)failedResult;
-        }
+            if (typeof(T).IsGenericType && typeof(T).GetGenericTypeDefinition() == typeof(Result<>))
+            {
+                var method = typeof(T).GetMethod("Failure", new[] { typeof(Error) })
+                             ?? throw new InvalidOperationException($"{typeof(T).Name}.Failure(Error) missing");
+                var e = System.Linq.Expressions.Expression.Parameter(typeof(Error), "e");
+                var call = System.Linq.Expressions.Expression.Call(method, e);
+                var lambda = System.Linq.Expressions.Expression.Lambda<Func<Error, T>>(call, e);
+                return lambda.Compile();
+            }
 
-        // If response type is not Result-based, we have a configuration issue
-        throw new InvalidOperationException(
-            $"ResultValidationBehavior can only be used with Result or Result<T> response types. " +
-            $"Found: {typeof(T).Name}");
+            throw new InvalidOperationException($"ResultValidationBehavior requires TResponse : IResult. Found {typeof(T).Name}");
+        }
     }
 }

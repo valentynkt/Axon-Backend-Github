@@ -49,8 +49,8 @@ public sealed class InvalidateCachingBehavior<TRequest, TResponse> : IPipelineBe
 
     private async Task InvalidateCaches(TRequest request, CancellationToken cancellationToken)
     {
-        var invalidationTags = GetInvalidationTags(request);
-        if (!invalidationTags.Any())
+        var invalidationTags = InvalidateCachingBehavior<TRequest, TResponse>.GetInvalidationTags(request);
+        if (invalidationTags.Length == 0)
         {
             _logger.LogDebug("No cache invalidation tags configured for {RequestType}",
                 typeof(TRequest).Name);
@@ -75,7 +75,7 @@ public sealed class InvalidateCachingBehavior<TRequest, TResponse> : IPipelineBe
         }
     }
 
-    private string[] GetInvalidationTags(TRequest request)
+    private static string[] GetInvalidationTags(TRequest request)
     {
         // 1. Check if request implements ICacheInvalidator
         if (request is ICacheInvalidatable invalidatableRequest)
@@ -168,7 +168,7 @@ public sealed class CacheInvalidator : ICacheInvalidator
     public async Task InvalidateByTagsAsync(IEnumerable<string> tags, CancellationToken cancellationToken = default)
     {
         var tagArray = tags.ToArray();
-        if (!tagArray.Any())
+        if (tagArray.Length == 0)
             return;
 
         _logger.LogDebug("Invalidating caches for tags: {Tags}", string.Join(", ", tagArray));
@@ -184,11 +184,11 @@ public sealed class CacheInvalidator : ICacheInvalidator
         // For demonstration, we'll invalidate some common patterns
         foreach (var tag in tagArray)
         {
-            await InvalidateByPattern($"*{tag}*", cancellationToken);
+            await InvalidateByPattern($"*{tag}*");
         }
     }
 
-    private async Task InvalidateByPattern(string pattern, CancellationToken cancellationToken)
+    private async Task InvalidateByPattern(string pattern)
     {
         // This is a simplified implementation
         // In production with Redis, you would use SCAN with pattern matching

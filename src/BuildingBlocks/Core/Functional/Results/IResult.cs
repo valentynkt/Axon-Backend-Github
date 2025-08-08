@@ -3,12 +3,9 @@ namespace BuildingBlocks.Core.Functional.Results;
 /// <summary>
 /// Interface for Result types
 /// </summary>
-public interface IResult<T>
+public interface IResult<T> : IResult
 {
-    bool IsSuccess { get; }
-    bool IsFailure { get; }
     T Value { get; }
-    Error Error { get; }
     
     TResult Match<TResult>(
         Func<T, TResult> success,
