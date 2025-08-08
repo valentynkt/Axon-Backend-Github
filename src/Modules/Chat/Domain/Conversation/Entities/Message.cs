@@ -73,6 +73,83 @@ public sealed record Message : BaseAuditableEntity<MessageId>
             sequence: sequence,
             metadata: metadata);
 
-        return message;
+        return Result<Message>.Success(message);
+    }
+
+    /// <summary>
+    /// Epic 2 entity validation implementation.
+    /// </summary>
+    public override Validation<Unit> Validate()
+    {
+        var errors = new List<Error>();
+        
+        // Core entity validation
+        if (ConversationId == null || ConversationId.Value == Guid.Empty)
+            errors.Add(Error.Validation("Message must belong to a conversation", "MESSAGE_NO_CONVERSATION"));
+            
+        if (Role == null)
+            errors.Add(Error.Validation("Message must have a role", "MESSAGE_NO_ROLE"));
+            
+        if (Content == null)
+        {
+            errors.Add(Error.Validation("Message must have content", "MESSAGE_NO_CONTENT"));
+        }
+        else
+        {
+            // Validate content using value object validation
+            var contentValidation = Content.Validate();
+            if (contentValidation.IsInvalid)
+                errors.AddRange(contentValidation.Errors);
+        }
+        
+        if (Sequence <= 0)
+            errors.Add(Error.Validation("Message sequence must be positive", "MESSAGE_INVALID_SEQUENCE"));
+            
+        // Metadata validation
+        if (Metadata != null && Metadata.Count > 100)
+            errors.Add(Error.Validation("Message cannot have more than 100 metadata entries", "MESSAGE_TOO_MUCH_METADATA"));
+        
+        return errors.Any() 
+            ? Validation<Unit>.Invalid(errors)
+            : Validation<Unit>.Valid(Unit.Value);
+    }
+    
+    /// <summary>
+    /// Gets message preview for display purposes.
+    /// </summary>
+    public string GetPreview(int maxLength = 100)
+    {
+        return Content.GetPreview(maxLength);
+    }
+    
+    /// <summary>
+    /// Gets message content metrics.
+    /// </summary>
+    public MessageContentMetrics GetContentMetrics()
+    {
+        return Content.GetMetrics();
+    }
+    
+    /// <summary>
+    /// Checks if message contains specific text.
+    /// </summary>
+    public bool Contains(string searchText, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return false;
+            
+        return Content.Value.Contains(searchText, comparison);
+    }
+    
+    /// <summary>
+    /// Updates metadata - only operation allowed after creation.
+    /// </summary>
+    public Result<Message> WithUpdatedMetadata(Dictionary<string, object?> newMetadata)
+    {
+        if (newMetadata.Count > 100)
+            return Result<Message>.Failure(
+                Error.Validation("Message cannot have more than 100 metadata entries", "MESSAGE_TOO_MUCH_METADATA"));
+        
+        return Result<Message>.Success(this with { Metadata = newMetadata });
     }
 }

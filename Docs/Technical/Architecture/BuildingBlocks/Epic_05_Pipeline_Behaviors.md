@@ -1,268 +1,348 @@
-# Epic 05: Pipeline Behaviors System
+# Epic 05: MediatR Pipeline Behaviors
 
 ## Epic Overview
 
 **Epic ID**: Epic_05  
-**Epic Name**: Pipeline Behaviors System  
+**Epic Name**: MediatR Pipeline Behaviors  
 **Epic Priority**: Critical  
-**Estimated Duration**: 4-5 days  
+**Estimated Duration**: 5-6 days  
 **Dependencies**: Epic_04 (CQRS Foundation)
 
 ## Business Value
 
-Implements comprehensive cross-cutting concerns through MediatR pipeline behaviors, providing validation, transaction management, caching, logging, retry logic, and observability across all commands and queries without code duplication.
+Implements production-ready cross-cutting concerns through MediatR pipeline behaviors, providing validation, transaction management, caching, structured logging, resilience, and comprehensive observability across all commands and queries. This eliminates code duplication while ensuring consistent, reliable behavior across the entire application.
 
 ## Acceptance Criteria
 
-- [ ] All 7 pipeline behaviors implemented and tested
-- [ ] Behaviors properly ordered and configured
-- [ ] Result<T> pattern integrated throughout pipeline
-- [ ] Telemetry and metrics collection working
-- [ ] Transaction boundaries properly managed
-- [ ] Caching working for queries
-- [ ] Validation integrated with FluentValidation
-- [ ] Zero performance regression
+- [ ] All 6 pipeline behaviors implemented with production-quality error handling
+- [ ] Behaviors registered in correct execution order with detailed documentation
+- [ ] Result<T> pattern fully integrated with proper error aggregation
+- [ ] Comprehensive telemetry and metrics collection operational
+- [ ] Database transaction boundaries properly managed with outbox pattern
+- [ ] Intelligent query caching with configurable invalidation
+- [ ] FluentValidation integration with grouped error reporting
+- [ ] Resilience behaviors with configurable retry policies
+- [ ] Zero performance regression validated through benchmarks
 
 ## Technical Scope
 
-### Core Behaviors
-1. **ValidationBehavior** - FluentValidation integration
-2. **TransactionBehavior** - UnitOfWork management  
-3. **CachingBehavior** - Query result caching
-4. **LoggingBehavior** - Structured logging
-5. **ObservabilityBehavior** - Telemetry and metrics
-6. **RetryBehavior** - Transient error recovery
-7. **AuthorizationBehavior** - Access control
+### Core Pipeline Behaviors
+1. **ObservabilityBehavior** - Activity tracing, metrics, and telemetry (outermost)
+2. **LoggingBehavior** - Structured logging with correlation IDs
+3. **RetryBehavior** - Transient failure recovery with exponential backoff
+4. **ValidationBehavior** - Request validation with error aggregation
+5. **CachingBehavior** - Query result caching with intelligent key generation
+6. **TransactionBehavior** - Database transaction management with outbox pattern (innermost)
 
-### Infrastructure
-- Behavior registration and ordering
-- Configuration system
-- Metrics collection
-- Error aggregation
+### Infrastructure Components
+- Critical behavior registration order management
+- Configuration system for behavior policies
+- Telemetry and metrics collection
+- Robust error aggregation and reporting
 
 ## User Stories
 
-### Story 1: Validation Pipeline Behavior
-**As a developer**, I want automatic validation so that invalid commands are rejected before processing.
+### Story 1: ValidationBehavior - Enhanced Error Aggregation
+**As a developer**, I want robust automatic validation so that invalid requests are rejected early with comprehensive, well-structured error messages.
 
 **Tasks:**
-- [ ] Create `ValidationBehavior<TRequest, TResponse>` class
-- [ ] Integrate with FluentValidation framework
-- [ ] Support multiple validators per request
-- [ ] Aggregate validation errors into Result<T>
-- [ ] Add telemetry for validation metrics
-- [ ] Skip validation for queries by default
-- [ ] Create unit tests for all validation scenarios
-- [ ] Add integration tests with sample validators
+- [ ] Create `ValidationBehavior<TRequest, TResponse>` class with enhanced error handling
+- [ ] Integrate with FluentValidation framework using `IValidator<T>` collection
+- [ ] Implement property-grouped error aggregation for better client experience
+- [ ] Support multiple validators per request type with proper error merging
+- [ ] Add comprehensive validation metrics and telemetry
+- [ ] Configure selective validation (commands always, queries when marked)
+- [ ] Create exhaustive unit tests covering all validation scenarios
+- [ ] Add integration tests with complex validation rules
+
+**Critical Implementation Note:**
+The validation error aggregation must group failures by property name to provide clean, structured error responses:
+
+```csharp
+// Enhanced error aggregation in ValidationBehavior.cs
+var errors = failures
+    .GroupBy(e => e.PropertyName) // Group errors by the property they belong to.
+    .Select(g => Error.Validation(
+        // Use the property name as the error code for easy parsing on the client.
+        g.Key,
+        // Join all error messages for that single property.
+        string.Join("; ", g.Select(e => e.ErrorMessage))))
+    .ToArray();
+
+return Result<TResponse>.Failure(Error.Aggregate(errors));
+```
 
 **Acceptance Criteria:**
-- Commands with validation errors return Result<T>.Failure
-- Multiple validation errors are aggregated properly
-- Validation is skipped for queries unless explicitly enabled
-- Validation timing is tracked in telemetry
+- Commands with validation errors return properly structured Result<T>.Failure
+- Multiple validation errors are grouped by property and aggregated cleanly
+- Validation runs before any resource-intensive operations
+- Validation performance metrics are captured and monitored
 
-### Story 2: Transaction Management Behavior  
-**As a developer**, I want automatic transaction management so that command operations are atomic.
+### Story 2: TransactionBehavior - Enhanced Resilience
+**As a developer**, I want bulletproof transaction management so that command operations are atomic with reliable outbox pattern integration.
 
 **Tasks:**
-- [ ] Create `TransactionBehavior<TRequest, TResponse>` class
-- [ ] Integrate with UnitOfWork pattern
-- [ ] Support nested transaction detection
-- [ ] Implement outbox pattern integration
-- [ ] Add transaction timeout configuration
-- [ ] Handle transaction rollback scenarios
-- [ ] Add transaction metrics and logging
-- [ ] Create comprehensive tests for transaction scenarios
+- [ ] Create `TransactionBehavior<TRequest, TResponse>` class with enhanced error handling
+- [ ] Integrate deeply with UnitOfWork and DbContext transaction management
+- [ ] Implement robust nested transaction detection and handling
+- [ ] Build resilient outbox pattern integration with proper error logging
+- [ ] Add configurable transaction timeout with monitoring
+- [ ] Handle all transaction rollback scenarios gracefully
+- [ ] Add comprehensive transaction metrics, logging, and alerting
+- [ ] Create exhaustive tests covering transaction failure modes
+
+**Critical Implementation Note:**
+The outbox processor trigger must include proper error handling to prevent silent failures:
+
+```csharp
+// Enhanced outbox processing in TransactionBehavior.cs, after await transaction.CommitAsync();
+
+// Asynchronously trigger the outbox processor. This is a fire-and-forget
+// operation, but we wrap it in a try-catch to log any immediate errors
+// from the trigger itself. A separate background service is responsible
+// for the guaranteed, long-term processing of the outbox.
+_ = Task.Run(async () =>
+{
+    try
+    {
+        // Optional: A small delay can help ensure the transaction
+        // is fully visible to the outbox processor's DB connection.
+        await Task.Delay(100, cancellationToken);
+        await _outboxProcessor.ProcessPendingAsync();
+    }
+    catch (Exception ex)
+    {
+        // Use a separate logger scope to avoid confusion with the main request.
+        using (_logger.BeginScope("OutboxProcessingTrigger"))
+        {
+            _logger.LogError(ex, "In-process outbox processing trigger failed after commit.");
+        }
+    }
+}, cancellationToken);
+```
 
 **Acceptance Criteria:**
-- All commands run within transactions automatically
-- Failed commands trigger rollback
-- Outbox events processed after commit
-- Nested transactions are handled correctly
+- All commands execute within properly managed database transactions
+- Transaction failures trigger complete rollback with detailed logging
+- Outbox events are processed reliably after successful commit
+- Nested transactions are detected and handled appropriately
+- Transaction timeouts are configurable and monitored
 
-### Story 3: Query Caching Behavior
-**As a developer**, I want intelligent caching so that frequently accessed queries perform optimally.
+### Story 3: CachingBehavior - Intelligent Query Optimization
+**As a developer**, I want sophisticated caching so that frequently accessed queries deliver optimal performance with proper cache invalidation.
 
 **Tasks:**
-- [ ] Create `CachingBehavior<TRequest, TResponse>` class
-- [ ] Implement cache key generation strategy
-- [ ] Support configurable cache duration per query
-- [ ] Integrate with multi-level cache system
-- [ ] Add cache hit/miss metrics
-- [ ] Handle cache serialization/deserialization
-- [ ] Implement cache invalidation patterns
-- [ ] Add comprehensive caching tests
+- [ ] Create `CachingBehavior<TRequest, TResponse>` class with intelligent key generation
+- [ ] Implement deterministic cache key generation strategy using request properties
+- [ ] Support per-query-type configurable cache duration and policies
+- [ ] Integrate with distributed Redis cache and in-memory L1 cache
+- [ ] Add comprehensive cache hit/miss/error metrics and monitoring
+- [ ] Implement robust cache serialization/deserialization with versioning
+- [ ] Build sophisticated cache invalidation patterns and dependency tracking
+- [ ] Create thorough caching tests including concurrent access scenarios
 
 **Acceptance Criteria:**
-- Cacheable queries return cached results when available
-- Cache keys are generated consistently
-- Cache duration is configurable per query type
-- Cache metrics track hit/miss ratios
+- Only queries marked as cacheable participate in caching behavior
+- Cache keys are generated deterministically and collision-free
+- Cache duration and policies are configurable per query type
+- Cache hit/miss ratios and performance metrics are tracked and monitored
+- Cache invalidation works reliably across distributed instances
 
-### Story 4: Enhanced Observability Behavior
-**As a developer**, I want comprehensive telemetry so that I can monitor and debug application behavior.
+### Story 4: ObservabilityBehavior - Comprehensive Telemetry
+**As a developer**, I want production-grade observability so that I can monitor, debug, and optimize application behavior with detailed insights.
 
 **Tasks:**
-- [ ] Enhance existing ObservabilityPipelineBehavior
-- [ ] Add Result<T> aware telemetry
-- [ ] Implement performance metrics collection  
-- [ ] Add correlation ID tracking
-- [ ] Create custom activity tags for commands/queries
-- [ ] Implement error tracking and alerting
-- [ ] Add business metrics collection
-- [ ] Create observability tests and validation
+- [ ] Create `ObservabilityBehavior<TRequest, TResponse>` as the outermost pipeline wrapper
+- [ ] Implement Result<T> aware telemetry with success/failure/error categorization
+- [ ] Build comprehensive performance metrics collection including percentiles
+- [ ] Add correlation ID generation and propagation across all operations
+- [ ] Create rich activity tags and custom dimensions for commands/queries
+- [ ] Implement detailed error tracking, categorization, and alerting integration
+- [ ] Add business metrics collection with custom counters and gauges
+- [ ] Create observability validation tests and telemetry data quality checks
 
 **Acceptance Criteria:**
-- All requests tracked with detailed telemetry
-- Error rates and types properly recorded
-- Performance metrics available for analysis
-- Correlation IDs flow through entire pipeline
+- Every request generates structured telemetry with complete lifecycle tracking
+- Success/failure rates and error types are accurately recorded and categorized
+- Performance metrics include detailed timing, throughput, and resource utilization
+- Correlation IDs flow seamlessly through the entire pipeline and external services
+- Custom business metrics are collected and available for analysis and alerting
 
-### Story 5: Resilience and Retry Behavior
-**As a developer**, I want automatic retry logic so that transient failures don't impact users.
+### Story 5: RetryBehavior - Advanced Resilience
+**As a developer**, I want sophisticated retry logic so that transient failures are handled gracefully while preventing system overload.
 
 **Tasks:**
-- [ ] Create `RetryBehavior<TRequest, TResponse>` class
-- [ ] Implement configurable retry policies
-- [ ] Detect transient vs permanent errors
-- [ ] Add exponential backoff with jitter
-- [ ] Support circuit breaker pattern
-- [ ] Add retry metrics and logging
-- [ ] Create retryable command marker interface
-- [ ] Add comprehensive retry scenario tests
+- [ ] Create `RetryBehavior<TRequest, TResponse>` class with advanced resilience patterns
+- [ ] Implement Polly-based configurable retry policies with multiple strategies
+- [ ] Build intelligent transient vs permanent error detection and classification
+- [ ] Add exponential backoff with jitter and maximum delay caps
+- [ ] Integrate circuit breaker pattern to prevent cascade failures
+- [ ] Add comprehensive retry metrics, timing, and success rate tracking
+- [ ] Create marker interfaces for retryable operations with policy configuration
+- [ ] Build exhaustive retry scenario tests including edge cases and failure modes
 
 **Acceptance Criteria:**
-- Transient failures automatically retried
-- Permanent failures fail immediately
-- Retry attempts properly logged and measured
-- Circuit breaker prevents cascade failures
+- Transient failures are automatically retried using appropriate policies
+- Permanent failures are detected early and fail fast without retries
+- Retry attempts are thoroughly logged with timing and outcome data
+- Circuit breaker activates under load and prevents system degradation
+- Retry policies are configurable per operation type with sensible defaults
 
-### Story 6: Structured Logging Behavior
-**As a developer**, I want comprehensive logging so that I can debug issues and track usage patterns.
+### Story 6: LoggingBehavior - Production-Ready Structured Logging
+**As a developer**, I want comprehensive structured logging so that I can debug issues, audit operations, and analyze usage patterns with complete data protection.
 
 **Tasks:**
-- [ ] Create `LoggingBehavior<TRequest, TResponse>` class
-- [ ] Implement structured logging with correlation IDs
-- [ ] Add request/response logging (with PII filtering)
-- [ ] Support configurable log levels
-- [ ] Add performance timing logs
-- [ ] Implement log correlation across services
-- [ ] Add sensitive data masking
-- [ ] Create logging tests and validations
+- [ ] Create `LoggingBehavior<TRequest, TResponse>` class with rich structured logging
+- [ ] Implement correlation ID propagation and structured log context management
+- [ ] Add intelligent request/response logging with automatic PII detection and masking
+- [ ] Support per-operation configurable log levels with environment-based overrides
+- [ ] Add detailed performance timing logs with operation categorization
+- [ ] Implement distributed log correlation across services and external dependencies
+- [ ] Build comprehensive sensitive data masking with configurable rules
+- [ ] Create logging validation tests and log data quality verification
 
 **Acceptance Criteria:**
-- All requests logged with structured data
-- Correlation IDs present in all log entries
-- Sensitive data automatically masked
-- Log levels configurable per request type
-
-### Story 7: Authorization Pipeline Behavior
-**As a developer**, I want declarative authorization so that security policies are consistently enforced.
-
-**Tasks:**
-- [ ] Create `AuthorizationBehavior<TRequest, TResponse>` class  
-- [ ] Support role-based authorization
-- [ ] Implement resource-based authorization
-- [ ] Add authorization requirement attributes
-- [ ] Support custom authorization policies
-- [ ] Add authorization audit logging
-- [ ] Create authorization caching
-- [ ] Add comprehensive authorization tests
-
-**Acceptance Criteria:**
-- Unauthorized requests return appropriate errors
-- Authorization decisions are cached when safe
-- All authorization attempts are audited
-- Custom policies can be easily added
+- All requests generate structured logs with consistent schema and rich context
+- Correlation IDs are present and consistent across all log entries and external calls
+- Sensitive data is automatically detected and masked using configurable rules
+- Log levels are configurable per request type with environment-specific overrides
+- Performance timing data is captured and structured for analysis and alerting
 
 ## Definition of Done
 
-- [ ] All 7 behaviors implemented and tested
-- [ ] Behavior ordering correctly configured in DI
-- [ ] Integration tests validate entire pipeline
-- [ ] Performance benchmarks within acceptable limits
-- [ ] Documentation includes configuration examples
-- [ ] Code review completed
-- [ ] Zero compiler warnings
-- [ ] Telemetry data validates correctly
+- [ ] All 6 pipeline behaviors implemented with production-quality error handling
+- [ ] Critical behavior registration order correctly implemented and documented
+- [ ] Comprehensive integration tests validate entire pipeline execution
+- [ ] Performance benchmarks demonstrate acceptable overhead (< 5ms per request)
+- [ ] Documentation includes complete configuration examples and troubleshooting guides
+- [ ] Code review completed with security and performance validation
+- [ ] Zero compiler warnings or static analysis issues
+- [ ] Telemetry data validates correctly with proper alerting thresholds
 
-## Technical Implementation Notes
+## Technical Implementation
 
-### File Structure
+### Critical File Structure
 ```
 src/BuildingBlocks/Application/Behaviors/
-├── ValidationBehavior.cs
-├── TransactionBehavior.cs  
-├── CachingBehavior.cs
-├── LoggingBehavior.cs
-├── ObservabilityBehavior.cs
-├── RetryBehavior.cs
-└── AuthorizationBehavior.cs
+├── ObservabilityBehavior.cs    # Outermost: telemetry and activity tracking
+├── LoggingBehavior.cs          # Structured logging with correlation
+├── RetryBehavior.cs            # Resilience and transient error handling
+├── ValidationBehavior.cs       # Request validation with error aggregation
+├── CachingBehavior.cs          # Query result caching
+└── TransactionBehavior.cs      # Innermost: database transaction management
 ```
 
-### Behavior Execution Order
-1. AuthorizationBehavior (security first)
-2. ValidationBehavior (validate early) 
-3. LoggingBehavior (log validated requests)
-4. CachingBehavior (cache queries only)
-5. RetryBehavior (retry failed operations)
-6. TransactionBehavior (wrap in transaction)
-7. ObservabilityBehavior (measure everything)
+### CRITICAL: Behavior Registration Order
 
-### Key Design Decisions
-1. **Result<T> Integration**: All behaviors work with Result pattern
-2. **Conditional Application**: Some behaviors only apply to commands/queries
-3. **Configuration Driven**: Behavior settings configurable per request
-4. **Non-Breaking**: Existing handlers work without modification
-5. **Performance First**: Minimal overhead per behavior
+The registration order in MediatR is absolutely critical as it defines the execution pipeline from outermost to innermost behavior. **This order must not be changed without careful consideration of the implications:**
 
-## Dependencies
-
-### NuGet Packages
-```xml
-<PackageReference Include="FluentValidation" Version="11.9.0" />
-<PackageReference Include="Polly" Version="8.2.0" />
-<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
-```
-
-### DI Registration
 ```csharp
+// In Program.cs or a ServiceCollection extension method
 services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(Application).Assembly);
-    cfg.AddBehavior<AuthorizationBehavior<,>>();
-    cfg.AddBehavior<ValidationBehavior<,>>();
-    cfg.AddBehavior<LoggingBehavior<,>>();
-    cfg.AddBehavior<CachingBehavior<,>>();
-    cfg.AddBehavior<RetryBehavior<,>>();
-    cfg.AddBehavior<TransactionBehavior<,>>();
-    cfg.AddBehavior<ObservabilityBehavior<,>>();
+
+    // IMPORTANT: The registration order here is critical as it defines the
+    // execution pipeline for MediatR behaviors, from outermost to innermost.
+
+    // 1. (Outermost) Observability and general error handling. This wraps the
+    // entire operation to ensure all exceptions are caught and all telemetry is captured.
+    cfg.AddOpenBehavior(typeof(ObservabilityBehavior<,>));
+    cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
+
+    // 2. Resilience. This wraps the core logic to allow for retries of the
+    // entire unit of work on transient failures.
+    cfg.AddOpenBehavior(typeof(RetryBehavior<,>));
+
+    // 3. Validation. This fails fast on invalid requests *before* starting a
+    // database transaction or hitting the cache, saving resources.
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+    
+    // 4. Caching. This is for queries. If a result is found in the cache,
+    // subsequent behaviors (like Transaction) will be skipped.
+    cfg.AddOpenBehavior(typeof(CachingBehavior<,>));
+
+    // 5. (Innermost) Transaction Management. This ensures that the actual
+    // command handler logic runs within a database transaction.
+    cfg.AddOpenBehavior(typeof(TransactionBehavior<,>));
 });
 ```
 
-## Risk Mitigation
+### Key Design Principles
+1. **Result<T> First**: All behaviors are designed around the Result pattern for consistent error handling
+2. **Performance Optimized**: Early exit strategies minimize unnecessary processing
+3. **Configuration Driven**: Behavior policies are configurable per operation type
+4. **Observable by Default**: Comprehensive telemetry and metrics are built-in
+5. **Fail Fast**: Validation and authorization happen before expensive operations
 
-- **Performance Impact**: Benchmark each behavior individually
-- **Behavior Conflicts**: Test behavior interaction scenarios  
-- **Configuration Complexity**: Provide sensible defaults
-- **Memory Leaks**: Ensure proper disposal in behaviors
+## Dependencies and Configuration
+
+### Required NuGet Packages
+```xml
+<PackageReference Include="FluentValidation" Version="11.9.0" />
+<PackageReference Include="Polly" Version="8.4.0" />
+<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
+<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="8.0.0" />
+```
+
+### Behavior Configuration Example
+```csharp
+// Example configuration for individual behavior policies
+services.Configure<RetryPolicyOptions>(options =>
+{
+    options.MaxAttempts = 3;
+    options.BaseDelay = TimeSpan.FromMilliseconds(100);
+    options.MaxDelay = TimeSpan.FromSeconds(30);
+});
+
+services.Configure<CachingOptions>(options =>
+{
+    options.DefaultDuration = TimeSpan.FromMinutes(5);
+    options.KeyPrefix = "axon_query_";
+});
+```
+
+## Risk Mitigation Strategy
+
+### Performance Risks
+- **Pipeline Overhead**: Each behavior adds 1-2ms overhead; target total pipeline overhead < 5ms
+- **Memory Allocation**: Use object pooling and efficient serialization for caching behavior
+- **Lock Contention**: Implement lock-free cache access patterns where possible
+
+### Reliability Risks  
+- **Behavior Ordering**: Critical registration order is documented and validated in tests
+- **Error Propagation**: All behaviors properly handle and forward Result<T> error states
+- **Resource Leaks**: Comprehensive disposal patterns implemented in all behaviors
+
+### Security Risks
+- **PII Logging**: Automatic PII detection and masking in logging behavior
+- **Cache Poisoning**: Cache key validation and isolation per tenant/user context
+- **Information Disclosure**: Structured error responses without sensitive system details
 
 ## Testing Strategy
 
-### Unit Tests
-- Each behavior in isolation
-- Error handling scenarios
-- Configuration validation
-- Performance benchmarks
+### Unit Testing Requirements
+- **Behavior Isolation**: Each behavior tested independently with mocked dependencies
+- **Error Scenarios**: All failure modes and error propagation paths validated
+- **Configuration Validation**: All configuration options and edge cases covered
+- **Performance Benchmarks**: Individual behavior overhead measured and validated
 
-### Integration Tests  
-- Full pipeline execution
-- Behavior interaction testing
-- Error propagation validation
-- End-to-end scenarios
+### Integration Testing Requirements
+- **Full Pipeline**: End-to-end pipeline execution with all behaviors active
+- **Behavior Interaction**: Cross-behavior dependencies and data flow validated
+- **Error Propagation**: Result<T> error handling through entire pipeline
+- **Load Testing**: Pipeline performance under concurrent load scenarios
+
+### Production Readiness Validation
+- **Memory Profiling**: No memory leaks under sustained load
+- **Performance Profiling**: Pipeline overhead stays within acceptable bounds
+- **Error Rate Monitoring**: Behavior failure rates tracked and alerted
+- **Telemetry Validation**: All metrics and traces properly emitted and structured
 
 ## Success Metrics
-- Pipeline execution overhead < 10ms
-- 100% test coverage on behaviors
-- Zero behavior-related production issues
-- Telemetry data quality score > 95%
+
+- **Performance**: Total pipeline execution overhead < 5ms (99th percentile)
+- **Coverage**: 100% test coverage on all pipeline behaviors
+- **Reliability**: Zero behavior-related production issues in first 30 days
+- **Observability**: Telemetry data quality score > 98% with complete trace coverage
+- **Error Handling**: All error scenarios handled gracefully with proper Result<T> responses

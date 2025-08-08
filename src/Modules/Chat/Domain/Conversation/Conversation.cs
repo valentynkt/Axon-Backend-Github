@@ -2,18 +2,24 @@ using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Modules.Chat.Domain.Conversation.Events;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Errors;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Rules;
 using Axon.Shared.Common;
-using BuildingBlocks.Core.Model;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Rules;
+using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Functional.Validation;
+using BuildingBlocks.Core.Domain.Migration;
 
 namespace Axon.Modules.Chat.Domain.Conversation;
 
 /// <summary>
-/// Conversation aggregate (DDD/CQRS).
-/// Minimal, behavior-first model focused on user messages.
-/// Inherits BaseAggregate for identity/versioning/auditing/event buffer.
+/// Epic 2 enhanced Conversation aggregate root demonstrating comprehensive domain modeling patterns.
+/// Implements rich business rules, domain events, and validation using Epic 2 patterns.
+/// Fully integrated with Epic 5 pipeline behaviors for transaction management and event dispatching.
 /// </summary>
-public sealed record Conversation : BaseAggregate<ConversationId>
+[Epic2Migrated("Migrated from BaseAggregate to AggregateRoot with Epic 2 patterns")]
+public sealed partial class Conversation : AggregateRoot<ConversationId>
 {
     private readonly List<Message> _messages = new();
 
@@ -47,99 +53,138 @@ public sealed record Conversation : BaseAggregate<ConversationId>
         Title = title;
         Status = ConversationStatus.Active;
 
-        AddDomainEvent(new ConversationStartedDomainEvent(Id, OwnerId, Title));
+        RaiseDomainEvent(new ConversationStartedDomainEvent(Id, OwnerId, Title));
     }
 
     /// <summary>
-    /// Start a new conversation. Validates owner and title, raises ConversationStarted.
+    /// Epic 2 factory method with comprehensive business rule validation.
+    /// Demonstrates proper use of RuleBuilder pattern and domain event raising.
     /// </summary>
     public static Result<Conversation> Start(string title, string userId)
     {
-        if (string.IsNullOrWhiteSpace(userId))
-            return ChatErrors.Conversation.OwnerRequired;
+        // 1. Validate inputs using Epic 2 business rules pattern
+        var rules = new RuleBuilder()
+            .NotEmpty(userId, nameof(userId))
+            .NotEmpty(title, nameof(title))
+            .AddRule(new ConversationTitleValidationRule(title))
+            .Build();
+            
+        if (rules.IsFailure)
+            return Result<Conversation>.Failure(rules.Error);
 
-        title = (title ?? string.Empty).Trim();
-        if (title.Length == 0)
-            return ChatErrors.Conversation.CannotStart("Title cannot be empty");
-        if (title.Length > 200)
-            return ChatErrors.Conversation.CannotStart("Title cannot exceed 200 characters");
-
+        // 2. Create value objects with validation
         var ownerIdResult = UserId.Create(userId);
         if (ownerIdResult.IsFailure)
-            return ownerIdResult.Error;
+            return Result<Conversation>.Failure(ownerIdResult.Error);
 
-        var conversation = new Conversation(ConversationId.New(), ownerIdResult.Value, title);
-        return conversation;
+        // 3. Create aggregate with validated inputs
+        var conversation = new Conversation(ConversationId.New(), ownerIdResult.Value, title.Trim());
+        
+        // 4. Validate aggregate state
+        var validation = conversation.Validate();
+        if (validation.IsInvalid)
+            return validation.ToResultWithAggregatedError();
+        
+        return Result<Conversation>.Success(conversation);
     }
 
     /// <summary>
-    /// Append a user message (ownership/status/content invariants). Raises UserMessageAppended.
-    /// Sequence = 1-based ordinal within this conversation.
+    /// Epic 2 enhanced message appending with comprehensive business rule validation.
+    /// Demonstrates proper use of Epic 2 patterns: rules first, then state changes, then events.
     /// </summary>
     public Result<Message> AppendUserMessage(string content, string requestingUserId)
     {
-        if (!BelongsToUser(requestingUserId))
-            return ChatErrors.Conversation.NotConversationOwner(requestingUserId, Id.ToString());
+        // 1. Business rules validation FIRST (Epic 2 corrected pattern)
+        var requestingUserIdResult = UserId.Create(requestingUserId);
+        if (requestingUserIdResult.IsFailure)
+            return Result<Message>.Failure(requestingUserIdResult.Error);
+            
+        var rules = new RuleBuilder()
+            .AddRule(new ConversationOwnershipRule(OwnerId, requestingUserIdResult.Value))
+            .AddRule(new ConversationMustBeActiveRule(Status))
+            .AddRule(new MessageContentValidationRule(content))
+            .AddRule(new ConversationMessageLimitRule(_messages.Count))
+            .AddRule(new DuplicateMessagePreventionRule(_messages, content))
+            .AddRule(new MessageRateLimitRule(_messages.Where(m => m.Role == MessageRole.User).ToList()))
+            .Build();
+            
+        if (rules.IsFailure)
+            return Result<Message>.Failure(rules.Error);
 
-        if (!IsActive)
-            return ChatErrors.Conversation.ConversationNotActive;
+        // 2. Create value objects with validation
+        var messageContentResult = MessageContent.Create(content);
+        if (messageContentResult.IsFailure)
+            return Result<Message>.Failure(messageContentResult.Error);
 
-        content = (content ?? string.Empty).Trim();
-        if (content.Length == 0)
-            return ChatErrors.Conversation.InvalidMessageContent("Content cannot be empty");
-        if (content.Length > 100_000)
-            return ChatErrors.Conversation.InvalidMessageContent("Content cannot exceed 100,000 characters");
+        var nextSequence = _messages.Count + 1;
 
-        var nextSeq = _messages.Count + 1;
+        // 3. Apply state change (all preconditions validated)
+        return ApplyChange(() =>
+        {
+            var messageResult = Message.Create(
+                messageContentResult.Value,
+                Id,
+                MessageRole.User,
+                nextSequence);
+                
+            if (messageResult.IsFailure)
+                throw new InvalidOperationException($"Message creation failed after validation: {messageResult.Error.Message}");
 
-        var messageResult = Message.Create(
-            content: content,
-            conversationId: Id,
-            role: MessageRole.User,
-            sequence: nextSeq);
+            var message = messageResult.Value;
+            _messages.Add(message);
 
-        if (messageResult.IsFailure)
-            return messageResult.Error;
-
-        var message = messageResult.Value;
-        _messages.Add(message);
-
-        // Validate sequence integrity after modification
-        var validationResult = ValidateSequenceIntegrity();
-        if (validationResult.IsFailure)
-            return validationResult.Error;
-
-        AddDomainEvent(new UserMessageAppendedDomainEvent(
-            Id,
-            message.Id,
-            nextSeq,
-            requestingUserId));
-
-        return message;
+            // 4. Raise domain events after successful state change
+            RaiseDomainEvent(new UserMessageAppendedDomainEvent(
+                Id,
+                message.Id,
+                nextSequence,
+                requestingUserId));
+                
+            return message;
+        });
     }
 
-    /// <summary>Update the title (trimmed,  200 chars). No event (YAGNI).</summary>
-    public Result UpdateTitle(string newTitle)
+    /// <summary>
+    /// Epic 2 title update with business rule validation.
+    /// </summary>
+    public Result<Unit> UpdateTitle(string newTitle)
     {
-        newTitle = (newTitle ?? string.Empty).Trim();
-        if (newTitle.Length == 0)
-            return Error.Validation("Title cannot be empty");
-        if (newTitle.Length > 200)
-            return Error.Validation("Title cannot exceed 200 characters");
+        // Business rules validation
+        var rules = new RuleBuilder()
+            .AddRule(new ConversationTitleValidationRule(newTitle))
+            .Build();
+            
+        if (rules.IsFailure)
+            return rules;
 
-        Title = newTitle;
-        return Result.Success();
+        return ApplyChange(() =>
+        {
+            Title = newTitle.Trim();
+        });
     }
 
-    /// <summary>Complete the conversation. No event (kept minimal).</summary>
-    public Result Complete()
+    /// <summary>
+    /// Epic 2 conversation completion with business rules and domain events.
+    /// </summary>
+    public Result<Unit> Complete()
     {
-        if (!IsActive)
-            return Error.Validation("Only active conversations can be completed.");
+        // Business rules validation
+        var rules = new RuleBuilder()
+            .Must(IsActive, "CONVERSATION_NOT_ACTIVE", "Only active conversations can be completed")
+            .Must(_messages.Count > 0, "CONVERSATION_EMPTY", "Cannot complete empty conversation")
+            .Build();
+            
+        if (rules.IsFailure)
+            return rules;
 
-        Status = ConversationStatus.Completed;
-        CompletedAt = DateTime.UtcNow;
-        return Result.Success();
+        return ApplyChange(() =>
+        {
+            Status = ConversationStatus.Completed;
+            CompletedAt = DateTime.UtcNow;
+            
+            // Raise domain event for completion
+            RaiseDomainEvent(new ConversationCompletedDomainEvent(Id, OwnerId, _messages.Count));
+        });
     }
 
     /// <summary>Invariant: does this conversation belong to the given user?</summary>
@@ -147,16 +192,36 @@ public sealed record Conversation : BaseAggregate<ConversationId>
         !string.IsNullOrWhiteSpace(userId) &&
         OwnerId.Value.Equals(userId, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Optional probe: validate sequence integrity (1..N).</summary>
+    /// <summary>
+    /// Epic 2 aggregate invariants implementation.
+    /// Defines rules that must always be true for the aggregate.
+    /// </summary>
+    protected override IEnumerable<IBusinessRule> GetInvariants()
+    {
+        yield return new ConversationMustHaveOwnerRule(OwnerId);
+        yield return new ConversationTitleValidationRule(Title);
+        yield return new MessageSequenceIntegrityRule(_messages);
+        
+        // Conditional invariants
+        if (Status == ConversationStatus.Completed)
+        {
+            yield return new PredicateRule(
+                "COMPLETED_CONVERSATION_MUST_HAVE_COMPLETION_DATE",
+                "Completed conversations must have a completion date",
+                () => CompletedAt == null);
+        }
+    }
+
+    /// <summary>
+    /// Optional probe for sequence validation - now uses business rules.
+    /// </summary>
+    [Obsolete("Use GetInvariants() and Validate() instead")]
     public Result ValidateSequenceIntegrity()
     {
-        for (int i = 0; i < _messages.Count; i++)
-        {
-            var expected = i + 1;
-            if (_messages[i].Sequence != expected)
-                return ChatErrors.Conversation.SequenceViolation(expected, _messages[i].Sequence);
-        }
-        return Result.Success();
+        var rule = new MessageSequenceIntegrityRule(_messages);
+        return rule.IsBroken() 
+            ? Result.Failure(Error.BusinessRule(rule.Message, rule.Code))
+            : Result.Success();
     }
 }
 

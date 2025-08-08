@@ -4,7 +4,7 @@ using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
 
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Model;
 
 /// <summary>
 /// Base class for aggregate roots following tactical DDD and Epic 2 specifications.

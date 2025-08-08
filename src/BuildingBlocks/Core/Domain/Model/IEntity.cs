@@ -1,6 +1,6 @@
 using BuildingBlocks.Core.Domain.Primitives;
 
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Model;
 
 /// <summary>
 /// Interface for entities with strongly-typed identifiers following Epic 2 specifications.
@@ -19,7 +19,7 @@ public interface IEntity<TId> : IEntity
 /// </summary>
 public interface IEntity : IAuditable
 {
-    uint Version { get; }
+    long Version { get; }
     bool IsDeleted { get; }
     DateTime? DeletedAt { get; }
 }

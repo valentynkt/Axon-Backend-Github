@@ -2,7 +2,7 @@ using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional;
 
-namespace BuildingBlocks.Core.Model;
+namespace BuildingBlocks.Core.Domain.Model;
 
 /// <summary>
 /// Base class for all domain entities following Epic 2 specifications.
@@ -11,7 +11,7 @@ namespace BuildingBlocks.Core.Model;
 /// </summary>
 /// <typeparam name="TId">The type of the entity identifier implementing IStrongId</typeparam>
 public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
-    where TId : struct, IStrongId, IEquatable<TId>
+    where TId : IStrongId
 {
     protected Entity(TId id)
     {

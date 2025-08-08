@@ -12,9 +12,6 @@
     <Project Path="src/BuildingBlocks/BuildingBlocks.csproj" />
   </Folder>
   <Folder Name="/src/Modules/" />
-  <Folder Name="/src/Modules/Booking/">
-    <Project Path="src/Modules/Booking/src/Booking.csproj" />
-  </Folder>
   <Folder Name="/src/Modules/Chat/" />
   <Folder Name="/src/Modules/Chat/Application/">
     <Project Path="src/Modules/Chat/Application/Axon.Modules.Chat.Application.csproj" />
@@ -37,9 +34,6 @@
   </Folder>
   <Folder Name="/tests/Axon.ArchitectureTests.Framework/">
     <Project Path="tests/Axon.ArchitectureTests.Framework/Axon.ArchitectureTests.Framework.csproj" />
-  </Folder>
-  <Folder Name="/tests/Modules.Booking.Integration.Test/">
-    <Project Path="src/Modules/Booking/tests/Integration.Test/Integration.Test.csproj" />
   </Folder>
   <Folder Name="/tests/Modules.Chat.Application.Tests/">
     <Project Path="tests/Modules.Chat.Application.Tests/Axon.Modules.Chat.Application.Tests.csproj" />
