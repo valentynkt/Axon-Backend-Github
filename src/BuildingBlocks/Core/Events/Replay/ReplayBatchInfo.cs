@@ -2,7 +2,7 @@ namespace BuildingBlocks.Core.Events.Replay;
 
 /// <summary>
 /// Information about a specific batch of events being processed during replay.
-/// Created for Epic 06 Story 04 - Event Replay & Recovery Service.
+/// Created for Epic 06 Story 04 - Event Replay and Recovery Service.
 /// Provides detailed tracking of batch-level processing for monitoring and diagnostics.
 /// </summary>
 public sealed record ReplayBatchInfo

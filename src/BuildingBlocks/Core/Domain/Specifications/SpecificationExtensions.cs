@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Core.Domain.Specifications;
 

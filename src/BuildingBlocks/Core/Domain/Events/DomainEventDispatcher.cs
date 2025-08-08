@@ -1,6 +1,8 @@
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Domain.Primitives;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -165,18 +167,19 @@ public static class DomainEventExtensions
         this TAggregate aggregate,
         IDomainEventDispatcher dispatcher,
         CancellationToken cancellationToken = default)
-        where TAggregate : class, IAggregateRoot
+        where TAggregate : class
     {
         ArgumentNullException.ThrowIfNull(aggregate);
         ArgumentNullException.ThrowIfNull(dispatcher);
 
-        if (!aggregate.DomainEvents.Any())
+        var aggregateRoot = aggregate as dynamic;
+        if (aggregateRoot?.DomainEvents == null || !aggregateRoot.DomainEvents.Any())
         {
             return Result<Unit>.Success(Unit.Value);
         }
 
         // Get events before clearing (in case of partial failure)
-        var events = aggregate.DomainEvents.ToList();
+        var events = ((IEnumerable<IDomainEvent>)aggregateRoot.DomainEvents).ToList();
         
         // Dispatch events
         var result = await dispatcher.DispatchAsync(events, cancellationToken);

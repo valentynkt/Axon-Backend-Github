@@ -3,7 +3,8 @@ using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Domain.Rules;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
-using Error = BuildingBlocks.Core.Diagnostics.Errors.Error;
+using BuildingBlocks.Core.Functional.Validation;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Core.Domain.Model;
 

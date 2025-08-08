@@ -1,121 +1,81 @@
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Core.Domain.Primitives;
 
+public partial interface IStrongId
+{
+    object GetValue();
+    Type GetValueType();
+}
+
+public partial interface IStrongId<TPrimitive> : IStrongId where TPrimitive : struct
+{
+    TPrimitive Value { get; }
+}
+
 /// <summary>
-/// Base implementation for strongly-typed identifiers
-/// Provides type safety, validation, and serialization support
+/// Base for strongly-typed IDs. No parameterless constructor magic.
 /// </summary>
 public abstract record StrongId<TPrimitive> : IStrongId<TPrimitive>, IComparable<StrongId<TPrimitive>>
     where TPrimitive : struct, IComparable<TPrimitive>, IEquatable<TPrimitive>
 {
     public TPrimitive Value { get; }
-    
+
     protected StrongId(TPrimitive value)
     {
-        if (value.Equals(default(TPrimitive)))
+        if (EqualityComparer<TPrimitive>.Default.Equals(value, default))
             throw new ArgumentException($"StrongId value cannot be default({typeof(TPrimitive).Name})", nameof(value));
-            
+
         Value = value;
     }
-    
-    #region IStrongId Implementation
-    
+
     public object GetValue() => Value;
     public Type GetValueType() => typeof(TPrimitive);
-    
-    #endregion
-    
-    #region Comparison
-    
-    public int CompareTo(StrongId<TPrimitive>? other)
-    {
-        if (other is null) return 1;
-        return Value.CompareTo(other.Value);
-    }
-    
-    public static bool operator <(StrongId<TPrimitive> left, StrongId<TPrimitive> right)
-        => left.CompareTo(right) < 0;
-        
-    public static bool operator >(StrongId<TPrimitive> left, StrongId<TPrimitive> right)
-        => left.CompareTo(right) > 0;
-        
-    public static bool operator <=(StrongId<TPrimitive> left, StrongId<TPrimitive> right)
-        => left.CompareTo(right) <= 0;
-        
-    public static bool operator >=(StrongId<TPrimitive> left, StrongId<TPrimitive> right)
-        => left.CompareTo(right) >= 0;
-    
-    #endregion
-    
-    #region Conversion
-    
-    public static implicit operator TPrimitive(StrongId<TPrimitive> strongId) => strongId.Value;
-    
+
+    public int CompareTo(StrongId<TPrimitive>? other) =>
+        other is null ? 1 : Value.CompareTo(other.Value);
+
+    public static implicit operator TPrimitive(StrongId<TPrimitive> id) => id.Value;
+
     public override string ToString() => Value.ToString() ?? string.Empty;
-    
-    #endregion
 }
 
 /// <summary>
-/// GUID-based strongly-typed identifier
+/// GUID-based strong id.
 /// </summary>
 public abstract record GuidStrongId : StrongId<Guid>
 {
     protected GuidStrongId(Guid value) : base(value) { }
-    
-    protected GuidStrongId() : base(Guid.NewGuid()) { }
-    
-    /// <summary>
-    /// Create a new instance with a new GUID
-    /// </summary>
-    public static T New<T>() where T : GuidStrongId, new() => new();
-    
-    /// <summary>
-    /// Create from string representation
-    /// </summary>
-    protected static Result<T> FromString<T>(string value, Func<Guid, T> factory)
-        where T : GuidStrongId
+
+    // Factory helpers
+    public static T New<T>() where T : GuidStrongId => (T)Activator.CreateInstance(typeof(T), Guid.NewGuid())!;
+    public static Result<T> FromString<T>(string value) where T : GuidStrongId
     {
         if (string.IsNullOrWhiteSpace(value))
             return Result<T>.Failure(Error.Validation($"{typeof(T).Name} cannot be empty"));
-            
-        if (!Guid.TryParse(value, out var guid))
-            return Result<T>.Failure(Error.Validation($"Invalid {typeof(T).Name} format"));
-            
-        if (guid == Guid.Empty)
-            return Result<T>.Failure(Error.Validation($"{typeof(T).Name} cannot be empty GUID"));
-            
-        return Result<T>.Success(factory(guid));
+
+        return Guid.TryParse(value, out var g) && g != Guid.Empty
+            ? Result<T>.Success((T)Activator.CreateInstance(typeof(T), g)!)
+            : Result<T>.Failure(Error.Validation($"Invalid {typeof(T).Name} format"));
     }
 }
 
 /// <summary>
-/// Integer-based strongly-typed identifier
+/// Int-based strong id.
 /// </summary>
 public abstract record IntStrongId : StrongId<int>
 {
-    protected IntStrongId(int value) : base(value) 
-    { 
-        if (value <= 0)
-            throw new ArgumentException("Integer StrongId must be positive", nameof(value));
-    }
-    
-    /// <summary>
-    /// Create from string representation
-    /// </summary>
-    protected static Result<T> FromString<T>(string value, Func<int, T> factory)
-        where T : IntStrongId
+    protected IntStrongId(int value) : base(value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            return Result<T>.Failure(Error.Validation($"{typeof(T).Name} cannot be empty"));
-            
-        if (!int.TryParse(value, out var id))
+        if (value <= 0) throw new ArgumentException("Integer StrongId must be positive", nameof(value));
+    }
+
+    public static Result<T> FromString<T>(string s) where T : IntStrongId
+    {
+        if (!int.TryParse(s, out var v) || v <= 0)
             return Result<T>.Failure(Error.Validation($"Invalid {typeof(T).Name} format"));
-            
-        if (id <= 0)
-            return Result<T>.Failure(Error.Validation($"{typeof(T).Name} must be positive"));
-            
-        return Result<T>.Success(factory(id));
+
+        return Result<T>.Success((T)Activator.CreateInstance(typeof(T), v)!);
     }
 }

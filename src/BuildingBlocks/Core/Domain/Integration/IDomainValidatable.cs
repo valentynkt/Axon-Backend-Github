@@ -1,6 +1,8 @@
 using BuildingBlocks.Core.Domain.Rules;
+using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
+using System.Net.Http;
 
 namespace BuildingBlocks.Core.Domain.Integration;
 

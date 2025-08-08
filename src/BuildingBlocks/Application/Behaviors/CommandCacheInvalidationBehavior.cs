@@ -11,16 +11,16 @@ namespace BuildingBlocks.Application.Behaviors;
 /// Invalidates caches after successful commands.
 /// Uses tag sets produced by query caching to delete keys from L2 and evict from L1.
 /// </summary>
-public sealed class InvalidateCachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class CommandCacheInvalidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : ICommand<TResponse>
     where TResponse : IResult
 {
     private readonly ICacheInvalidator _invalidator;
-    private readonly ILogger<InvalidateCachingBehavior<TRequest, TResponse>> _logger;
+    private readonly ILogger<CommandCacheInvalidationBehavior<TRequest, TResponse>> _logger;
 
-    public InvalidateCachingBehavior(
+    public CommandCacheInvalidationBehavior(
         ICacheInvalidator cacheInvalidator,
-        ILogger<InvalidateCachingBehavior<TRequest, TResponse>> logger)
+        ILogger<CommandCacheInvalidationBehavior<TRequest, TResponse>> logger)
     {
         _invalidator = cacheInvalidator ?? throw new ArgumentNullException(nameof(cacheInvalidator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));

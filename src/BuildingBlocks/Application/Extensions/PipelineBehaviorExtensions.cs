@@ -40,15 +40,15 @@ public static class PipelineBehaviorExtensions
 
         // 3. Resilience. This wraps the core logic to allow for retries of the
         // entire unit of work on transient failures.
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RetryBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryRetryBehavior<,>));
         
         
         // 5. Caching. This is for queries. If a result is found in the cache,
         // subsequent behaviors (like Transaction) will be skipped.
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
         
         // Additional caching behavior for cache invalidation on commands
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(InvalidateCachingBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CommandCacheInvalidationBehavior<,>));
 
         // 6. (Innermost) Transaction Management. This ensures that the actual
         // command handler logic runs within a database transaction.

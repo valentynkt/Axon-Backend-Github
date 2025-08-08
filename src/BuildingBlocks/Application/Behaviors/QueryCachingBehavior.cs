@@ -18,23 +18,23 @@ namespace BuildingBlocks.Application.Behaviors;
 /// - Optional tag index for later invalidation by commands.
 /// - Low-cardinality metrics, W3C-friendly (no custom correlation in here).
 /// </summary>
-public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class QueryCachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IQuery<TResponse>
     where TResponse : class
 {
     private readonly IMemoryCache _memory;
     private readonly IDistributedCache _distributed;
     private readonly ICacheKeyGenerator _keys;
-    private readonly ILogger<CachingBehavior<TRequest, TResponse>> _logger;
+    private readonly ILogger<QueryCachingBehavior<TRequest, TResponse>> _logger;
     private readonly CacheOptions _opts;
     private readonly JsonSerializerOptions _json;
     private readonly ICacheTagIndex? _tagIndex; // optional, enables true tag invalidation
 
-    public CachingBehavior(
+    public QueryCachingBehavior(
         IMemoryCache memoryCache,
         IDistributedCache distributedCache,
         ICacheKeyGenerator keyGenerator,
-        ILogger<CachingBehavior<TRequest, TResponse>> logger,
+        ILogger<QueryCachingBehavior<TRequest, TResponse>> logger,
         IOptions<CacheOptions> options,
         IOptions<JsonSerializerOptions>? jsonOptions = null,
         ICacheTagIndex? tagIndex = null)

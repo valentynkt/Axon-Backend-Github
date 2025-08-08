@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Domain.Primitives;
+using BuildingBlocks.Core.Domain.ValueObjects;
 
 namespace BuildingBlocks.Core.Domain.Events;
 
@@ -91,5 +92,14 @@ public sealed record OrderPlacedEvent : DomainEvent
 }
 
 // Dummy types for compilation. Replace with actual implementations from other modules.
-public record UserId(Guid Value) : StrongId<Guid>(Value);
-public record OrderId(Guid Value) : StrongId<Guid>(Value);
+public record UserId : GuidStrongId
+{
+    public UserId(Guid value) : base(value) { }
+    public static UserId Create() => new(Guid.NewGuid());
+}
+
+public record OrderId : GuidStrongId
+{
+    public OrderId(Guid value) : base(value) { }
+    public static OrderId Create() => new(Guid.NewGuid());
+}

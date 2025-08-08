@@ -2,7 +2,7 @@ namespace BuildingBlocks.Core.Events.Replay;
 
 /// <summary>
 /// Request parameters for querying replay operation history.
-/// Created for Epic 06 Story 04 - Event Replay & Recovery Service.
+/// Created for Epic 06 Story 04 - Event Replay and Recovery Service.
 /// Provides flexible filtering and pagination for historical replay data.
 /// </summary>
 public sealed record ReplayHistoryRequest
