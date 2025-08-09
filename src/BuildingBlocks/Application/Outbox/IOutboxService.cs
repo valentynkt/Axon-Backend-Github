@@ -1,6 +1,5 @@
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Infrastructure.Outbox;
 
 namespace BuildingBlocks.Application.Outbox;
 
@@ -75,45 +74,33 @@ public interface IOutboxService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result with reprocessing statistics</returns>
     Task<Result<OutboxProcessingResult>> ReprocessDeadLetterEventsAsync(
-        IReadOnlyList<OutboxEntryId>? entryIds = null,
+        IReadOnlyList<Guid>? entryIds = null,
         CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 /// Repository interface for outbox entry persistence operations.
 /// Provides optimized queries for high-throughput event processing.
+/// This interface belongs to the Application layer but implementations are in Infrastructure.
 /// </summary>
 public interface IOutboxRepository
 {
     /// <summary>
     /// Add new outbox entries within the current transaction.
     /// </summary>
-    /// <param name="entries">Entries to add</param>
+    /// <param name="events">Domain events to store</param>
+    /// <param name="transactionId">Transaction ID for correlation</param>
+    /// <param name="traceId">W3C trace ID for distributed tracing</param>
+    /// <param name="requestId">Request ID for correlation</param>
+    /// <param name="metadata">Additional context metadata</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task AddAsync(IReadOnlyList<OutboxEntry> entries, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Update an existing outbox entry (status, retry count, etc.).
-    /// </summary>
-    /// <param name="entry">Entry to update</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    Task UpdateAsync(OutboxEntry entry, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Update multiple entries in batch for better performance.
-    /// </summary>
-    /// <param name="entries">Entries to update</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    Task UpdateBatchAsync(IReadOnlyList<OutboxEntry> entries, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Get pending entries for a specific transaction, ordered by creation time.
-    /// </summary>
-    /// <param name="transactionId">Transaction ID</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Pending entries for the transaction</returns>
-    Task<IReadOnlyList<OutboxEntry>> GetPendingByTransactionAsync(
-        Guid transactionId, 
+    /// <returns>Number of entries created</returns>
+    Task<int> AddEventsAsync(
+        IReadOnlyList<IDomainEvent> events,
+        Guid transactionId,
+        string? traceId = null,
+        Guid? requestId = null,
+        IReadOnlyDictionary<string, object>? metadata = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -124,10 +111,20 @@ public interface IOutboxRepository
     /// <param name="tenantId">Optional tenant filter</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Entries ready for processing</returns>
-    Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(
+    Task<IReadOnlyList<OutboxEventEntry>> GetPendingAsync(
         int batchSize = 100,
         int processingTimeoutMinutes = 30,
         string? tenantId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get pending entries for a specific transaction, ordered by creation time.
+    /// </summary>
+    /// <param name="transactionId">Transaction ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Pending entries for the transaction</returns>
+    Task<IReadOnlyList<OutboxEventEntry>> GetPendingByTransactionAsync(
+        Guid transactionId, 
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -136,7 +133,7 @@ public interface IOutboxRepository
     /// <param name="maxEntries">Maximum number of entries to return</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Failed entries ready for retry</returns>
-    Task<IReadOnlyList<OutboxEntry>> GetFailedReadyForRetryAsync(
+    Task<IReadOnlyList<OutboxEventEntry>> GetFailedReadyForRetryAsync(
         int maxEntries = 100,
         CancellationToken cancellationToken = default);
 
@@ -146,17 +143,9 @@ public interface IOutboxRepository
     /// <param name="maxEntries">Maximum number of entries to return</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Dead letter entries</returns>
-    Task<IReadOnlyList<OutboxEntry>> GetDeadLetterEntriesAsync(
+    Task<IReadOnlyList<OutboxEventEntry>> GetDeadLetterEntriesAsync(
         int maxEntries = 100,
         CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Get outbox entry by ID.
-    /// </summary>
-    /// <param name="id">Entry ID</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Entry if found, null otherwise</returns>
-    Task<OutboxEntry?> GetByIdAsync(OutboxEntryId id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Get outbox entries by IDs for batch operations.
@@ -164,8 +153,48 @@ public interface IOutboxRepository
     /// <param name="ids">Entry IDs</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Found entries</returns>
-    Task<IReadOnlyList<OutboxEntry>> GetByIdsAsync(
-        IReadOnlyList<OutboxEntryId> ids, 
+    Task<IReadOnlyList<OutboxEventEntry>> GetByIdsAsync(
+        IReadOnlyList<Guid> ids, 
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mark entries as being processed.
+    /// </summary>
+    /// <param name="entries">Entries to mark as processing</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task MarkAsProcessingAsync(
+        IReadOnlyList<OutboxEventEntry> entries, 
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mark entries as completed successfully.
+    /// </summary>
+    /// <param name="entries">Entries to mark as completed</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task MarkAsCompletedAsync(
+        IReadOnlyList<OutboxEventEntry> entries, 
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Mark entries as failed with error information.
+    /// </summary>
+    /// <param name="failureInfos">Entry failure information</param>
+    /// <param name="baseRetryDelayMinutes">Base delay for retry calculation</param>
+    /// <param name="maxRetries">Maximum retry attempts before dead letter</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task MarkAsFailedAsync(
+        IReadOnlyList<OutboxFailureInfo> failureInfos,
+        int baseRetryDelayMinutes,
+        int maxRetries,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reset dead letter entries to pending for manual retry.
+    /// </summary>
+    /// <param name="entryIds">Entry IDs to reset, or null for all dead letters</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task ResetDeadLetterToPendingAsync(
+        IReadOnlyList<Guid>? entryIds = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -216,7 +245,7 @@ public sealed record OutboxProcessingResult(
 /// Error information from outbox processing.
 /// </summary>
 public sealed record OutboxProcessingError(
-    OutboxEntryId EntryId,
+    Guid EntryId,
     string EventType,
     string ErrorMessage,
     DateTime OccurredAt);

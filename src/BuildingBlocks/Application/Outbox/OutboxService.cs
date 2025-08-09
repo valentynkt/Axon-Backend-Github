@@ -369,7 +369,7 @@ public sealed class OutboxService : IOutboxService
                 {
                     Interlocked.Increment(ref failedCount);
                     
-                    if (entry.Status == OutboxEntryStatus.DeadLetter)
+                    if (entry.Status == OutboxEventStatus.DeadLetter)
                     {
                         Interlocked.Increment(ref movedToDeadLetterCount);
                     }

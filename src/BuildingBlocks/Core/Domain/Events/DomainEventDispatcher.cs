@@ -21,7 +21,7 @@ public interface IDomainEventDispatcher
     /// <param name="domainEvents">Domain events to dispatch</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result indicating success or failure of event dispatch</returns>
-    Task<Result<Unit>> DispatchAsync(IEnumerable<IDomainEvent> domainEvents, CancellationToken cancellationToken = default);
+    Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchAsync(IEnumerable<IDomainEvent> domainEvents, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Dispatch a single domain event asynchronously.
@@ -29,7 +29,7 @@ public interface IDomainEventDispatcher
     /// <param name="domainEvent">Domain event to dispatch</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result indicating success or failure of event dispatch</returns>
-    Task<Result<Unit>> DispatchAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default);
+    Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -49,7 +49,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<Result<Unit>> DispatchAsync(
+    public async Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchAsync(
         IEnumerable<IDomainEvent> domainEvents, 
         CancellationToken cancellationToken = default)
     {
@@ -58,7 +58,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
         var events = domainEvents.ToList();
         if (events.Count == 0)
         {
-            return Result<Unit>.Success(Unit.Value);
+            return Result<BuildingBlocks.Core.Functional.Unit>.Success(BuildingBlocks.Core.Functional.Unit.Value);
         }
 
         using var scope = _logger.BeginScope("DomainEventDispatch");
@@ -89,14 +89,14 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
                 errors.Count,
                 events.Count);
             
-            return Result<Unit>.Failure(Error.Aggregate(errors.ToArray()));
+            return Result<BuildingBlocks.Core.Functional.Unit>.Failure(Error.Aggregate(errors.ToArray()));
         }
 
         _logger.LogDebug("Successfully dispatched all {EventCount} domain events", events.Count);
-        return Result<Unit>.Success(Unit.Value);
+        return Result<BuildingBlocks.Core.Functional.Unit>.Success(BuildingBlocks.Core.Functional.Unit.Value);
     }
 
-    public async Task<Result<Unit>> DispatchAsync(
+    public async Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchAsync(
         IDomainEvent domainEvent, 
         CancellationToken cancellationToken = default)
     {
@@ -105,7 +105,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
         return await DispatchSingleEventAsync(domainEvent, cancellationToken);
     }
 
-    private async Task<Result<Unit>> DispatchSingleEventAsync(
+    private async Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchSingleEventAsync(
         IDomainEvent domainEvent, 
         CancellationToken cancellationToken)
     {
@@ -131,7 +131,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
                 domainEvent.GetType().Name,
                 domainEvent.EventId);
 
-            return Result<Unit>.Success(Unit.Value);
+            return Result<BuildingBlocks.Core.Functional.Unit>.Success(BuildingBlocks.Core.Functional.Unit.Value);
         }
         catch (Exception ex)
         {
@@ -140,7 +140,7 @@ public sealed class DomainEventDispatcher : IDomainEventDispatcher
                 domainEvent.GetType().Name,
                 domainEvent.EventId);
 
-            return Result<Unit>.Failure(
+            return Result<BuildingBlocks.Core.Functional.Unit>.Failure(
                 Error.Failure(
                     $"Failed to dispatch domain event {domainEvent.GetType().Name}: {ex.Message}",
                     "DOMAIN_EVENT_DISPATCH_FAILED"));
@@ -163,23 +163,23 @@ public static class DomainEventExtensions
     /// <param name="dispatcher">Domain event dispatcher</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result indicating success or failure of event dispatch</returns>
-    public static async Task<Result<Unit>> DispatchDomainEventsAsync<TAggregate>(
+    public static async Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchDomainEventsAsync<TAggregate, TId>(
         this TAggregate aggregate,
         IDomainEventDispatcher dispatcher,
         CancellationToken cancellationToken = default)
-        where TAggregate : class
+        where TAggregate : IAggregateRoot<TId>
+        where TId : IStrongId
     {
         ArgumentNullException.ThrowIfNull(aggregate);
         ArgumentNullException.ThrowIfNull(dispatcher);
 
-        var aggregateRoot = aggregate as dynamic;
-        if (aggregateRoot?.DomainEvents == null || !aggregateRoot.DomainEvents.Any())
+        if (!aggregate.DomainEvents.Any())
         {
-            return Result<Unit>.Success(Unit.Value);
+            return Result<BuildingBlocks.Core.Functional.Unit>.Success(BuildingBlocks.Core.Functional.Unit.Value);
         }
 
         // Get events before clearing (in case of partial failure)
-        var events = ((IEnumerable<IDomainEvent>)aggregateRoot.DomainEvents).ToList();
+        var events = aggregate.DomainEvents.ToList();
         
         // Dispatch events
         var result = await dispatcher.DispatchAsync(events, cancellationToken);
@@ -202,10 +202,11 @@ public static class DomainEventExtensions
     /// <param name="dispatcher">Domain event dispatcher</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result indicating success or failure of event dispatch</returns>
-    public static async Task<Result<Unit>> DispatchDomainEventsAsync(
-        this IEnumerable<IAggregateRoot> aggregates,
+    public static async Task<Result<BuildingBlocks.Core.Functional.Unit>> DispatchDomainEventsAsync<TId>(
+        this IEnumerable<IAggregateRoot<TId>> aggregates,
         IDomainEventDispatcher dispatcher,
         CancellationToken cancellationToken = default)
+        where TId : IStrongId
     {
         ArgumentNullException.ThrowIfNull(aggregates);
         ArgumentNullException.ThrowIfNull(dispatcher);
@@ -213,7 +214,7 @@ public static class DomainEventExtensions
         var aggregateList = aggregates.ToList();
         if (aggregateList.Count == 0)
         {
-            return Result<Unit>.Success(Unit.Value);
+            return Result<BuildingBlocks.Core.Functional.Unit>.Success(BuildingBlocks.Core.Functional.Unit.Value);
         }
 
         // Collect all events from all aggregates
@@ -223,7 +224,7 @@ public static class DomainEventExtensions
 
         if (!allEvents.Any())
         {
-            return Result<Unit>.Success(Unit.Value);
+            return Result<BuildingBlocks.Core.Functional.Unit>.Success(BuildingBlocks.Core.Functional.Unit.Value);
         }
 
         // Dispatch all events in batch

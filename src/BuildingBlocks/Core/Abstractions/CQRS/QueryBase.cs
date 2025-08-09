@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Functional.Results;
+
 namespace BuildingBlocks.Core.Abstractions.CQRS;
 
 /// <summary>

@@ -1,5 +1,6 @@
 using System.Data;
 using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 

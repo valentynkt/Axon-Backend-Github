@@ -45,13 +45,9 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
         string featureName)
     {
         ArgumentNullException.ThrowIfNull(ruleBuilder);
+        ValidationContextHelper.ValidateStringParameter(featureName, nameof(featureName));
         
-        if (string.IsNullOrEmpty(featureName))
-        {
-            throw new ArgumentException("Feature name cannot be null or empty", nameof(featureName));
-        }
-        
-        return ruleBuilder.When(_ => Context?.IsFeatureEnabled(featureName) == true);
+        return ruleBuilder.When(_ => ValidationContextHelper.HasFeatureEnabled(Context, featureName));
     }
     
     /// <summary>
@@ -72,13 +68,9 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
         string tenantId)
     {
         ArgumentNullException.ThrowIfNull(ruleBuilder);
+        ValidationContextHelper.ValidateStringParameter(tenantId, nameof(tenantId));
         
-        if (string.IsNullOrEmpty(tenantId))
-        {
-            throw new ArgumentException("Tenant ID cannot be null or empty", nameof(tenantId));
-        }
-        
-        return ruleBuilder.When(_ => string.Equals(Context?.TenantId, tenantId, StringComparison.OrdinalIgnoreCase));
+        return ruleBuilder.When(_ => ValidationContextHelper.IsFromTenant(Context, tenantId));
     }
     
     /// <summary>
@@ -102,13 +94,9 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
     {
         ArgumentNullException.ThrowIfNull(ruleBuilder);
         ArgumentNullException.ThrowIfNull(expectedValue);
+        ValidationContextHelper.ValidateStringParameter(key, nameof(key));
         
-        if (string.IsNullOrEmpty(key))
-        {
-            throw new ArgumentException("Metadata key cannot be null or empty", nameof(key));
-        }
-        
-        return ruleBuilder.When(_ => IsMetadataValueMatch(key, expectedValue));
+        return ruleBuilder.When(_ => ValidationContextHelper.IsMetadataValueMatch(Context, key, expectedValue));
     }
     
     /// <summary>
@@ -129,13 +117,9 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
         string userId)
     {
         ArgumentNullException.ThrowIfNull(ruleBuilder);
+        ValidationContextHelper.ValidateStringParameter(userId, nameof(userId));
         
-        if (string.IsNullOrEmpty(userId))
-        {
-            throw new ArgumentException("User ID cannot be null or empty", nameof(userId));
-        }
-        
-        return ruleBuilder.When(_ => string.Equals(Context?.UserId, userId, StringComparison.OrdinalIgnoreCase));
+        return ruleBuilder.When(_ => ValidationContextHelper.IsFromUser(Context, userId));
     }
     
     /// <summary>
@@ -149,7 +133,7 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
     /// <example>
     /// RuleFor(x => x.AdvancedSettings)
     ///     .NotNull()
-    ///     .WhenContext(ctx => ctx.IsFeatureEnabled("AdvancedMode") && ctx.TenantId == "premium");
+    ///     .WhenContext(ctx =&gt; ctx.IsFeatureEnabled("AdvancedMode") &amp;&amp; ctx.TenantId == "premium");
     /// </example>
     protected IRuleBuilderOptions<T, TProperty> WhenContext<TProperty>(
         IRuleBuilder<T, TProperty> ruleBuilder, 
@@ -182,7 +166,7 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
     /// <returns>True if feature is enabled</returns>
     protected bool HasFeatureEnabled(string featureName)
     {
-        return Context?.IsFeatureEnabled(featureName) == true;
+        return ValidationContextHelper.HasFeatureEnabled(Context, featureName);
     }
     
     /// <summary>
@@ -193,41 +177,6 @@ public abstract class ValidatorBase<T> : AbstractValidator<T>, IMetadataValidato
     /// <returns>True if request is from specified tenant</returns>
     protected bool IsFromTenant(string tenantId)
     {
-        return string.Equals(Context?.TenantId, tenantId, StringComparison.OrdinalIgnoreCase);
-    }
-    
-    /// <summary>
-    /// Check if metadata value matches expected value with type-safe comparison.
-    /// </summary>
-    /// <param name="key">Metadata key to check</param>
-    /// <param name="expectedValue">Expected value to compare against</param>
-    /// <returns>True if metadata value matches expected value</returns>
-    private bool IsMetadataValueMatch(string key, object expectedValue)
-    {
-        if (Context == null)
-        {
-            return false;
-        }
-        
-        var actualValue = Context.GetMetadata<object>(key);
-        
-        if (actualValue == null && expectedValue == null)
-        {
-            return true;
-        }
-        
-        if (actualValue == null || expectedValue == null)
-        {
-            return false;
-        }
-        
-        // Handle string comparisons case-insensitively
-        if (actualValue is string actualString && expectedValue is string expectedString)
-        {
-            return string.Equals(actualString, expectedString, StringComparison.OrdinalIgnoreCase);
-        }
-        
-        // Handle direct equality
-        return actualValue.Equals(expectedValue);
+        return ValidationContextHelper.IsFromTenant(Context, tenantId);
     }
 }

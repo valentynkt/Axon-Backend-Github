@@ -168,7 +168,7 @@ public sealed class ValidationContext : IValidationContext
             }
         }
         
-        return flags.AsReadOnly();
+        return flags;
     }
     
     /// <summary>

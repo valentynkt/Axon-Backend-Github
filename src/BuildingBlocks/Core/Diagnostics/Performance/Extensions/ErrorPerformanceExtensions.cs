@@ -35,11 +35,11 @@ public static class ErrorPerformanceExtensions
         services.Configure<EfficientErrorAggregatorOptions>(opt => ConfigureFromPerformanceOptions(opt, options));
         
         // Register core components in dependency order
-        services.AddErrorCache(options.ErrorCacheOptions);
-        services.AddErrorMetadataPool(options.MetadataPoolOptions);
-        services.AddErrorMetrics(options.MetricsOptions);
-        services.AddOptimizedErrorFactory(options.ErrorFactoryOptions);
-        services.AddEfficientErrorAggregator(options.AggregatorOptions);
+        services.AddErrorCache(opt => ConfigureFromPerformanceOptions(opt, options));
+        services.AddErrorMetadataPool(opt => ConfigureFromPerformanceOptions(opt, options));
+        services.AddErrorMetrics(opt => ConfigureFromPerformanceOptions(opt, options));
+        services.AddOptimizedErrorFactory(opt => ConfigureFromPerformanceOptions(opt, options));
+        services.AddEfficientErrorAggregator(opt => ConfigureFromPerformanceOptions(opt, options));
         
         // Register composite services and helpers
         services.AddScoped<IErrorPerformanceService, ErrorPerformanceService>();

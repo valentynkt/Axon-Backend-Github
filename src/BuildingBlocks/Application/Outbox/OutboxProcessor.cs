@@ -20,6 +20,7 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
     private readonly object _recentErrorsLock = new();
 
     private DateTime? _lastProcessingRun;
+    private DateTime? _lastCleanupRun;
     private bool _isRunning;
 
     public OutboxProcessor(
@@ -63,7 +64,11 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
                     // Optional cleanup run
                     if (_options.EnableCleanup && ShouldRunCleanup())
                     {
-                        _ = Task.Run(async () => await RunCleanupAsync(stoppingToken), stoppingToken);
+                        _ = Task.Run(async () => 
+                        {
+                            await RunCleanupAsync(stoppingToken);
+                            _lastCleanupRun = DateTime.UtcNow;
+                        }, stoppingToken);
                     }
 
                     // Wait for the next processing cycle
@@ -269,11 +274,14 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
         }
     }
 
-    private static bool ShouldRunCleanup()
+    private bool ShouldRunCleanup()
     {
-        // Simple time-based cleanup trigger
+        // Simple time-based cleanup trigger - every hour
         // In a production environment, you might want more sophisticated scheduling
-        return DateTime.UtcNow.Hour % 1 == 0 && DateTime.UtcNow.Minute < 5;
+        var now = DateTime.UtcNow;
+        var timeSinceLastCleanup = _lastCleanupRun.HasValue ? now - _lastCleanupRun.Value : TimeSpan.MaxValue;
+        
+        return timeSinceLastCleanup >= _options.CleanupInterval;
     }
 
     private void AddRecentError(string errorMessage)

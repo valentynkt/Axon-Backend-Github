@@ -4,6 +4,8 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Application.Outbox;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Abstractions.CQRS; // for ICommand<TResponse>
@@ -19,7 +21,7 @@ namespace BuildingBlocks.Application.Behaviors;
 /// - Always clears domain events after commit to avoid re-dispatch
 /// - Static ActivitySource for consistent tracing
 /// </summary>
-public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull, ICommand<TResponse>
     where TResponse : IResult
 {
@@ -30,12 +32,12 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
     private readonly IOutboxService? _outboxService;
     private readonly IOutboxProcessor? _outboxProcessor;
     private readonly IOptions<TransactionOptions> _options;
-    private readonly ILogger<TransactionBehavior<TRequest, TResponse>> _logger;
+    private readonly ILogger<CommandTransactionBehavior<TRequest, TResponse>> _logger;
 
-    public TransactionBehavior(
+    public CommandTransactionBehavior(
         DbContext dbContext,
         IDomainEventDispatcher domainEventDispatcher,
-        ILogger<TransactionBehavior<TRequest, TResponse>> logger,
+        ILogger<CommandTransactionBehavior<TRequest, TResponse>> logger,
         IOutboxService? outboxService = null,
         IOutboxProcessor? outboxProcessor = null,
         IOptions<TransactionOptions>? options = null)

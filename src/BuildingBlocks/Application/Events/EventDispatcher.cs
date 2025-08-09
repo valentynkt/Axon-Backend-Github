@@ -10,71 +10,109 @@ using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Application.Events;
 
+/// <summary>
+/// Default implementation of IEventDispatcher that handles domain events, integration events, and internal commands.
+/// Uses dependency injection to resolve mappers and processors for event handling.
+/// Supports both single event and batch event processing with appropriate routing.
+/// </summary>
 public sealed class EventDispatcher(
     IServiceScopeFactory serviceScopeFactory,
     IEventMapper eventMapper,
     ILogger<EventDispatcher> logger,
     IPersistMessageProcessor persistMessageProcessor,
-    IHttpContextAccessor httpContextAccessor
-)
+    IHttpContextAccessor httpContextAccessor)
     : IEventDispatcher
 {
     public async Task SendAsync<T>(IReadOnlyList<T> events, Type? type = null,
                                    CancellationToken cancellationToken = default)
         where T : IEvent
     {
-        if (events.Count > 0)
+        ArgumentNullException.ThrowIfNull(events);
+        
+        if (events.Count == 0)
         {
-            var eventType = type != null && type.IsAssignableTo(typeof(IInternalCommand))
-                ? EventType.InternalCommand
-                : EventType.DomainEvent;
-
-            async Task PublishIntegrationEvent(IReadOnlyList<IIntegrationEvent> integrationEvents)
-            {
-                foreach (var integrationEvent in integrationEvents)
-                {
-                    await persistMessageProcessor.PublishMessageAsync(
-                        new MessageEnvelope(integrationEvent, SetHeaders()),
-                        cancellationToken);
-                }
-            }
-
-            switch (events)
-            {
-                case IReadOnlyList<IDomainEvent> domainEvents:
-                    {
-                        var integrationEvents = await MapDomainEventToIntegrationEventAsync(domainEvents)
-                        .ConfigureAwait(false);
-
-                        await PublishIntegrationEvent(integrationEvents);
-                        break;
-                    }
-
-                case IReadOnlyList<IIntegrationEvent> integrationEvents:
-                    await PublishIntegrationEvent(integrationEvents);
-                    break;
-            }
-
-            if (type != null && eventType == EventType.InternalCommand)
-            {
-                var domainEvents = events as IReadOnlyList<IDomainEvent>;
-                if (domainEvents is null) return;
-                
-                var internalMessages = await MapDomainEventToInternalCommandAsync(domainEvents)
-                    .ConfigureAwait(false);
-
-                foreach (var internalMessage in internalMessages)
-                {
-                    await persistMessageProcessor.AddInternalMessageAsync(internalMessage, cancellationToken);
-                }
-            }
+            logger.LogDebug("No events to process");
+            return;
         }
+
+        logger.LogDebug("Processing {EventCount} events of type {EventType}", events.Count, typeof(T).Name);
+
+        var eventType = DetermineEventType(type);
+
+        await ProcessEvents(events, eventType, cancellationToken);
+        
+        if (eventType == EventType.InternalCommand)
+        {
+            await ProcessInternalCommands(events, cancellationToken);
+        }
+
+        logger.LogDebug("Completed processing {EventCount} events", events.Count);
     }
 
     public async Task SendAsync<T>(T @event, Type? type = null,
         CancellationToken cancellationToken = default)
-        where T : IEvent =>
+        where T : IEvent
+    {
+        ArgumentNullException.ThrowIfNull(@event);
         await SendAsync(new[] { @event }, type, cancellationToken);
+    }
+
+    private static EventType DetermineEventType(Type? type)
+    {
+        return type != null && type.IsAssignableTo(typeof(IInternalCommand))
+            ? EventType.InternalCommand
+            : EventType.DomainEvent;
+    }
+
+    private async Task ProcessEvents<T>(IReadOnlyList<T> events, EventType eventType, 
+        CancellationToken cancellationToken) where T : IEvent
+    {
+        switch (events)
+        {
+            case IReadOnlyList<IDomainEvent> domainEvents:
+                await ProcessDomainEvents(domainEvents, cancellationToken);
+                break;
+
+            case IReadOnlyList<IIntegrationEvent> integrationEvents:
+                await PublishIntegrationEvents(integrationEvents, cancellationToken);
+                break;
+        }
+    }
+
+    private async Task ProcessDomainEvents(IReadOnlyList<IDomainEvent> domainEvents, 
+        CancellationToken cancellationToken)
+    {
+        var integrationEvents = await MapDomainEventToIntegrationEventAsync(domainEvents)
+            .ConfigureAwait(false);
+
+        await PublishIntegrationEvents(integrationEvents, cancellationToken);
+    }
+
+    private async Task PublishIntegrationEvents(IReadOnlyList<IIntegrationEvent> integrationEvents, 
+        CancellationToken cancellationToken)
+    {
+        foreach (var integrationEvent in integrationEvents)
+        {
+            await persistMessageProcessor.PublishMessageAsync(
+                new MessageEnvelope(integrationEvent, SetHeaders()),
+                cancellationToken);
+        }
+    }
+
+    private async Task ProcessInternalCommands<T>(IReadOnlyList<T> events, 
+        CancellationToken cancellationToken) where T : IEvent
+    {
+        if (events is not IReadOnlyList<IDomainEvent> domainEvents)
+            return;
+            
+        var internalMessages = await MapDomainEventToInternalCommandAsync(domainEvents)
+            .ConfigureAwait(false);
+
+        foreach (var internalMessage in internalMessages)
+        {
+            await persistMessageProcessor.AddInternalMessageAsync(internalMessage, cancellationToken);
+        }
+    }
 
 
     private Task<IReadOnlyList<IIntegrationEvent>> MapDomainEventToIntegrationEventAsync(

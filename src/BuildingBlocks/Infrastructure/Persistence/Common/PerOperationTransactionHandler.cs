@@ -1,97 +1,52 @@
-using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Logging;
+using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
-/// Transaction handler that creates a new transaction for each operation
-/// Automatically begins, commits, and rolls back transactions per operation
-/// Suitable for operations that need individual transaction isolation
+/// Transaction handler that creates a new transaction for each operation.
+/// Refactored to eliminate code duplication using the Template Method pattern.
 /// </summary>
-public class PerOperationTransactionHandler : ITransactionBehaviorHandler
+public sealed class PerOperationTransactionHandler : TransactionHandlerBase
 {
     private readonly IWriteUnitOfWork _unitOfWork;
-    private readonly ILogger<PerOperationTransactionHandler> _logger;
 
     public PerOperationTransactionHandler(
         IWriteUnitOfWork unitOfWork,
         ILogger<PerOperationTransactionHandler> logger)
+        : base(logger)
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public TransactionBehavior BehaviorType => TransactionBehavior.PerOperation;
+    public override TransactionBehavior BehaviorType => TransactionBehavior.PerOperation;
 
-    public bool HasActiveTransaction => _unitOfWork.HasActiveTransaction;
+    public override bool HasActiveTransaction => _unitOfWork.HasActiveTransaction;
 
-    public async Task ExecuteAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+    protected override async Task BeforeExecutionAsync(CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(operation);
-
-        _logger.LogDebug("Starting per-operation transaction");
-        
+        Logger.LogDebug("Starting per-operation transaction");
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
-        
-        try
-        {
-            await operation();
-            
-            if (_unitOfWork.HasChanges)
-            {
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-            
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-            
-            _logger.LogDebug("Per-operation transaction committed successfully");
-        }
-        catch (System.Exception ex)
-        {
-            _logger.LogWarning(ex, "Per-operation transaction failed, rolling back");
-            
-            if (_unitOfWork.HasActiveTransaction)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            }
-            
-            throw;
-        }
     }
 
-    public async Task<T> ExecuteAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+    protected override async Task OnSuccessAsync(CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(operation);
-
-        _logger.LogDebug("Starting per-operation transaction (with return value)");
-        
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
-        
-        try
+        if (_unitOfWork.HasChanges)
         {
-            var result = await operation();
-            
-            if (_unitOfWork.HasChanges)
-            {
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-            
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-            
-            _logger.LogDebug("Per-operation transaction committed successfully (with return value)");
-            
-            return result;
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
-        catch (System.Exception ex)
+
+        await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        Logger.LogDebug("Per-operation transaction committed successfully");
+    }
+
+    protected override async Task OnFailureAsync(Exception exception, CancellationToken cancellationToken)
+    {
+        Logger.LogWarning(exception, "Per-operation transaction failed, rolling back");
+
+        if (_unitOfWork.HasActiveTransaction)
         {
-            _logger.LogWarning(ex, "Per-operation transaction failed, rolling back (with return value)");
-            
-            if (_unitOfWork.HasActiveTransaction)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            }
-            
-            throw;
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
         }
     }
 }

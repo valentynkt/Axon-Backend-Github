@@ -1,4 +1,3 @@
-using System.Runtime.Serialization;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Diagnostics.Exceptions;
 using FluentValidation;
@@ -10,7 +9,6 @@ namespace BuildingBlocks.Application.Exceptions;
 /// Exception for validation errors with FluentValidation support.
 /// Moved to Application layer to avoid FluentValidation dependency in Core layer.
 /// </summary>
-[Serializable]
 public sealed class ValidationException : DomainException
 {
     public IReadOnlyList<ValidationFailure> ValidationFailures { get; }
@@ -68,17 +66,5 @@ public sealed class ValidationException : DomainException
     {
         return GetErrorsForProperty(propertyName).Select(f => f.ErrorMessage);
     }
-    
-    // Serialization constructor
-    private ValidationException(SerializationInfo info, StreamingContext context)
-        : base(info, context)
-    {
-        ValidationFailures = (IReadOnlyList<ValidationFailure>)info.GetValue(nameof(ValidationFailures), typeof(IReadOnlyList<ValidationFailure>))!;
-    }
-    
-    public override void GetObjectData(SerializationInfo info, StreamingContext context)
-    {
-        base.GetObjectData(info, context);
-        info.AddValue(nameof(ValidationFailures), ValidationFailures);
-    }
+
 }

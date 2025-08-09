@@ -3,15 +3,19 @@ using BuildingBlocks.Core.Domain.Events;
 
 namespace BuildingBlocks.Application.Events;
 
-public class CompositeEventMapper : IEventMapper
+/// <summary>
+/// Composite implementation of IEventMapper that delegates to multiple mappers.
+/// Uses the first mapper that can handle the domain event (chain of responsibility pattern).
+/// </summary>
+public sealed class CompositeEventMapper(IEnumerable<IEventMapper> mappers) : IEventMapper
 {
-    private readonly IEnumerable<IEventMapper> _mappers;
+    private readonly IEnumerable<IEventMapper> _mappers = mappers ?? throw new ArgumentNullException(nameof(mappers));
 
-    public CompositeEventMapper(IEnumerable<IEventMapper> mappers)
-    {
-        _mappers = mappers;
-    }
-
+    /// <summary>
+    /// Maps a domain event to an integration event using the first available mapper.
+    /// </summary>
+    /// <param name="event">The domain event to map</param>
+    /// <returns>The integration event if a mapper can handle it, otherwise null</returns>
     public IIntegrationEvent? MapToIntegrationEvent(IDomainEvent @event)
     {
         foreach (var mapper in _mappers)
@@ -24,6 +28,11 @@ public class CompositeEventMapper : IEventMapper
         return null;
     }
 
+    /// <summary>
+    /// Maps a domain event to an internal command using the first available mapper.
+    /// </summary>
+    /// <param name="event">The domain event to map</param>
+    /// <returns>The internal command if a mapper can handle it, otherwise null</returns>
     public IInternalCommand? MapToInternalCommand(IDomainEvent @event)
     {
         foreach (var mapper in _mappers)

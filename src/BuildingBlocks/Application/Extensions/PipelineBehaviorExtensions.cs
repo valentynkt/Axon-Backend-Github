@@ -33,15 +33,20 @@ public static class PipelineBehaviorExtensions
 
         // 1. (Outermost) Observability and general error handling. This wraps the
         // entire operation to ensure all exceptions are caught and all telemetry is captured.
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityPipelineBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
         
         // 2. Structured logging with correlation IDs and request/response data
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestLoggingBehavior<,>));
 
         // 3. Resilience. This wraps the core logic to allow for retries of the
         // entire unit of work on transient failures.
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryRetryBehavior<,>));
         
+        // 4a. FluentValidation - Request validation with error aggregation
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
+        
+        // 4b. Domain validation - Business rule validation for commands
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(DomainValidationBehavior<,>));
         
         // 5. Caching. This is for queries. If a result is found in the cache,
         // subsequent behaviors (like Transaction) will be skipped.
@@ -52,7 +57,7 @@ public static class PipelineBehaviorExtensions
 
         // 6. (Innermost) Transaction Management. This ensures that the actual
         // command handler logic runs within a database transaction.
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
 
         return services;
     }

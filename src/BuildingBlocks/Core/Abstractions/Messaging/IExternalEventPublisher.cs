@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Abstractions.Events;
+using BuildingBlocks.Core.Events;
 using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Abstractions.Messaging;

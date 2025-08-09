@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
-public class CustomeDiagnosticsProvider(IMeterFactory meterFactory, IOptions<ObservabilityOptions> options)
+public sealed class CustomDiagnosticsProvider(IMeterFactory meterFactory, IOptions<ObservabilityOptions> options)
     : IDiagnosticsProvider
 {
     private readonly Version? _version = Assembly.GetCallingAssembly().GetName().Version;

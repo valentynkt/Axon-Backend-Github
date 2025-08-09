@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
@@ -12,8 +14,8 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// Automatically invalidates cache entries after write operations
 /// </summary>
 public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : CacheManagerBase<TEntity, TId>, IWriteRepository<TEntity, TId>
-    where TEntity : class, IAggregate<TId>
-    where TId : notnull
+    where TEntity : class, IAggregateRoot<TId>
+    where TId : IStrongId
 {
     private readonly IWriteRepository<TEntity, TId> _inner;
 
@@ -163,6 +165,13 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : CacheManagerBa
         return await _inner.AnyAsync(predicate, cancellationToken);
     }
 
+    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    {
+        // This is a read operation in a write repository
+        // We don't cache here as it's typically used in write scenarios
+        return await _inner.AnyAsync(cancellationToken);
+    }
+
     public override void Dispose()
     {
         if (_inner is IDisposable disposableInner)
@@ -175,15 +184,15 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : CacheManagerBa
 }
 
 /// <summary>
-/// Write repository with cache invalidation for entities with long ID
+/// Write repository with cache invalidation for entities with StrongId&lt;Guid&gt;
 /// </summary>
-public class WriteRepositoryWithCacheInvalidation<TEntity> : WriteRepositoryWithCacheInvalidation<TEntity, long>
-    where TEntity : class, IAggregate<long>
+public class WriteRepositoryWithCacheInvalidation<TEntity> : WriteRepositoryWithCacheInvalidation<TEntity, StrongId<Guid>>
+    where TEntity : class, IAggregateRoot<StrongId<Guid>>
 {
     public WriteRepositoryWithCacheInvalidation(
-        IWriteRepository<TEntity, long> inner,
+        IWriteRepository<TEntity, StrongId<Guid>> inner,
         IMemoryCache cache,
-        ILogger<WriteRepositoryWithCacheInvalidation<TEntity, long>> logger,
+        ILogger<WriteRepositoryWithCacheInvalidation<TEntity, StrongId<Guid>>> logger,
         TimeSpan? cacheExpiration = null)
         : base(inner, cache, logger, cacheExpiration)
     {

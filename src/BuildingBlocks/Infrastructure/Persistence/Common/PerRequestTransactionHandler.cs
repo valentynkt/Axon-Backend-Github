@@ -3,42 +3,27 @@ using Microsoft.Extensions.Logging;
 namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
-/// Transaction handler that manages one transaction per request/operation scope
-/// Does not automatically create transactions - relies on external transaction management
-/// Suitable for scenarios where transaction scope is managed at the request level
+/// Transaction handler for per-request transaction management where transactions
+/// are managed at the HTTP request level (typically via middleware or filters).
+/// Refactored to eliminate code duplication using the Template Method pattern.
 /// </summary>
-public class PerRequestTransactionHandler : ITransactionBehaviorHandler
+public sealed class PerRequestTransactionHandler : TransactionHandlerBase
 {
-    private readonly ILogger<PerRequestTransactionHandler> _logger;
-
     public PerRequestTransactionHandler(ILogger<PerRequestTransactionHandler> logger)
+        : base(logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public TransactionBehavior BehaviorType => TransactionBehavior.PerRequest;
+    public override TransactionBehavior BehaviorType => TransactionBehavior.PerRequest;
 
-    public bool HasActiveTransaction => false; // External management
+    public override bool HasActiveTransaction => false; // External management
 
-    public async Task ExecuteAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+    protected override Task BeforeExecutionAsync(CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(operation);
-        
-        _logger.LogDebug("Executing operation with per-request transaction behavior");
-        
-        // In per-request mode, we don't manage transactions ourselves
-        // The transaction scope is expected to be managed at the request level
-        await operation();
+        Logger.LogDebug("Executing operation with per-request transaction behavior");
+        return Task.CompletedTask;
     }
 
-    public async Task<T> ExecuteAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        
-        _logger.LogDebug("Executing operation with per-request transaction behavior (with return value)");
-        
-        // In per-request mode, we don't manage transactions ourselves
-        // The transaction scope is expected to be managed at the request level
-        return await operation();
-    }
+    // No transaction management needed - all handled at request level
+    // Base class handles the rest through template method pattern
 }

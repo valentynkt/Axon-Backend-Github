@@ -2,7 +2,7 @@ namespace BuildingBlocks.Core.Events.Replay;
 
 /// <summary>
 /// Performance metrics and statistics for replay operations.
-/// Created for Epic 06 Story 04 - Event Replay & Recovery Service.
+/// Created for Epic 06 Story 04 - Event Replay and Recovery Service.
 /// Provides comprehensive performance monitoring and analysis capabilities.
 /// </summary>
 public sealed record ReplayPerformanceMetrics

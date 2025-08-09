@@ -1,44 +1,24 @@
 using System.Diagnostics;
-using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Commands;
 
-public class CommandHandlerActivity(IDiagnosticsProvider diagnosticsProvider)
+public sealed class CommandHandlerActivity(IDiagnosticsProvider diagnosticsProvider)
 {
     public async Task Execute<TCommand>(
         Func<Activity?, CancellationToken, Task> action,
         CancellationToken cancellationToken
     )
     {
-        var commandName = typeof(TCommand).Name;
-        var handlerType = typeof(TCommand)
-            .Assembly.GetTypes()
-            .FirstOrDefault(t =>
-                t.GetInterfaces()
-                    .Any(i =>
-                        i.IsGenericType
-                        && i.GetGenericTypeDefinition() == typeof(ICommandHandler<,>)
-                        && i.GetGenericArguments()[0] == typeof(TCommand)
-                    )
-            );
-        var commandHandlerName = handlerType?.Name;
-
-        // usually we use class/methodName
-        var activityName = $"{ObservabilityConstant.Components.CommandHandler}.{commandHandlerName}/{commandName}";
+        var activityName = HandlerTypeResolver.CreateCommandActivityName<TCommand>();
+        var tags = HandlerTypeResolver.CreateCommandTags<TCommand>();
 
         await diagnosticsProvider.ExecuteActivityAsync(
             new CreateActivityInfo
             {
                 Name = activityName,
                 ActivityKind = ActivityKind.Consumer,
-                Tags = new Dictionary<string, object?>
-                {
-                    { TelemetryTags.Tracing.Application.Commands.Command, commandName },
-                    { TelemetryTags.Tracing.Application.Commands.CommandType, typeof(TCommand).FullName },
-                    { TelemetryTags.Tracing.Application.Commands.CommandHandler, commandHandlerName },
-                    { TelemetryTags.Tracing.Application.Commands.CommandHandlerType, handlerType?.FullName },
-                },
+                Tags = tags,
             },
             action,
             cancellationToken
@@ -50,34 +30,15 @@ public class CommandHandlerActivity(IDiagnosticsProvider diagnosticsProvider)
         CancellationToken cancellationToken
     )
     {
-        var commandName = typeof(TCommand).Name;
-        var handlerType = typeof(TCommand)
-            .Assembly.GetTypes()
-            .FirstOrDefault(t =>
-                t.GetInterfaces()
-                    .Any(i =>
-                        i.IsGenericType
-                        && i.GetGenericTypeDefinition() == typeof(ICommandHandler<,>)
-                        && i.GetGenericArguments()[0] == typeof(TCommand)
-                    )
-            );
-        var commandHandlerName = handlerType?.Name;
-
-        // usually we use class/methodName
-        var activityName = $"{ObservabilityConstant.Components.CommandHandler}.{commandHandlerName}/{commandName}";
+        var activityName = HandlerTypeResolver.CreateCommandActivityName<TCommand>();
+        var tags = HandlerTypeResolver.CreateCommandTags<TCommand>();
 
         return await diagnosticsProvider.ExecuteActivityAsync(
             new CreateActivityInfo
             {
                 Name = activityName,
                 ActivityKind = ActivityKind.Consumer,
-                Tags = new Dictionary<string, object?>
-                {
-                    { TelemetryTags.Tracing.Application.Commands.Command, commandName },
-                    { TelemetryTags.Tracing.Application.Commands.CommandType, typeof(TCommand).FullName },
-                    { TelemetryTags.Tracing.Application.Commands.CommandHandler, commandHandlerName },
-                    { TelemetryTags.Tracing.Application.Commands.CommandHandlerType, handlerType?.FullName },
-                },
+                Tags = tags,
             },
             action,
             cancellationToken

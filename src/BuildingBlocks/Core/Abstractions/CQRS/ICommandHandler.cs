@@ -1,5 +1,6 @@
+using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Functional.Results;
 using MediatR;
-using Unit = BuildingBlocks.Core.Functional.Unit;
 
 namespace BuildingBlocks.Core.Abstractions.CQRS;
 

@@ -13,13 +13,13 @@ namespace BuildingBlocks.Application.Behaviors;
 /// CorrelationId == W3C TraceId (Activity.TraceId). No custom correlation provider.
 /// Emits low-cardinality metrics and result-aware span tags.
 /// </summary>
-public sealed class ObservabilityPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class ObservabilityBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IAxonRequest<TResponse>
     where TResponse : IResult
 {
-    private readonly ILogger<ObservabilityPipelineBehavior<TRequest, TResponse>> _logger;
+    private readonly ILogger<ObservabilityBehavior<TRequest, TResponse>> _logger;
 
-    public ObservabilityPipelineBehavior(ILogger<ObservabilityPipelineBehavior<TRequest, TResponse>> logger)
+    public ObservabilityBehavior(ILogger<ObservabilityBehavior<TRequest, TResponse>> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

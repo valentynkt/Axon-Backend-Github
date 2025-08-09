@@ -53,7 +53,7 @@ public interface IValidationContext
     /// Feature flags dictionary extracted from metadata.
     /// Enables feature-flag conditional validation rules.
     /// </summary>
-    IReadOnlyDictionary<string, bool> FeatureFlags => GetFeatureFlags();
+    IReadOnlyDictionary<string, bool> FeatureFlags { get; }
     
     /// <summary>
     /// Safely retrieve typed metadata value by key.

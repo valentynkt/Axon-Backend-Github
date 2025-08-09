@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using BuildingBlocks.Infrastructure.Persistence.Read;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -40,8 +42,8 @@ public static class RepositoryCachingExtensions
                     var entityType = genericArgs[0];
                     var idType = genericArgs[1];
                     
-                    // Only cache repositories for entities that implement IAggregate<TId>
-                    var aggregateInterface = typeof(IAggregate<>).MakeGenericType(idType);
+                    // Only cache repositories for entities that implement IAggregateRoot<TId>
+                    var aggregateInterface = typeof(IAggregateRoot<>).MakeGenericType(idType);
                     if (aggregateInterface.IsAssignableFrom(entityType))
                     {
                         var decoratorType = typeof(CachedReadRepositoryForAggregates<,>).MakeGenericType(entityType, idType);
@@ -72,7 +74,7 @@ public static class RepositoryCachingExtensions
                     var entityType = genericArgs[0];
                     var idType = genericArgs[1];
                     
-                    // IWriteRepository already requires IAggregate<TId> constraint
+                    // IWriteRepository already requires IAggregateRoot<TId> constraint
                     var decoratorType = typeof(WriteRepositoryWithCacheInvalidation<,>).MakeGenericType(entityType, idType);
                     var cache = serviceProvider.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
                     var loggerType = typeof(Microsoft.Extensions.Logging.ILogger<>).MakeGenericType(decoratorType);
@@ -100,8 +102,8 @@ public static class RepositoryCachingExtensions
     public static IServiceCollection AddRepositoryCachingFor<TEntity, TId>(
         this IServiceCollection services,
         TimeSpan? cacheExpiration = null)
-        where TEntity : class, IAggregate<TId>
-        where TId : notnull
+        where TEntity : class, IAggregateRoot<TId>
+        where TId : IStrongId
     {
         // Ensure IMemoryCache is registered
         services.AddMemoryCache();

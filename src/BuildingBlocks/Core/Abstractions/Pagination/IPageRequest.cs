@@ -1,27 +1,44 @@
-using System.Collections.Generic;
-using System.Text.Json.Serialization;
-
 namespace BuildingBlocks.Core.Abstractions.Pagination;
 
+/// <summary>
+/// Interface for pagination request parameters with support for both modern and legacy patterns.
+/// Provides default implementations to avoid breaking existing implementers.
+/// </summary>
 public interface IPageRequest
 {
-    // Legacy names kept for compatibility (many handlers might depend on them).
-    // Prefer using Page going forward.
+    /// <summary>
+    /// Legacy page number property - prefer using 1-based Page property.
+    /// Kept for compatibility with existing handlers.
+    /// </summary>
     [Obsolete("Use Page (1-based) instead of PageNumber.")]
     int PageNumber { get; init; }
 
-    int PageSize { get; init; } // server caps will be enforced by PageQueryBase
+    /// <summary>
+    /// Number of items per page. Server caps will be enforced by PageQueryBase.
+    /// </summary>
+    int PageSize { get; init; }
 
-    // Added for scalable pagination. Default interface impl avoids breaking existing implementers.
+    /// <summary>
+    /// Whether to include total count in results (for performance optimization).
+    /// Default implementation avoids breaking existing implementers.
+    /// </summary>
     bool IncludeTotalCount => false;
 
-    // Typed sorting preferred; server will inject a unique tiebreaker.
+    /// <summary>
+    /// Typed sorting criteria - preferred approach. Server will inject unique tiebreaker.
+    /// Default implementation avoids breaking existing implementers.
+    /// </summary>
     IReadOnlyList<SortCriteria>? SortBy => null;
 
-    // Legacy Sieve-style props (string-based). Keep but discourage.
+    /// <summary>
+    /// Legacy string-based filtering - discouraged, use explicit filter properties.
+    /// </summary>
     [Obsolete("Use explicit filter properties + SortBy.")]
     string? Filters => null;
 
+    /// <summary>
+    /// Legacy string-based sorting - discouraged, use SortBy property.
+    /// </summary>
     [Obsolete("Use SortBy.")]
     string? SortOrder => null;
 }

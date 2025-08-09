@@ -8,7 +8,7 @@ namespace BuildingBlocks.Core.Functional.Extensions;
 public static class ExceptionExtensions
 {
     /// <summary>
-    /// Convert DomainException to Result<T>
+    /// Convert DomainException to Result&lt;T&gt;
     /// </summary>
     public static Result<T> ToResult<T>(this DomainException exception)
     {
@@ -24,7 +24,7 @@ public static class ExceptionExtensions
     }
     
     /// <summary>
-    /// Execute operation and convert any DomainException to Result<T>
+    /// Execute operation and convert any DomainException to Result&lt;T&gt;
     /// </summary>
     public static Result<T> Try<T>(Func<T> operation)
     {
@@ -56,7 +56,7 @@ public static class ExceptionExtensions
     }
     
     /// <summary>
-    /// Execute async operation and convert any DomainException to Result<T>
+    /// Execute async operation and convert any DomainException to Result&lt;T&gt;
     /// </summary>
     public static async Task<Result<T>> TryAsync<T>(Func<Task<T>> operation)
     {

@@ -1,292 +1,404 @@
-# Epic 08: Saga Pattern Implementation
+# Epic 08: Saga Pattern — Architecture & Implementation Guide (v2)
 
-## Epic Overview
+## Why this matters (short version)
 
-**Epic ID**: Epic_08  
-**Epic Name**: Saga Pattern Implementation  
-**Epic Priority**: Medium  
-**Estimated Duration**: 4-5 days  
-**Dependencies**: Epic_04 (CQRS Foundation), Epic_06 (Event System)
+We need a **reliable way to coordinate long-running, cross-service workflows** (funding → KYC → wallet provisioning → trade settlement → notifications, etc.). Sagas give us:
+
+* **Atomicity by composition** (forward steps + compensations).
+* **Idempotency + recovery** across crashes/restarts.
+* **Clear observability** of every step and rollback.
+* **Pluggable orchestration** (orchestrated, choreographed, or hybrid).
+
+Below is a **state-of-the-art, production-grade blueprint** aligned with our CQRS/Result<T>/Outbox-Inbox stack and OpenTelemetry.
+
+---
+
+# 1) Scope & Outcomes
+
+## Acceptance Criteria (refined)
+
+* [ ] **Abstractions**: `ISaga<TState>`, `ISagaState`, `ISagaStep<TState>`, `ISagaCompensation<TState>`, `ISagaSerializer`, `ISagaClock`.
+* [ ] **Execution Engine**: deterministic step runner, idempotent replays, retries, timeouts, compensation.
+* [ ] **Persistence**: versioned state, optimistic concurrency, snapshots, encryption for sensitive fields.
+* [ ] **Coordination**: Orchestrated engine + hooks for choreographed/hybrid via the event bus (Outbox/Inbox).
+* [ ] **Error Model**: explicit retryable/non-retryable error taxonomy; poison handling.
+* [ ] **Observability**: OTel tracing & metrics, structured logs, correlation IDs.
+* [ ] **Ops**: pause/resume, manual compensate, dead-letter, requeue, TTL/archival.
+* [ ] **Performance**: horizontal scaling, partitioning, sharding by `SagaType/CorrelationId`.
 
 ## Business Value
 
-Implements the Saga pattern to manage long-running business processes and distributed transactions, providing compensation logic, state management, and reliable coordination across multiple bounded contexts with proper error handling and recovery mechanisms.
+* Cuts failure blast radius; **automatic compensation** prevents stranded funds/states.
+* **Faster recovery** (resume from last good step with at-least-once semantics).
+* **Auditability** (who/what/when for each step and compensation).
+* **Pluggable** across bounded contexts without tight coupling.
 
-## Acceptance Criteria
+---
 
-- [ ] Saga pattern abstractions implemented
-- [ ] State persistence and recovery working
-- [ ] Compensation logic for rollback scenarios
-- [ ] Saga coordination and orchestration
-- [ ] Integration with event system
-- [ ] Comprehensive error handling and timeouts
-- [ ] Saga monitoring and observability
-- [ ] Performance optimized for scale
+# 2) Architecture Overview
 
-## Technical Scope
+```
+Client / Command
+    └─► Orchestrator (SagaManager)
+           ├─ SagaExecutionEngine
+           │    ├─ StepRunner (Execute / Compensate)
+           │    ├─ Retry & Timeout policy
+           │    └─ Idempotency (step invocation keys)
+           ├─ SagaStateRepository (EF/SQL, versioned JSON)
+           ├─ Outbox (events) / Inbox (dedupe)
+           └─ Scheduler (timeouts/heartbeats)
+```
 
-### Core Components
-1. **ISaga Interface** - Saga contract definition
-2. **SagaBase** - Base saga implementation
-3. **SagaManager** - Saga lifecycle management
-4. **SagaStateRepository** - Saga persistence
-5. **SagaCoordinator** - Multi-saga orchestration
-6. **CompensationHandler** - Rollback logic
+**Orchestrated Sagas**: centralized coordinator drives steps.
+**Choreographed Sagas**: decentralized, event-driven steps listen to domain events.
+**Hybrid**: orchestrator for critical sections + events for peripheral steps.
 
-### Saga Types
-- **Choreographed Sagas**: Event-driven coordination
-- **Orchestrated Sagas**: Centralized coordination
-- **Hybrid Sagas**: Mixed coordination patterns
+---
 
-## User Stories
+# 3) Domain Model
 
-### Story 1: Saga Abstractions and Base Classes
-**As a developer**, I want saga abstractions so that I can implement long-running processes consistently.
+## 3.1 Contracts (minimal but expressive)
 
-**Tasks:**
-- [ ] Create ISaga<TState> interface with state management
-- [ ] Define ISagaState interface for saga state persistence
-- [ ] Implement SagaBase<TState> with common functionality
-- [ ] Add saga step definition and execution
-- [ ] Create saga completion and compensation interfaces
-- [ ] Implement saga correlation ID tracking
-- [ ] Add saga timeout and cancellation support
-- [ ] Create comprehensive saga abstraction tests
+```csharp
+// Abstractions/Sagas/ISagaState.cs
+public interface ISagaState : ICloneable
+{
+    Guid SagaId { get; }
+    string SagaType { get; }
+    string CorrelationId { get; }
+    SagaStatus Status { get; }              // Pending, Running, Compensating, Completed, Failed, TimedOut, Cancelled
+    int Version { get; }                    // optimistic concurrency
+    DateTime CreatedAt { get; }
+    DateTime UpdatedAt { get; }
+    DateTime? ExpiresAt { get; }
 
-**Acceptance Criteria:**
-- Sagas can define multiple steps with compensation
-- Saga state is properly typed and serializable
-- Correlation IDs track saga instances
-- Timeouts and cancellation work correctly
+    string? CurrentStepId { get; }
+    int StepsCompleted { get; }
+    IReadOnlyList<string> ForwardHistory { get; }      // step ids in execution order
+    IReadOnlyList<string> CompensationHistory { get; } // step ids compensated
 
-### Story 2: Saga State Management
-**As a developer**, I want reliable saga state persistence so that sagas can survive application restarts.
+    IReadOnlyDictionary<string, object> Bag { get; }   // safe, serializable scratchpad
+}
 
-**Tasks:**
-- [ ] Create SagaStateRepository with CRUD operations
-- [ ] Implement saga state serialization and versioning
-- [ ] Add saga state locking for concurrency
-- [ ] Support saga state snapshots for recovery
-- [ ] Implement saga state cleanup and archiving
-- [ ] Add saga state encryption for sensitive data
-- [ ] Create saga state monitoring and diagnostics
-- [ ] Add comprehensive state management tests
+// Abstractions/Sagas/ISaga.cs
+public interface ISaga<TState> where TState : ISagaState
+{
+    string SagaType { get; }
+    IReadOnlyList<ISagaStep<TState>> Steps { get; }        // forward steps
+    TimeSpan? DefaultStepTimeout { get; }
+    TimeSpan? SagaTtl { get; }
+}
 
-**Acceptance Criteria:**
-- Saga state persisted reliably to database
-- Concurrent access to saga state is handled safely
-- Saga state versions are managed properly
-- Recovery from failures works correctly
+// Abstractions/Sagas/ISagaStep.cs
+public interface ISagaStep<TState> where TState : ISagaState
+{
+    string StepId { get; }
+    bool IsIdempotent { get; }             // external call must be idempotent
+    bool IsCompensable { get; }            // must provide compensation if true
+    TimeSpan? Timeout { get; }             // overrides default
+    RetryPlan Retry { get; }               // retries & backoff
+    Task<StepResult> ExecuteAsync(TState state, CancellationToken ct);
+    Task<StepResult> CompensateAsync(TState state, CancellationToken ct);
+}
 
-### Story 3: Saga Orchestration Engine
-**As a developer**, I want saga orchestration so that complex business processes are coordinated reliably.
+public enum StepOutcome { Success, TransientFailure, PermanentFailure, NoOp }
+public sealed record StepResult(StepOutcome Outcome, string? ErrorCode = null, string? ErrorMessage = null, object? Data = null);
 
-**Tasks:**
-- [ ] Create SagaManager for saga lifecycle management
-- [ ] Implement saga step execution with error handling
-- [ ] Add saga compensation logic for rollbacks
-- [ ] Support saga branching and conditional steps
-- [ ] Implement saga timeout handling
-- [ ] Add saga pause and resume capabilities
-- [ ] Create saga execution metrics and logging
-- [ ] Add comprehensive orchestration tests
+public sealed record RetryPlan(int MaxAttempts = 3, TimeSpan? InitialDelay = null, TimeSpan? MaxDelay = null, bool Jitter = true);
+```
 
-**Acceptance Criteria:**
-- Sagas execute steps in defined order
-- Failed steps trigger appropriate compensation
-- Timeouts are handled gracefully
-- Saga execution can be monitored and debugged
+**Notes**
 
-### Story 4: Choreographed Saga Support
-**As a developer**, I want event-driven sagas so that I can implement decoupled business processes.
+* `Bag` stores transient, serializable details (e.g., external IDs) for later steps/compensation.
+* A step returns `TransientFailure` to trigger retry (policies apply). `PermanentFailure` ends forward path and enters compensation.
 
-**Tasks:**
-- [ ] Create event-driven saga coordination
-- [ ] Implement saga event handlers with correlation
-- [ ] Add saga event filtering and routing
-- [ ] Support saga event replay for debugging
-- [ ] Implement saga event ordering guarantees
-- [ ] Add event-based saga timeout handling
-- [ ] Create saga event metrics and tracing
-- [ ] Add choreographed saga tests
+## 3.2 Status Model
 
-**Acceptance Criteria:**
-- Sagas respond to events with proper correlation
-- Event ordering is maintained for saga consistency
-- Failed event processing triggers compensation
-- Event replay works for debugging scenarios
+```
+Pending → Running → Completed
+     ↘          ↘
+     Failed      Compensating → Compensated|Failed
+     ↘
+     TimedOut
+```
 
-### Story 5: Saga Coordination and Communication
-**As a developer**, I want saga coordination so that multiple sagas can work together reliably.
+* **Failed** (forward error): run compensation in reverse order.
+* **TimedOut**: treat as failure with compensation; engine may retry if step policy allows.
+* **Cancelled**: operator-triggered stop; can choose to compensate or hold.
 
-**Tasks:**
-- [ ] Create SagaCoordinator for multi-saga scenarios
-- [ ] Implement saga-to-saga communication patterns
-- [ ] Add saga dependency management
-- [ ] Support saga fan-out and fan-in patterns
-- [ ] Implement saga deadlock detection and resolution
-- [ ] Add saga priority and scheduling support
-- [ ] Create saga coordination monitoring
-- [ ] Add coordination pattern tests
+---
 
-**Acceptance Criteria:**
-- Multiple sagas can coordinate through events
-- Saga dependencies are managed correctly
-- Deadlocks are detected and resolved
-- Coordination performance scales appropriately
+# 4) Persistence & Idempotency
 
-### Story 6: Compensation and Error Handling
-**As a developer**, I want robust compensation logic so that failed business processes can be rolled back safely.
+## 4.1 Repository & Schema
 
-**Tasks:**
-- [ ] Implement compensation step definition
-- [ ] Create automatic compensation execution
-- [ ] Add compensation order management (reverse execution)
-- [ ] Support partial compensation for complex scenarios
-- [ ] Implement compensation timeout and retry
-- [ ] Add compensation audit trail
-- [ ] Create manual compensation triggers
-- [ ] Add comprehensive compensation tests
+**Repository (interface)**
 
-**Acceptance Criteria:**
-- Compensation steps execute in reverse order
-- Partial failures trigger appropriate compensation
-- Compensation can be manually triggered when needed
-- Audit trail tracks all compensation activities
+```csharp
+public interface ISagaStateRepository
+{
+    Task<TState?> GetAsync<TState>(Guid sagaId, CancellationToken ct) where TState : class, ISagaState;
+    Task UpsertAsync<TState>(TState state, CancellationToken ct) where TState : class, ISagaState; // optimistic concurrency
+    Task<bool> TryUpdateAsync<TState>(TState state, int expectedVersion, CancellationToken ct) where TState : class, ISagaState;
+    Task MarkExpiredAsync(Guid sagaId, DateTime expiresAt, CancellationToken ct);
+    Task ArchiveAsync(Guid sagaId, CancellationToken ct);
+}
+```
 
-### Story 7: Saga Monitoring and Diagnostics
-**As a developer**, I want comprehensive saga observability so that I can monitor and debug business processes.
+**SQL (example)**
 
-**Tasks:**
-- [ ] Implement saga execution metrics and dashboards
-- [ ] Add saga performance monitoring
-- [ ] Create saga health checks and alerts
-- [ ] Implement saga execution tracing
-- [ ] Add saga debugging and replay capabilities
-- [ ] Create saga business metrics collection
-- [ ] Implement saga SLA monitoring
-- [ ] Add monitoring and diagnostics tests
+```sql
+CREATE TABLE SagaStates (
+  Id UNIQUEIDENTIFIER PRIMARY KEY,
+  SagaType NVARCHAR(128) NOT NULL,
+  CorrelationId NVARCHAR(255) NOT NULL,
+  Status NVARCHAR(40) NOT NULL,
+  Version INT NOT NULL,
+  CurrentStepId NVARCHAR(128) NULL,
+  StepsCompleted INT NOT NULL,
+  ForwardHistory NVARCHAR(MAX) NOT NULL,        -- JSON string array
+  CompensationHistory NVARCHAR(MAX) NOT NULL,   -- JSON string array
+  Bag NVARCHAR(MAX) NULL,                       -- JSON map
+  CreatedAt DATETIME2 NOT NULL,
+  UpdatedAt DATETIME2 NOT NULL,
+  ExpiresAt DATETIME2 NULL,
+  RowVersion ROWVERSION                         -- or use EF Core concurrency token
+);
+CREATE INDEX IX_SagaStates_SagaType_Correlation ON SagaStates (SagaType, CorrelationId);
+```
 
-**Acceptance Criteria:**
-- Saga execution is fully observable
-- Performance metrics help optimize processes
-- Failed sagas can be debugged effectively
-- Business metrics provide process insights
+* **Optimistic concurrency** via `RowVersion` or `Version`.
+* **Snapshots** optional: snapshot table keyed by `(SagaId, Version)` for rewind/debug.
 
-## Definition of Done
+## 4.2 Idempotency
 
-- [ ] All saga pattern components implemented
-- [ ] State persistence and recovery working reliably
-- [ ] Compensation logic handles all failure scenarios
-- [ ] Comprehensive error handling and timeouts
-- [ ] Integration with event system complete
-- [ ] Performance testing validates scalability
-- [ ] Documentation includes implementation examples
-- [ ] Code review completed with zero warnings
+* **Step Idempotency Key** = `${SagaId}:${StepId}:${Attempt}` (or just `${SagaId}:${StepId}` if external call is fully idempotent).
+* Require **idempotent external APIs** (e.g., pass the key to MoonPay/Helius/Jupiter where supported).
+* **Inbox/Outbox**: event deliveries de-duplicated by `(MessageId, Consumer)`.
 
-## Technical Implementation Notes
+---
 
-### File Structure
+# 5) Orchestration Engine
+
+## 5.1 Manager & Engine
+
+```csharp
+public interface ISagaManager
+{
+    Task<Guid> StartAsync<TState>(ISaga<TState> saga, TState initial, CancellationToken ct) where TState : ISagaState;
+    Task ResumeAsync(Guid sagaId, CancellationToken ct);
+    Task CompensateAsync(Guid sagaId, CancellationToken ct);
+    Task CancelAsync(Guid sagaId, bool compensate, CancellationToken ct);
+}
+
+public interface ISagaExecutionEngine
+{
+    Task RunForwardAsync<TState>(ISaga<TState> saga, TState state, CancellationToken ct) where TState : ISagaState;
+    Task RunCompensationAsync<TState>(ISaga<TState> saga, TState state, CancellationToken ct) where TState : ISagaState;
+}
+```
+
+### Forward Execution (deterministic)
+
+1. Load state (check `Version`).
+2. Pick next step by `StepsCompleted`.
+3. Run **StepRunner** with retry/timeout.
+4. Persist state (increment `Version`, append `ForwardHistory`).
+5. Repeat until done or failure → compensation.
+
+### Compensation
+
+* Reverse iterate `ForwardHistory`.
+* For each compensable step: execute `CompensateAsync` with its own retry/timeout.
+* Record `CompensationHistory`, persist `Version`.
+* Stop when fully compensated or we hit a **compensation failure** → raise alert + leave saga in `Failed` (compensating) with manual action required.
+
+## 5.2 Timeouts & Scheduling
+
+* **Per-step timeout** (uses `CancellationTokenSource` linked to request CT + timeout).
+* **Heartbeat/Lease** rows: `UpdatedAt` acts as heartbeat; background **Reaper** resumes stuck sagas.
+* **Scheduler**: durable queue (e.g., table + worker) for resuming at `NextAttemptAt`.
+
+---
+
+# 6) Choreography & Hybrid
+
+* **Choreographed**: register event handlers that:
+
+    * Validate **correlation** (`CorrelationId`, `CausationId`).
+    * Load saga state, apply transitions, persist.
+    * Publish next intent/event via Outbox.
+* **Hybrid**: use orchestrator for critical steps (payments/trades), use events for UI notifications/integrations.
+
+**Ordering**: rely on per-key partitioning (e.g., Kafka topic by `CorrelationId`) or logical sequence numbers in state.
+**Delivery**: at-least-once with **Inbox de-dup**.
+
+---
+
+# 7) Error Handling & Retry Policy
+
+### Error Taxonomy
+
+* **Transient**: timeouts, 5xx, network errors → retry (exponential + jitter).
+* **Permanent**: 4xx semantic errors, validation → **no retry**, go to compensation.
+* **External Circuit Open**: short-circuit; set retry later (with backoff cap).
+
+### Poison Protection
+
+* Cap **MaxAttempts** (per step). Move to **dead-letter** with full context after cap; alert SRE.
+
+---
+
+# 8) Observability (OTel)
+
+**Tracing**
+
+* Activity name: `saga.{SagaType}` and `saga.step.{StepId}`.
+* Tags:
+
+    * `saga.id`, `saga.type`, `saga.correlation_id`, `saga.status`
+    * `saga.step.id`, `saga.step.outcome`, `saga.step.attempt`
+    * `error.code`, `error.message` (bounded length)
+
+**Metrics**
+
+* `axon.saga.started.total` (Counter) — tags: `saga.type`
+* `axon.saga.completed.total` (Counter) — tags: `saga.type`
+* `axon.saga.failed.total` (Counter) — tags: `saga.type`
+* `axon.saga.compensated.total` (Counter) — tags: `saga.type`
+* `axon.saga.step.duration.ms` (Histogram) — tags: `saga.type`, `step.id`
+* `axon.saga.retry.attempts` (Counter) — tags: `saga.type`, `step.id`
+* `axon.saga.inflight` (UpDownCounter) — tags: `saga.type`
+
+**Logging**
+
+* Structured, include `sagaId`, `correlationId`, `stepId`, `attempt`, `version`.
+* **No PII**. Use our `ISensitiveDataMasker` for payloads.
+
+---
+
+# 9) Security & Compliance
+
+* **Encrypt** sensitive fields in `Bag` (field-level encryption or envelope encryption).
+* **Scrub** PII in telemetry via masker.
+* **RBAC** for Admin actions (pause/resume/compensate).
+* **Audit trail**: append-only log of forward/compensation steps with timestamps and operator actions.
+
+---
+
+# 10) File Structure (concrete)
+
 ```
 src/BuildingBlocks/Application/
 ├── Abstractions/Sagas/
 │   ├── ISaga.cs
 │   ├── ISagaState.cs
-│   ├── SagaBase.cs
-│   └── ISagaStep.cs
+│   ├── ISagaStep.cs
+│   ├── ISagaManager.cs
+│   ├── ISagaExecutionEngine.cs
+│   ├── ISagaStateRepository.cs
+│   ├── ISagaSerializer.cs
+│   ├── ISagaClock.cs
+│   └── SagaStatus.cs
 ├── Sagas/
 │   ├── SagaManager.cs
-│   ├── SagaCoordinator.cs
-│   ├── SagaStateRepository.cs
-│   ├── CompensationHandler.cs
-│   └── SagaExecutionEngine.cs
+│   ├── SagaExecutionEngine.cs
+│   ├── StepRunner.cs
+│   ├── Policies/
+│   │   ├── RetryPlan.cs
+│   │   └── TimeoutPolicy.cs
+│   ├── Scheduling/
+│   │   ├── SagaScheduler.cs
+│   │   └── SagaReaper.cs
+│   ├── Observability/SagaMetrics.cs
+│   └── Orchestration/
+│       ├── OrchestratedSagaHost.cs
+│       └── ChoreographyHandlers.cs
 └── Infrastructure/Sagas/
-    ├── SagaState.cs
-    ├── SagaStep.cs
-    └── SagaMetrics.cs
+    ├── EfSagaStateRepository.cs
+    ├── JsonSagaSerializer.cs
+    ├── Encryption/EncryptedBagConverter.cs
+    ├── Mappings/SagaStateEntity.cs
+    └── Admin/SagaAdminService.cs
 ```
 
-### Saga Execution Flow
-```
-Start → Step 1 → Step 2 → Step N → Complete
-  ↓        ↓        ↓        ↓
-Fail → Compensate N → Compensate 2 → Compensate 1 → Abort
-```
+---
 
-### Key Design Decisions
-1. **State-First Design**: Saga state drives execution
-2. **Compensation Required**: Every step must have compensation
-3. **Event Integration**: Deep integration with event system
-4. **Timeout Handling**: All operations have timeouts
-5. **Observability**: Comprehensive monitoring built-in
+# 11) DI & Configuration
 
-## Dependencies
+```csharp
+services.AddScoped<ISagaStateRepository, EfSagaStateRepository>();
+services.AddScoped<ISagaExecutionEngine, SagaExecutionEngine>();
+services.AddScoped<ISagaManager, SagaManager>();
+services.AddSingleton<ISagaSerializer, JsonSagaSerializer>();
+services.AddSingleton<ISagaClock, SystemClock>();
 
-### Infrastructure Requirements
-- Database for saga state persistence
-- Message queue for event coordination
-- Distributed lock mechanism
-- Monitoring and alerting system
+// Background workers
+services.AddHostedService<SagaReaper>();      // resumes stuck/expired
+services.AddHostedService<SagaScheduler>();   // schedules retries/resumes
 
-### NuGet Packages
-```xml
-<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-<PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-<PackageReference Include="System.Threading.Tasks.Dataflow" Version="8.0.0" />
+// Options (from config)
+services.Configure<SagaOptions>(cfg => {
+    cfg.DefaultStepTimeout = TimeSpan.FromSeconds(30);
+    cfg.MaxParallelSagasPerType = 32;
+    cfg.ArchiveAfter = TimeSpan.FromDays(30);
+});
 ```
 
-### Database Schema
-```sql
-CREATE TABLE SagaStates (
-    Id UNIQUEIDENTIFIER PRIMARY KEY,
-    SagaType NVARCHAR(255) NOT NULL,
-    CorrelationId NVARCHAR(255) NOT NULL,
-    State NVARCHAR(MAX) NOT NULL,
-    Status NVARCHAR(50) NOT NULL,
-    Version INT NOT NULL,
-    CreatedAt DATETIME2 NOT NULL,
-    UpdatedAt DATETIME2 NOT NULL,
-    ExpiresAt DATETIME2 NULL
-);
-```
+---
 
-## Risk Mitigation
+# 12) Example: Orchestrated Trading Saga (sketch)
 
-- **State Corruption**: Implement state versioning and validation
-- **Deadlocks**: Add timeout and deadlock detection
-- **Performance**: Monitor and optimize saga execution
-- **Complexity**: Keep saga logic simple and testable
-- **Data Loss**: Ensure reliable state persistence
+Steps:
 
-## Testing Strategy
+1. **ReserveFunds** (wallet),
+2. **RouteTrade** (Jupiter),
+3. **ExecuteSwap** (Helius),
+4. **ConfirmSettlement** (on-chain check),
+5. **NotifyUser**.
 
-### Unit Tests
-- Saga execution logic
-- Compensation scenarios
-- State management
-- Error handling
+Compensations:
 
-### Integration Tests
-- End-to-end saga execution
-- Event-driven coordination
-- State persistence reliability
-- Recovery scenarios
+* `ExecuteSwap` ⇨ refund/reverse (best-effort)
+* `RouteTrade` ⇨ no-op (idempotent)
+* `ReserveFunds` ⇨ release hold
 
-### Performance Tests
-- Saga throughput capacity
-- State persistence performance
-- Memory usage patterns
-- Concurrent saga execution
+Each step uses an **idempotency key** `${SagaId}:${StepId}` passed downstream. Failures at steps 3–4 trigger compensation (reverse order).
 
-### Chaos Tests
-- Network partition handling
-- Database failure scenarios
-- Process crash recovery
-- Message loss handling
+---
 
-## Success Metrics
-- Saga completion rate > 99%
-- Compensation success rate > 99.9%
-- Saga execution time within SLA
-- Zero data inconsistency incidents
-- Recovery time from failures < 30 seconds
+# 13) Testing Strategy (tight)
+
+* **Unit**: step logic, compensation, repository concurrency, retry math.
+* **Integration**: end-to-end saga happy path + failure paths (transient & permanent) with Outbox/Inbox.
+* **Chaos**: kill orchestrator mid-step; verify resume.
+* **Performance**: parallel 1k sagas; measure p95 step duration & DB contention.
+* **Data**: snapshot + restore; verify deterministic replays.
+
+---
+
+# 14) Risks & Mitigations
+
+* **Compensation gaps** → enforce `IsCompensable` for any step with external side effects; PR checklist.
+* **Idempotency drift** → formal contract with external providers; e2e tests verifying key replays.
+* **Hot rows** → partition by `SagaType`; shard IDs; backoff on concurrency failures.
+* **Poison loops** → cap retries; dead-letter + alert.
+* **Observability noise** → cap tag cardinality; truncate error messages.
+
+---
+
+# 15) Definition of Done (final)
+
+* Abstractions, engine, repository implemented with tests.
+* Orchestrated saga working; sample Trading Saga runs through all paths.
+* Choreography handlers integrated with event bus & Inbox/Outbox.
+* OTel dashboards: success/failed/compensated counts, step durations.
+* Admin APIs: get status, pause/resume, manual compensate/cancel.
+* Docs: “How to author a saga” with templates and checklists.
+
+---
+
+If you want, I can follow up with:
+
+* The **exact C# interfaces/classes** for `ISagaStateRepository`, `SagaExecutionEngine`, and `StepRunner`.
+* A **reference TradingSaga** skeleton you can drop into the repo to validate the flow end-to-end.

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using MassTransit;
 
@@ -5,9 +6,9 @@ namespace BuildingBlocks.Core.Abstractions.Events;
 
 /// <summary>
 /// Base record for internal commands that combine event and command characteristics.
-/// Provides consistent implementation for internal command processing.
+/// Provides consistent implementation for internal command processing with proper initialization.
 /// </summary>
-public record InternalCommand : IInternalCommand, ICommand
+public abstract record InternalCommand : IInternalCommand, ICommand
 {
     /// <summary>
     /// Unique identifier for this event instance.
@@ -34,14 +35,26 @@ public record InternalCommand : IInternalCommand, ICommand
     /// </summary>
     public DateTime RequestedAt { get; } = DateTime.UtcNow;
 
-    public IReadOnlyDictionary<string, object> Metadata { get; }
+    /// <summary>
+    /// Immutable metadata dictionary for request context and custom properties.
+    /// </summary>
+    public IReadOnlyDictionary<string, object> Metadata { get; init; }
 
     /// <summary>
     /// Protected constructor that sets the event type based on the concrete implementation.
     /// </summary>
-    protected InternalCommand(IReadOnlyDictionary<string, object> metadata = null)
+    protected InternalCommand()
     {
-        Metadata = metadata;
+        Metadata = new ReadOnlyDictionary<string, object>(new());
+        EventType = GetType().AssemblyQualifiedName ?? GetType().FullName ?? GetType().Name;
+    }
+
+    /// <summary>
+    /// Protected constructor with metadata support.
+    /// </summary>
+    protected InternalCommand(IReadOnlyDictionary<string, object>? metadata)
+    {
+        Metadata = metadata ?? new ReadOnlyDictionary<string, object>(new());
         EventType = GetType().AssemblyQualifiedName ?? GetType().FullName ?? GetType().Name;
     }
 }

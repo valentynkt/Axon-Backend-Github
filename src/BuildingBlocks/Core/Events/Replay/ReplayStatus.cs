@@ -2,7 +2,7 @@ namespace BuildingBlocks.Core.Events.Replay;
 
 /// <summary>
 /// Real-time status and progress information for replay operations.
-/// Created for Epic 06 Story 04 - Event Replay & Recovery Service.
+/// Created for Epic 06 Story 04 - Event Replay and Recovery Service.
 /// Provides comprehensive monitoring and progress tracking for active replay operations.
 /// </summary>
 public sealed record ReplayStatus

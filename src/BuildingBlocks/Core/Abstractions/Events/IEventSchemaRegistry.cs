@@ -1,6 +1,7 @@
-using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Core.Events.Schema;
+using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Abstractions.Events;
 

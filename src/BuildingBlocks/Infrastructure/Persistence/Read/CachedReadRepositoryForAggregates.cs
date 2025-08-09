@@ -1,4 +1,7 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Abstractions.Pagination;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
@@ -8,11 +11,11 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 
 /// <summary>
 /// Decorator for IReadRepository that adds caching functionality specifically for aggregates
-/// This is the correct decorator for entities that implement IAggregate
+/// This is the correct decorator for entities that implement IAggregateRoot
 /// </summary>
 public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBase<TAggregate, TId>, IReadRepository<TAggregate, TId>
-    where TAggregate : class, IAggregate<TId>
-    where TId : notnull
+    where TAggregate : class, IAggregateRoot<TId>
+    where TId : IStrongId
 {
     private readonly IReadRepository<TAggregate, TId> _inner;
 
@@ -99,6 +102,16 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         return await _inner.AnyAsync(predicate, cancellationToken);
     }
 
+    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    {
+        return await _inner.AnyAsync(cancellationToken);
+    }
+
+    public async Task<long> CountAsync(CancellationToken cancellationToken = default)
+    {
+        return await _inner.CountAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<TAggregate>> GetByIdsAsync(
         IReadOnlyList<TId> ids,
         CancellationToken cancellationToken = default)
@@ -141,7 +154,7 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         return results;
     }
 
-    public async Task<IPagedResult<TAggregate>> GetPagedAsync<TPageRequest>(
+    public async Task<IPageList<TAggregate>> GetPagedAsync<TPageRequest>(
         TPageRequest request,
         CancellationToken cancellationToken = default)
         where TPageRequest : IPageRequest
@@ -149,7 +162,7 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         return await _inner.GetPagedAsync(request, cancellationToken);
     }
 
-    public async Task<IPagedResult<TAggregate>> GetPagedAsync(
+    public async Task<IPageList<TAggregate>> GetPagedAsync(
         Expression<Func<TAggregate, bool>>? predicate,
         int pageNumber,
         int pageSize,
@@ -160,7 +173,7 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         {
             var cacheKey = GetPagedCacheKey(pageNumber, pageSize);
             
-            if (TryGetCache<IPagedResult<TAggregate>>(cacheKey, out var cachedResult))
+            if (TryGetCache<IPageList<TAggregate>>(cacheKey, out var cachedResult))
             {
                 return cachedResult!;
             }

@@ -52,21 +52,9 @@ public sealed class RetryPolicyResolver : IRetryPolicyResolver
                 UseCircuitBreaker = false
             },
             
-            ["DefaultCommand"] = new RetryPolicy
-            {
-                MaxAttempts = 2, // Commands are more cautious about retries
-                InitialDelay = TimeSpan.FromMilliseconds(500),
-                MaxDelay = TimeSpan.FromSeconds(10),
-                UseCircuitBreaker = true
-            },
+            ["DefaultCommand"] = RetryPolicy.ForCommands,
             
-            ["DefaultQuery"] = new RetryPolicy
-            {
-                MaxAttempts = 3, // Queries can be retried more aggressively
-                InitialDelay = TimeSpan.FromMilliseconds(100),
-                MaxDelay = TimeSpan.FromSeconds(5),
-                UseCircuitBreaker = false // Queries typically don't need circuit breakers
-            },
+            ["DefaultQuery"] = RetryPolicy.ForQueries,
             
             // Example specific policies
             ["ProcessPaymentCommand"] = new RetryPolicy

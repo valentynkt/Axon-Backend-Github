@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Diagnostics.Errors;
+
 namespace BuildingBlocks.Core.Diagnostics;
 
 /// <summary>

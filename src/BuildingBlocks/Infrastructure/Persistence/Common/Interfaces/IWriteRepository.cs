@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
@@ -6,8 +8,8 @@ namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 /// Write-side repository (aggregate roots with full tracking).
 /// </summary>
 public interface IWriteRepository<TAggregate, in TId> : IDisposable
-    where TAggregate : class, IAggregate<TId>
-    where TId : notnull
+    where TAggregate : class, IAggregateRoot<TId>
+    where TId : IStrongId
 {
     // ——— C R E A T E ———
     Task<TAggregate> AddAsync(TAggregate aggregate, CancellationToken ct = default);
@@ -35,8 +37,10 @@ public interface IWriteRepository<TAggregate, in TId> : IDisposable
     Task<bool> AnyAsync(CancellationToken ct); // ★ new  – mirrors IReadRepository
 }
 
-/// <summary> Convenience shortcut for Guid keys. </summary>
-public interface IWriteRepository<TAggregate> : IWriteRepository<TAggregate, Guid>
-    where TAggregate : class, IAggregate<Guid>
+/// <summary>
+/// Convenience shortcut for StrongId&lt;Guid&gt;-based aggregates.
+/// </summary>
+public interface IWriteRepository<TAggregate> : IWriteRepository<TAggregate, StrongId<Guid>>
+    where TAggregate : class, IAggregateRoot<StrongId<Guid>>
 {
 }

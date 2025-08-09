@@ -1,4 +1,5 @@
-using Unit = BuildingBlocks.Core.Functional.Unit;
+using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Abstractions.CQRS;
 

@@ -1,17 +1,18 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Application.Behaviors;
 
-public sealed class ExceptionToResultBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class ExceptionHandlingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
     where TResponse : IResult
 {
-    private readonly ILogger<ExceptionToResultBehavior<TRequest, TResponse>> _logger;
+    private readonly ILogger<ExceptionHandlingBehavior<TRequest, TResponse>> _logger;
 
-    public ExceptionToResultBehavior(ILogger<ExceptionToResultBehavior<TRequest, TResponse>> logger)
+    public ExceptionHandlingBehavior(ILogger<ExceptionHandlingBehavior<TRequest, TResponse>> logger)
     {
         _logger = logger;
     }

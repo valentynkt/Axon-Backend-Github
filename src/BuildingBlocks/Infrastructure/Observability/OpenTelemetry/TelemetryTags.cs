@@ -231,7 +231,7 @@ public static class TelemetryTags
                 public static readonly string CommandType = $"{Command}.type";
                 public static readonly string CommandHandler = $"{Command}.handler";
                 public static readonly string SuccessCount = $"{CommandHandler}.success.count";
-                public static readonly string FaildCount = $"{CommandHandler}.failed.count";
+                public static readonly string FailedCount = $"{CommandHandler}.failed.count";
                 public static readonly string ActiveCount = $"{CommandHandler}.active.count";
                 public static readonly string TotalExecutedCount = $"{CommandHandler}.total.count";
                 public static readonly string HandlerDuration = $"{CommandHandler}.duration";
@@ -243,7 +243,7 @@ public static class TelemetryTags
                 public static readonly string QueryType = $"{Query}.type";
                 public static readonly string QueryHandler = $"{Query}.handler";
                 public static readonly string SuccessCount = $"{QueryHandler}.success.count";
-                public static readonly string FaildCount = $"{QueryHandler}.failed.count";
+                public static readonly string FailedCount = $"{QueryHandler}.failed.count";
                 public static readonly string ActiveCount = $"{QueryHandler}.active.count";
                 public static readonly string TotalExecutedCount = $"{QueryHandler}.total.count";
                 public static readonly string HandlerDuration = $"{QueryHandler}.duration";
@@ -255,7 +255,7 @@ public static class TelemetryTags
                 public static readonly string EventType = $"{Event}.type";
                 public static readonly string EventHandler = $"{Event}.handler";
                 public static readonly string SuccessCount = $"{EventHandler}.success.count";
-                public static readonly string FaildCount = $"{EventHandler}.failed.count";
+                public static readonly string FailedCount = $"{EventHandler}.failed.count";
                 public static readonly string ActiveCount = $"{EventHandler}.active.count";
                 public static readonly string TotalExecutedCount = $"{EventHandler}.total.count";
                 public static readonly string HandlerDuration = $"{EventHandler}.duration";

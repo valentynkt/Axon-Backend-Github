@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +11,8 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// Handles aggregates with domain events and transactional consistency
 /// </summary>
 public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, TId>
-    where TAggregate : class, IAggregate<TId>
-    where TId : notnull
+    where TAggregate : class, IAggregateRoot<TId>
+    where TId : IStrongId
 {
     protected DbContext Context { get; }
     protected DbSet<TAggregate> DbSet { get; }
@@ -114,6 +116,11 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     {
         ArgumentNullException.ThrowIfNull(predicate);
         return await DbSet.AnyAsync(predicate, cancellationToken);
+    }
+
+    public virtual async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    {
+        return await DbSet.AnyAsync(cancellationToken);
     }
 
     /// <summary>

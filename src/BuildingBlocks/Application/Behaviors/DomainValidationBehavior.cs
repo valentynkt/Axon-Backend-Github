@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Domain.CQRS;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

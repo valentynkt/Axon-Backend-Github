@@ -2,7 +2,8 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using BuildingBlocks.Infrastructure.Caching;
+
+using BuildingBlocks.Application.Behaviors;
 
 namespace BuildingBlocks.Application.Caching;
 
@@ -20,57 +21,51 @@ public static class CachingConfiguration
     /// <param name="configure">Optional cache configuration action</param>
     /// <returns>Configured service collection</returns>
     public static IServiceCollection AddDeclarativeQueryCaching(
-        this IServiceCollection services,
-        Action<CacheOptions>? configure = null)
+    this IServiceCollection services,
+    Action<CacheOptions>? configure = null)
+{
+    // Configure cache options
+    if (configure != null)
     {
-        // Configure cache options
-        if (configure != null)
-        {
-            services.Configure<CacheOptions>(configure);
-        }
-        else
-        {
-            services.Configure<CacheOptions>(options =>
-            {
-                options.DefaultDuration = TimeSpan.FromMinutes(5);
-                options.IncludeTraceInKey = false; // Default to global cache keys
-                options.MemoryCacheSizeLimitMB = 100;
-            });
-        }
-
-        // Add cache key generator
-        services.AddSingleton<ICacheKeyGenerator, DefaultCacheKeyGenerator>();
-        
-        // Add memory cache with size limits
-        services.AddMemoryCache(options =>
-        {
-            var serviceProvider = services.BuildServiceProvider();
-            var cacheOptions = serviceProvider.GetService<IOptions<CacheOptions>>()?.Value ?? new CacheOptions();
-            options.SizeLimit = cacheOptions.MemoryCacheSizeLimitMB * 1024 * 1024; // Convert MB to bytes
-        });
-
-        // Add distributed cache (Redis) - only if Redis connection is configured
-        services.AddStackExchangeRedisCache(options =>
-        {
-            var serviceProvider = services.BuildServiceProvider();
-            var cacheOptions = serviceProvider.GetService<IOptions<CacheOptions>>()?.Value ?? new CacheOptions();
-            
-            options.Configuration = cacheOptions.RedisConnectionString;
-            options.InstanceName = cacheOptions.InstanceName;
-            
-            // Configure connection options for resilience
-            options.ConfigurationOptions = new StackExchange.Redis.ConfigurationOptions
-            {
-                EndPoints = { cacheOptions.RedisConnectionString },
-                DefaultDatabase = cacheOptions.DefaultDatabase,
-                ConnectTimeout = 5000,
-                ConnectRetry = 3,
-                AbortOnConnectFail = false // Don't fail if Redis is unavailable
-            };
-        });
-
-        return services;
+        services.Configure<CacheOptions>(configure);
     }
+    else
+    {
+        services.Configure<CacheOptions>(options =>
+        {
+            options.DefaultDuration = TimeSpan.FromMinutes(5);
+            options.IncludeTraceInKey = false; // Default to global cache keys
+            options.MemoryCacheSizeLimitMB = 100;
+        });
+    }
+
+    // Add cache key generator
+    services.AddSingleton<ICacheKeyGenerator, DefaultCacheKeyGenerator>();
+    
+    // Add cache infrastructure services
+    services.AddSingleton<ICacheTagIndex, DistributedCacheTagIndex>();
+    services.AddSingleton<ICacheInvalidator, CacheInvalidator>();
+    
+    // Add memory cache with size limits
+    services.AddMemoryCache(options =>
+    {
+        using var serviceProvider = services.BuildServiceProvider();
+        var cacheOptions = serviceProvider.GetService<IOptions<CacheOptions>>()?.Value ?? new();
+        options.SizeLimit = cacheOptions.MemoryCacheSizeLimitMB * 1024 * 1024; // Convert MB to bytes
+    });
+
+    // Add distributed cache (Redis) - only if Redis connection is configured
+    services.AddStackExchangeRedisCache(options =>
+    {
+        using var serviceProvider = services.BuildServiceProvider();
+        var cacheOptions = serviceProvider.GetService<IOptions<CacheOptions>>()?.Value ?? new();
+        
+        options.Configuration = cacheOptions.RedisConnectionString;
+        options.InstanceName = cacheOptions.InstanceName;
+    });
+
+    return services;
+}
 
     /// <summary>
     /// Adds caching behavior to MediatR pipeline for queries.
@@ -81,7 +76,7 @@ public static class CachingConfiguration
     public static IServiceCollection AddCachingPipelineBehavior(this IServiceCollection services)
     {
         // Register the caching pipeline behavior
-        services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(CachingBehavior<,>));
+        services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
         
         return services;
     }

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Abstractions.Pagination;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
@@ -19,10 +20,10 @@ public interface IReadRepository<TReadModel, in TId> : IDisposable
     Task<IReadOnlyList<TReadModel>> GetByIdsAsync(IReadOnlyList<TId> ids, CancellationToken ct = default);
 
     // ——— Paged / filtered ———
-    Task<IPagedResult<TReadModel>> GetPagedAsync<TPageRequest>(TPageRequest request, CancellationToken ct = default)
+    Task<IPageList<TReadModel>> GetPagedAsync<TPageRequest>(TPageRequest request, CancellationToken ct = default)
         where TPageRequest : IPageRequest;
 
-    Task<IPagedResult<TReadModel>> GetPagedAsync(Expression<Func<TReadModel, bool>>? predicate,
+    Task<IPageList<TReadModel>> GetPagedAsync(Expression<Func<TReadModel, bool>>? predicate,
         int pageNumber,
         int pageSize,
         CancellationToken ct = default);
@@ -45,6 +46,7 @@ public interface IReadRepository<TReadModel, in TId> : IDisposable
 }
 
 /// <summary> Convenience shortcut for Guid keys. </summary>
-public interface IReadRepository<TReadModel> : IReadRepository<TReadModel, Guid> where TReadModel : class
+public interface IReadRepository<TReadModel> : IReadRepository<TReadModel, Guid> 
+    where TReadModel : class
 {
 }

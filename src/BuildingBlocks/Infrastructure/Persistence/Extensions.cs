@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Caching;
 using BuildingBlocks.Infrastructure.Persistence.Common;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
@@ -408,10 +410,10 @@ public static class Extensions
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (typeof(IAggregate).IsAssignableFrom(entityType.ClrType))
+            if (typeof(IEntity).IsAssignableFrom(entityType.ClrType))
             {
                 var parameter = Expression.Parameter(entityType.ClrType, "entity");
-                var property = Expression.Property(parameter, nameof(IAggregate.IsDeleted));
+                var property = Expression.Property(parameter, nameof(IEntity.IsDeleted));
                 var filter = Expression.Lambda(Expression.Not(property), parameter);
                 entityType.SetQueryFilter(filter);
             }

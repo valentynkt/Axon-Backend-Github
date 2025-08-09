@@ -1,47 +1,47 @@
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
-public class ObservabilityOptions
+public sealed class ObservabilityOptions
 {
-    public string InstrumentationName { get; set; } = default!;
-    public string? ServiceName { get; set; }
-    public bool MetricsEnabled { get; set; } = true;
-    public bool TracingEnabled { get; set; } = true;
-    public bool LoggingEnabled { get; set; } = true;
-    public bool UsePrometheusExporter { get; set; } = true;
-    public bool UseOTLPExporter { get; set; } = true;
-    public bool UseAspireOTLPExporter { get; set; } = true;
-    public bool UseGrafanaExporter { get; set; }
-    public bool UseConsoleExporter { get; set; }
-    public bool UseJaegerExporter { get; set; }
-    public bool UseZipkinExporter { get; set; }
-    public ZipkinOptions ZipkinOptions { get; set; } = default!;
-    public JaegerOptions JaegerOptions { get; set; } = default!;
-    public OTLPOptions OTLPOptions { get; set; } = default!;
-    public AspireDashboardOTLPOptions AspireDashboardOTLPOptions { get; set; } = default!;
+    public required string InstrumentationName { get; init; }
+    public string? ServiceName { get; init; }
+    public bool MetricsEnabled { get; init; } = true;
+    public bool TracingEnabled { get; init; } = true;
+    public bool LoggingEnabled { get; init; } = true;
+    public bool UsePrometheusExporter { get; init; } = true;
+    public bool UseOTLPExporter { get; init; } = true;
+    public bool UseAspireOTLPExporter { get; init; } = true;
+    public bool UseGrafanaExporter { get; init; }
+    public bool UseConsoleExporter { get; init; }
+    public bool UseJaegerExporter { get; init; }
+    public bool UseZipkinExporter { get; init; }
+    public ZipkinOptions ZipkinOptions { get; init; } = new();
+    public JaegerOptions JaegerOptions { get; init; } = new();
+    public OTLPOptions OTLPOptions { get; init; } = new();
+    public AspireDashboardOTLPOptions AspireDashboardOTLPOptions { get; init; } = new();
 }
 
 // https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/src/OpenTelemetry.Exporter.Zipkin/README.md
-public class ZipkinOptions
+public sealed record ZipkinOptions
 {
     /// <summary>
     /// Gets or sets endpoint address to receive telemetry
     /// </summary>
-    public string HttpExporterEndpoint { get; set; } = "http://localhost:9411/api/v2/spans";
+    public string HttpExporterEndpoint { get; init; } = "http://localhost:9411/api/v2/spans";
 }
 
-public class JaegerOptions
+public sealed record JaegerOptions
 {
-    public string OTLPGrpcExporterEndpoint { get; set; } = "http://localhost:14317";
-    public string HttpExporterEndpoint { get; set; } = "http://localhost:14268/api/traces";
+    public string OTLPGrpcExporterEndpoint { get; init; } = "http://localhost:14317";
+    public string HttpExporterEndpoint { get; init; } = "http://localhost:14268/api/traces";
 }
 
-public class OTLPOptions
+public sealed record OTLPOptions
 {
-    public string OTLPGrpcExporterEndpoint { get; set; } = "http://localhost:4317";
-    public string OTLPHttpExporterEndpoint { get; set; } = "http://localhost:4318";
+    public string OTLPGrpcExporterEndpoint { get; init; } = "http://localhost:4317";
+    public string OTLPHttpExporterEndpoint { get; init; } = "http://localhost:4318";
 }
 
-public class AspireDashboardOTLPOptions
+public sealed record AspireDashboardOTLPOptions
 {
-    public string OTLPGrpcExporterEndpoint { get; set; } = "http://localhost:4319";
+    public string OTLPGrpcExporterEndpoint { get; init; } = "http://localhost:4319";
 }

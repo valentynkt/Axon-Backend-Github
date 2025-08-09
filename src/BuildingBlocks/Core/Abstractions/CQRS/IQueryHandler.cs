@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 
 namespace BuildingBlocks.Core.Abstractions.CQRS;

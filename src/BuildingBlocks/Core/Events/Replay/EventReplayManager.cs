@@ -10,7 +10,7 @@ namespace BuildingBlocks.Core.Events.Replay;
 public sealed class EventReplayManager : IEventReplayService
 {
     private readonly ILogger<EventReplayManager> _logger;
-    private readonly Dictionary<Guid, ReplayOperation> _activeOperations = new();
+    private readonly Dictionary<Guid, InternalReplayOperation> _activeOperations = new();
     private readonly object _lock = new();
     private readonly ReplayServiceConfiguration _configuration;
     
@@ -50,7 +50,7 @@ public sealed class EventReplayManager : IEventReplayService
             }
 
             var operationId = Guid.NewGuid();
-            var operation = new ReplayOperation
+            var operation = new InternalReplayOperation
             {
                 Id = operationId,
                 Name = request.OperationName,
@@ -466,7 +466,7 @@ public sealed class EventReplayManager : IEventReplayService
         }
     }
 
-    private async Task ExecuteReplayAsync(ReplayOperation operation, CancellationToken cancellationToken)
+    private async Task ExecuteReplayAsync(InternalReplayOperation operation, CancellationToken cancellationToken)
     {
         // This would contain the actual replay logic
         // For this implementation, we'll simulate the process
@@ -512,7 +512,7 @@ public sealed class EventReplayManager : IEventReplayService
         }
     }
 
-    private ReplayStatus CreateReplayStatus(ReplayOperation operation)
+    private ReplayStatus CreateReplayStatus(InternalReplayOperation operation)
     {
         var progressPercentage = operation.TotalEventsCount > 0
             ? (double)operation.ProcessedEventsCount / operation.TotalEventsCount.Value * 100.0
@@ -539,7 +539,7 @@ public sealed class EventReplayManager : IEventReplayService
         };
     }
 
-    private ReplayProgress CreateReplayProgress(ReplayOperation operation)
+    private ReplayProgress CreateReplayProgress(InternalReplayOperation operation)
     {
         return new ReplayProgress
         {
@@ -554,7 +554,7 @@ public sealed class EventReplayManager : IEventReplayService
         };
     }
 
-    private ReplayResult CreateReplayResult(ReplayOperation operation)
+    private ReplayResult CreateReplayResult(InternalReplayOperation operation)
     {
         return new ReplayResult
         {
@@ -634,7 +634,7 @@ public sealed class EventReplayManager : IEventReplayService
 /// <summary>
 /// Internal representation of a replay operation.
 /// </summary>
-internal sealed class ReplayOperation
+internal sealed class InternalReplayOperation
 {
     public Guid Id { get; init; }
     public required string Name { get; init; }

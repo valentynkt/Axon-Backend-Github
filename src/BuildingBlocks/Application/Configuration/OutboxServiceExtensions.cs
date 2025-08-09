@@ -1,10 +1,9 @@
 using BuildingBlocks.Application.Behaviors;
+using BuildingBlocks.Application.Outbox;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using BuildingBlocks.Application.Outbox;
-using BuildingBlocks.Infrastructure.Outbox;
-using MediatR;
 
 namespace BuildingBlocks.Application.Configuration;
 
@@ -46,16 +45,16 @@ public static class OutboxServiceExtensions
             services.Configure<OutboxOptions>(options => { }); // Ensure options are registered with defaults
         }
 
-        // Register core outbox services
+        // Register core outbox services - repository implementation should be registered by Infrastructure layer
         services.TryAddScoped<IOutboxService, OutboxService>();
-        services.TryAddScoped<IOutboxRepository, EfOutboxRepository>();
+        // Note: IOutboxRepository implementation must be registered by the Infrastructure layer
 
         // Register background processor
         services.TryAddSingleton<IOutboxProcessor, OutboxProcessor>();
         services.AddHostedService<OutboxProcessor>();
 
         // Register transaction behavior (if not already registered)
-        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
 
         return services;
     }
@@ -83,12 +82,12 @@ public static class OutboxServiceExtensions
             services.Configure(configureOutbox);
         }
 
-        // Register core outbox services only
+        // Register core outbox services only - repository implementation should be registered by Infrastructure layer
         services.TryAddScoped<IOutboxService, OutboxService>();
-        services.TryAddScoped<IOutboxRepository, EfOutboxRepository>();
+        // Note: IOutboxRepository implementation must be registered by the Infrastructure layer
 
         // Register transaction behavior
-        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
 
         return services;
     }
@@ -109,7 +108,7 @@ public static class OutboxServiceExtensions
         }
 
         services.TryAddScoped<IOutboxService, OutboxService>();
-        services.TryAddScoped<IOutboxRepository, EfOutboxRepository>();
+        // Note: IOutboxRepository implementation must be registered by the Infrastructure layer
         services.TryAddSingleton<IOutboxProcessor, OutboxProcessor>();
         services.AddHostedService<OutboxProcessor>();
 
@@ -127,7 +126,7 @@ public static class OutboxServiceExtensions
         Action<TransactionOptions> configure)
     {
         services.Configure(configure);
-        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
         return services;
     }
 

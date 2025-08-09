@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using BuildingBlocks.Application.Configuration;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -9,16 +11,19 @@ namespace BuildingBlocks.Application.Behaviors;
 /// (i.e., ObservabilityPipelineBehavior is not active). Otherwise it's a no-op.
 /// This avoids duplicate logs/metrics and keeps tests/dev simple.
 /// </summary>
-public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class RequestLoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull, IRequest<TResponse>
     where TResponse : notnull
 {
-    private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
-    private const int SlowMsThreshold = 1000; // warn when over 1s
+    private readonly ILogger<RequestLoggingBehavior<TRequest, TResponse>> _logger;
+    private readonly LoggingOptions _options;
 
-    public LoggingBehavior(ILogger<LoggingBehavior<TRequest, TResponse>> logger)
+    public RequestLoggingBehavior(
+        ILogger<RequestLoggingBehavior<TRequest, TResponse>> logger,
+        IOptions<LoggingOptions> options)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options?.Value ?? new LoggingOptions();
     }
 
     public async Task<TResponse> Handle(
@@ -40,7 +45,7 @@ public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
         sw.Stop();
         var elapsedMs = sw.ElapsedMilliseconds;
 
-        if (elapsedMs > SlowMsThreshold)
+        if (elapsedMs > _options.SlowRequestThresholdMs)
             _logger.LogWarning("Slow {RequestType}: {ElapsedMs} ms", reqType, elapsedMs);
         else
             _logger.LogInformation("Handled {RequestType} in {ElapsedMs} ms", reqType, elapsedMs);

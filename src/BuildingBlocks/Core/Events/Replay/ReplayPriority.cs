@@ -2,7 +2,7 @@ namespace BuildingBlocks.Core.Events.Replay;
 
 /// <summary>
 /// Priority levels for replay operations determining resource allocation and execution order.
-/// Created for Epic 06 Story 04 - Event Replay & Recovery Service.
+/// Created for Epic 06 Story 04 - Event Replay and Recovery Service.
 /// Higher priority operations receive more system resources and are processed before lower priority ones.
 /// </summary>
 public enum ReplayPriority

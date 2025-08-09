@@ -25,7 +25,7 @@ public abstract record RequestBase : IAxonRequest
     /// Initialized as empty readonly dictionary to ensure immutability.
     /// </summary>
     public IReadOnlyDictionary<string, object> Metadata { get; init; } = 
-        new ReadOnlyDictionary<string, object>(new Dictionary<string, object>());
+        new ReadOnlyDictionary<string, object>(new());
     
     /// <summary>
     /// Creates a new instance of the request with additional metadata.

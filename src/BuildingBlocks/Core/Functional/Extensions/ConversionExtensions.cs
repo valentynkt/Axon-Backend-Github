@@ -13,7 +13,7 @@ public static class ConversionExtensions
     #region Result<T> Extensions
 
     /// <summary>
-    /// Convert Result<T> to Option<T> (Success → Some, Failure → None)
+    /// Convert Result to Option (Success → Some, Failure → None)
     /// </summary>
     public static Option<T> ToOption<T>(this Result<T> result)
     {
@@ -21,7 +21,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Result<T> to Option<T> with error callback
+    /// Convert Result to Option with error callback
     /// </summary>
     public static Option<T> ToOption<T>(this Result<T> result, Action<Error> onError)
     {
@@ -34,7 +34,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Result<T> to Option<T> with error logging
+    /// Convert Result to Option with error logging
     /// </summary>
     public static Option<T> ToOption<T>(this Result<T> result, ILogger logger, string? message = null)
     {
@@ -52,7 +52,7 @@ public static class ConversionExtensions
     #region Option<T> Extensions
 
     /// <summary>
-    /// Convert Option<T> to Result<T> with default error
+    /// Convert Option to Result with default error
     /// </summary>
     public static Result<T> ToResult<T>(this Option<T> option, Error error)
     {
@@ -63,7 +63,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Option<T> to Result<T> with error message
+    /// Convert Option to Result with error message
     /// </summary>
     public static Result<T> ToResult<T>(this Option<T> option, string errorMessage)
     {
@@ -71,7 +71,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Option<T> to Result<T> with error factory
+    /// Convert Option to Result with error factory
     /// </summary>
     public static Result<T> ToResult<T>(this Option<T> option, Func<Error> errorFactory)
     {
@@ -82,7 +82,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Option<T> to Result<T> with contextual error
+    /// Convert Option to Result with contextual error
     /// </summary>
     public static Result<T> ToResult<T, TContext>(
         this Option<T> option, 
@@ -96,7 +96,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Option<T> to Result<T> with NotFound error for entities
+    /// Convert Option to Result with NotFound error for entities
     /// </summary>
     public static Result<T> ToResultNotFound<T>(
         this Option<T> option, 
@@ -115,7 +115,7 @@ public static class ConversionExtensions
     #region Async Extensions
 
     /// <summary>
-    /// Convert Task<Result<T>> to Task<Option<T>>
+    /// Convert Task Result to Task Option
     /// </summary>
     public static async Task<Option<T>> ToOptionAsync<T>(this Task<Result<T>> resultTask)
     {
@@ -125,7 +125,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Task<Option<T>> to Task<Result<T>>
+    /// Convert Task Option to Task Result
     /// </summary>
     public static async Task<Result<T>> ToResultAsync<T>(this Task<Option<T>> optionTask, Error error)
     {
@@ -137,7 +137,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Task<Option<T>> to Task<Result<T>> with error factory
+    /// Convert Task Option to Task Result with error factory
     /// </summary>
     public static async Task<Result<T>> ToResultAsync<T>(
         this Task<Option<T>> optionTask, 
@@ -155,7 +155,7 @@ public static class ConversionExtensions
     #region Validation Extensions
 
     /// <summary>
-    /// Convert Result<T> to Validation<T>
+    /// Convert Result to Validation
     /// </summary>
     public static Validation<T> ToValidation<T>(this Result<T> result)
     {
@@ -165,7 +165,7 @@ public static class ConversionExtensions
     }
 
     /// <summary>
-    /// Convert Option<T> to Validation<T>
+    /// Convert Option to Validation
     /// </summary>
     public static Validation<T> ToValidation<T>(this Option<T> option, Error error)
     {

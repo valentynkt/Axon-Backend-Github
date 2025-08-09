@@ -1,12 +1,14 @@
-using System.Collections.Generic;
-using System.Text.Json.Serialization;
-
 namespace BuildingBlocks.Core.Abstractions.Pagination;
 
+/// <summary>
+/// Immutable record representing a paginated result with items and metadata.
+/// Implements both modern IPageList&lt;T&gt; and legacy IPagedResult&lt;T&gt; interfaces for compatibility.
+/// </summary>
+/// <typeparam name="T">The type of items in the paginated result</typeparam>
 public sealed record PagedResult<T>(
     IReadOnlyList<T> Items,
     PaginationMeta Meta
-) : IPagedResult<T>
+) : IPageList<T>, IPagedResult<T>
 {
     // ---- Legacy flattened properties (delegate to Meta). Keep for compatibility. ----
     [Obsolete("Use Meta.TotalCount.")]
@@ -36,4 +38,3 @@ public sealed record PagedResult<T>(
     [Obsolete("Use Meta.CurrentEndIndex.")]
     public int CurrentEndIndex => Meta.CurrentEndIndex;
 }
-

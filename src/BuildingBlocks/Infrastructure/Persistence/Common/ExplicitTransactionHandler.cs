@@ -3,42 +3,27 @@ using Microsoft.Extensions.Logging;
 namespace BuildingBlocks.Infrastructure.Persistence.Common;
 
 /// <summary>
-/// Transaction handler for explicit transaction management
-/// Does not automatically manage transactions - requires manual transaction control
-/// Suitable for complex scenarios where fine-grained transaction control is needed
+/// Transaction handler for explicit transaction management where the caller
+/// is responsible for all transaction lifecycle management.
+/// Refactored to eliminate code duplication using the Template Method pattern.
 /// </summary>
-public class ExplicitTransactionHandler : ITransactionBehaviorHandler
+public sealed class ExplicitTransactionHandler : TransactionHandlerBase
 {
-    private readonly ILogger<ExplicitTransactionHandler> _logger;
-
     public ExplicitTransactionHandler(ILogger<ExplicitTransactionHandler> logger)
+        : base(logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public TransactionBehavior BehaviorType => TransactionBehavior.Explicit;
+    public override TransactionBehavior BehaviorType => TransactionBehavior.Explicit;
 
-    public bool HasActiveTransaction => false; // Externally managed
+    public override bool HasActiveTransaction => false; // Externally managed
 
-    public async Task ExecuteAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+    protected override Task BeforeExecutionAsync(CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(operation);
-        
-        _logger.LogDebug("Executing operation with explicit transaction behavior");
-        
-        // In explicit mode, we don't manage transactions at all
-        // The caller is responsible for all transaction management
-        await operation();
+        Logger.LogDebug("Executing operation with explicit transaction behavior");
+        return Task.CompletedTask;
     }
 
-    public async Task<T> ExecuteAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        
-        _logger.LogDebug("Executing operation with explicit transaction behavior (with return value)");
-        
-        // In explicit mode, we don't manage transactions at all
-        // The caller is responsible for all transaction management
-        return await operation();
-    }
+    // No transaction management needed - all handled externally
+    // Base class handles the rest through template method pattern
 }

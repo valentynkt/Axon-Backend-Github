@@ -1,8 +1,9 @@
+using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Diagnostics;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using Microsoft.EntityFrameworkCore;
 using Sieve.Models;
 using Sieve.Services;
-using Error = BuildingBlocks.Core.Diagnostics.Error;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Pagination;
 
@@ -32,7 +33,7 @@ public static class PaginationExtensions
     /// <param name="sieveProcessor">Sieve processor for filtering and sorting</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Paginated result with items and metadata</returns>
-    public static async Task<IPagedResult<TEntity>> ToPagedResultAsync<TEntity>(
+    public static async Task<IPageList<TEntity>> ToPagedResultAsync<TEntity>(
         this IQueryable<TEntity> queryable,
         IPageRequest pageRequest,
         ISieveProcessor sieveProcessor,
@@ -60,7 +61,7 @@ public static class PaginationExtensions
         
         if (totalCount == 0)
         {
-            return PagedResult.Empty<TEntity>();
+            return CreateEmptyPagedResult<TEntity>(pageRequest.PageNumber, pageRequest.PageSize);
         }
         
         // Apply pagination to the filtered query
@@ -70,11 +71,7 @@ public static class PaginationExtensions
         // Fetch items
         var items = await paginatedQuery.ToListAsync(cancellationToken);
         
-        return PagedResult.Create(
-            items.AsReadOnly(), 
-            pageRequest.PageNumber, 
-            pageRequest.PageSize, 
-            totalCount);
+        return CreatePagedResult(items, pageRequest.PageNumber, pageRequest.PageSize, totalCount);
     }
     
     /// <summary>
@@ -87,7 +84,7 @@ public static class PaginationExtensions
     /// <param name="pageSize">Number of items per page</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Paginated result with items and metadata</returns>
-    public static async Task<IPagedResult<TEntity>> ToPagedResultAsync<TEntity>(
+    public static async Task<IPageList<TEntity>> ToPagedResultAsync<TEntity>(
         this IQueryable<TEntity> queryable,
         int pageNumber,
         int pageSize,
@@ -107,7 +104,7 @@ public static class PaginationExtensions
         
         if (totalCount == 0)
         {
-            return PagedResult.Empty<TEntity>();
+            return CreateEmptyPagedResult<TEntity>(pageNumber, pageSize);
         }
         
         // Apply pagination
@@ -116,11 +113,7 @@ public static class PaginationExtensions
             .Take(pageSize)
             .ToListAsync(cancellationToken);
         
-        return PagedResult.Create(
-            items.AsReadOnly(), 
-            pageNumber, 
-            pageSize, 
-            totalCount);
+        return CreatePagedResult(items, pageNumber, pageSize, totalCount);
     }
     
     /// <summary>
@@ -132,7 +125,7 @@ public static class PaginationExtensions
     /// <param name="pageNumber">Page number (1-based)</param>
     /// <param name="pageSize">Number of items per page</param>
     /// <returns>Paginated result with items and metadata</returns>
-    public static IPagedResult<TEntity> ToPagedResult<TEntity>(
+    public static IPageList<TEntity> ToPagedResult<TEntity>(
         this IEnumerable<TEntity> source,
         int pageNumber,
         int pageSize)
@@ -151,16 +144,15 @@ public static class PaginationExtensions
         
         if (totalCount == 0)
         {
-            return PagedResult.Empty<TEntity>();
+            return CreateEmptyPagedResult<TEntity>(pageNumber, pageSize);
         }
         
         var items = sourceList
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .ToList()
-            .AsReadOnly();
+            .ToList();
         
-        return PagedResult.Create(items, pageNumber, pageSize, totalCount);
+        return CreatePagedResult(items, pageNumber, pageSize, totalCount);
     }
     
     /// <summary>
@@ -196,5 +188,27 @@ public static class PaginationExtensions
             return PaginationErrors.PageSizeExceedsMaximum(MaxPageSize);
         
         return null;
+    }
+
+    /// <summary>
+    /// Creates a paginated result with items and metadata
+    /// </summary>
+    private static PagedResult<TEntity> CreatePagedResult<TEntity>(
+        IReadOnlyList<TEntity> items, 
+        int pageNumber, 
+        int pageSize, 
+        long totalCount)
+    {
+        var meta = new PaginationMeta(pageNumber, pageSize, totalCount);
+        return new PagedResult<TEntity>(items, meta);
+    }
+
+    /// <summary>
+    /// Creates an empty paginated result
+    /// </summary>
+    private static PagedResult<TEntity> CreateEmptyPagedResult<TEntity>(int pageNumber, int pageSize)
+    {
+        var meta = new PaginationMeta(pageNumber, pageSize, 0);
+        return new PagedResult<TEntity>(Array.Empty<TEntity>(), meta);
     }
 }

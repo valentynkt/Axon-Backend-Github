@@ -6,6 +6,8 @@ using Polly;
 using Polly.Retry;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Resilience;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -171,12 +173,6 @@ public sealed class RetryPolicy
     public int MaxAttempts { get; init; } = 3;
     public TimeSpan InitialDelay { get; init; } = TimeSpan.FromMilliseconds(100);
     public TimeSpan MaxDelay { get; init; } = TimeSpan.FromSeconds(30);
-}
-
-/// <summary> Classifies exceptions as transient (HTTP 5xx/429, socket resets, DNS, etc.). </summary>
-public interface ITransientFaultDetector
-{
-    bool IsTransient(Exception exception);
 }
 
 /// <summary> Global defaults; keep retry OFF unless explicitly enabled. </summary>

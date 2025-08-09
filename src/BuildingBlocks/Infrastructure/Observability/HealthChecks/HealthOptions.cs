@@ -1,6 +1,6 @@
 namespace BuildingBlocks.Infrastructure.Observability.HealthChecks;
 
-public class HealthOptions
+public sealed record HealthOptions
 {
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; init; } = true;
 }

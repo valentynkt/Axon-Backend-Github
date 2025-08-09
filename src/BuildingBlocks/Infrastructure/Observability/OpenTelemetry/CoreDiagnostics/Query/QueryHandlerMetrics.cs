@@ -1,156 +1,43 @@
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using BuildingBlocks.Core.Abstractions.CQRS;
-using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
-
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Query;
 
-public class QueryHandlerMetrics
+/// <summary>
+/// Metrics tracking for query handlers.
+/// Refactored to eliminate code duplication and follow SOLID principles.
+/// </summary>
+public sealed class QueryHandlerMetrics : HandlerMetricsBase
 {
-    private readonly UpDownCounter<long> _activeQueriesCounter;
-    private readonly Counter<long> _totalQueriesNumber;
-    private readonly Counter<long> _successQueriesNumber;
-    private readonly Counter<long> _failedQueriesNumber;
-    private readonly Histogram<double> _handlerDuration;
-
-    private Stopwatch _timer = new();
-
     public QueryHandlerMetrics(IDiagnosticsProvider diagnosticsProvider)
+        : base(diagnosticsProvider, HandlerMetricsConfiguration.ForQueries())
     {
-        _activeQueriesCounter = diagnosticsProvider.Meter.CreateUpDownCounter<long>(
-            TelemetryTags.Metrics.Application.Commands.ActiveCount,
-            unit: "{active_queries}",
-            description: "Number of queries currently being handled"
-        );
-
-        _totalQueriesNumber = diagnosticsProvider.Meter.CreateCounter<long>(
-            TelemetryTags.Metrics.Application.Commands.TotalExecutedCount,
-            unit: "{total_queries}",
-            description: "Total number of executed query that sent to query handlers"
-        );
-
-        _successQueriesNumber = diagnosticsProvider.Meter.CreateCounter<long>(
-            TelemetryTags.Metrics.Application.Commands.SuccessCount,
-            unit: "{success_queries}",
-            description: "Number queries that handled successfully"
-        );
-
-        _failedQueriesNumber = diagnosticsProvider.Meter.CreateCounter<long>(
-            TelemetryTags.Metrics.Application.Commands.FaildCount,
-            unit: "{failed_queries}",
-            description: "Number queries that handled with errors"
-        );
-
-        _handlerDuration = diagnosticsProvider.Meter.CreateHistogram<double>(
-            TelemetryTags.Metrics.Application.Commands.HandlerDuration,
-            unit: "s",
-            description: "Measures the duration of query handler"
-        );
     }
 
+    /// <summary>
+    /// Starts tracking metrics for query execution.
+    /// </summary>
     public void StartExecuting<TQuery>()
     {
-        var queryName = typeof(TQuery).Name;
-        var handlerType = typeof(TQuery)
-            .Assembly.GetTypes()
-            .FirstOrDefault(t =>
-                t.GetInterfaces()
-                    .Any(i =>
-                        i.IsGenericType
-                        && i.GetGenericTypeDefinition() == typeof(IQueryHandler<,>)
-                        && i.GetGenericArguments()[0] == typeof(TQuery)
-                    )
-            );
-        var queryHandlerName = handlerType?.Name;
-
-        var tags = new TagList
-        {
-            { TelemetryTags.Tracing.Application.Queries.Query, queryName },
-            { TelemetryTags.Tracing.Application.Queries.QueryType, typeof(TQuery).FullName },
-            { TelemetryTags.Tracing.Application.Queries.QueryHandler, queryHandlerName },
-            { TelemetryTags.Tracing.Application.Queries.QueryHandlerType, handlerType?.FullName },
-        };
-
-        if (_activeQueriesCounter.Enabled)
-        {
-            _activeQueriesCounter.Add(1, tags);
-        }
-
-        if (_totalQueriesNumber.Enabled)
-        {
-            _totalQueriesNumber.Add(1, tags);
-        }
-
-        _timer = Stopwatch.StartNew();
+        var queryTags = HandlerTypeResolver.CreateQueryTags<TQuery>();
+        var tags = CreateTagList(queryTags);
+        StartExecution(tags);
     }
 
+    /// <summary>
+    /// Finishes tracking metrics for successful query execution.
+    /// </summary>
     public void FinishExecuting<TQuery>()
     {
-        var queryName = typeof(TQuery).Name;
-        var handlerType = typeof(TQuery)
-            .Assembly.GetTypes()
-            .FirstOrDefault(t =>
-                t.GetInterfaces()
-                    .Any(i =>
-                        i.IsGenericType
-                        && i.GetGenericTypeDefinition() == typeof(IQueryHandler<,>)
-                        && i.GetGenericArguments()[0] == typeof(TQuery)
-                    )
-            );
-        var queryHandlerName = handlerType?.Name;
-
-        var tags = new TagList
-        {
-            { TelemetryTags.Tracing.Application.Queries.Query, queryName },
-            { TelemetryTags.Tracing.Application.Queries.QueryType, typeof(TQuery).FullName },
-            { TelemetryTags.Tracing.Application.Queries.QueryHandler, queryHandlerName },
-            { TelemetryTags.Tracing.Application.Queries.QueryHandlerType, handlerType?.FullName },
-        };
-
-        if (_activeQueriesCounter.Enabled)
-        {
-            _activeQueriesCounter.Add(-1, tags);
-        }
-
-        if (!_handlerDuration.Enabled)
-            return;
-
-        var elapsedTimeSeconds = _timer.Elapsed.Seconds;
-
-        _handlerDuration.Record(elapsedTimeSeconds, tags);
-
-        if (_successQueriesNumber.Enabled)
-        {
-            _successQueriesNumber.Add(1, tags);
-        }
+        var queryTags = HandlerTypeResolver.CreateQueryTags<TQuery>();
+        var tags = CreateTagList(queryTags);
+        FinishExecution(tags);
     }
 
-    public void FailedCommand<TQuery>()
+    /// <summary>
+    /// Records a failed query execution.
+    /// </summary>
+    public void FailedQuery<TQuery>()
     {
-        var queryName = typeof(TQuery).Name;
-        var handlerType = typeof(TQuery)
-            .Assembly.GetTypes()
-            .FirstOrDefault(t =>
-                t.GetInterfaces()
-                    .Any(i =>
-                        i.IsGenericType
-                        && i.GetGenericTypeDefinition() == typeof(IQueryHandler<,>)
-                        && i.GetGenericArguments()[0] == typeof(TQuery)
-                    )
-            );
-        var queryHandlerName = handlerType?.Name;
-
-        var tags = new TagList
-        {
-            { TelemetryTags.Tracing.Application.Queries.Query, queryName },
-            { TelemetryTags.Tracing.Application.Queries.QueryType, typeof(TQuery).FullName },
-            { TelemetryTags.Tracing.Application.Queries.QueryHandler, queryHandlerName },
-            { TelemetryTags.Tracing.Application.Queries.QueryHandlerType, handlerType?.FullName },
-        };
-
-        if (_failedQueriesNumber.Enabled)
-        {
-            _failedQueriesNumber.Add(1, tags);
-        }
+        var queryTags = HandlerTypeResolver.CreateQueryTags<TQuery>();
+        var tags = CreateTagList(queryTags);
+        RecordFailure(tags);
     }
 }
