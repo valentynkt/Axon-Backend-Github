@@ -1,14 +1,20 @@
 namespace BuildingBlocks.Core.Domain.Events;
 
 /// <summary>
-/// Marker interface for domain events.
-/// Domain events represent something important that happened in the domain.
-/// Extends IEvent to ensure consistent event properties across the system.
+/// Marker for domain events raised inside a bounded context.
+/// Pure domain contract (no MediatR/transport).
 /// </summary>
-public interface IDomainEvent : IEvent
+public interface IDomainEvent
 {
-    /// <summary>
-    /// Version of the event schema (for evolution and compatibility).
-    /// </summary>
+    /// <summary>Unique event identifier.</summary>
+    Guid EventId { get; }
+
+    /// <summary>UTC timestamp when the event occurred.</summary>
+    DateTime OccurredAt { get; }
+
+    /// <summary>Schema/version of the event payload. Defaults to 1.</summary>
     int Version { get; }
+
+    /// <summary>Stable name for routing/diagnostics (defaults to concrete type name).</summary>
+    string Name { get; }
 }

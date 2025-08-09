@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Functional.Results;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace BuildingBlocks.Core.Functional.Railway;
 
@@ -7,6 +8,7 @@ namespace BuildingBlocks.Core.Functional.Railway;
 /// Advanced railway programming extensions for Result pattern.
 /// Provides sequence operations, parallel execution, and conditional patterns.
 /// Enables complex result composition while maintaining railway-oriented programming principles.
+/// W3C mode: CorrelationId is always the current Activity TraceId.
 /// </summary>
 public static class RailwayExtensions
 {
@@ -28,12 +30,12 @@ public static class RailwayExtensions
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
 
         var values = new List<T>();
-        
+
         foreach (var result in resultsList)
         {
             if (result.IsFailure)
-                return Result<IReadOnlyList<T>>.Failure(result.Error);
-                
+                return Result<IReadOnlyList<T>>.Failure(WithCorrelation(result.Error));
+
             values.Add(result.Value);
         }
 
@@ -58,7 +60,7 @@ public static class RailwayExtensions
 
         var values = new List<T>();
         var errors = new List<Error>();
-        
+
         foreach (var result in resultsList)
         {
             if (result.IsSuccess)
@@ -69,10 +71,11 @@ public static class RailwayExtensions
 
         if (errors.Count != 0)
         {
-            var aggregatedError = errors.Count == 1 
-                ? errors[0] 
+            var aggregatedError = errors.Count == 1
+                ? errors[0]
                 : Error.Aggregate(errors.ToArray());
-            return Result<IReadOnlyList<T>>.Failure(aggregatedError);
+
+            return Result<IReadOnlyList<T>>.Failure(WithCorrelation(aggregatedError));
         }
 
         return Result<IReadOnlyList<T>>.Success(values.AsReadOnly());
@@ -82,11 +85,6 @@ public static class RailwayExtensions
     /// Applies a function to each item in a sequence, returning all successful results.
     /// Failed operations are filtered out, allowing partial success scenarios.
     /// </summary>
-    /// <typeparam name="TIn">Input type</typeparam>
-    /// <typeparam name="TOut">Output type</typeparam>
-    /// <param name="items">The items to transform</param>
-    /// <param name="transform">The transformation function that returns Result</param>
-    /// <returns>A Result containing all successful transformations</returns>
     public static Result<IReadOnlyList<TOut>> TraversePartial<TIn, TOut>(
         this IEnumerable<TIn> items,
         Func<TIn, Result<TOut>> transform)
@@ -95,7 +93,7 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(transform);
 
         var results = new List<TOut>();
-        
+
         foreach (var item in items)
         {
             var result = transform(item);
@@ -110,11 +108,6 @@ public static class RailwayExtensions
     /// Applies a function to each item in a sequence, requiring all to succeed.
     /// Returns the first failure encountered or all successful results.
     /// </summary>
-    /// <typeparam name="TIn">Input type</typeparam>
-    /// <typeparam name="TOut">Output type</typeparam>
-    /// <param name="items">The items to transform</param>
-    /// <param name="transform">The transformation function that returns Result</param>
-    /// <returns>A Result containing all successful transformations or the first failure</returns>
     public static Result<IReadOnlyList<TOut>> Traverse<TIn, TOut>(
         this IEnumerable<TIn> items,
         Func<TIn, Result<TOut>> transform)
@@ -133,11 +126,6 @@ public static class RailwayExtensions
     /// Executes multiple Result-returning operations in parallel and combines their results.
     /// Returns the first failure encountered or all successful results.
     /// </summary>
-    /// <typeparam name="T">The type of values in the results</typeparam>
-    /// <param name="operations">The operations to execute in parallel</param>
-    /// <param name="maxDegreeOfParallelism">Maximum number of concurrent operations</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>A Result containing all success values or the first failure</returns>
     public static async Task<Result<IReadOnlyList<T>>> ParallelSequence<T>(
         this IEnumerable<Func<CancellationToken, Task<Result<T>>>> operations,
         int maxDegreeOfParallelism = -1,
@@ -149,7 +137,6 @@ public static class RailwayExtensions
         if (operationsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
 
-        // Use processor count if -1 is specified
         var actualMaxDegree = maxDegreeOfParallelism == -1 ? Environment.ProcessorCount : maxDegreeOfParallelism;
 
         try
@@ -169,11 +156,15 @@ public static class RailwayExtensions
             });
 
             var results = await Task.WhenAll(tasks);
-            return results.Sequence();
+
+            // Ensure all failures carry the current correlation id
+            var normalized = results.Select(EnsureResultCorrelation).ToArray();
+
+            return normalized.Sequence();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Result<IReadOnlyList<T>>.Failure(Error.Cancelled("Parallel operation was cancelled"));
+            return Result<IReadOnlyList<T>>.Failure(WithCorrelation(Error.Cancelled("Parallel operation was cancelled")));
         }
     }
 
@@ -181,11 +172,6 @@ public static class RailwayExtensions
     /// Executes multiple Result-returning operations in parallel, collecting all errors.
     /// Returns success with all values if all succeed, or failure with aggregated errors.
     /// </summary>
-    /// <typeparam name="T">The type of values in the results</typeparam>
-    /// <param name="operations">The operations to execute in parallel</param>
-    /// <param name="maxDegreeOfParallelism">Maximum number of concurrent operations</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>A Result containing all success values or aggregated failures</returns>
     public static async Task<Result<IReadOnlyList<T>>> ParallelSequenceWithAllErrors<T>(
         this IEnumerable<Func<CancellationToken, Task<Result<T>>>> operations,
         int maxDegreeOfParallelism = -1,
@@ -197,7 +183,6 @@ public static class RailwayExtensions
         if (operationsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
 
-        // Use processor count if -1 is specified
         var actualMaxDegree = maxDegreeOfParallelism == -1 ? Environment.ProcessorCount : maxDegreeOfParallelism;
 
         try
@@ -217,11 +202,13 @@ public static class RailwayExtensions
             });
 
             var results = await Task.WhenAll(tasks);
-            return results.SequenceWithAllErrors();
+            var normalized = results.Select(EnsureResultCorrelation).ToArray();
+
+            return normalized.SequenceWithAllErrors();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Result<IReadOnlyList<T>>.Failure(Error.Cancelled("Parallel operation was cancelled"));
+            return Result<IReadOnlyList<T>>.Failure(WithCorrelation(Error.Cancelled("Parallel operation was cancelled")));
         }
     }
 
@@ -229,11 +216,6 @@ public static class RailwayExtensions
     /// Executes operations in parallel but allows partial success.
     /// Returns all successful results, ignoring failures.
     /// </summary>
-    /// <typeparam name="T">The type of values in the results</typeparam>
-    /// <param name="operations">The operations to execute in parallel</param>
-    /// <param name="maxDegreeOfParallelism">Maximum number of concurrent operations</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>A Result containing all successful values</returns>
     public static async Task<Result<IReadOnlyList<T>>> ParallelPartial<T>(
         this IEnumerable<Func<CancellationToken, Task<Result<T>>>> operations,
         int maxDegreeOfParallelism = -1,
@@ -245,20 +227,19 @@ public static class RailwayExtensions
         if (operationsList.Count == 0)
             return Result<IReadOnlyList<T>>.Success(Array.Empty<T>());
 
-        // Use processor count if -1 is specified
         var actualMaxDegree = maxDegreeOfParallelism == -1 ? Environment.ProcessorCount : maxDegreeOfParallelism;
 
         try
         {
             var results = new ConcurrentBag<T>();
             var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
-            
+
             var tasks = operationsList.Select(async operation =>
             {
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    var result = await operation(cancellationToken);
+                    var result = EnsureResultCorrelation(await operation(cancellationToken));
                     if (result.IsSuccess)
                         results.Add(result.Value);
                 }
@@ -273,7 +254,7 @@ public static class RailwayExtensions
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Result<IReadOnlyList<T>>.Failure(Error.Cancelled("Parallel operation was cancelled"));
+            return Result<IReadOnlyList<T>>.Failure(WithCorrelation(Error.Cancelled("Parallel operation was cancelled")));
         }
     }
 
@@ -283,13 +264,7 @@ public static class RailwayExtensions
 
     /// <summary>
     /// Executes one of two functions based on a condition, both returning Results.
-    /// Maintains railway programming by handling both success and failure paths.
     /// </summary>
-    /// <typeparam name="T">The result type</typeparam>
-    /// <param name="condition">The condition to evaluate</param>
-    /// <param name="trueFunc">Function to execute if condition is true</param>
-    /// <param name="falseFunc">Function to execute if condition is false</param>
-    /// <returns>The result of the executed function</returns>
     public static Result<T> Branch<T>(
         bool condition,
         Func<Result<T>> trueFunc,
@@ -304,12 +279,6 @@ public static class RailwayExtensions
     /// <summary>
     /// Executes one of two async functions based on a condition, both returning Results.
     /// </summary>
-    /// <typeparam name="T">The result type</typeparam>
-    /// <param name="condition">The condition to evaluate</param>
-    /// <param name="trueFunc">Async function to execute if condition is true</param>
-    /// <param name="falseFunc">Async function to execute if condition is false</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The result of the executed function</returns>
     public static async Task<Result<T>> BranchAsync<T>(
         bool condition,
         Func<CancellationToken, Task<Result<T>>> trueFunc,
@@ -319,8 +288,8 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(trueFunc);
         ArgumentNullException.ThrowIfNull(falseFunc);
 
-        return condition 
-            ? await trueFunc(cancellationToken) 
+        return condition
+            ? await trueFunc(cancellationToken)
             : await falseFunc(cancellationToken);
     }
 
@@ -328,12 +297,6 @@ public static class RailwayExtensions
     /// Conditional bind - executes the binder only if the condition is met.
     /// If condition is false, returns the original result unchanged.
     /// </summary>
-    /// <typeparam name="T">The current result type</typeparam>
-    /// <typeparam name="TNew">The new result type</typeparam>
-    /// <param name="result">The result to potentially bind</param>
-    /// <param name="condition">The condition to check</param>
-    /// <param name="binder">The binding function to execute if condition is true</param>
-    /// <returns>The bound result if condition is true, otherwise a successful result with default value</returns>
     public static Result<TNew> BindIf<T, TNew>(
         this Result<T> result,
         bool condition,
@@ -343,23 +306,16 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(binder);
 
         if (result.IsFailure)
-            return Result<TNew>.Failure(result.Error);
+            return Result<TNew>.Failure(WithCorrelation(result.Error));
 
-        return condition 
-            ? binder(result.Value) 
+        return condition
+            ? binder(result.Value)
             : Result<TNew>.Success(new TNew());
     }
 
     /// <summary>
     /// Conditional bind with predicate function - executes the binder only if predicate returns true.
     /// </summary>
-    /// <typeparam name="T">The current result type</typeparam>
-    /// <typeparam name="TNew">The new result type</typeparam>
-    /// <param name="result">The result to potentially bind</param>
-    /// <param name="predicate">The predicate function to evaluate</param>
-    /// <param name="binder">The binding function to execute if predicate is true</param>
-    /// <param name="defaultValueFactory">Factory for default value when predicate is false</param>
-    /// <returns>The bound result if predicate is true, otherwise default value</returns>
     public static Result<TNew> BindIf<T, TNew>(
         this Result<T> result,
         Func<T, bool> predicate,
@@ -371,7 +327,7 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(defaultValueFactory);
 
         if (result.IsFailure)
-            return Result<TNew>.Failure(result.Error);
+            return Result<TNew>.Failure(WithCorrelation(result.Error));
 
         return predicate(result.Value)
             ? binder(result.Value)
@@ -382,10 +338,6 @@ public static class RailwayExtensions
     /// Pipeline multiple operations in sequence, short-circuiting on first failure.
     /// Each operation receives the result of the previous operation.
     /// </summary>
-    /// <typeparam name="T">The result type</typeparam>
-    /// <param name="initialResult">The initial result to start the pipeline</param>
-    /// <param name="operations">The operations to execute in sequence</param>
-    /// <returns>The final result after all operations</returns>
     public static Result<T> Pipeline<T>(
         this Result<T> initialResult,
         params Func<T, Result<T>>[] operations)
@@ -393,12 +345,12 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(operations);
 
         var current = initialResult;
-        
+
         foreach (var operation in operations)
         {
             if (current.IsFailure)
-                return current;
-                
+                return EnsureResultCorrelation(current);
+
             current = operation(current.Value);
         }
 
@@ -408,11 +360,6 @@ public static class RailwayExtensions
     /// <summary>
     /// Async pipeline for sequential operations with short-circuiting.
     /// </summary>
-    /// <typeparam name="T">The result type</typeparam>
-    /// <param name="initialResult">The initial result to start the pipeline</param>
-    /// <param name="operations">The async operations to execute in sequence</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The final result after all operations</returns>
     public static async Task<Result<T>> PipelineAsync<T>(
         this Result<T> initialResult,
         IEnumerable<Func<T, CancellationToken, Task<Result<T>>>> operations,
@@ -421,12 +368,12 @@ public static class RailwayExtensions
         ArgumentNullException.ThrowIfNull(operations);
 
         var current = initialResult;
-        
+
         foreach (var operation in operations)
         {
             if (current.IsFailure)
-                return current;
-                
+                return EnsureResultCorrelation(current);
+
             current = await operation(current.Value, cancellationToken);
         }
 
@@ -441,13 +388,6 @@ public static class RailwayExtensions
     /// Retries an operation that returns a Result with exponential backoff.
     /// Only retries on specific error types that might be transient.
     /// </summary>
-    /// <typeparam name="T">The result type</typeparam>
-    /// <param name="operation">The operation to retry</param>
-    /// <param name="maxAttempts">Maximum number of attempts</param>
-    /// <param name="baseDelay">Base delay between attempts</param>
-    /// <param name="retryableErrorTypes">Error types that should trigger a retry</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The result of the operation or the final failure</returns>
     public static async Task<Result<T>> RetryAsync<T>(
         Func<CancellationToken, Task<Result<T>>> operation,
         int maxAttempts = 3,
@@ -461,39 +401,66 @@ public static class RailwayExtensions
             throw new ArgumentException("Max attempts must be greater than 0", nameof(maxAttempts));
 
         var delay = baseDelay ?? TimeSpan.FromMilliseconds(100);
-        var defaultRetryableTypes = new[] { ErrorType.System, ErrorType.Cancellation };
-        var retryableTypes = retryableErrorTypes ?? defaultRetryableTypes;
+        var retryableTypes = retryableErrorTypes ?? [ErrorType.System, ErrorType.Cancellation];
+
+        Result<T> lastResult = Result<T>.Failure(Error.System("Retry not attempted"));
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var result = await operation(cancellationToken);
-            
-            if (result.IsSuccess)
-                return result;
+            lastResult = EnsureResultCorrelation(await operation(cancellationToken));
 
-            // Don't retry if error type is not retryable
-            if (!retryableTypes.Contains(result.Error.Type))
-                return result;
+            if (lastResult.IsSuccess)
+                return lastResult;
 
-            // Don't retry on last attempt
-            if (attempt == maxAttempts)
-                return result;
+            if (ShouldStopRetrying(lastResult.Error, retryableTypes, attempt, maxAttempts))
+                break;
 
-            // Calculate exponential backoff delay
-            var actualDelay = TimeSpan.FromTicks(delay.Ticks * (long)Math.Pow(2, attempt - 1));
-            
-            try
-            {
-                await Task.Delay(actualDelay, cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                return Result<T>.Failure(Error.Cancelled("Operation was cancelled during retry"));
-            }
+            await DelayWithTelemetry(delay, attempt, cancellationToken);
         }
 
-        // This should never be reached due to the logic above, but included for completeness
-        return Result<T>.Failure(Error.System("Retry logic error - should not reach this point"));
+        return EnsureResultCorrelation(lastResult);
+    }
+
+    private static bool ShouldStopRetrying(Error error, ErrorType[] retryableTypes, int attempt, int maxAttempts)
+        => !retryableTypes.Contains(error.Type) || attempt >= maxAttempts;
+
+    private static async Task DelayWithTelemetry(TimeSpan baseDelay, int attempt, CancellationToken cancellationToken)
+    {
+        var actualDelay = TimeSpan.FromTicks(baseDelay.Ticks * (long)Math.Pow(2, attempt - 1));
+
+        Activity.Current?.AddEvent(new ActivityEvent(
+            "retry.attempt",
+            tags: new ActivityTagsCollection
+            {
+                ["attempt"] = attempt,
+                ["next_delay_ms"] = actualDelay.TotalMilliseconds,
+                ["correlation.id"] = Activity.Current?.TraceId.ToString()
+            }));
+
+        try
+        {
+            await Task.Delay(actualDelay, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("Operation was cancelled during retry", cancellationToken);
+        }
+    }
+
+    #endregion
+
+    #region Helpers (W3C Correlation)
+
+    private static Result<T> EnsureResultCorrelation<T>(Result<T> result)
+        => result.IsFailure ? Result<T>.Failure(WithCorrelation(result.Error)) : result;
+
+    private static Error WithCorrelation(Error error)
+    {
+        if (!string.IsNullOrWhiteSpace(error.CorrelationId))
+            return error;
+
+        var traceId = Activity.Current?.TraceId.ToString();
+        return error.WithCorrelationId(traceId ?? ActivityTraceId.CreateRandom().ToString());
     }
 
     #endregion

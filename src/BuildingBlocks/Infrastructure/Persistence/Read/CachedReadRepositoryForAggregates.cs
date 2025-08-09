@@ -1,6 +1,8 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Application.Abstractions.Persistence;
 using BuildingBlocks.Core.Abstractions.Pagination;
-using BuildingBlocks.Core.Domain.Model;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
+
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
@@ -14,7 +16,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 /// This is the correct decorator for entities that implement IAggregateRoot
 /// </summary>
 public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBase<TAggregate, TId>, IReadRepository<TAggregate, TId>
-    where TAggregate : class, IAggregateRoot<TId>
+    where TAggregate : class, IIdentifiable<TId>
     where TId : IStrongId
 {
     private readonly IReadRepository<TAggregate, TId> _inner;
@@ -199,13 +201,12 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         return await _inner.ExecuteCompiledQueryAsync(compiledQuery, cancellationToken);
     }
 
-    public override void Dispose()
+    public void Dispose()
     {
         if (_inner is IDisposable disposableInner)
         {
             disposableInner.Dispose();
         }
-        base.Dispose();
         GC.SuppressFinalize(this);
     }
 }

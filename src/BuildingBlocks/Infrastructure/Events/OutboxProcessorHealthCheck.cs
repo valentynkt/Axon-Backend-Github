@@ -2,6 +2,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Core.Abstractions.Events;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BuildingBlocks.Infrastructure.Events;
 

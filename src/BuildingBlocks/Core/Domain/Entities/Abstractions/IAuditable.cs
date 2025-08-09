@@ -1,11 +1,15 @@
 namespace BuildingBlocks.Core.Domain.Entities.Abstractions;
 
 /// <summary>
-/// Opt-in trait for entities that track creation/update timestamps.
-/// Infrastructure (e.g., EF interceptors) should populate these consistently.
+/// Auditing surface: creation and modification timestamps.
+/// Do not include actor (CreatedBy/UpdatedBy) here to avoid coupling;
+/// add that in your app layer or a separate interface if needed.
 /// </summary>
 public interface IAuditable
 {
+    /// <summary>When the entity was created (UTC).</summary>
     DateTimeOffset CreatedAt { get; }
-    DateTimeOffset UpdatedAt { get; }
+
+    /// <summary>When the entity was last modified (UTC), if ever.</summary>
+    DateTimeOffset? UpdatedAt { get; }
 }

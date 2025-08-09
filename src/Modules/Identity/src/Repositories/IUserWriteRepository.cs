@@ -1,3 +1,4 @@
+using BuildingBlocks.Application.Abstractions.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Identity.Identity.Models;
 

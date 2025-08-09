@@ -4,6 +4,7 @@ using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Errors;
 using Axon.Modules.Chat.Domain.Rules;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Domain.Entities.Base;
 using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Domain.Rules;
 using BuildingBlocks.Core.Functional;

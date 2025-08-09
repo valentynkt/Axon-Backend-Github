@@ -8,17 +8,17 @@ namespace BuildingBlocks.Core.Functional.Extensions;
 
 /// <summary>
 /// OpenTelemetry Activity and telemetry integration extensions for Result&lt;T&gt;.
-/// Provides distributed tracing, metrics collection, and activity enrichment
-/// for Result-based operations with zero-allocation performance paths.
+/// W3C mode: correlation.id is always the Activity TraceId.
 /// </summary>
 public static class ResultTelemetryExtensions
 {
     private static readonly ActivitySource ActivitySource = new(TelemetryTags.Tracing.Application.AppService);
-    
+
     #region Activity Integration Extensions
-    
+
     /// <summary>
-    /// Enrich current Activity with Result outcome and metadata
+    /// Enrich current Activity with Result outcome and metadata.
+    /// Ensures failures carry correlation id equal to the Activity TraceId.
     /// </summary>
     public static Result<T> EnrichActivity<T>(
         this Result<T> result,
@@ -27,21 +27,30 @@ public static class ResultTelemetryExtensions
     {
         var activity = Activity.Current;
         if (activity == null) return result;
-        
+
         var opName = operationName ?? memberName ?? "UnknownOperation";
-        
+
+        // Make sure failures have correlation id set to the current trace id
+        if (result.IsFailure && string.IsNullOrWhiteSpace(result.Error.CorrelationId))
+        {
+            var traceId = activity.TraceId.ToString();
+            result = Result<T>.Failure(result.Error.WithCorrelationId(traceId));
+        }
+
         // Set operation name if not already set
         if (string.IsNullOrEmpty(activity.DisplayName))
         {
             activity.SetTag("operation.name", opName);
             activity.DisplayName = opName;
         }
-        
-        // Add Result-specific tags
+
+        // Add W3C correlation + result tags
+        activity.SetTag("correlation.id", activity.TraceId.ToString()); // equals trace id
+        activity.SetTag("trace.id", activity.TraceId.ToString());
         activity.SetTag("result.type", typeof(T).Name);
         activity.SetTag("result.is_success", result.IsSuccess);
         activity.SetTag("result.is_failure", result.IsFailure);
-        
+
         if (result.IsSuccess)
         {
             activity.SetStatus(ActivityStatusCode.Ok, "Operation completed successfully");
@@ -53,23 +62,18 @@ public static class ResultTelemetryExtensions
             activity.SetStatus(ActivityStatusCode.Error, error.Message);
             activity.SetTag(TelemetryTags.Tracing.Otel.StatusCode, "ERROR");
             activity.SetTag(TelemetryTags.Tracing.Otel.StatusDescription, error.Message);
-            
+
             // Add error details
             activity.SetTag("error.code", error.Code);
             activity.SetTag("error.type", error.Type.ToString());
             activity.SetTag("error.severity", error.Severity.ToString());
             activity.SetTag("http.status_code", error.ToHttpStatusCode());
-            
-            if (!string.IsNullOrEmpty(error.CorrelationId))
-            {
-                activity.SetTag("correlation.id", error.CorrelationId);
-            }
-            
+
             if (!string.IsNullOrEmpty(error.Source))
             {
                 activity.SetTag("error.source", error.Source);
             }
-            
+
             // Add error metadata as tags (with size limits)
             if (error.Metadata != null)
             {
@@ -82,7 +86,7 @@ public static class ResultTelemetryExtensions
                     }
                 }
             }
-            
+
             // Add exception event if inner exception exists
             if (error.InnerException != null)
             {
@@ -94,10 +98,10 @@ public static class ResultTelemetryExtensions
                 }));
             }
         }
-        
+
         return result;
     }
-    
+
     /// <summary>
     /// Create a child Activity for a Result operation with automatic completion
     /// </summary>
@@ -111,7 +115,7 @@ public static class ResultTelemetryExtensions
         var activity = activitySource.StartActivity(operationName, kind, parentContext, tags);
         return new ResultActivityScope<T>(activity, operationName);
     }
-    
+
     /// <summary>
     /// Execute operation within an Activity scope with automatic Result enrichment
     /// </summary>
@@ -122,7 +126,7 @@ public static class ResultTelemetryExtensions
         IEnumerable<KeyValuePair<string, object?>>? tags = null)
     {
         using var activity = ActivitySource.StartActivity(operationName, kind, tags: tags);
-        
+
         try
         {
             var result = await operation.ConfigureAwait(false);
@@ -140,7 +144,7 @@ public static class ResultTelemetryExtensions
             throw;
         }
     }
-    
+
     /// <summary>
     /// Execute synchronous operation within an Activity scope
     /// </summary>
@@ -151,7 +155,7 @@ public static class ResultTelemetryExtensions
         IEnumerable<KeyValuePair<string, object?>>? tags = null)
     {
         using var activity = ActivitySource.StartActivity(operationName, kind, tags: tags);
-        
+
         try
         {
             var result = operation();
@@ -169,13 +173,14 @@ public static class ResultTelemetryExtensions
             throw;
         }
     }
-    
+
     #endregion
-    
+
     #region Baggage and Context Extensions
-    
+
     /// <summary>
-    /// Add Result context to Activity baggage for cross-service correlation
+    /// Add Result context to Activity baggage for cross-service correlation.
+    /// Always sets correlation.id to Activity.TraceId.
     /// </summary>
     public static Result<T> AddToBaggage<T>(
         this Result<T> result,
@@ -184,28 +189,23 @@ public static class ResultTelemetryExtensions
     {
         var activity = Activity.Current;
         if (activity == null) return result;
-        
+
         var opName = operationName ?? memberName ?? "UnknownOperation";
-        
-        // Add baggage items for cross-service correlation
+
         activity.SetBaggage("operation.name", opName);
         activity.SetBaggage("operation.result", result.IsSuccess ? "success" : "failure");
-        
+        activity.SetBaggage("correlation.id", activity.TraceId.ToString());
+
         if (result.IsFailure)
         {
             var error = result.Error;
             activity.SetBaggage("error.code", error.Code);
             activity.SetBaggage("error.type", error.Type.ToString());
-            
-            if (!string.IsNullOrEmpty(error.CorrelationId))
-            {
-                activity.SetBaggage("correlation.id", error.CorrelationId);
-            }
         }
-        
+
         return result;
     }
-    
+
     /// <summary>
     /// Create correlation context from Result for downstream operations
     /// </summary>
@@ -213,34 +213,31 @@ public static class ResultTelemetryExtensions
     {
         var activity = Activity.Current;
         if (activity == null) return default;
-        
+
         var context = activity.Context;
-        
+
         // Add Result-specific trace state
         var traceState = context.TraceState ?? string.Empty;
         var resultState = result.IsSuccess ? "success" : "failure";
-        
+
         if (!traceState.Contains("result="))
         {
-            traceState = string.IsNullOrEmpty(traceState) 
-                ? $"result={resultState}" 
+            traceState = string.IsNullOrEmpty(traceState)
+                ? $"result={resultState}"
                 : $"{traceState},result={resultState}";
         }
-        
+
         return new ActivityContext(
-            context.TraceId, 
-            context.SpanId, 
-            context.TraceFlags, 
+            context.TraceId,
+            context.SpanId,
+            context.TraceFlags,
             traceState);
     }
-    
+
     #endregion
-    
+
     #region Custom Event Extensions
-    
-    /// <summary>
-    /// Add custom event to current Activity based on Result outcome
-    /// </summary>
+
     public static Result<T> AddEvent<T>(
         this Result<T> result,
         string eventName,
@@ -249,13 +246,14 @@ public static class ResultTelemetryExtensions
     {
         var activity = Activity.Current;
         if (activity == null) return result;
-        
-        var tags = new ActivityTagsCollection();
-        
-        // Add Result context
-        tags.Add("result.is_success", result.IsSuccess);
-        tags.Add("result.type", typeof(T).Name);
-        
+
+        var tags = new ActivityTagsCollection
+        {
+            ["correlation.id"] = activity.TraceId.ToString(),
+            ["result.is_success"] = result.IsSuccess,
+            ["result.type"] = typeof(T).Name
+        };
+
         if (result.IsFailure)
         {
             var error = result.Error;
@@ -263,12 +261,11 @@ public static class ResultTelemetryExtensions
             tags.Add("error.message", error.Message);
             tags.Add("error.type", error.Type.ToString());
         }
-        
-        // Add custom event data
+
         if (eventData != null)
         {
             var properties = eventData.GetType().GetProperties();
-            foreach (var prop in properties.Take(10)) // Limit properties
+            foreach (var prop in properties.Take(10))
             {
                 try
                 {
@@ -278,21 +275,16 @@ public static class ResultTelemetryExtensions
                         tags.Add($"event.{prop.Name.ToLowerInvariant()}", value.ToString());
                     }
                 }
-                catch (Exception)
-                {
-                    // Ignore property access errors
-                }
+#pragma warning disable CA1031 // Do not catch general exception types
+                catch { }
+#pragma warning restore CA1031
             }
         }
-        
+
         activity.AddEvent(new ActivityEvent(eventName, timestamp ?? DateTimeOffset.UtcNow, tags));
-        
         return result;
     }
-    
-    /// <summary>
-    /// Add business event based on successful Result
-    /// </summary>
+
     public static Result<T> AddBusinessEvent<T>(
         this Result<T> result,
         string businessEventName,
@@ -302,13 +294,10 @@ public static class ResultTelemetryExtensions
         {
             result.AddEvent($"business.{businessEventName}", businessData);
         }
-        
+
         return result;
     }
-    
-    /// <summary>
-    /// Add error event based on failed Result
-    /// </summary>
+
     public static Result<T> AddErrorEvent<T>(
         this Result<T> result,
         string errorEventName = "operation.error",
@@ -318,51 +307,45 @@ public static class ResultTelemetryExtensions
         {
             result.AddEvent(errorEventName, errorData);
         }
-        
+
         return result;
     }
-    
+
     #endregion
-    
+
     #region Activity Link Extensions
-    
-    /// <summary>
-    /// Link current Activity to related operations based on Result correlation
-    /// </summary>
+
     public static Result<T> LinkToCorrelatedOperations<T>(
         this Result<T> result,
         IEnumerable<ActivityContext> relatedContexts)
     {
         var activity = Activity.Current;
         if (activity == null) return result;
-        
+
         foreach (var context in relatedContexts)
         {
             var linkTags = new ActivityTagsCollection
             {
                 ["link.type"] = "correlation",
-                ["result.is_success"] = result.IsSuccess
+                ["result.is_success"] = result.IsSuccess,
+                ["correlation.id"] = activity.TraceId.ToString()
             };
-            
+
             if (result.IsFailure)
             {
                 linkTags.Add("error.code", result.Error.Code);
             }
-            
-            // Note: Activity links must be added during Activity creation,
-            // so this is more for documentation and future enhancement
+
+            // Note: Links must be added when starting an Activity; here for parity/documentation.
         }
-        
+
         return result;
     }
-    
+
     #endregion
-    
+
     #region Sampling and Performance
-    
-    /// <summary>
-    /// Apply conditional sampling based on Result outcome
-    /// </summary>
+
     public static Result<T> ApplyConditionalSampling<T>(
         this Result<T> result,
         double successSampleRate = 0.1,
@@ -370,11 +353,11 @@ public static class ResultTelemetryExtensions
     {
         var activity = Activity.Current;
         if (activity == null) return result;
-        
-        var shouldSample = result.IsSuccess 
+
+        var shouldSample = result.IsSuccess
             ? Random.Shared.NextDouble() < successSampleRate
             : Random.Shared.NextDouble() < failureSampleRate;
-            
+
         if (!shouldSample)
         {
             activity.IsAllDataRequested = false;
@@ -385,10 +368,10 @@ public static class ResultTelemetryExtensions
             activity.SetTag("sampling.applied", true);
             activity.SetTag("sampling.rate", result.IsSuccess ? successSampleRate : failureSampleRate);
         }
-        
+
         return result;
     }
-    
+
     #endregion
 }
 
@@ -400,39 +383,33 @@ public sealed class ResultActivityScope<T> : IDisposable
     private readonly Activity? _activity;
     private readonly string _operationName;
     private bool _disposed;
-    
+
     internal ResultActivityScope(Activity? activity, string operationName)
     {
         _activity = activity;
         _operationName = operationName;
     }
-    
-    /// <summary>
-    /// Complete the operation with a Result and enrich the Activity
-    /// </summary>
+
     public Result<T> Complete(Result<T> result)
     {
         if (_disposed) return result;
-        
+
         result.EnrichActivity(_operationName);
         return result;
     }
-    
-    /// <summary>
-    /// Get the underlying Activity
-    /// </summary>
+
     public Activity? Activity => _activity;
-    
+
     public void Dispose()
     {
         if (_disposed) return;
-        
+
         if (_activity != null && _activity.IsAllDataRequested)
         {
             _activity.SetTag("operation.completed", false);
             _activity.SetStatus(ActivityStatusCode.Error, "Operation was not completed properly");
         }
-        
+
         _activity?.Dispose();
         _disposed = true;
     }

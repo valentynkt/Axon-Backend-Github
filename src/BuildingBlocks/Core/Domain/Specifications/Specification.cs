@@ -2,219 +2,91 @@ using System.Linq.Expressions;
 
 namespace BuildingBlocks.Core.Domain.Specifications;
 
-/// <summary>
-/// Base class for specifications following the specification pattern.
-/// Encapsulates query logic that can be composed and reused with LINQ integration.
-/// Supports both in-memory and database query scenarios.
-/// </summary>
-/// <typeparam name="T">The type of entity this specification applies to</typeparam>
-public abstract class Specification<T>
+/// <summary>Minimal, composable specification (expression-based, infra-agnostic).</summary>
+public interface ISpecification<T>
 {
-    /// <summary>
-    /// Convert specification to expression for LINQ queries.
-    /// This is the core method that must be implemented by derived classes.
-    /// </summary>
-    /// <returns>Expression that can be used in LINQ queries</returns>
+    Expression<Func<T, bool>> ToExpression();
+
+    bool IsSatisfiedBy(T candidate)
+        => ToExpression().Compile().Invoke(candidate);
+}
+
+/// <summary>
+/// Base class enabling rich combinators and operator syntax. Caches compiled predicate per instance.
+/// </summary>
+public abstract class Specification<T> : ISpecification<T>
+{
+    private Func<T, bool>? _cachedPredicate;
+
     public abstract Expression<Func<T, bool>> ToExpression();
-    
-    /// <summary>
-    /// Check if an entity satisfies the specification using in-memory evaluation.
-    /// Use this for single entity checks or when working with in-memory collections.
-    /// </summary>
-    /// <param name="entity">The entity to check</param>
-    /// <returns>True if the entity satisfies the specification</returns>
-    public bool IsSatisfiedBy(T entity)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-        
-        var predicate = ToExpression().Compile();
-        return predicate(entity);
-    }
-    
-    /// <summary>
-    /// Combine with another specification using AND logic.
-    /// Both specifications must be satisfied.
-    /// </summary>
-    /// <param name="specification">The specification to combine with</param>
-    /// <returns>A new specification representing the AND combination</returns>
-    public Specification<T> And(Specification<T> specification)
-    {
-        ArgumentNullException.ThrowIfNull(specification);
-        return new AndSpecification<T>(this, specification);
-    }
-    
-    /// <summary>
-    /// Combine with another specification using OR logic.
-    /// Either specification can be satisfied.
-    /// </summary>
-    /// <param name="specification">The specification to combine with</param>
-    /// <returns>A new specification representing the OR combination</returns>
-    public Specification<T> Or(Specification<T> specification)
-    {
-        ArgumentNullException.ThrowIfNull(specification);
-        return new OrSpecification<T>(this, specification);
-    }
-    
-    /// <summary>
-    /// Create a negated version of this specification.
-    /// The result will be satisfied when this specification is NOT satisfied.
-    /// </summary>
-    /// <returns>A new specification representing the negation</returns>
-    public Specification<T> Not()
-    {
-        return new NotSpecification<T>(this);
-    }
-    
-    /// <summary>
-    /// Implicit conversion to Expression for seamless LINQ integration.
-    /// Allows specifications to be used directly in LINQ queries.
-    /// </summary>
-    /// <param name="specification">The specification to convert</param>
+
+    public static Specification<T> Create(Expression<Func<T, bool>> predicate)
+        => new AdHocSpecification<T>(predicate);
+
+    public Specification<T> And(ISpecification<T> other) => new AndSpecification<T>(this, other);
+    public Specification<T> Or(ISpecification<T> other)  => new OrSpecification<T>(this, other);
+    public Specification<T> Not()                        => new NotSpecification<T>(this);
+
+    /// <summary>Compile once, reuse many times (LINQ-to-Objects path).</summary>
+    public Func<T, bool> ToPredicate()
+        => _cachedPredicate ??= ToExpression().Compile();
+
+    public bool IsSatisfiedBy(T candidate) => ToPredicate().Invoke(candidate);
+
+    /// <summary>Implicit conversion to Expression for seamless LINQ integration.</summary>
     public static implicit operator Expression<Func<T, bool>>(Specification<T> specification)
     {
         ArgumentNullException.ThrowIfNull(specification);
         return specification.ToExpression();
     }
-    
-    /// <summary>
-    /// Compile the specification to a predicate function for in-memory use.
-    /// Useful for performance when the same specification will be used multiple times.
-    /// </summary>
-    /// <returns>A compiled predicate function</returns>
-    public Func<T, bool> Compile()
+
+    // Operator sugar: specA & specB, specA | specB, !specA
+    public static Specification<T> operator &(Specification<T> left, ISpecification<T> right) => left.And(right);
+    public static Specification<T> operator |(Specification<T> left, ISpecification<T> right) => left.Or(right);
+    public static Specification<T> operator !(Specification<T> inner) => inner.Not();
+
+    private sealed class AdHocSpecification<TC> : Specification<TC>
     {
-        return ToExpression().Compile();
+        private readonly Expression<Func<TC, bool>> _expr;
+        public AdHocSpecification(Expression<Func<TC, bool>> expr) => _expr = expr ?? throw new ArgumentNullException(nameof(expr));
+        public override Expression<Func<TC, bool>> ToExpression() => _expr;
     }
 }
 
-/// <summary>
-/// AND specification combinator - both specifications must be satisfied.
-/// </summary>
-/// <typeparam name="T">The type of entity</typeparam>
 internal sealed class AndSpecification<T> : Specification<T>
 {
-    private readonly Specification<T> _left;
-    private readonly Specification<T> _right;
-    
-    public AndSpecification(Specification<T> left, Specification<T> right)
-    {
-        _left = left ?? throw new ArgumentNullException(nameof(left));
-        _right = right ?? throw new ArgumentNullException(nameof(right));
-    }
-    
+    private readonly ISpecification<T> _left, _right;
+    public AndSpecification(ISpecification<T> left, ISpecification<T> right) { _left = left; _right = right; }
     public override Expression<Func<T, bool>> ToExpression()
-    {
-        var leftExpression = _left.ToExpression();
-        var rightExpression = _right.ToExpression();
-        
-        // Use expression parameter rewriter for proper composition
-        var parameter = Expression.Parameter(typeof(T), "x");
-        var leftBody = new ParameterRewriter(leftExpression.Parameters[0], parameter).Visit(leftExpression.Body);
-        var rightBody = new ParameterRewriter(rightExpression.Parameters[0], parameter).Visit(rightExpression.Body);
-        
-        var body = Expression.AndAlso(leftBody!, rightBody!);
-        return Expression.Lambda<Func<T, bool>>(body, parameter);
-    }
+        => _left.ToExpression().AndAlso(_right.ToExpression());
 }
 
-/// <summary>
-/// OR specification combinator - either specification can be satisfied.
-/// </summary>
-/// <typeparam name="T">The type of entity</typeparam>
 internal sealed class OrSpecification<T> : Specification<T>
 {
-    private readonly Specification<T> _left;
-    private readonly Specification<T> _right;
-    
-    public OrSpecification(Specification<T> left, Specification<T> right)
-    {
-        _left = left ?? throw new ArgumentNullException(nameof(left));
-        _right = right ?? throw new ArgumentNullException(nameof(right));
-    }
-    
+    private readonly ISpecification<T> _left, _right;
+    public OrSpecification(ISpecification<T> left, ISpecification<T> right) { _left = left; _right = right; }
     public override Expression<Func<T, bool>> ToExpression()
-    {
-        var leftExpression = _left.ToExpression();
-        var rightExpression = _right.ToExpression();
-        
-        // Use expression parameter rewriter for proper composition
-        var parameter = Expression.Parameter(typeof(T), "x");
-        var leftBody = new ParameterRewriter(leftExpression.Parameters[0], parameter).Visit(leftExpression.Body);
-        var rightBody = new ParameterRewriter(rightExpression.Parameters[0], parameter).Visit(rightExpression.Body);
-        
-        var body = Expression.OrElse(leftBody!, rightBody!);
-        return Expression.Lambda<Func<T, bool>>(body, parameter);
-    }
+        => _left.ToExpression().OrElse(_right.ToExpression());
 }
 
-/// <summary>
-/// NOT specification combinator - negates the wrapped specification.
-/// </summary>
-/// <typeparam name="T">The type of entity</typeparam>
 internal sealed class NotSpecification<T> : Specification<T>
 {
-    private readonly Specification<T> _specification;
-    
-    public NotSpecification(Specification<T> specification)
-    {
-        _specification = specification ?? throw new ArgumentNullException(nameof(specification));
-    }
-    
+    private readonly ISpecification<T> _inner;
+    public NotSpecification(ISpecification<T> inner) => _inner = inner;
     public override Expression<Func<T, bool>> ToExpression()
-    {
-        var expression = _specification.ToExpression();
-        
-        var parameter = Expression.Parameter(typeof(T), "x");
-        var body = new ParameterRewriter(expression.Parameters[0], parameter).Visit(expression.Body);
-        var negatedBody = Expression.Not(body!);
-        
-        return Expression.Lambda<Func<T, bool>>(negatedBody, parameter);
-    }
+        => _inner.ToExpression().Not();
 }
 
-/// <summary>
-/// Identity specification - always returns true.
-/// Useful as a neutral element in specification composition.
-/// </summary>
-/// <typeparam name="T">The type of entity</typeparam>
+/// <summary>Always true.</summary>
 public sealed class TrueSpecification<T> : Specification<T>
 {
-    public override Expression<Func<T, bool>> ToExpression()
-    {
-        return _ => true;
-    }
+    private static readonly Expression<Func<T, bool>> _expr = _ => true;
+    public override Expression<Func<T, bool>> ToExpression() => _expr;
 }
 
-/// <summary>
-/// False specification - always returns false.
-/// Useful for creating empty result sets or as a base for OR combinations.
-/// </summary>
-/// <typeparam name="T">The type of entity</typeparam>
+/// <summary>Always false.</summary>
 public sealed class FalseSpecification<T> : Specification<T>
 {
-    public override Expression<Func<T, bool>> ToExpression()
-    {
-        return _ => false;
-    }
-}
-
-/// <summary>
-/// Expression parameter rewriter for proper expression tree composition.
-/// This ensures that when combining expressions, parameter references are correctly updated.
-/// </summary>
-internal sealed class ParameterRewriter : ExpressionVisitor
-{
-    private readonly ParameterExpression _oldParameter;
-    private readonly ParameterExpression _newParameter;
-
-    public ParameterRewriter(ParameterExpression oldParameter, ParameterExpression newParameter)
-    {
-        _oldParameter = oldParameter;
-        _newParameter = newParameter;
-    }
-
-    protected override Expression VisitParameter(ParameterExpression node)
-    {
-        return node == _oldParameter ? _newParameter : base.VisitParameter(node);
-    }
+    private static readonly Expression<Func<T, bool>> _expr = _ => false;
+    public override Expression<Func<T, bool>> ToExpression() => _expr;
 }

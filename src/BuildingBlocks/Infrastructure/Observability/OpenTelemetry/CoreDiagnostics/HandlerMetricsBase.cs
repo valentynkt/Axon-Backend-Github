@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
 
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics;
 

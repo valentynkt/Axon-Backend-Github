@@ -5,6 +5,7 @@ using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Conversations;
 using Axon.Modules.Chat.Domain.Conversations.Enums;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
+using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Results;

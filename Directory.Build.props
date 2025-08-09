@@ -19,7 +19,7 @@
         <EnableSingleFileAnalyzer Condition="'$(Configuration)' == 'Release'">true</EnableSingleFileAnalyzer>
         <EnableAotAnalyzer Condition="'$(Configuration)' == 'Release'">true</EnableAotAnalyzer>
 
-        <NoWarn>$(NoWarn);CA2016</NoWarn>
+        <NoWarn>$(NoWarn);CA2016;CA1031</NoWarn>
     </PropertyGroup>
 
     <!-- Normalize paths only in CI for SourceLink-friendly PDBs -->

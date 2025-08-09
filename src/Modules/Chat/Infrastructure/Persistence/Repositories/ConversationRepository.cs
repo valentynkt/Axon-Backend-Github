@@ -3,6 +3,7 @@ using Axon.Modules.Chat.Application.Repositories;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Shared.Common;
+using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Core.Functional.Results;
 using Microsoft.EntityFrameworkCore;

@@ -245,7 +245,9 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
             var clear = entity.GetType().GetMethod("ClearDomainEvents", BindingFlags.Public | BindingFlags.Instance);
             if (clear is not null)
             {
+#pragma warning disable CA1031 // Do not catch general exception types
                 try { clear.Invoke(entity, null); } catch { /* ignore */ }
+#pragma warning restore CA1031
             }
         }
     }

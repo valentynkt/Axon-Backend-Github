@@ -1,6 +1,7 @@
 using BuildingBlocks.Core.Abstractions.Events;
 using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 using MassTransit;
+using MassTransit.Serialization;
 
 namespace BuildingBlocks.Infrastructure.Messaging.MassTransit;
 

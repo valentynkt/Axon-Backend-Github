@@ -54,11 +54,74 @@ public static class ResultMetricsExtensions
         "axon.result.success_rate",
         "percentage",
         "Success rate percentage over time window");
-        
+
     private static readonly Histogram<long> RetryAttempts = Meter.CreateHistogram<long>(
         "axon.result.retry.attempts",
         "attempts",
         "Number of retry attempts for operations");
+
+    // --- Added: centralize instruments that were previously created inside methods ---
+
+    // Component timing
+    private static readonly Histogram<double> ComponentDuration = Meter.CreateHistogram<double>(
+        "axon.result.component.duration", "milliseconds", "Duration by component");
+
+    // Retry metrics
+    private static readonly Histogram<double> RetryTotalTime = Meter.CreateHistogram<double>(
+        "axon.result.retry.total_time", "milliseconds", "Total retry time for operations");
+
+    private static readonly Counter<long> RetryExhaustedCount = Meter.CreateCounter<long>(
+        "axon.result.retry.exhausted.count", "operations", "Operations that exhausted retries");
+
+    // Business metrics
+    private static readonly Counter<long> BusinessOperationsCount = Meter.CreateCounter<long>(
+        "axon.business.operations.count", "operations", "Business operation count");
+
+    private static readonly Histogram<double> BusinessValue = Meter.CreateHistogram<double>(
+        "axon.business.value", "units", "Business value recorded on success");
+
+    private static readonly Counter<long> BusinessErrorsCount = Meter.CreateCounter<long>(
+        "axon.business.errors.count", "errors", "Business errors");
+
+    // Batch metrics
+    private static readonly Counter<long> BatchProcessedCount = Meter.CreateCounter<long>(
+        "axon.result.batch.processed.count", "batches", "Batches processed");
+
+    private static readonly Histogram<long> BatchSize = Meter.CreateHistogram<long>(
+        "axon.result.batch.size", "items", "Batch size");
+
+    private static readonly Gauge<double> BatchSuccessRate = Meter.CreateGauge<double>(
+        "axon.result.batch.success_rate", "percentage", "Batch success rate");
+
+    private static readonly Histogram<double> BatchProcessingTime = Meter.CreateHistogram<double>(
+        "axon.result.batch.processing_time", "milliseconds", "Batch processing time");
+
+    private static readonly Gauge<double> BatchThroughput = Meter.CreateGauge<double>(
+        "axon.result.batch.throughput", "items_per_second", "Batch throughput");
+
+    private static readonly Counter<long> BatchErrorBreakdownCount = Meter.CreateCounter<long>(
+        "axon.result.batch.error_breakdown.count", "errors", "Batch error breakdown by code");
+
+    // Resource metrics
+    private static readonly Histogram<long> MemoryAllocated = Meter.CreateHistogram<long>(
+        "axon.result.memory.allocated", "bytes", "Memory allocated during operation");
+
+    private static readonly Histogram<long> MemoryFreed = Meter.CreateHistogram<long>(
+        "axon.result.memory.freed", "bytes", "Memory freed during operation");
+
+    private static readonly Histogram<int> ThreadsUsed = Meter.CreateHistogram<int>(
+        "axon.result.threads.used", "threads", "ThreadPool threads used");
+
+    private static readonly Histogram<int> DatabaseConnections = Meter.CreateHistogram<int>(
+        "axon.result.database.connections", "connections", "Database connections used");
+
+    // Incomplete ops
+    private static readonly Counter<long> IncompleteCounter = Meter.CreateCounter<long>(
+        "axon.result.incomplete.count", "operations", "Operations disposed without completion");
+
+    // Internal bridge so non-nested types can update ActiveOperations safely
+    internal static void AddActiveOperations(long delta, KeyValuePair<string, object?>[] tags) =>
+        ActiveOperations.Add(delta, tags);
     
     #region Core Metrics Extensions
     
@@ -171,8 +234,7 @@ public static class ResultMetricsExtensions
                 new("component", "validation"),
                 new("caller.member", memberName ?? "Unknown")
             };
-            Meter.CreateHistogram<double>("axon.result.component.duration", "milliseconds")
-                .Record(validationTime.Value.TotalMilliseconds, validationTags);
+            ComponentDuration.Record(validationTime.Value.TotalMilliseconds, validationTags);
         }
         
         if (businessRuleTime.HasValue)
@@ -183,8 +245,7 @@ public static class ResultMetricsExtensions
                 new("component", "business_rules"),
                 new("caller.member", memberName ?? "Unknown")
             };
-            Meter.CreateHistogram<double>("axon.result.component.duration", "milliseconds")
-                .Record(businessRuleTime.Value.TotalMilliseconds, businessRuleTags);
+            ComponentDuration.Record(businessRuleTime.Value.TotalMilliseconds, businessRuleTags);
         }
         
         if (persistenceTime.HasValue)
@@ -195,8 +256,7 @@ public static class ResultMetricsExtensions
                 new("component", "persistence"),
                 new("caller.member", memberName ?? "Unknown")
             };
-            Meter.CreateHistogram<double>("axon.result.component.duration", "milliseconds")
-                .Record(persistenceTime.Value.TotalMilliseconds, persistenceTags);
+            ComponentDuration.Record(persistenceTime.Value.TotalMilliseconds, persistenceTags);
         }
         
         return result.RecordMetrics(operationName, executionTime, memberName: memberName);
@@ -227,8 +287,7 @@ public static class ResultMetricsExtensions
         };
         
         // Business operation counter
-        Meter.CreateCounter<long>("axon.business.operations.count", "operations")
-            .Add(1, businessTags);
+        BusinessOperationsCount.Add(1, businessTags);
         
         // Business value tracking
         if (businessValue.HasValue && result.IsSuccess)
@@ -240,8 +299,7 @@ public static class ResultMetricsExtensions
                 new("business.unit", businessUnit ?? "unknown")
             };
             
-            Meter.CreateHistogram<double>("axon.business.value", "units")
-                .Record((double)businessValue.Value, valueTags);
+            ResultMetricsExtensions.BusinessValue.Record((double)businessValue.Value, valueTags);
         }
         
         // Business error tracking
@@ -255,8 +313,7 @@ public static class ResultMetricsExtensions
                 new("error.type", result.Error.Type.ToString())
             };
             
-            Meter.CreateCounter<long>("axon.business.errors.count", "errors")
-                .Add(1, errorTags);
+            BusinessErrorsCount.Add(1, errorTags);
         }
         
         return result;
@@ -287,14 +344,11 @@ public static class ResultMetricsExtensions
         };
         
         RetryAttempts.Record(attemptNumber, retryTags);
-        
-        Meter.CreateHistogram<double>("axon.result.retry.total_time", "milliseconds")
-            .Record(totalRetryTime.TotalMilliseconds, retryTags);
+        RetryTotalTime.Record(totalRetryTime.TotalMilliseconds, retryTags);
         
         if (result.IsFailure && isLastAttempt)
         {
-            Meter.CreateCounter<long>("axon.result.retry.exhausted.count", "operations")
-                .Add(1, retryTags);
+            RetryExhaustedCount.Add(1, retryTags);
         }
         
         return result;
@@ -330,24 +384,17 @@ public static class ResultMetricsExtensions
         };
         
         // Batch processing metrics
-        Meter.CreateCounter<long>("axon.result.batch.processed.count", "batches")
-            .Add(1, batchTags);
-            
-        Meter.CreateHistogram<long>("axon.result.batch.size", "items")
-            .Record(resultList.Count, batchTags);
-            
-        Meter.CreateGauge<double>("axon.result.batch.success_rate", "percentage")
-            .Record(successRate * 100, batchTags);
+        BatchProcessedCount.Add(1, batchTags);
+        BatchSize.Record(resultList.Count, batchTags);
+        BatchSuccessRate.Record(successRate * 100, batchTags);
         
         if (totalProcessingTime.HasValue)
         {
-            Meter.CreateHistogram<double>("axon.result.batch.processing_time", "milliseconds")
-                .Record(totalProcessingTime.Value.TotalMilliseconds, batchTags);
+            BatchProcessingTime.Record(totalProcessingTime.Value.TotalMilliseconds, batchTags);
                 
             // Throughput metric
             var itemsPerSecond = resultList.Count / Math.Max(totalProcessingTime.Value.TotalSeconds, 0.001);
-            Meter.CreateGauge<double>("axon.result.batch.throughput", "items_per_second")
-                .Record(itemsPerSecond, batchTags);
+            BatchThroughput.Record(itemsPerSecond, batchTags);
         }
         
         // Record error breakdown
@@ -367,8 +414,7 @@ public static class ResultMetricsExtensions
                     new("error.count", group.Count())
                 };
                 
-                Meter.CreateCounter<long>("axon.result.batch.error_breakdown.count", "errors")
-                    .Add(group.Count(), errorTags);
+                BatchErrorBreakdownCount.Add(group.Count(), errorTags);
             }
         }
         
@@ -400,26 +446,22 @@ public static class ResultMetricsExtensions
         
         if (memoryAllocated > 0)
         {
-            Meter.CreateHistogram<long>("axon.result.memory.allocated", "bytes")
-                .Record(memoryAllocated, resourceTags);
+            MemoryAllocated.Record(memoryAllocated, resourceTags);
         }
         
         if (memoryFreed > 0)
         {
-            Meter.CreateHistogram<long>("axon.result.memory.freed", "bytes")
-                .Record(memoryFreed, resourceTags);
+            MemoryFreed.Record(memoryFreed, resourceTags);
         }
         
         if (threadPoolThreadsUsed > 0)
         {
-            Meter.CreateHistogram<int>("axon.result.threads.used", "threads")
-                .Record(threadPoolThreadsUsed, resourceTags);
+            ThreadsUsed.Record(threadPoolThreadsUsed, resourceTags);
         }
         
         if (databaseConnections > 0)
         {
-            Meter.CreateHistogram<int>("axon.result.database.connections", "connections")
-                .Record(databaseConnections, resourceTags);
+            DatabaseConnections.Record(databaseConnections, resourceTags);
         }
         
         return result;
@@ -474,7 +516,7 @@ public sealed class ResultMetricsScope<T> : IDisposable
             new("caller.member", _memberName)
         };
         
-        ResultMetricsExtensions.ActiveOperations.Add(1, baseTags);
+        ResultMetricsExtensions.AddActiveOperations(1, baseTags);
         _startActiveOperations = Environment.TickCount64;
     }
     
@@ -498,7 +540,7 @@ public sealed class ResultMetricsScope<T> : IDisposable
             new("result.is_success", result.IsSuccess)
         };
         
-        ResultMetricsExtensions.ActiveOperations.Add(-1, baseTags);
+        ResultMetricsExtensions.AddActiveOperations(-1, baseTags);
         
         return result;
     }
@@ -518,12 +560,16 @@ public sealed class ResultMetricsScope<T> : IDisposable
             new("operation.status", "incomplete")
         };
         
-        ResultMetricsExtensions.ActiveOperations.Add(-1, baseTags);
+        ResultMetricsExtensions.AddActiveOperations(-1, baseTags);
         
         // Record incomplete operation metric
-        var incompleteCounter = ResultMetricsExtensions.Meter.CreateCounter<long>(
-            "axon.result.incomplete.count", "operations");
-        incompleteCounter.Add(1, baseTags);
+        // (Use centralized instrument instead of creating a new one per call)
+        System.Diagnostics.Metrics.Counter<long> incompleteCounterField =
+            (System.Diagnostics.Metrics.Counter<long>)
+            typeof(ResultMetricsExtensions)
+                .GetField("IncompleteCounter", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+                .GetValue(null)!;
+        incompleteCounterField.Add(1, baseTags);
         
         _disposed = true;
     }

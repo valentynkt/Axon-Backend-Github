@@ -1,16 +1,13 @@
 namespace BuildingBlocks.Core.Domain.Entities.Abstractions;
 
 /// <summary>
-/// Opt-in trait for optimistic concurrency using a version token.
-/// Generic to stay provider-agnostic (e.g., uint/xmin, ulong/rowversion, byte[]).
+/// Optimistic concurrency marker (e.g., row version).
 /// </summary>
-public interface IVersioned<TVersion>
+public interface IVersioned
 {
-    TVersion Version { get; }
+    /// <summary>
+    /// Version used for optimistic concurrency checks.
+    /// Typically mapped to a rowversion/timestamp/etag by the persistence layer.
+    /// </summary>
+    uint Version { get; }
 }
-
-/// <summary>
-/// Default alias for current stack (Postgres xmin/uint).
-/// If you migrate providers, you can switch specific entities to another TVersion.
-/// </summary>
-public interface IVersioned : IVersioned<uint> { }

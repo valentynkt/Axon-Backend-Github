@@ -4,21 +4,35 @@ using BuildingBlocks.Core.Domain.Primitives;
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
 /// <summary>
-/// Convenience base for entities that need audit timestamps.
-/// Infra (e.g., EF SaveChanges interceptor) should set/populate these fields.
+/// Base entity that tracks creation and modification times.
 /// </summary>
+/// <typeparam name="TId">Strongly typed ID type</typeparam>
 public abstract class AuditableEntity<TId> : Entity<TId>, IAuditable
-    where TId : IStrongId
+    where TId : notnull, IStrongId
 {
-    protected AuditableEntity(TId id) : base(id) { }
-    protected AuditableEntity() { }
-
-    public DateTimeOffset CreatedAt { get; protected set; }
-    public DateTimeOffset UpdatedAt { get; protected set; }
+    protected AuditableEntity(TId id) : base(id)
+    {
+        CreatedAt = DateTimeOffset.UtcNow;
+        UpdatedAt = CreatedAt;
+    }
 
     /// <summary>
-    /// Signal a mutation in domain logic. Infra typically overwrites UpdatedAt on save,
-    /// but calling Touch keeps intent explicit and aids in non-EF persistence paths.
+    /// Parameterless ctor for ORM materialization only.
     /// </summary>
-    protected void Touch() => UpdatedAt = DateTimeOffset.UtcNow;
+    protected AuditableEntity() : base()
+    {
+    }
+
+    public DateTimeOffset CreatedAt { get; protected set; }
+    public DateTimeOffset? UpdatedAt { get; protected set; }
+
+    /// <summary>
+    /// Call when entity is updated to refresh UpdatedAt timestamp.
+    /// Infrastructure typically overwrites this on save, but calling
+    /// MarkUpdated keeps intent explicit.
+    /// </summary>
+    protected void MarkUpdated()
+    {
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
 }

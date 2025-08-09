@@ -1,4 +1,5 @@
 using Ardalis.GuardClauses;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 
 namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 

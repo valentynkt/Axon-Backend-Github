@@ -33,7 +33,7 @@ public sealed class InvariantViolationException : DomainException
         if (!string.IsNullOrEmpty(invariantName))
             metadata["InvariantName"] = invariantName;
         
-        return Error.Aggregate(
+        return Error.BusinessRule(
             message,
             "INVARIANT_VIOLATION",
             metadata.Count > 0 ? metadata : null);

@@ -6,8 +6,6 @@ namespace BuildingBlocks.Core.Domain.Entities.Abstractions;
 public interface IEntity { }
 
 /// <summary>Strongly-typed entity identity.</summary>
-public interface IEntity<out TId> : IEntity where TId : IStrongId
+public interface IEntity<out TId> : IEntity, IIdentifiable<TId> where TId : IStrongId
 {
-    /// <summary>Entity identifier (strongly-typed).</summary>
-    TId Id { get; }
 }

@@ -4,6 +4,7 @@ using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Abstractions.Events;
 using BuildingBlocks.Core.Domain.Events;
 using MassTransit;
+using MassTransit.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

@@ -1,195 +1,144 @@
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
-using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Core.Domain.Rules;
 
 /// <summary>
-/// Fluent builder for creating and composing business rules
+/// Allocation-friendly aggregator for domain rules.
+/// Turns many rule checks into a single <see cref="Validation{T}"/> (domain layer),
+/// or a <see cref="Result{T}"/> when needed.
 /// </summary>
-public class RuleBuilder
+public sealed class RuleBuilder
 {
-    private readonly List<IBusinessRule> _rules = new();
-    
-    /// <summary>
-    /// Add a rule that must be true (condition must be true, or rule is broken)
-    /// </summary>
-    public RuleBuilder Must(bool condition, string code, string message)
+    private readonly List<Error> _errors = new();
+
+    private RuleBuilder() { }
+    public static RuleBuilder Start() => new();
+
+    /// <summary>Evaluate a rule synchronously and collect its error if broken.</summary>
+    public RuleBuilder Check(IBusinessRule rule)
     {
-        _rules.Add(new PredicateRule(code, message, () => !condition));
+        if (rule is null) return this;
+        if (rule.IsBroken())
+            _errors.Add(rule.ToError());
         return this;
     }
-    
-    /// <summary>
-    /// Add a rule with predicate that must be true
-    /// </summary>
-    public RuleBuilder Must(Func<bool> predicate, string code, string message)
+
+    /// <summary>Evaluate a rule and collect its error if broken.</summary>
+    public async Task<RuleBuilder> CheckAsync(IBusinessRule rule, CancellationToken ct = default)
     {
-        _rules.Add(new PredicateRule(code, message, () => !predicate()));
+        if (rule is null) return this;
+        if (await rule.IsBrokenAsync(ct).ConfigureAwait(false))
+            _errors.Add(rule.ToError());
         return this;
     }
-    
-    /// <summary>
-    /// Add a rule that must not be true (condition must be false, or rule is broken)
-    /// </summary>
-    public RuleBuilder MustNot(bool condition, string code, string message)
+
+    /// <summary>Evaluate many rules synchronously, collecting all violations (no short-circuit).</summary>
+    public RuleBuilder CheckAll(IEnumerable<IBusinessRule> rules)
     {
-        _rules.Add(new PredicateRule(code, message, () => condition));
+        if (rules is null) return this;
+        foreach (var r in rules)
+            Check(r);
         return this;
     }
-    
-    /// <summary>
-    /// Add a rule with predicate that must not be true
-    /// </summary>
-    public RuleBuilder MustNot(Func<bool> predicate, string code, string message)
+
+    /// <summary>Evaluate many rules, collecting all violations (no short-circuit).</summary>
+    public async Task<RuleBuilder> CheckAllAsync(IEnumerable<IBusinessRule> rules, CancellationToken ct = default)
     {
-        _rules.Add(new PredicateRule(code, message, predicate));
+        if (rules is null) return this;
+        foreach (var r in rules)
+            await CheckAsync(r, ct).ConfigureAwait(false);
         return this;
     }
-    
-    /// <summary>
-    /// Add an existing business rule
-    /// </summary>
-    public RuleBuilder AddRule(IBusinessRule rule)
+
+    /// <summary>Synchronous predicate convenience.</summary>
+    public RuleBuilder Check(bool isBroken, string message, string code = "BUSINESS_RULE_VIOLATION",
+        IReadOnlyDictionary<string, object>? metadata = null)
     {
-        ArgumentNullException.ThrowIfNull(rule);
-        _rules.Add(rule);
+        if (isBroken)
+            _errors.Add(Error.BusinessRule(message, code, metadata ?? new Dictionary<string, object>()));
         return this;
     }
-    
-    /// <summary>
-    /// Add multiple existing business rules
-    /// </summary>
-    public RuleBuilder AddRules(params IBusinessRule[] rules)
+
+    /// <summary>Async predicate convenience.</summary>
+    public async Task<RuleBuilder> CheckAsync(Func<CancellationToken, Task<bool>> isBrokenAsync, string message,
+        string code = "BUSINESS_RULE_VIOLATION",
+        IReadOnlyDictionary<string, object>? metadata = null,
+        CancellationToken ct = default)
     {
-        if (rules != null)
-        {
-            _rules.AddRange(rules);
-        }
+        if (isBrokenAsync is null) return this;
+        if (await isBrokenAsync(ct).ConfigureAwait(false))
+            _errors.Add(Error.BusinessRule(message, code, metadata ?? new Dictionary<string, object>()));
         return this;
     }
-    
-    /// <summary>
-    /// Build and evaluate rules, returning Result
-    /// </summary>
-    public Result<Unit> Build()
+
+    /// <summary>Merges another builder's errors into this one.</summary>
+    public RuleBuilder Merge(RuleBuilder other)
     {
-        var brokenRules = _rules.Where(r => r.IsBroken()).ToList();
-        
-        if (brokenRules.Count != 0)
-        {
-            var errors = brokenRules.Select(r => 
-                Error.BusinessRule(r.Message, r.Code)).ToArray();
-            return Result<Unit>.Failure(Error.Aggregate(errors));
-        }
-        
-        return Result<Unit>.Success(Unit.Value);
-    }
-    
-    /// <summary>
-    /// Build and evaluate rules, returning Validation (accumulates all errors)
-    /// </summary>
-    public Validation<Unit> BuildValidation()
-    {
-        var brokenRules = _rules.Where(r => r.IsBroken()).ToList();
-        
-        if (brokenRules.Count != 0)
-        {
-            var errors = brokenRules.Select(r => 
-                Error.BusinessRule(r.Message, r.Code)).ToArray();
-            return Validation<Unit>.Invalid(errors);
-        }
-        
-        return Validation<Unit>.Valid(Unit.Value);
-    }
-    
-    /// <summary>
-    /// Get all rules (for inspection/debugging)
-    /// </summary>
-    public IReadOnlyList<IBusinessRule> GetRules() => _rules.AsReadOnly();
-    
-    /// <summary>
-    /// Clear all rules
-    /// </summary>
-    public RuleBuilder Clear()
-    {
-        _rules.Clear();
+        if (other is null) return this;
+        if (other._errors.Count != 0) _errors.AddRange(other._errors);
         return this;
+    }
+
+    /// <summary>Build a Validation result (Valid when no errors, otherwise Invalid with all errors).</summary>
+    public Validation<Unit> Build()
+        => _errors.Count == 0 ? Validation<Unit>.Valid(Unit.Value) : Validation<Unit>.Invalid(_errors);
+
+    /// <summary>Build a Result (returns first error or success).</summary>
+    public Result<Unit> BuildResult()
+        => _errors.Count == 0 ? Result<Unit>.Success(Unit.Value) : Result<Unit>.Failure(_errors[0]);
+
+    /// <summary>Throwing variant for the rare case you must enforce invariants via exceptions.</summary>
+    public void Ensure()
+    {
+        if (_errors.Count != 0)
+            throw new DomainRuleViolationException(_errors.ToArray());
     }
 }
 
-/// <summary>
-/// Extension methods for fluent rule composition
-/// </summary>
+/// <summary>Optional exception for invariants that must never pass a boundary.</summary>
+public sealed class DomainRuleViolationException : Exception
+{
+    public Error[] Errors { get; }
+
+    public DomainRuleViolationException(Error[] errors)
+        : base(errors.Length == 1 ? errors[0].Message : "Multiple business rule violations.")
+        => Errors = errors;
+}
+
+/// <summary>Fluent helpers for common checks.</summary>
 public static class RuleBuilderExtensions
 {
-    /// <summary>
-    /// Create a new rule builder
-    /// </summary>
-    public static RuleBuilder Rules() => new();
-    
-    /// <summary>
-    /// Create a rule builder with initial rule
-    /// </summary>
-    public static RuleBuilder Rules(IBusinessRule initialRule)
-    {
-        return new RuleBuilder().AddRule(initialRule);
-    }
-    
-    /// <summary>
-    /// Validate that a value is not null
-    /// </summary>
-    public static RuleBuilder NotNull<T>(this RuleBuilder builder, T? value, string propertyName)
-    {
-        return builder.Must(
-            value != null, 
-            $"{propertyName.ToUpperInvariant()}_NULL", 
-            $"{propertyName} cannot be null");
-    }
-    
-    /// <summary>
-    /// Validate that a string is not empty
-    /// </summary>
-    public static RuleBuilder NotEmpty(this RuleBuilder builder, string? value, string propertyName)
-    {
-        return builder.Must(
-            !string.IsNullOrWhiteSpace(value), 
-            $"{propertyName.ToUpperInvariant()}_EMPTY", 
-            $"{propertyName} cannot be empty");
-    }
-    
-    /// <summary>
-    /// Validate that a collection is not empty
-    /// </summary>
-    public static RuleBuilder NotEmpty<T>(this RuleBuilder builder, IEnumerable<T>? collection, string propertyName)
-    {
-        return builder.Must(
-            collection?.Any() == true, 
-            $"{propertyName.ToUpperInvariant()}_EMPTY", 
-            $"{propertyName} cannot be empty");
-    }
-    
-    /// <summary>
-    /// Validate numeric range
-    /// </summary>
-    public static RuleBuilder InRange<T>(this RuleBuilder builder, T value, T min, T max, string propertyName)
-        where T : IComparable<T>
-    {
-        return builder.Must(
-            value.CompareTo(min) >= 0 && value.CompareTo(max) <= 0,
-            $"{propertyName.ToUpperInvariant()}_OUT_OF_RANGE",
-            $"{propertyName} must be between {min} and {max}");
-    }
-    
-    /// <summary>
-    /// Validate string length
-    /// </summary>
-    public static RuleBuilder MaxLength(this RuleBuilder builder, string? value, int maxLength, string propertyName)
-    {
-        return builder.Must(
-            value?.Length <= maxLength,
-            $"{propertyName.ToUpperInvariant()}_TOO_LONG",
-            $"{propertyName} cannot exceed {maxLength} characters");
-    }
+    public static RuleBuilder MustNotBeEmpty(this RuleBuilder b, string? value, string field)
+        => b.Check(string.IsNullOrWhiteSpace(value), $"{field} cannot be empty", $"{field.ToUpperInvariant()}_EMPTY");
+
+    public static RuleBuilder MustNotBeNull<T>(this RuleBuilder b, T? value, string field) where T : class
+        => b.Check(value is null, $"{field} cannot be null", $"{field.ToUpperInvariant()}_NULL");
+
+    public static RuleBuilder MustHaveItems<T>(this RuleBuilder b, IEnumerable<T>? collection, string field)
+        => b.Check(collection?.Any() != true, $"{field} must contain at least one item", $"{field.ToUpperInvariant()}_EMPTY");
+
+    public static RuleBuilder MustBeInRange<T>(this RuleBuilder b, T value, T min, T max, string field) where T : IComparable<T>
+        => b.Check(value.CompareTo(min) < 0 || value.CompareTo(max) > 0,
+                   $"{field} must be between {min} and {max}",
+                   $"{field.ToUpperInvariant()}_OUT_OF_RANGE",
+                   new Dictionary<string, object> { ["min"] = min!, ["max"] = max!, ["actual"] = value! });
+
+    public static RuleBuilder MustNotExceedLength(this RuleBuilder b, string? value, int max, string field)
+        => b.Check(value?.Length > max, $"{field} must not exceed {max} characters",
+                   $"{field.ToUpperInvariant()}_TOO_LONG",
+                   new Dictionary<string, object> { ["maxLength"] = max, ["actualLength"] = value?.Length ?? 0 });
+
+    public static RuleBuilder MustHaveMinimumLength(this RuleBuilder b, string? value, int min, string field)
+        => b.Check(value?.Length < min, $"{field} must be at least {min} characters",
+                   $"{field.ToUpperInvariant()}_TOO_SHORT",
+                   new Dictionary<string, object> { ["minLength"] = min, ["actualLength"] = value?.Length ?? 0 });
+
+    public static RuleBuilder Must<T>(this RuleBuilder b, T value, Func<T, bool> predicate, string message, string code)
+        => b.Check(!predicate(value), message, code);
+
+    public static Task<RuleBuilder> MustAsync<T>(this RuleBuilder b, T value, Func<T, CancellationToken, Task<bool>> predicate,
+        string message, string code, CancellationToken ct = default)
+        => b.CheckAsync(async token => !await predicate(value, token).ConfigureAwait(false), message, code, null, ct);
 }

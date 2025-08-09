@@ -1,4 +1,5 @@
 using Axon.Shared.Domain;
+using BuildingBlocks.Core.Domain.Entities.Base;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Model;
 

@@ -1,4 +1,5 @@
 using FluentValidation;
+using NSubstitute;
 
 namespace BuildingBlocks.Application.Validation;
 

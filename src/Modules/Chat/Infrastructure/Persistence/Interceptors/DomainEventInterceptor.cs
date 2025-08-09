@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.Json;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Model;
 

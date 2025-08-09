@@ -4,6 +4,7 @@ using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Messaging.Outbox;
 using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 using BuildingBlocks.Web;
+using MassTransit.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

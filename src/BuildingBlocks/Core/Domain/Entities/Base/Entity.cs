@@ -1,55 +1,74 @@
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
 /// <summary>
-/// Minimal entity base:
-/// - Strongly-typed Id
-/// - Identity-based equality (safe for transient instances)
+/// Minimal base type for domain entities.
+/// Holds identity and value-based equality only.
+/// No events and no concurrency here by design (aggregate concern).
 /// </summary>
-[DebuggerDisplay("{GetType().Name,nq}({Id})")]
-public abstract class Entity<TId> : IEntity<TId>, IEquatable<Entity<TId>>
-    where TId : IStrongId
+/// <typeparam name="TId">Strongly typed ID type</typeparam>
+public abstract class Entity<TId> : IEntity<TId>
+    where TId : notnull, IStrongId
 {
-    /// <summary>Create an entity with a valid Id.</summary>
     protected Entity(TId id)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
     }
 
-    /// <summary>Parameterless ctor for ORM materialization only.</summary>
+    /// <summary>
+    /// Parameterless ctor for ORM materialization only.
+    /// Keep protected to avoid accidental public use.
+    /// </summary>
     protected Entity() { }
 
+    /// <summary>Entity unique identifier.</summary>
     public TId Id { get; protected set; } = default!;
 
-    private static bool IsTransient(Entity<TId> e)
-    {
-        if (e.Id is null) return true;
-        var value = e.Id.GetValue();
-        if (value is null) return true;
+    #region Equality
 
-        // Compare to default of underlying primitive type
-        var type = e.Id.GetValueType();
-        var defaultValue = type.IsValueType ? Activator.CreateInstance(type) : null;
-        return Equals(value, defaultValue);
+    public override bool Equals(object? obj)
+    {
+        if (obj is not Entity<TId> other)
+            return false;
+
+        if (ReferenceEquals(this, other))
+            return true;
+
+        if (GetType() != other.GetType())
+            return false;
+
+        // Transient entities are never equal (no stable identity yet)
+        if (IsTransient(this) || IsTransient(other))
+            return false;
+
+        return EqualityComparer<TId>.Default.Equals(Id, other.Id);
     }
 
-    public bool Equals(Entity<TId>? other)
+    public static bool operator ==(Entity<TId>? left, Entity<TId>? right) => Equals(left, right);
+    public static bool operator !=(Entity<TId>? left, Entity<TId>? right) => !Equals(left, right);
+
+    public override int GetHashCode()
     {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
-        if (GetType() != other.GetType()) return false;
-        if (IsTransient(this) || IsTransient(other)) return false;
-        return Id.Equals(other.Id);
+        // For transient entities, use reference-based hash to avoid hash changes
+        if (IsTransient(this))
+            return System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+
+        return HashCode.Combine(GetType(), Id);
     }
 
-    public override bool Equals(object? obj) => Equals(obj as Entity<TId>);
+    private static bool IsTransient(Entity<TId> entity)
+    {
+        // If the underlying strong id holds default(TPrimitive), treat as transient
+        var raw = entity.Id?.GetValue();
+        if (raw is null) return true;
 
-    public override int GetHashCode() =>
-        IsTransient(this)
-            ? RuntimeHelpers.GetHashCode(this) // stable within process, avoids changing hash across states
-            : HashCode.Combine(GetType(), Id);
+        var valueType = entity.Id?.GetValueType();
+        if (valueType is null) return true;
+        var defaultValue = valueType.IsValueType ? Activator.CreateInstance(valueType) : null;
+        return Equals(raw, defaultValue);
+    }
+
+    #endregion
 }

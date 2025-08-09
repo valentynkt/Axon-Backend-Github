@@ -1,283 +1,263 @@
-using System.Linq.Expressions;
-using System.Reflection;
-using BuildingBlocks.Core.Abstractions.CQRS;
-using Microsoft.EntityFrameworkCore;
-using BuildingBlocks.Core.Abstractions.Pagination;
+// File: ResultOpenTelemetryExtensions.cs
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
+using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
-namespace BuildingBlocks.Infrastructure.Persistence.Pagination;
+namespace BuildingBlocks.Infrastructure.Observability;
 
 /// <summary>
-/// Enhanced pagination extensions with advanced sorting and metadata support for Epic 04.
-/// Provides efficient database querying with dynamic sorting, cursor-based pagination,
-/// and rich metadata integration for improved performance and observability.
+/// OpenTelemetry-first extensions for recording <see cref="Result{T}"/> outcomes
+/// using W3C trace context and OTel semantic conventions (no Application Insights SDK).
 /// </summary>
-public static class EnhancedPaginationExtensions
+public static class ResultOpenTelemetryExtensions
 {
-    /// <summary>
-    /// Converts a queryable to a paginated result with advanced sorting and metadata support.
-    /// Supports efficient count caching, dynamic LINQ sorting, and rich metadata collection.
-    /// </summary>
-    /// <typeparam name="T">The entity type</typeparam>
-    /// <param name="query">The source queryable</param>
-    /// <param name="pageQuery">The page query with sorting criteria</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Paginated result with items and rich metadata</returns>
-    public static async Task<PagedResult<T>> ToPagedResultAsync<T>(
-        this IQueryable<T> query,
-        ISortablePageQuery<PagedResult<T>> pageQuery,
-        CancellationToken cancellationToken = default)
-        where T : class
-    {
-        ArgumentNullException.ThrowIfNull(query);
-        ArgumentNullException.ThrowIfNull(pageQuery);
+    // Spans
+    private static readonly ActivitySource ActivitySource =
+        new(TelemetryTags.Tracing.Application.AppService);
 
-        var startTime = DateTimeOffset.UtcNow;
-        
-        // Apply sorting
-        var sortedQuery = ApplySorting(query, pageQuery.EffectiveSortBy);
-        
-        // Get total count (with potential caching optimization)
-        var totalCount = await GetTotalCountAsync(sortedQuery, pageQuery, cancellationToken);
-        
-        if (totalCount == 0)
-        {
-            return CreateEmptyResult<T>(pageQuery, startTime);
-        }
-        
-        // Apply pagination
-        var items = await sortedQuery
-            .Skip(pageQuery.Skip)
-            .Take(pageQuery.Take)
-            .ToListAsync(cancellationToken);
-        
-        // Create rich metadata
-        var metadata = CreateMetadata(pageQuery, startTime, totalCount, false);
-        
-        return PagedResult<T>.Create(
-            items.AsReadOnly(), 
-            pageQuery.Page, 
-            pageQuery.Size, 
-            totalCount, 
-            metadata);
-    }
-    
-    /// <summary>
-    /// Converts a queryable to a cursor-based paginated result for efficient large dataset traversal.
-    /// Uses cursor-based pagination to avoid expensive offset calculations for deep paging.
-    /// </summary>
-    /// <typeparam name="T">The entity type</typeparam>
-    /// <param name="query">The source queryable</param>
-    /// <param name="cursorQuery">The cursor page query</param>
-    /// <param name="cursorSelector">Function to extract cursor value from entity</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Cursor-based paginated result</returns>
-    public static async Task<CursorPagedResult<T>> ToCursorPagedResultAsync<T>(
-        this IQueryable<T> query,
-        ICursorPageQuery<CursorPagedResult<T>> cursorQuery,
-        Func<T, string> cursorSelector,
-        CancellationToken cancellationToken = default)
-        where T : class
-    {
-        ArgumentNullException.ThrowIfNull(query);
-        ArgumentNullException.ThrowIfNull(cursorQuery);
-        ArgumentNullException.ThrowIfNull(cursorSelector);
+    // Metrics
+    private static readonly Meter Meter = new("Axon.Results", "1.0.0");
 
-        var startTime = DateTimeOffset.UtcNow;
-        
-        // Apply sorting
-        var sortedQuery = ApplySorting(query, cursorQuery.SortBy);
-        
-        // Apply cursor filter if provided
-        if (!string.IsNullOrEmpty(cursorQuery.Cursor))
-        {
-            // This is a simplified implementation - in practice, you'd need to decode the cursor
-            // and apply appropriate where clauses based on the sorting criteria
-            // For now, we'll skip cursor filtering implementation
-        }
-        
-        // Fetch one extra item to determine if there are more pages
-        var items = await sortedQuery
-            .Take(cursorQuery.Size + 1)
-            .ToListAsync(cancellationToken);
-        
-        var hasNextPage = items.Count > cursorQuery.Size;
-        var actualItems = hasNextPage ? items.Take(cursorQuery.Size).ToList() : items;
-        
-        // Generate next cursor from the last item
-        string? nextCursor = null;
-        if (hasNextPage && actualItems.Any())
-        {
-            nextCursor = cursorSelector(actualItems.Last());
-        }
-        
-        // Create metadata
-        var metadata = new Dictionary<string, object>
-        {
-            ["TraceId"] = GetTraceIdFromQuery(cursorQuery) ?? "unknown",
-            ["QueryTime"] = DateTimeOffset.UtcNow,
-            ["ExecutionDuration"] = DateTimeOffset.UtcNow - startTime,
-            ["SortCriteria"] = cursorQuery.SortBy,
-            ["RequestedSize"] = cursorQuery.Size,
-            ["ActualSize"] = actualItems.Count,
-            ["HasNextPage"] = hasNextPage,
-            ["CursorType"] = "forward-only"
-        };
-        
-        return CursorPagedResult<T>.Create(
-            actualItems.AsReadOnly(),
-            nextCursor,
-            hasNextPage,
-            metadata.AsReadOnly());
-    }
-    
+    private static readonly Counter<long> ResultOperations =
+        Meter.CreateCounter<long>("axon.result.operations", unit: "operations",
+            description: "Total number of Result operations");
+
+    private static readonly Counter<long> ResultSuccesses =
+        Meter.CreateCounter<long>("axon.result.success", unit: "operations",
+            description: "Successful Result operations");
+
+    private static readonly Counter<long> ResultFailures =
+        Meter.CreateCounter<long>("axon.result.failure", unit: "operations",
+            description: "Failed Result operations");
+
+    private static readonly Histogram<double> ResultDurationMs =
+        Meter.CreateHistogram<double>("axon.result.duration", unit: "ms",
+            description: "Duration of Result operations in milliseconds");
+
+    #region Result operation tracking
+
     /// <summary>
-    /// Applies dynamic sorting to a queryable based on sort criteria.
-    /// Uses reflection and expression trees to build dynamic OrderBy/ThenBy clauses.
+    /// Record a Result outcome on the current span and emit OTel metrics.
+    /// Does not create a new span; instead enriches the current one and adds an event.
     /// </summary>
-    /// <typeparam name="T">The entity type</typeparam>
-    /// <param name="query">The source queryable</param>
-    /// <param name="sortCriteria">The sorting criteria to apply</param>
-    /// <returns>Sorted queryable</returns>
-    private static IQueryable<T> ApplySorting<T>(IQueryable<T> query, IReadOnlyList<SortCriteria> sortCriteria)
+    public static Result<T> TrackResultOperation<T>(
+        this Result<T> result,
+        string operationName,
+        TimeSpan? duration = null,
+        IEnumerable<KeyValuePair<string, object?>>? attributes = null,
+        [CallerMemberName] string? memberName = null)
     {
-        if (!sortCriteria.Any()) return query;
-        
-        IOrderedQueryable<T>? orderedQuery = null;
-        
-        foreach (var sort in sortCriteria)
+        var activity = Activity.Current;
+
+        // ---- Span enrichment (W3C/OTel) ----
+        if (activity is not null)
         {
-            var parameter = Expression.Parameter(typeof(T), "x");
-            
-            // Handle nested property paths like "User.Name"
-            Expression property = parameter;
-            foreach (var propName in sort.PropertyName.Split('.'))
+            // Ensure a display name (helpful for exporters)
+            if (string.IsNullOrWhiteSpace(activity.DisplayName))
+                activity.DisplayName = operationName;
+
+            activity.SetTag("operation.name", operationName);
+            activity.SetTag("code.function", memberName ?? "unknown");
+            activity.SetTag("result.type", typeof(T).Name);
+            activity.SetTag("result.is_success", result.IsSuccess);
+
+            if (attributes != null)
             {
-                var propInfo = property.Type.GetProperty(propName, 
-                    BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-                
-                if (propInfo == null)
+                foreach (var (k, v) in attributes)
+                    activity.SetTag(k, v);
+            }
+
+            if (result.IsSuccess)
+            {
+                activity.SetStatus(ActivityStatusCode.Ok, "Result success");
+            }
+            else
+            {
+                var e = result.Error;
+                activity.SetStatus(ActivityStatusCode.Error, e.Message);
+                activity.SetTag("error.code", e.Code);
+                activity.SetTag("error.type", e.Type.ToString());
+                activity.SetTag("error.severity", e.Severity.ToString());
+                activity.SetTag("http.status_code", e.ToHttpStatusCode());
+
+                if (!string.IsNullOrEmpty(e.CorrelationId))
+                    activity.SetTag("correlation.id", e.CorrelationId);
+                if (!string.IsNullOrEmpty(e.Source))
+                    activity.SetTag("error.source", e.Source);
+
+                // Add exception event if present (OTel exception semantic conv)
+                if (e.InnerException is not null)
                 {
-                    throw new ArgumentException($"Property '{propName}' not found on type '{property.Type.Name}'");
+                    activity.AddEvent(new ActivityEvent(
+                        TelemetryTags.Tracing.Exception.EventName,
+                        DateTimeOffset.UtcNow,
+                        new ActivityTagsCollection
+                        {
+                            [TelemetryTags.Tracing.Exception.Type] = e.InnerException.GetType().FullName,
+                            [TelemetryTags.Tracing.Exception.Message] = e.InnerException.Message,
+                            [TelemetryTags.Tracing.Exception.Stacktrace] = e.InnerException.StackTrace ?? string.Empty
+                        }));
                 }
-                
-                property = Expression.Property(property, propInfo);
             }
-            
-            var lambda = Expression.Lambda(property, parameter);
-            
-            var methodName = orderedQuery == null
-                ? (sort.Direction == SortDirection.Ascending ? "OrderBy" : "OrderByDescending")
-                : (sort.Direction == SortDirection.Ascending ? "ThenBy" : "ThenByDescending");
-            
-            var method = typeof(Queryable).GetMethods()
-                .First(m => m.Name == methodName && m.GetParameters().Length == 2)
-                .MakeGenericMethod(typeof(T), property.Type);
-            
-            orderedQuery = (IOrderedQueryable<T>)method.Invoke(null, new object[] { orderedQuery ?? query, lambda })!;
+
+            // Add a compact structured event for the operation
+            var evtTags = new ActivityTagsCollection
+            {
+                ["operation"] = operationName,
+                ["result.is_success"] = result.IsSuccess,
+                ["result.type"] = typeof(T).Name
+            };
+            if (duration.HasValue) evtTags.Add("duration.ms", duration.Value.TotalMilliseconds);
+            activity.AddEvent(new ActivityEvent("result.operation", DateTimeOffset.UtcNow, evtTags));
         }
-        
-        return orderedQuery ?? query;
-    }
-    
-    /// <summary>
-    /// Gets total count with potential caching optimization.
-    /// In a real implementation, this could check cache or use approximate counts for large datasets.
-    /// </summary>
-    /// <typeparam name="T">The entity type</typeparam>
-    /// <param name="query">The queryable to count</param>
-    /// <param name="pageQuery">The page query (for cache key generation)</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Total count</returns>
-    private static async Task<int> GetTotalCountAsync<T>(
-        IQueryable<T> query,
-        ISortablePageQuery<PagedResult<T>> pageQuery,
-        CancellationToken cancellationToken)
-    {
-        // In a production system, you might want to:
-        // 1. Check if count is cached based on query + filters
-        // 2. Use approximate counts for very large datasets
-        // 3. Skip count entirely for cursor-based pagination
-        
-        return await query.CountAsync(cancellationToken);
-    }
-    
-    /// <summary>
-    /// Creates an empty paginated result with metadata.
-    /// </summary>
-    /// <typeparam name="T">The entity type</typeparam>
-    /// <param name="pageQuery">The page query</param>
-    /// <param name="startTime">Query start time</param>
-    /// <returns>Empty paginated result</returns>
-    private static PagedResult<T> CreateEmptyResult<T>(
-        ISortablePageQuery<PagedResult<T>> pageQuery,
-        DateTimeOffset startTime)
-        where T : class
-    {
-        var metadata = CreateMetadata(pageQuery, startTime, 0, false);
-        return PagedResult<T>.Create(Array.Empty<T>(), pageQuery.Page, pageQuery.Size, 0, metadata);
-    }
-    
-    /// <summary>
-    /// Creates rich metadata for paginated results.
-    /// Includes trace context, performance metrics, and query information.
-    /// </summary>
-    /// <param name="pageQuery">The page query</param>
-    /// <param name="startTime">Query start time</param>
-    /// <param name="totalCount">Total item count</param>
-    /// <param name="cacheHit">Whether result came from cache</param>
-    /// <returns>Metadata dictionary</returns>
-    private static IReadOnlyDictionary<string, object> CreateMetadata<T>(
-        ISortablePageQuery<T> pageQuery,
-        DateTimeOffset startTime,
-        int totalCount,
-        bool cacheHit)
-        where T : class
-    {
-        var metadata = new Dictionary<string, object>
+
+        // ---- Metrics (OTel) ----
+        var dims = new KeyValuePair<string, object?>[]
         {
-            ["TraceId"] = GetTraceIdFromQuery(pageQuery) ?? "unknown",
-            ["QueryTime"] = DateTimeOffset.UtcNow,
-            ["ExecutionDuration"] = DateTimeOffset.UtcNow - startTime,
-            ["SortCriteria"] = pageQuery.EffectiveSortBy,
-            ["TotalCount"] = totalCount,
-            ["RequestedPage"] = pageQuery.Page,
-            ["RequestedSize"] = pageQuery.Size,
-            ["CacheHit"] = cacheHit,
-            ["QueryType"] = "offset-based"
+            new("operation.name", operationName),
+            new("result.type", typeof(T).Name),
+            new("code.function", memberName ?? "unknown")
         };
-        
-        // Add metadata from the query if available
-        if (pageQuery is IAxonRequest axonRequest && 
-            axonRequest.Metadata != null)
-        {
-            if (axonRequest.Metadata.TryGetValue("TenantId", out var tenantId))
-            {
-                metadata["TenantId"] = tenantId;
-            }
-            
-            if (axonRequest.Metadata.TryGetValue("UserId", out var userId))
-            {
-                metadata["UserId"] = userId;
-            }
-        }
-        
-        return metadata.AsReadOnly();
+
+        ResultOperations.Add(1, dims);
+        if (result.IsSuccess) ResultSuccesses.Add(1, dims);
+        else ResultFailures.Add(1, dims);
+
+        if (duration.HasValue)
+            ResultDurationMs.Record(duration.Value.TotalMilliseconds, dims);
+
+        return result;
     }
-    
+
+    #endregion
+
+    #region Dependency tracking
+
     /// <summary>
-    /// Extracts trace ID from query metadata.
+    /// Start a client/dependency span using W3C/OTel conventions.
+    /// Call <see cref="ResultDependencyScope{T}.Complete"/> with the final <see cref="Result{T}"/>.
     /// </summary>
-    /// <param name="query">The query object</param>
-    /// <returns>Trace ID if available</returns>
-    private static string? GetTraceIdFromQuery<T>(object query)
+    public static ResultDependencyScope<T> StartDependencyTracking<T>(
+        string system,          // e.g. "http", "db", "redis", "mq"
+        string name,            // peer/service name or DB name
+        string command)         // command/statement/operation
     {
-        if (query is IAxonRequest axonRequest)
+        var spanName = $"dep:{system}:{name}";
+        var activity = ActivitySource.StartActivity(spanName, ActivityKind.Client);
+
+        if (activity is not null)
         {
-            return axonRequest.Metadata?.TryGetValue("TraceId", out var traceId) == true 
-                ? traceId?.ToString() 
-                : null;
+            activity.SetTag("dependency.system", system);
+            activity.SetTag("dependency.name", name);
+            activity.SetTag("dependency.command", command);
+
+            // Map to common semantic attributes when possible
+            if (system.Equals("db", StringComparison.OrdinalIgnoreCase))
+            {
+                activity.SetTag("db.system", name);
+                activity.SetTag("db.statement", command);
+            }
+            else if (system.Equals("http", StringComparison.OrdinalIgnoreCase))
+            {
+                // When used for HTTP, pass the HTTP attributes as part of 'command' or attributes
+                activity.SetTag("http.target", command);
+            }
         }
-        
-        return System.Diagnostics.Activity.Current?.TraceId.ToString();
+
+        return new ResultDependencyScope<T>(activity, spanName);
     }
-}
+
+    /// <summary>
+    /// Record a dependency outcome without managing a scope (manual mode).
+    /// </summary>
+    public static Result<T> TrackResultDependency<T>(
+        this Result<T> result,
+        string system,
+        string name,
+        string command,
+        DateTimeOffset startTime,
+        TimeSpan duration,
+        IEnumerable<KeyValuePair<string, object?>>? attributes = null)
+    {
+        using var activity = ActivitySource.StartActivity($"dep:{system}:{name}", ActivityKind.Client);
+        if (activity is not null)
+        {
+            activity.SetStartTime(startTime.UtcDateTime);
+
+            activity.SetTag("dependency.system", system);
+            activity.SetTag("dependency.name", name);
+            activity.SetTag("dependency.command", command);
+            activity.SetTag("result.type", typeof(T).Name);
+
+            if (attributes != null)
+            {
+                foreach (var (k, v) in attributes)
+                    activity.SetTag(k, v);
+            }
+
+            if (result.IsSuccess)
+            {
+                activity.SetStatus(ActivityStatusCode.Ok);
+            }
+            else
+            {
+                var e = result.Error;
+                activity.SetStatus(ActivityStatusCode.Error, e.Message);
+                activity.SetTag("error.code", e.Code);
+                activity.SetTag("error.type", e.Type.ToString());
+                activity.SetTag("http.status_code", e.ToHttpStatusCode());
+            }
+
+            activity.SetEndTime(startTime.Add(duration).UtcDateTime);
+        }
+
+        // Also emit simple counters
+        var dims = new KeyValuePair<string, object?>[]
+        {
+            new("dependency.system", system),
+            new("dependency.name", name),
+            new("result.type", typeof(T).Name),
+        };
+        ResultOperations.Add(1, dims);
+        if (result.IsSuccess) ResultSuccesses.Add(1, dims);
+        else ResultFailures.Add(1, dims);
+        ResultDurationMs.Record(duration.TotalMilliseconds, dims);
+
+        return result;
+    }
+
+    #endregion
+
+    #region Request tracking
+
+    /// <summary>
+    /// Create a server/request span for a completed operation (useful in non-HTTP hosts).
+    /// </summary>
+    public static Result<T> TrackResultRequest<T>(
+        this Result<T> result,
+        string requestName,
+        DateTimeOffset startTime,
+        TimeSpan duration,
+        string? responseCode = null)
+    {
+        using var activity = ActivitySource.StartActivity(requestName, ActivityKind.Server);
+        if (activity is not null)
+        {
+            activity.SetStartTime(startTime.UtcDateTime);
+            activity.SetTag("result.type", typeof(T).Name);
+            activity.SetTag("http.status_code", result.IsSuccess
+                ? responseCode ?? "200"
+                : (responseCode ?? result.Error.ToHttpStatusCode().ToString()));
+
+            if (result.IsSuccess)
+            {
+                activity.SetStatus(ActivityStatusCode.Ok);
+            }
+            else
+            {
+                var e = result.Error;
+                activity.SetStatus(ActivityStatusCode.Error, e.Message);
+                activity.SetTag("error.code", e.Code);
+                activity.SetTag("error.type", e.Type.ToStri

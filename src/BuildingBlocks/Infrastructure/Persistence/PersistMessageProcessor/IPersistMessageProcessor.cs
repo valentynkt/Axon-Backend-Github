@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Core.Abstractions.Events;
+using MassTransit.Serialization;
 
 namespace BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 

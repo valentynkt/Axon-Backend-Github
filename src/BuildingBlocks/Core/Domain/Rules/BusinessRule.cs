@@ -1,129 +1,61 @@
-using BuildingBlocks.Core.Functional;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional.Validation;
 
 namespace BuildingBlocks.Core.Domain.Rules;
 
 /// <summary>
-/// Base implementation for business rules
+/// Convenience base for implementing rules with consistent error shape.
+/// Implement <see cref="IsBrokenAsync"/> in derived classes; message/code/metadata are provided via ctor.
+/// Prefer <see cref="BusinessRule.Create"/> / <see cref="CreateAsync"/> factories for ad-hoc rules.
 /// </summary>
-public abstract record BusinessRule : IBusinessRule
+public abstract class BusinessRule : IBusinessRule
 {
-    public abstract string Code { get; }
-    public abstract string Message { get; }
-    public abstract bool IsBroken();
-    
-    /// <summary>
-    /// Convert to Result
-    /// </summary>
-    public Result<Unit> ToResult()
+    protected BusinessRule(string message, string code, IReadOnlyDictionary<string, object>? metadata = null)
     {
-        return IsBroken() 
-            ? Result<Unit>.Failure(Error.BusinessRule(Message, Code))
-            : Result<Unit>.Success(Unit.Value);
+        Message = string.IsNullOrWhiteSpace(message) ? "Business rule violated." : message;
+        Code    = string.IsNullOrWhiteSpace(code)    ? "BUSINESS_RULE_VIOLATION" : code;
+        Metadata = metadata;
     }
-    
-    /// <summary>
-    /// Convert to Validation
-    /// </summary>
-    public Validation<Unit> ToValidation()
-    {
-        return IsBroken()
-            ? Validation<Unit>.Invalid(Error.BusinessRule(Message, Code))
-            : Validation<Unit>.Valid(Unit.Value);
-    }
-}
 
-/// <summary>
-/// Simple predicate-based business rule
-/// </summary>
-public sealed record PredicateRule : BusinessRule
-{
-    private readonly Func<bool> _predicate;
-    
-    public PredicateRule(string code, string message, Func<bool> predicate)
-    {
-        Code = code;
-        Message = message;
-        _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
-    }
-    
-    public override string Code { get; }
-    public override string Message { get; }
-    
-    public override bool IsBroken() => _predicate();
-}
+    public string Code { get; }
+    public string Message { get; }
+    public IReadOnlyDictionary<string, object>? Metadata { get; }
 
-/// <summary>
-/// Composite rule for combining multiple rules
-/// </summary>
-public sealed record CompositeRule : BusinessRule
-{
-    private readonly IBusinessRule[] _rules;
-    private readonly string _code;
-    private readonly string _message;
-    private readonly CompositeRuleMode _mode;
-    
-    public CompositeRule(
-        string code, 
-        string message, 
-        CompositeRuleMode mode,
-        params IBusinessRule[] rules)
-    {
-        _code = code;
-        _message = message;
-        _mode = mode;
-        _rules = rules ?? Array.Empty<IBusinessRule>();
-    }
-    
-    public override string Code => _code;
-    public override string Message => _message;
-    
-    public override bool IsBroken()
-    {
-        return _mode switch
-        {
-            CompositeRuleMode.All => _rules.All(r => r.IsBroken()),
-            CompositeRuleMode.Any => _rules.Any(r => r.IsBroken()),
-            CompositeRuleMode.None => !_rules.Any(r => r.IsBroken()),
-            _ => throw new InvalidOperationException($"Unsupported composite rule mode: {_mode}")
-        };
-    }
-    
     /// <summary>
-    /// Get all broken rules
+    /// Default implementation for synchronous rules. Override for sync-only rules for better performance.
     /// </summary>
-    public IEnumerable<IBusinessRule> GetBrokenRules()
-    {
-        return _rules.Where(r => r.IsBroken());
-    }
-    
-    /// <summary>
-    /// Get all rules with their status
-    /// </summary>
-    public IEnumerable<(IBusinessRule Rule, bool IsBroken)> GetRulesWithStatus()
-    {
-        return _rules.Select(r => (r, r.IsBroken()));
-    }
-}
+    public virtual bool IsBroken() => IsBrokenAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-/// <summary>
-/// Composite rule evaluation mode
-/// </summary>
-public enum CompositeRuleMode
-{
-    /// <summary>
-    /// All sub-rules must be broken for composite to be broken
-    /// </summary>
-    All,
-    
-    /// <summary>
-    /// Any sub-rule broken makes composite broken
-    /// </summary>
-    Any,
-    
-    /// <summary>
-    /// No sub-rules should be broken (inverse of Any)
-    /// </summary>
-    None
+    public abstract ValueTask<bool> IsBrokenAsync(CancellationToken ct = default);
+
+    public Error ToError() => Error.BusinessRule(Message, Code, Metadata ?? new Dictionary<string, object>());
+
+    // ---------- Factories for ad-hoc rules (allocation-minimal) ----------
+
+    public static IBusinessRule Create(string message, string code, Func<bool> isBroken,
+        IReadOnlyDictionary<string, object>? metadata = null)
+        => new SyncBusinessRule(message, code, isBroken, metadata);
+
+    public static IBusinessRule CreateAsync(string message, string code,
+        Func<CancellationToken, ValueTask<bool>> isBrokenAsync,
+        IReadOnlyDictionary<string, object>? metadata = null)
+        => new AsyncBusinessRule(message, code, isBrokenAsync, metadata);
+
+    private sealed class SyncBusinessRule : BusinessRule
+    {
+        private readonly Func<bool> _isBroken;
+        public SyncBusinessRule(string message, string code, Func<bool> isBroken, IReadOnlyDictionary<string, object>? metadata)
+            : base(message, code, metadata) => _isBroken = isBroken ?? throw new ArgumentNullException(nameof(isBroken));
+        
+        public override bool IsBroken() => _isBroken();
+        public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) => ValueTask.FromResult(_isBroken());
+    }
+
+    private sealed class AsyncBusinessRule : BusinessRule
+    {
+        private readonly Func<CancellationToken, ValueTask<bool>> _isBrokenAsync;
+        public AsyncBusinessRule(string message, string code, Func<CancellationToken, ValueTask<bool>> isBrokenAsync, IReadOnlyDictionary<string, object>? metadata)
+            : base(message, code, metadata) => _isBrokenAsync = isBrokenAsync ?? throw new ArgumentNullException(nameof(isBrokenAsync));
+        public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) => _isBrokenAsync(ct);
+    }
 }

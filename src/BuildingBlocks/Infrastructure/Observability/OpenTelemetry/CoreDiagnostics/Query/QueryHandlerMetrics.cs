@@ -1,3 +1,5 @@
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry.DiagnosticsProvider;
+
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry.CoreDiagnostics.Query;
 
 /// <summary>

@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Claims;
 using Ardalis.GuardClauses;
 using BuildingBlocks.Core.Abstractions.Events;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;

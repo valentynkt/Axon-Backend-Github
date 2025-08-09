@@ -4,6 +4,8 @@ using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Messages;
 using Axon.Modules.Chat.Domain.Messages.ValueObjects;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
+using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Results;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;

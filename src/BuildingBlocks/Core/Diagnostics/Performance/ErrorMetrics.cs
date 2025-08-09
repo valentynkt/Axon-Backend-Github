@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -10,493 +11,382 @@ namespace BuildingBlocks.Core.Diagnostics.Performance;
 
 /// <summary>
 /// High-performance metrics collection system for Error tracking and analysis.
-/// Provides comprehensive error telemetry with zero-allocation hot paths,
+/// Provides comprehensive error telemetry with zero-allocation leaning hot paths,
 /// real-time aggregation, and intelligent sampling for production environments.
 /// </summary>
 public sealed class ErrorMetrics : IDisposable
 {
-    private static readonly Meter Meter = new("Axon.Errors", "1.0.0");
-    
-    // Core error metrics instruments
-    private static readonly Counter<long> ErrorCount = Meter.CreateCounter<long>(
-        "axon.errors.count",
-        "errors",
-        "Total number of errors created");
-        
-    private static readonly Counter<long> ErrorByTypeCount = Meter.CreateCounter<long>(
-        "axon.errors.by_type.count", 
-        "errors",
-        "Number of errors by error type");
-        
-    private static readonly Counter<long> ErrorBySeverityCount = Meter.CreateCounter<long>(
-        "axon.errors.by_severity.count",
-        "errors", 
-        "Number of errors by severity level");
-        
-    private static readonly Histogram<double> ErrorCreationDuration = Meter.CreateHistogram<double>(
-        "axon.errors.creation.duration",
-        "milliseconds",
-        "Time spent creating error instances");
-        
-    private static readonly Histogram<double> ErrorSerializationDuration = Meter.CreateHistogram<double>(
-        "axon.errors.serialization.duration", 
-        "milliseconds",
-        "Time spent serializing errors");
-        
-    private static readonly Counter<long> ErrorCacheHits = Meter.CreateCounter<long>(
+    // Single meter & instruments (created once)
+    private static readonly Meter Meter = new("Axon.Errors", "1.1.0");
+
+    private static readonly Counter<long> ErrorsCreated = Meter.CreateCounter<long>(
+        "axon.errors.created",
+        unit: "errors",
+        description: "Total number of errors created");
+
+    private static readonly Counter<long> ErrorsByType = Meter.CreateCounter<long>(
+        "axon.errors.by_type",
+        unit: "errors",
+        description: "Number of errors, by error type");
+
+    private static readonly Counter<long> ErrorsBySeverity = Meter.CreateCounter<long>(
+        "axon.errors.by_severity",
+        unit: "errors",
+        description: "Number of errors, by severity");
+
+    private static readonly Histogram<double> ErrorCreationDurationMs = Meter.CreateHistogram<double>(
+        "axon.errors.creation.ms",
+        unit: "ms",
+        description: "Elapsed time when creating error instances");
+
+    private static readonly Histogram<double> ErrorSerializationDurationMs = Meter.CreateHistogram<double>(
+        "axon.errors.serialization.ms",
+        unit: "ms",
+        description: "Elapsed time for serializing errors");
+
+    private static readonly Counter<long> CacheHits = Meter.CreateCounter<long>(
         "axon.errors.cache.hits",
-        "hits",
-        "Number of error cache hits");
-        
-    private static readonly Counter<long> ErrorCacheMisses = Meter.CreateCounter<long>(
+        unit: "hits",
+        description: "Error cache hits");
+
+    private static readonly Counter<long> CacheMisses = Meter.CreateCounter<long>(
         "axon.errors.cache.misses",
-        "misses", 
-        "Number of error cache misses");
-        
-    private static readonly Gauge<long> ActiveErrors = Meter.CreateGauge<long>(
-        "axon.errors.active.count",
-        "errors",
-        "Number of currently active/unresolved errors");
-        
-    private static readonly Histogram<long> ErrorMessageLength = Meter.CreateHistogram<long>(
-        "axon.errors.message.length",
-        "characters",
-        "Length of error messages");
-        
-    private static readonly Counter<long> ErrorWithMetadata = Meter.CreateCounter<long>(
-        "axon.errors.with_metadata.count",
-        "errors",
-        "Number of errors created with metadata");
-        
-    private static readonly Counter<long> ErrorWithExceptions = Meter.CreateCounter<long>(
-        "axon.errors.with_exceptions.count", 
-        "errors",
-        "Number of errors created with inner exceptions");
-    
-    // Hot path performance metrics
-    private static readonly Counter<long> ZeroAllocationPaths = Meter.CreateCounter<long>(
-        "axon.errors.zero_allocation.count",
-        "operations",
-        "Number of zero-allocation error operations");
-        
-    private static readonly Histogram<double> MemoryAllocated = Meter.CreateHistogram<double>(
-        "axon.errors.memory.allocated",
-        "bytes", 
-        "Memory allocated for error operations");
-    
-    // Error pattern analysis
-    private readonly ConcurrentDictionary<string, ErrorPattern> _errorPatterns;
-    private readonly ConcurrentDictionary<string, long> _errorCodeFrequency;
-    private readonly ConcurrentDictionary<ErrorType, long> _errorTypeFrequency;
-    private readonly ConcurrentDictionary<ErrorSeverity, long> _errorSeverityFrequency;
-    
-    // Time-series data for trends
-    private readonly ConcurrentQueue<ErrorTimeSeriesEntry> _timeSeriesData;
-    private readonly Timer _aggregationTimer;
-    
-    // Configuration and dependencies
+        unit: "misses",
+        description: "Error cache misses");
+
+    // Active error count over time
+    private static readonly UpDownCounter<long> ActiveErrorsCounter = Meter.CreateUpDownCounter<long>(
+        "axon.errors.active",
+        unit: "errors",
+        description: "Currently active/unresolved errors");
+
+    private static readonly Histogram<long> MessageLength = Meter.CreateHistogram<long>(
+        "axon.errors.message.len",
+        unit: "chars",
+        description: "Length of error messages");
+
+    private static readonly Counter<long> WithMetadata = Meter.CreateCounter<long>(
+        "axon.errors.with_metadata",
+        unit: "errors",
+        description: "Errors created with metadata");
+
+    private static readonly Counter<long> WithExceptions = Meter.CreateCounter<long>(
+        "axon.errors.with_exception",
+        unit: "errors",
+        description: "Errors created with inner exceptions");
+
+    private static readonly Counter<long> ZeroAllocPaths = Meter.CreateCounter<long>(
+        "axon.errors.zero_alloc",
+        unit: "ops",
+        description: "Zero-allocation hot-path operations");
+
+    private static readonly Histogram<double> BytesAllocated = Meter.CreateHistogram<double>(
+        "axon.errors.mem.bytes",
+        unit: "bytes",
+        description: "Bytes allocated for error operations");
+
+    // Compiled regexes for pattern extraction
+    private static readonly Regex GuidRegex = new(
+        @"\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static readonly Regex NumberRegex = new(
+        @"\d+",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex QuotedRegex = new(
+        @"'[^']*'",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // Error pattern and frequency tracking (in-memory)
+    private readonly ConcurrentDictionary<string, ErrorPattern> _patterns = new();
+    private readonly ConcurrentDictionary<string, long> _codeFreq = new();
+    private readonly ConcurrentDictionary<ErrorType, long> _typeFreq = new();
+    private readonly ConcurrentDictionary<ErrorSeverity, long> _severityFreq = new();
+
+    // Simple time-series (bounded)
+    private readonly ConcurrentQueue<ErrorTimeSeriesEntry> _series = new();
+
+    // Aggregation tick
+    private readonly Timer _aggTimer;
+
+    // Config & logging
     private readonly ErrorMetricsOptions _options;
     private readonly ILogger<ErrorMetrics> _logger;
-    
-    // State management
-    private readonly object _lockObject = new();
-    private long _totalErrorsTracked;
-    private long _currentActiveErrors;
-    private DateTimeOffset _lastResetTime;
-    private bool _disposed;
-    
+
+    // State
+    private long _totalTracked;
+    private long _activeErrors; // mirrors ActiveErrorsCounter
+    private DateTimeOffset _lastResetUtc = DateTimeOffset.UtcNow;
+    private volatile bool _disposed;
+
     public ErrorMetrics(
         IOptions<ErrorMetricsOptions> options,
         ILogger<ErrorMetrics> logger)
     {
         _options = options?.Value ?? new ErrorMetricsOptions();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        
-        _errorPatterns = new ConcurrentDictionary<string, ErrorPattern>();
-        _errorCodeFrequency = new ConcurrentDictionary<string, long>();
-        _errorTypeFrequency = new ConcurrentDictionary<ErrorType, long>();
-        _errorSeverityFrequency = new ConcurrentDictionary<ErrorSeverity, long>();
-        _timeSeriesData = new ConcurrentQueue<ErrorTimeSeriesEntry>();
-        
-        _lastResetTime = DateTimeOffset.UtcNow;
-        
-        // Setup aggregation timer
-        _aggregationTimer = new Timer(PerformAggregation, null,
-            TimeSpan.FromSeconds(_options.AggregationIntervalSeconds),
-            TimeSpan.FromSeconds(_options.AggregationIntervalSeconds));
+
+        _aggTimer = new Timer(PerformAggregation,
+            state: null,
+            dueTime: TimeSpan.FromSeconds(_options.AggregationIntervalSeconds),
+            period: TimeSpan.FromSeconds(_options.AggregationIntervalSeconds));
     }
-    
-    #region Error Tracking Methods
-    
+
+    #region Tracking
+
     /// <summary>
-    /// Track error creation with comprehensive metrics (zero-allocation for common patterns)
+    /// Track error creation with comprehensive metrics.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void TrackErrorCreated(Error error, TimeSpan? creationTime = null)
     {
-        if (_disposed || error == null) return;
-        
-        // Core metrics with tags
+        if (_disposed || error is null) return;
+
         var tags = new KeyValuePair<string, object?>[]
         {
             new("error.code", error.Code),
             new("error.type", error.Type.ToString()),
             new("error.severity", error.Severity.ToString()),
-            new("has_inner_exception", error.InnerException != null),
-            new("has_metadata", error.Metadata != null && error.Metadata.Count > 0),
+            new("has_exception", error.InnerException is not null),
+            new("has_metadata", error.Metadata is { Count: > 0 }),
             new("has_correlation_id", !string.IsNullOrEmpty(error.CorrelationId)),
             new("has_source", !string.IsNullOrEmpty(error.Source))
         };
-        
-        // Record basic metrics
-        ErrorCount.Add(1, tags);
-        ErrorByTypeCount.Add(1, new KeyValuePair<string, object?>[] { new("error.type", error.Type.ToString()) });
-        ErrorBySeverityCount.Add(1, new KeyValuePair<string, object?>[] { new("error.severity", error.Severity.ToString()) });
-        
-        // Track message length
+
+        // Instruments
+        ErrorsCreated.Add(1, tags);
+        ErrorsByType.Add(1, new KeyValuePair<string, object?>[] { new("error.type", error.Type.ToString()) });
+        ErrorsBySeverity.Add(1, new KeyValuePair<string, object?>[] { new("error.severity", error.Severity.ToString()) });
+
         if (!string.IsNullOrEmpty(error.Message))
-        {
-            ErrorMessageLength.Record(error.Message.Length, tags);
-        }
-        
-        // Track metadata usage
-        if (error.Metadata != null && error.Metadata.Count > 0)
-        {
-            ErrorWithMetadata.Add(1, tags);
-        }
-        
-        // Track exception usage
-        if (error.InnerException != null)
-        {
-            ErrorWithExceptions.Add(1, tags);
-        }
-        
-        // Track creation time if provided
-        if (creationTime.HasValue)
-        {
-            ErrorCreationDuration.Record(creationTime.Value.TotalMilliseconds, tags);
-        }
-        
-        // Update internal tracking
-        Interlocked.Increment(ref _totalErrorsTracked);
-        Interlocked.Increment(ref _currentActiveErrors);
-        
-        // Update frequency counters
-        _errorCodeFrequency.AddOrUpdate(error.Code, 1, (_, count) => count + 1);
-        _errorTypeFrequency.AddOrUpdate(error.Type, 1, (_, count) => count + 1);
-        _errorSeverityFrequency.AddOrUpdate(error.Severity, 1, (_, count) => count + 1);
-        
-        // Track error patterns
-        TrackErrorPattern(error);
-        
-        // Add to time series data
+            MessageLength.Record(error.Message.Length, tags);
+
+        if (error.Metadata is { Count: > 0 })
+            WithMetadata.Add(1, tags);
+
+        if (error.InnerException is not null)
+            WithExceptions.Add(1, tags);
+
+        if (creationTime is { } ct)
+            ErrorCreationDurationMs.Record(ct.TotalMilliseconds, tags);
+
+        // Internal counters
+        Interlocked.Increment(ref _totalTracked);
+        var activeNow = Interlocked.Increment(ref _activeErrors);
+        ActiveErrorsCounter.Add(1);
+
+        _codeFreq.AddOrUpdate(error.Code, 1, static (_, v) => v + 1);
+        _typeFreq.AddOrUpdate(error.Type, 1, static (_, v) => v + 1);
+        _severityFreq.AddOrUpdate(error.Severity, 1, static (_, v) => v + 1);
+
+        if (_options.EnablePatternTracking)
+            TrackPattern(error);
+
         if (_options.EnableTimeSeriesTracking)
-        {
-            AddTimeSeriesEntry(error);
-        }
+            EnqueueTimeSeries(error);
     }
-    
+
     /// <summary>
-    /// Track error resolution/handling
+    /// Track resolution/handling of an error.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void TrackErrorResolved(string errorCode, TimeSpan resolutionTime)
     {
         if (_disposed) return;
-        
-        var tags = new KeyValuePair<string, object?>[]
-        {
-            new("error.code", errorCode),
-            new("resolution.duration_ms", resolutionTime.TotalMilliseconds)
-        };
-        
-        Meter.CreateCounter<long>("axon.errors.resolved.count", "resolutions")
-            .Add(1, tags);
-            
-        Meter.CreateHistogram<double>("axon.errors.resolution.duration", "milliseconds")
-            .Record(resolutionTime.TotalMilliseconds, tags);
-        
-        // Decrement active errors
-        var newCount = Interlocked.Decrement(ref _currentActiveErrors);
-        if (newCount < 0) Interlocked.Exchange(ref _currentActiveErrors, 0);
-        
-        UpdateActiveErrorsGauge();
+
+        // Resolution counters
+        Meter.CreateCounter<long>("axon.errors.resolved", unit: "resolutions")
+            .Add(1, new KeyValuePair<string, object?>[] { new("error.code", errorCode) });
+
+        Meter.CreateHistogram<double>("axon.errors.resolution.ms", unit: "ms")
+            .Record(resolutionTime.TotalMilliseconds);
+
+        // Active errors down
+        var after = Interlocked.Decrement(ref _activeErrors);
+        if (after < 0) Interlocked.Exchange(ref _activeErrors, 0);
+        ActiveErrorsCounter.Add(-1);
     }
-    
+
     /// <summary>
-    /// Track cache operations with zero-allocation paths
+    /// Track cache hit.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void TrackCacheHit(string errorCode, string cacheType = "default")
+    public void TrackCacheHit(string errorCode, string cache = "default")
     {
         if (_disposed) return;
-        
-        var tags = new KeyValuePair<string, object?>[]
+        CacheHits.Add(1, new KeyValuePair<string, object?>[]
         {
             new("error.code", errorCode),
-            new("cache.type", cacheType)
-        };
-        
-        ErrorCacheHits.Add(1, tags);
-        ZeroAllocationPaths.Add(1, tags);
+            new("cache", cache)
+        });
+        ZeroAllocPaths.Add(1);
     }
-    
+
     /// <summary>
-    /// Track cache misses
+    /// Track cache miss.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void TrackCacheMiss(string errorCode, string cacheType = "default")
+    public void TrackCacheMiss(string errorCode, string cache = "default")
     {
         if (_disposed) return;
-        
-        var tags = new KeyValuePair<string, object?>[]
+        CacheMisses.Add(1, new KeyValuePair<string, object?>[]
         {
             new("error.code", errorCode),
-            new("cache.type", cacheType)
-        };
-        
-        ErrorCacheMisses.Add(1, tags);
+            new("cache", cache)
+        });
     }
-    
+
     /// <summary>
-    /// Track serialization performance
+    /// Track serialization cost.
     /// </summary>
-    public void TrackSerialization(string format, TimeSpan duration, long serializedSize)
+    public void TrackSerialization(string format, TimeSpan duration, long sizeBytes)
     {
         if (_disposed) return;
-        
+
         var tags = new KeyValuePair<string, object?>[]
         {
-            new("serialization.format", format),
-            new("serialized.size_bytes", serializedSize)
+            new("format", format),
+            new("size_bytes", sizeBytes)
         };
-        
-        ErrorSerializationDuration.Record(duration.TotalMilliseconds, tags);
-        
-        Meter.CreateHistogram<long>("axon.errors.serialized.size", "bytes")
-            .Record(serializedSize, tags);
+
+        ErrorSerializationDurationMs.Record(duration.TotalMilliseconds, tags);
+        Meter.CreateHistogram<long>("axon.errors.serialized.bytes", unit: "bytes")
+            .Record(sizeBytes, tags);
     }
-    
+
     /// <summary>
-    /// Track memory allocation for error operations
+    /// Track memory allocation (external observations).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void TrackMemoryAllocation(long bytesAllocated, string operation = "create")
+    public void TrackMemoryAllocation(long bytes, string operation = "create")
     {
         if (_disposed) return;
-        
-        var tags = new KeyValuePair<string, object?>[]
+        BytesAllocated.Record(bytes, new KeyValuePair<string, object?>[]
         {
-            new("operation", operation)
-        };
-        
-        MemoryAllocated.Record(bytesAllocated, tags);
+            new("op", operation)
+        });
     }
-    
+
     #endregion
-    
-    #region Pattern Analysis
-    
-    /// <summary>
-    /// Track error patterns for analysis and optimization
-    /// </summary>
-    private void TrackErrorPattern(Error error)
+
+    #region Patterns & Series
+
+    private void TrackPattern(Error error)
     {
-        if (!_options.EnablePatternTracking) return;
-        
-        var patternKey = $"{error.Type}:{error.Severity}:{GetMessagePattern(error.Message)}";
-        
-        _errorPatterns.AddOrUpdate(patternKey, 
+        var msgPattern = ExtractMessagePattern(error.Message);
+        var key = $"{error.Type}:{error.Severity}:{msgPattern}";
+
+        _patterns.AddOrUpdate(
+            key,
             _ => new ErrorPattern
             {
                 ErrorType = error.Type,
                 Severity = error.Severity,
-                MessagePattern = GetMessagePattern(error.Message),
+                MessagePattern = msgPattern,
                 Count = 1,
                 FirstSeen = DateTimeOffset.UtcNow,
                 LastSeen = DateTimeOffset.UtcNow,
-                HasMetadata = error.Metadata != null && error.Metadata.Count > 0,
-                HasInnerException = error.InnerException != null
+                HasMetadata = error.Metadata is { Count: > 0 },
+                HasInnerException = error.InnerException is not null
             },
-            (_, existing) => existing with 
-            { 
-                Count = existing.Count + 1, 
-                LastSeen = DateTimeOffset.UtcNow 
+            (_, existing) => existing with
+            {
+                Count = existing.Count + 1,
+                LastSeen = DateTimeOffset.UtcNow
             });
     }
-    
-    /// <summary>
-    /// Extract pattern from error message for analysis
-    /// </summary>
-    private static string GetMessagePattern(string message)
+
+    private static string ExtractMessagePattern(string message)
     {
         if (string.IsNullOrEmpty(message)) return "empty";
-        
-        // Simple pattern extraction - replace numbers and IDs with placeholders
-        var pattern = message;
-        pattern = System.Text.RegularExpressions.Regex.Replace(pattern, @"\d+", "{number}");
-        pattern = System.Text.RegularExpressions.Regex.Replace(pattern, @"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", "{guid}");
-        pattern = System.Text.RegularExpressions.Regex.Replace(pattern, @"'[^']*'", "{value}");
-        
-        return pattern.Length > 100 ? pattern[..100] : pattern;
+
+        // replace GUIDs, numbers, quoted segments
+        var s = GuidRegex.Replace(message, "{guid}");
+        s = NumberRegex.Replace(s, "{number}");
+        s = QuotedRegex.Replace(s, "{value}");
+
+        return s.Length > 100 ? s[..100] : s;
     }
-    
-    /// <summary>
-    /// Get top error patterns for analysis
-    /// </summary>
-    public IEnumerable<ErrorPattern> GetTopErrorPatterns(int count = 10)
+
+    private void EnqueueTimeSeries(Error error)
     {
-        if (_disposed) return Enumerable.Empty<ErrorPattern>();
-        
-        return _errorPatterns.Values
-            .OrderByDescending(p => p.Count)
-            .Take(count)
-            .ToList();
-    }
-    
-    #endregion
-    
-    #region Time Series Tracking
-    
-    /// <summary>
-    /// Add entry to time series data for trend analysis
-    /// </summary>
-    private void AddTimeSeriesEntry(Error error)
-    {
-        var entry = new ErrorTimeSeriesEntry
+        _series.Enqueue(new ErrorTimeSeriesEntry
         {
             Timestamp = DateTimeOffset.UtcNow,
             ErrorType = error.Type,
             Severity = error.Severity,
             ErrorCode = error.Code
-        };
-        
-        _timeSeriesData.Enqueue(entry);
-        
-        // Limit time series data size
-        while (_timeSeriesData.Count > _options.MaxTimeSeriesEntries)
-        {
-            _timeSeriesData.TryDequeue(out _);
-        }
+        });
+
+        while (_series.Count > _options.MaxTimeSeriesEntries)
+            _series.TryDequeue(out _);
     }
-    
-    /// <summary>
-    /// Get error rate for a specific time window
-    /// </summary>
+
+    public IEnumerable<ErrorPattern> GetTopErrorPatterns(int count = 10)
+    {
+        if (_disposed) return Enumerable.Empty<ErrorPattern>();
+        return _patterns.Values.OrderByDescending(p => p.Count).Take(count).ToList();
+    }
+
+    #endregion
+
+    #region Rates & Trends
+
     public double GetErrorRate(TimeSpan window)
     {
         if (_disposed) return 0.0;
-        
-        var cutoff = DateTimeOffset.UtcNow - window;
-        var recentEntries = _timeSeriesData.Count(e => e.Timestamp >= cutoff);
-        
-        return recentEntries / window.TotalMinutes; // Errors per minute
+
+        var since = DateTimeOffset.UtcNow - window;
+        var n = _series.Count(e => e.Timestamp >= since);
+        var minutes = Math.Max(0.000001, window.TotalMinutes);
+        return n / minutes;
     }
-    
-    /// <summary>
-    /// Get error trend data for the specified period
-    /// </summary>
-    public ErrorTrendData GetErrorTrend(TimeSpan period, TimeSpan bucketSize)
+
+    public ErrorTrendData GetErrorTrend(TimeSpan period, TimeSpan bucket)
     {
         if (_disposed) return new ErrorTrendData { Buckets = Array.Empty<ErrorTrendBucket>() };
-        
+
         var cutoff = DateTimeOffset.UtcNow - period;
-        var relevantEntries = _timeSeriesData.Where(e => e.Timestamp >= cutoff).ToList();
-        
-        var buckets = new List<ErrorTrendBucket>();
-        var bucketCount = (int)(period.TotalMilliseconds / bucketSize.TotalMilliseconds);
-        
-        for (int i = 0; i < bucketCount; i++)
+        var entries = _series.Where(e => e.Timestamp >= cutoff).ToList();
+
+        var bucketCount = Math.Max(1, (int)(period.TotalMilliseconds / Math.Max(1, bucket.TotalMilliseconds)));
+        var buckets = new List<ErrorTrendBucket>(bucketCount);
+
+        for (var i = 0; i < bucketCount; i++)
         {
-            var bucketStart = cutoff.Add(TimeSpan.FromMilliseconds(i * bucketSize.TotalMilliseconds));
-            var bucketEnd = bucketStart.Add(bucketSize);
-            
-            var bucketEntries = relevantEntries.Where(e => e.Timestamp >= bucketStart && e.Timestamp < bucketEnd).ToList();
-            
+            var start = cutoff.AddMilliseconds(i * bucket.TotalMilliseconds);
+            var end = start.Add(bucket);
+
+            var slice = entries.Where(e => e.Timestamp >= start && e.Timestamp < end).ToList();
+
             buckets.Add(new ErrorTrendBucket
             {
-                StartTime = bucketStart,
-                EndTime = bucketEnd,
-                ErrorCount = bucketEntries.Count,
-                ErrorsByType = bucketEntries.GroupBy(e => e.ErrorType).ToDictionary(g => g.Key, g => g.Count()),
-                ErrorsBySeverity = bucketEntries.GroupBy(e => e.Severity).ToDictionary(g => g.Key, g => g.Count())
+                StartTime = start,
+                EndTime = end,
+                ErrorCount = slice.Count,
+                ErrorsByType = slice.GroupBy(e => e.ErrorType).ToDictionary(g => g.Key, g => g.Count()),
+                ErrorsBySeverity = slice.GroupBy(e => e.Severity).ToDictionary(g => g.Key, g => g.Count())
             });
         }
-        
+
         return new ErrorTrendData { Buckets = buckets.ToArray() };
     }
-    
+
     #endregion
-    
-    #region Statistics and Reporting
-    
-    /// <summary>
-    /// Get comprehensive error metrics statistics
-    /// </summary>
-    public ErrorMetricsStatistics GetStatistics()
-    {
-        if (_disposed) return new ErrorMetricsStatistics();
-        
-        var uptime = DateTimeOffset.UtcNow - _lastResetTime;
-        var errorRate = uptime.TotalMinutes > 0 ? _totalErrorsTracked / uptime.TotalMinutes : 0;
-        
-        return new ErrorMetricsStatistics
-        {
-            TotalErrorsTracked = _totalErrorsTracked,
-            CurrentActiveErrors = _currentActiveErrors,
-            ErrorRate = errorRate,
-            TopErrorCodes = _errorCodeFrequency.OrderByDescending(kvp => kvp.Value).Take(10).ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-            ErrorsByType = _errorTypeFrequency.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-            ErrorsBySeverity = _errorSeverityFrequency.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-            TopPatterns = GetTopErrorPatterns(5).ToList(),
-            UptimeMinutes = uptime.TotalMinutes,
-            LastResetTime = _lastResetTime,
-            MemoryPressure = GC.GetTotalMemory(false)
-        };
-    }
-    
-    /// <summary>
-    /// Reset all metrics and counters
-    /// </summary>
-    public void Reset()
+
+    #region Aggregation & Statistics
+
+    private void PerformAggregation(object? _)
     {
         if (_disposed) return;
-        
-        lock (_lockObject)
-        {
-            _errorPatterns.Clear();
-            _errorCodeFrequency.Clear();
-            _errorTypeFrequency.Clear();
-            _errorSeverityFrequency.Clear();
-            
-            while (_timeSeriesData.TryDequeue(out _)) { }
-            
-            Interlocked.Exchange(ref _totalErrorsTracked, 0);
-            Interlocked.Exchange(ref _currentActiveErrors, 0);
-            _lastResetTime = DateTimeOffset.UtcNow;
-            
-            _logger.LogInformation("Error metrics reset");
-        }
-    }
-    
-    #endregion
-    
-    #region Private Methods
-    
-    private void PerformAggregation(object? state)
-    {
-        if (_disposed) return;
-        
+
         try
         {
-            // Update gauge metrics
-            UpdateActiveErrorsGauge();
-            
-            // Log periodic statistics if enabled
             if (_options.EnablePeriodicLogging)
             {
                 var stats = GetStatistics();
-                _logger.LogInformation("Error metrics - Total: {Total}, Active: {Active}, Rate: {Rate:F2}/min", 
+                _logger.LogInformation("Error metrics - total: {Total}, active: {Active}, rate: {Rate:F2}/min",
                     stats.TotalErrorsTracked, stats.CurrentActiveErrors, stats.ErrorRate);
             }
         }
@@ -505,40 +395,72 @@ public sealed class ErrorMetrics : IDisposable
             _logger.LogError(ex, "Error during metrics aggregation");
         }
     }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void UpdateActiveErrorsGauge()
+
+    public ErrorMetricsStatistics GetStatistics()
     {
-        ActiveErrors.Record(_currentActiveErrors);
+        if (_disposed) return new ErrorMetricsStatistics();
+
+        var uptime = DateTimeOffset.UtcNow - _lastResetUtc;
+        var tracked = Volatile.Read(ref _totalTracked);
+        var active = Volatile.Read(ref _activeErrors);
+        var rate = uptime.TotalMinutes > 0 ? tracked / uptime.TotalMinutes : 0;
+
+        return new ErrorMetricsStatistics
+        {
+            TotalErrorsTracked = tracked,
+            CurrentActiveErrors = active,
+            ErrorRate = rate,
+            TopErrorCodes = _codeFreq.OrderByDescending(kv => kv.Value).Take(10).ToDictionary(kv => kv.Key, kv => kv.Value),
+            ErrorsByType = _typeFreq.ToDictionary(kv => kv.Key, kv => kv.Value),
+            ErrorsBySeverity = _severityFreq.ToDictionary(kv => kv.Key, kv => kv.Value),
+            TopPatterns = GetTopErrorPatterns(5).ToList(),
+            UptimeMinutes = uptime.TotalMinutes,
+            LastResetTime = _lastResetUtc,
+            MemoryPressure = GC.GetTotalMemory(false)
+        };
     }
-    
+
+    public void Reset()
+    {
+        if (_disposed) return;
+
+        _patterns.Clear();
+        _codeFreq.Clear();
+        _typeFreq.Clear();
+        _severityFreq.Clear();
+        while (_series.TryDequeue(out _)) { }
+
+        Interlocked.Exchange(ref _totalTracked, 0);
+        // keep _activeErrors as-is; it reflects real-time unresolved count
+        _lastResetUtc = DateTimeOffset.UtcNow;
+
+        _logger.LogInformation("Error metrics reset");
+    }
+
     #endregion
-    
+
     #region IDisposable
-    
+
     public void Dispose()
     {
         if (_disposed) return;
-        
         _disposed = true;
-        
+
         try
         {
-            _aggregationTimer?.Dispose();
-            
-            // Final statistics log
+            _aggTimer.Dispose();
             var stats = GetStatistics();
-            _logger.LogInformation("ErrorMetrics disposed - Final stats: Total errors: {Total}, Active: {Active}", 
+            _logger.LogInformation("ErrorMetrics disposed - final: total={Total}, active={Active}",
                 stats.TotalErrorsTracked, stats.CurrentActiveErrors);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during ErrorMetrics disposal");
         }
-        
+
         GC.SuppressFinalize(this);
     }
-    
+
     #endregion
 }
 
@@ -547,35 +469,14 @@ public sealed class ErrorMetrics : IDisposable
 /// </summary>
 public sealed class ErrorMetricsOptions
 {
-    /// <summary>
-    /// Aggregation interval in seconds (default: 30)
-    /// </summary>
     public int AggregationIntervalSeconds { get; set; } = 30;
-    
-    /// <summary>
-    /// Enable pattern tracking (default: true)
-    /// </summary>
     public bool EnablePatternTracking { get; set; } = true;
-    
-    /// <summary>
-    /// Enable time series tracking (default: true)
-    /// </summary>
     public bool EnableTimeSeriesTracking { get; set; } = true;
-    
-    /// <summary>
-    /// Maximum time series entries to keep in memory (default: 10000)
-    /// </summary>
-    public int MaxTimeSeriesEntries { get; set; } = 10000;
-
-    /// <summary>
-    /// Enable periodic logging of statistics (default: false)
-    /// </summary>
+    public int MaxTimeSeriesEntries { get; set; } = 10_000;
     public bool EnablePeriodicLogging { get; set; }
 }
 
-/// <summary>
-/// Error pattern information for analysis
-/// </summary>
+/// <summary> Error pattern information for analysis </summary>
 public sealed record ErrorPattern
 {
     public required ErrorType ErrorType { get; init; }
@@ -588,9 +489,7 @@ public sealed record ErrorPattern
     public required bool HasInnerException { get; init; }
 }
 
-/// <summary>
-/// Time series entry for error tracking
-/// </summary>
+/// <summary> Time series entry for error tracking </summary>
 public sealed record ErrorTimeSeriesEntry
 {
     public required DateTimeOffset Timestamp { get; init; }
@@ -599,17 +498,13 @@ public sealed record ErrorTimeSeriesEntry
     public required string ErrorCode { get; init; }
 }
 
-/// <summary>
-/// Error trend analysis data
-/// </summary>
+/// <summary> Error trend analysis data </summary>
 public sealed record ErrorTrendData
 {
     public required ErrorTrendBucket[] Buckets { get; init; }
 }
 
-/// <summary>
-/// Time bucket for error trend analysis
-/// </summary>
+/// <summary> Time bucket for error trend analysis </summary>
 public sealed record ErrorTrendBucket
 {
     public required DateTimeOffset StartTime { get; init; }
@@ -619,9 +514,7 @@ public sealed record ErrorTrendBucket
     public required IReadOnlyDictionary<ErrorSeverity, int> ErrorsBySeverity { get; init; }
 }
 
-/// <summary>
-/// Comprehensive error metrics statistics
-/// </summary>
+/// <summary> Comprehensive error metrics statistics </summary>
 public sealed record ErrorMetricsStatistics
 {
     public long TotalErrorsTracked { get; init; }

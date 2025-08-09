@@ -1,11 +1,13 @@
 namespace BuildingBlocks.Core.Domain.Entities.Abstractions;
 
 /// <summary>
-/// Opt-in trait for entities that support soft deletion.
-/// Infra typically applies a global query filter on <see cref="IsDeleted"/>.
+/// Soft-deletion surface. Persistence and app layers decide how to filter.
 /// </summary>
 public interface ISoftDeletable
 {
+    /// <summary>Whether the entity is soft-deleted.</summary>
     bool IsDeleted { get; }
+
+    /// <summary>When the entity was soft-deleted (UTC), if applicable.</summary>
     DateTimeOffset? DeletedAt { get; }
 }

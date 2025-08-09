@@ -1,329 +1,358 @@
-#pragma warning disable CA1031 // Do not catch general exception types - intentional for ToResultAsync methods
+#pragma warning disable CA1031
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Core.Functional.Results;
 
 /// <summary>
-/// Extension methods for Result types to support async operations and enhanced functionality
+/// Consolidated sync/async helpers for Result/Result&lt;T&gt; (+ streaming & collections).
+/// This file replaces Async/AsyncResultExtensions.cs to remove duplication.
 /// </summary>
 public static class ResultExtensions
 {
-    #region Task<Result> Extensions
+    #region Task<Result<T>> helpers
 
-    /// <summary>
-    /// Transforms the value if the async result is successful
-    /// </summary>
-    public static async Task<Result<TOutput>> MapAsync<T, TOutput>(this Task<Result<T>> resultTask, Func<T, TOutput> transform)
+    public static async Task<Result<TOut>> MapAsync<T, TOut>(this Task<Result<T>> task, Func<T, TOut> map)
     {
-        var result = await resultTask;
-        return result.Map(transform);
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(map);
+        var r = await task.ConfigureAwait(false);
+        return r.Map(map);
     }
 
-    /// <summary>
-    /// Transforms the value if the async result is successful, with async transform
-    /// </summary>
-    public static async Task<Result<TOutput>> MapAsync<T, TOutput>(this Task<Result<T>> resultTask, Func<T, Task<TOutput>> transform)
+    public static async Task<Result<TOut>> MapAsync<T, TOut>(this Task<Result<T>> task, Func<T, Task<TOut>> map)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return Result<TOutput>.Failure(result.Error);
-
-        var transformedValue = await transform(result.Value);
-        return Result<TOutput>.Success(transformedValue);
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(map);
+        var r = await task.ConfigureAwait(false);
+        return r.IsFailure
+            ? Result<TOut>.Failure(r.Error)
+            : await r.MapAsync(map).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Transforms the value if the async result is successful, allowing the transform to return a Result
-    /// </summary>
-    public static async Task<Result<TOutput>> BindAsync<T, TOutput>(this Task<Result<T>> resultTask, Func<T, Result<TOutput>> transform)
+    public static async Task<Result<TOut>> BindAsync<T, TOut>(this Task<Result<T>> task, Func<T, Result<TOut>> bind)
     {
-        var result = await resultTask;
-        return result.Bind(transform);
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(bind);
+        var r = await task.ConfigureAwait(false);
+        return r.Bind(bind);
     }
 
-    /// <summary>
-    /// Transforms the value if the async result is successful, with async transform that returns Result
-    /// </summary>
-    public static async Task<Result<TOutput>> BindAsync<T, TOutput>(this Task<Result<T>> resultTask, Func<T, Task<Result<TOutput>>> transform)
+    public static async Task<Result<TOut>> BindAsync<T, TOut>(this Task<Result<T>> task, Func<T, Task<Result<TOut>>> bind)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return Result<TOutput>.Failure(result.Error);
-
-        return await transform(result.Value);
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(bind);
+        var r = await task.ConfigureAwait(false);
+        return r.IsFailure ? Result<TOut>.Failure(r.Error) : await bind(r.Value).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Executes an async action if the result is successful
-    /// </summary>
-    public static async Task<Result<T>> OnSuccessAsync<T>(this Task<Result<T>> resultTask, Func<T, Task> action)
+    public static async Task<Result<T>> OnSuccessAsync<T>(this Task<Result<T>> task, Func<T, Task> action)
     {
-        var result = await resultTask;
-        if (result.IsSuccess)
-            await action(result.Value);
-        return result;
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(action);
+        var r = await task.ConfigureAwait(false);
+        if (r.IsSuccess) await action(r.Value).ConfigureAwait(false);
+        return r;
     }
 
-    /// <summary>
-    /// Executes an async action if the result is failed
-    /// </summary>
-    public static async Task<Result<T>> OnFailureAsync<T>(this Task<Result<T>> resultTask, Func<Error, Task> action)
+    public static async Task<Result<T>> OnFailureAsync<T>(this Task.Result<T> task, Func<Error, Task> action)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            await action(result.Error);
-        return result;
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(action);
+        var r = await task.ConfigureAwait(false);
+        if (r.IsFailure) await action(r.Error).ConfigureAwait(false);
+        return r;
     }
 
-    /// <summary>
-    /// Transforms the async result based on success or failure
-    /// </summary>
-    public static async Task<TOutput> MatchAsync<T, TOutput>(this Task<Result<T>> resultTask, Func<T, TOutput> onSuccess, Func<Error, TOutput> onFailure)
+    public static async Task<TOut> MatchAsync<T, TOut>(this Task<Result<T>> task, Func<T, TOut> ok, Func<Error, TOut> fail)
     {
-        var result = await resultTask;
-        return result.Match(onSuccess, onFailure);
+        var r = await task.ConfigureAwait(false);
+        return r.Match(ok, fail);
     }
 
-    /// <summary>
-    /// Transforms the async result based on success or failure, with async transforms
-    /// </summary>
-    public static async Task<TOutput> MatchAsync<T, TOutput>(this Task<Result<T>> resultTask, Func<T, Task<TOutput>> onSuccess, Func<Error, Task<TOutput>> onFailure)
+    public static async Task<TOut> MatchAsync<T, TOut>(this Task<Result<T>> task, Func<T, Task<TOut>> ok, Func<Error, Task<TOut>> fail)
     {
-        var result = await resultTask;
-        if (result.IsSuccess)
-            return await onSuccess(result.Value);
-        
-        return await onFailure(result.Error);
+        var r = await task.ConfigureAwait(false);
+        return r.IsSuccess ? await ok(r.Value).ConfigureAwait(false) : await fail(r.Error).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Provides a fallback async operation if the result is failed
-    /// </summary>
-    public static async Task<Result<T>> OrElseAsync<T>(this Task<Result<T>> resultTask, Func<Error, Task<Result<T>>> fallback)
+    public static async Task<Result<T>> OrElseAsync<T>(this Task<Result<T>> task, Func<Error, Task<Result<T>>> fallback)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return await fallback(result.Error);
-        
-        return result;
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(fallback);
+        var r = await task.ConfigureAwait(false);
+        return r.IsFailure ? await fallback(r.Error).ConfigureAwait(false) : r;
+    }
+
+    public static async Task<Result<T>> TapAsync<T>(this Task<Result<T>> task, Func<T, Task> action)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(action);
+        var r = await task.ConfigureAwait(false);
+        if (r.IsSuccess)
+        {
+#pragma warning disable CA1031 // Do not catch general exception types
+            try { await action(r.Value).ConfigureAwait(false); } catch { /* ignore side-effect failures */ }
+#pragma warning restore CA1031
+        }
+        return r;
+    }
+
+    public static async Task<Result<T>> TapErrorAsync<T>(this Task<Result<T>> task, Action<Error> action)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(action);
+        var r = await task.ConfigureAwait(false);
+        return r.TapError(action);
     }
 
     #endregion
 
-    #region Result Extensions for Sync to Async
+    #region Result<T> ↔ async helpers
 
-    /// <summary>
-    /// Transforms the value if the result is successful, with async transform
-    /// </summary>
-    public static async Task<Result<TOutput>> MapAsync<T, TOutput>(this Result<T> result, Func<T, Task<TOutput>> transform)
+    public static async Task<Result<TOut>> MapAsync<T, TOut>(this Result<T> r, Func<T, Task<TOut>> map)
+        => r.IsFailure ? Result<TOut>.Failure(r.Error) : Result<TOut>.Success(await map(r.Value).ConfigureAwait(false));
+
+    public static async Task<Result<TOut>> BindAsync<T, TOut>(this Result<T> r, Func<T, Task<Result<TOut>>> bind)
+        => r.IsFailure ? Result<TOut>.Failure(r.Error) : await bind(r.Value).ConfigureAwait(false);
+
+    public static async Task<Result<T>> OnSuccessAsync<T>(this Result<T> r, Func<T, Task> action)
     {
-        if (result.IsFailure)
-            return Result<TOutput>.Failure(result.Error);
-
-        var transformedValue = await transform(result.Value);
-        return Result<TOutput>.Success(transformedValue);
+        if (r.IsSuccess) await action(r.Value).ConfigureAwait(false);
+        return r;
     }
 
-    /// <summary>
-    /// Transforms the value if the result is successful, with async transform that returns Result
-    /// </summary>
-    public static async Task<Result<TOutput>> BindAsync<T, TOutput>(this Result<T> result, Func<T, Task<Result<TOutput>>> transform)
+    public static async Task<Result<T>> OnFailureAsync<T>(this Result<T> r, Func<Error, Task> action)
     {
-        if (result.IsFailure)
-            return Result<TOutput>.Failure(result.Error);
-
-        return await transform(result.Value);
-    }
-
-    /// <summary>
-    /// Executes an async action if the result is successful
-    /// </summary>
-    public static async Task<Result<T>> OnSuccessAsync<T>(this Result<T> result, Func<T, Task> action)
-    {
-        if (result.IsSuccess)
-            await action(result.Value);
-        return result;
-    }
-
-    /// <summary>
-    /// Executes an async action if the result is failed
-    /// </summary>
-    public static async Task<Result<T>> OnFailureAsync<T>(this Result<T> result, Func<Error, Task> action)
-    {
-        if (result.IsFailure)
-            await action(result.Error);
-        return result;
+        if (r.IsFailure) await action(r.Error).ConfigureAwait(false);
+        return r;
     }
 
     #endregion
 
-    #region Collection Extensions
+    #region Non-generic Task<Result> helpers
 
-    /// <summary>
-    /// Combines multiple async results. Returns success only if all results are successful.
-    /// </summary>
-    public static async Task<Result<T[]>> CombineAsync<T>(params Task<Result<T>>[] resultTasks)
+    public static async Task<Result<T>> MapAsync<T>(this Task<Result> task, Func<T> valueFactory)
     {
-        var results = await Task.WhenAll(resultTasks);
-        return Result.Combine(results);
+        var r = await task.ConfigureAwait(false);
+        return r.IsFailure ? Result<T>.Failure(r.Error) : Result<T>.Success(valueFactory());
     }
 
-    /// <summary>
-    /// Combines multiple async results. Returns success only if all results are successful.
-    /// </summary>
-    public static async Task<Result<T[]>> CombineAsync<T>(IEnumerable<Task<Result<T>>> resultTasks)
+    public static async Task<Result<T>> MapAsync<T>(this Task<Result> task, Func<Task<T>> valueFactory)
     {
-        var results = await Task.WhenAll(resultTasks);
-        return Result.Combine(results.ToArray());
+        var r = await task.ConfigureAwait(false);
+        if (r.IsFailure) return Result<T>.Failure(r.Error);
+        var v = await valueFactory().ConfigureAwait(false);
+        return Result<T>.Success(v);
     }
 
-    /// <summary>
-    /// Maps a collection of values through an async transform that returns Results
-    /// </summary>
-    public static async Task<Result<TOutput[]>> TraverseAsync<T, TOutput>(this IEnumerable<T> source, Func<T, Task<Result<TOutput>>> transform)
+    public static async Task<Result<T>> BindAsync<T>(this Task<Result> task, Func<Task<Result<T>>> transform)
     {
-        var tasks = source.Select(transform);
-        var results = await Task.WhenAll(tasks);
-        return Result.Combine(results);
+        var r = await task.ConfigureAwait(false);
+        return r.IsFailure ? Result<T>.Failure(r.Error) : await transform().ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Maps a collection of values through a transform that returns Results
-    /// </summary>
-    public static Result<TOutput[]> Traverse<T, TOutput>(this IEnumerable<T> source, Func<T, Result<TOutput>> transform)
+    public static async Task<Result> OnSuccessAsync(this Task<Result> task, Func<Task> action)
     {
-        var results = source.Select(transform).ToArray();
-        return Result.Combine(results);
+        var r = await task.ConfigureAwait(false);
+        if (r.IsSuccess) await action().ConfigureAwait(false);
+        return r;
+    }
+
+    public static async Task<Result> OnFailureAsync(this Task<Result> task, Func<Error, Task> action)
+    {
+        var r = await task.ConfigureAwait(false);
+        if (r.IsFailure) await action(r.Error).ConfigureAwait(false);
+        return r;
     }
 
     #endregion
 
-    #region Task<Result> (non-generic) Extensions
+    #region Try / Wrap
 
-    /// <summary>
-    /// Transforms an async non-generic Result to a generic Result
-    /// </summary>
-    public static async Task<Result<T>> MapAsync<T>(this Task<Result> resultTask, Func<T> valueFactory)
+    public static async Task<Result<T>> ToResultAsync<T>(this Task<T> task, Func<Exception, Error>? map = null)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return Result<T>.Failure(result.Error);
-
-        return Result<T>.Success(valueFactory());
+        try { return Result<T>.Success(await task.ConfigureAwait(false)); }
+        catch (Exception ex) { return Result<T>.Failure(map?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex)); }
     }
 
-    /// <summary>
-    /// Transforms an async non-generic Result to a generic Result with async value factory
-    /// </summary>
-    public static async Task<Result<T>> MapAsync<T>(this Task<Result> resultTask, Func<Task<T>> valueFactory)
+    public static async Task<Result> ToResultAsync(this Task task, Func<Exception, Error>? map = null)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return Result<T>.Failure(result.Error);
-
-        var value = await valueFactory();
-        return Result<T>.Success(value);
+        try { await task.ConfigureAwait(false); return Result.Success(); }
+        catch (Exception ex) { return Result.Failure(map?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex)); }
     }
 
-    /// <summary>
-    /// Chains an async operation to a non-generic Result
-    /// </summary>
-    public static async Task<Result<T>> BindAsync<T>(this Task<Result> resultTask, Func<Task<Result<T>>> transform)
+    public static async Task<T?> GetValueOrDefaultAsync<T>(this Task<Result<T>> task, T? defaultValue = default)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return Result<T>.Failure(result.Error);
-
-        return await transform();
+        var r = await task.ConfigureAwait(false);
+        return r.IsSuccess ? r.Value : defaultValue;
     }
 
-    /// <summary>
-    /// Executes an async action if the non-generic result is successful
-    /// </summary>
-    public static async Task<Result> OnSuccessAsync(this Task<Result> resultTask, Func<Task> action)
+    public static async Task<T> GetValueOrDefaultAsync<T>(this Task<Result<T>> task, Func<Error, T> defaultFactory)
     {
-        var result = await resultTask;
-        if (result.IsSuccess)
-            await action();
-        return result;
+        ArgumentNullException.ThrowIfNull(defaultFactory);
+        var r = await task.ConfigureAwait(false);
+        return r.IsSuccess ? r.Value : defaultFactory(r.Error);
     }
 
-    /// <summary>
-    /// Executes an async action if the non-generic result is failed
-    /// </summary>
-    public static async Task<Result> OnFailureAsync(this Task<Result> resultTask, Func<Error, Task> action)
+    public static async Task<T> GetValueOrDefaultAsync<T>(this Task<Result<T>> task, Func<Error, Task<T>> defaultFactory)
     {
-        var result = await resultTask;
-        if (result.IsFailure)
-            await action(result.Error);
-        return result;
+        ArgumentNullException.ThrowIfNull(defaultFactory);
+        var r = await task.ConfigureAwait(false);
+        return r.IsSuccess ? r.Value : await defaultFactory(r.Error).ConfigureAwait(false);
     }
 
     #endregion
 
-    #region Utility Extensions
+    #region Collections (no dependency on hidden Result.Combine)
 
-    /// <summary>
-    /// Converts a Task&lt;T&gt; to a Task&lt;Result&lt;T&gt;&gt; by wrapping exceptions
-    /// </summary>
-    public static async Task<Result<T>> ToResultAsync<T>(this Task<T> task, Func<System.Exception, Error>? errorFactory = null)
+    public static Result<T[]> Combine<T>(params Result<T>[] results)
     {
+        ArgumentNullException.ThrowIfNull(results);
+        if (results.Length == 0) return Array.Empty<T>();
+        foreach (var r in results) if (r.IsFailure) return r.Error;
+        var vals = new T[results.Length];
+        for (int i = 0; i < results.Length; i++) vals[i] = results[i].Value;
+        return vals;
+    }
+
+    public static async Task<Result<T[]>> CombineAsync<T>(params Task<Result<T>>[] tasks)
+    {
+        ArgumentNullException.ThrowIfNull(tasks);
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return Combine(results);
+    }
+
+    public static async Task<Result<T[]>> CombineAsync<T>(IEnumerable<Task<Result<T>>> tasks)
+        => Combine(await Task.WhenAll(tasks).ConfigureAwait(false));
+
+    public static Result<TOut[]> Traverse<T, TOut>(this IEnumerable<T> source, Func<T, Result<TOut>> f)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(f);
+        var list = new List<TOut>();
+        foreach (var item in source)
+        {
+            var r = f(item);
+            if (r.IsFailure) return r.Error;
+            list.Add(r.Value);
+        }
+        return list.ToArray();
+    }
+
+    public static async Task<Result<TOut[]>> TraverseAsync<T, TOut>(this IEnumerable<T> source, Func<T, Task<Result<TOut>>> f)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(f);
+        var list = new List<TOut>();
+        foreach (var item in source)
+        {
+            var r = await f(item).ConfigureAwait(false);
+            if (r.IsFailure) return r.Error;
+            list.Add(r.Value);
+        }
+        return list.ToArray();
+    }
+
+    #endregion
+
+    #region IAsyncEnumerable helpers
+
+    public static async IAsyncEnumerable<Result<T>> ToResultsAsync<T>(this IAsyncEnumerable<T> source,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        await foreach (var item in source.WithCancellation(ct).ConfigureAwait(false))
+            yield return Result<T>.Success(item);
+    }
+
+    public static async IAsyncEnumerable<TOut> SelectManyResultsAsync<TIn, TOut>(
+        this IAsyncEnumerable<TIn> source,
+        Func<TIn, Result<TOut>> transform,
+        Action<Error>? onError = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(transform);
+        await foreach (var item in source.WithCancellation(ct).ConfigureAwait(false))
+        {
+            var r = transform(item);
+            if (r.IsSuccess) yield return r.Value; else onError?.Invoke(r.Error);
+        }
+    }
+
+    public static async IAsyncEnumerable<TOut> SelectManyResultsAsync<TIn, TOut>(
+        this IAsyncEnumerable<TIn> source,
+        Func<TIn, Task<Result<TOut>>> transform,
+        Action<Error>? onError = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(transform);
+        await foreach (var item in source.WithCancellation(ct).ConfigureAwait(false))
+        {
+            var r = await transform(item).ConfigureAwait(false);
+            if (r.IsSuccess) yield return r.Value; else onError?.Invoke(r.Error);
+        }
+    }
+
+    public static async IAsyncEnumerable<T> WhereSuccessAsync<T>(this IAsyncEnumerable<Result<T>> source,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        await foreach (var r in source.WithCancellation(ct).ConfigureAwait(false))
+            if (r.IsSuccess) yield return r.Value;
+    }
+
+    public static async IAsyncEnumerable<Error> WhereFailureAsync<T>(this IAsyncEnumerable<Result<T>> source,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        await foreach (var r in source.WithCancellation(ct).ConfigureAwait(false))
+            if (r.IsFailure) yield return r.Error;
+    }
+
+    public static async Task<Result<IReadOnlyList<T>>> ToListAsync<T>(this IAsyncEnumerable<Result<T>> source, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
         try
         {
-            var value = await task;
-            return Result<T>.Success(value);
+            var values = new List<T>();
+            var errors = new List<Error>();
+            await foreach (var r in source.WithCancellation(ct).ConfigureAwait(false))
+            {
+                if (r.IsSuccess) values.Add(r.Value); else errors.Add(r.Error);
+            }
+            return errors.Count > 0
+                ? Result<IReadOnlyList<T>>.Failure(errors.Count == 1 ? errors[0] : Error.Aggregate(errors.ToArray()))
+                : Result<IReadOnlyList<T>>.Success(values.AsReadOnly());
         }
-        catch (System.Exception ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var error = errorFactory?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex);
-            return Result<T>.Failure(error);
+            return Result<IReadOnlyList<T>>.Failure(Error.Cancelled("Operation was cancelled"));
         }
-    }
-
-    /// <summary>
-    /// Converts a Task to a Task&lt;Result&gt; by wrapping exceptions
-    /// </summary>
-    public static async Task<Result> ToResultAsync(this Task task, Func<System.Exception, Error>? errorFactory = null)
-    {
-        try
+        catch (Exception ex)
         {
-            await task;
-            return Result.Success();
+            return Result<IReadOnlyList<T>>.Failure(Error.FromException(ex));
         }
-        catch (System.Exception ex)
+    }
+
+    public static async IAsyncEnumerable<IReadOnlyList<T>> BatchAsync<T>(this IAsyncEnumerable<T> source, int batchSize,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (batchSize <= 0) throw new ArgumentException("Batch size must be > 0", nameof(batchSize));
+
+        var batch = new List<T>(batchSize);
+        await foreach (var item in source.WithCancellation(ct).ConfigureAwait(false))
         {
-            var error = errorFactory?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex);
-            return Result.Failure(error);
+            batch.Add(item);
+            if (batch.Count == batchSize)
+            {
+                yield return batch.AsReadOnly();
+                batch.Clear();
+            }
         }
-    }
-
-    /// <summary>
-    /// Safely gets the value or returns default if failed
-    /// </summary>
-    public static async Task<T?> GetValueOrDefaultAsync<T>(this Task<Result<T>> resultTask, T? defaultValue = default)
-    {
-        var result = await resultTask;
-        return result.IsSuccess ? result.Value : defaultValue;
-    }
-
-    /// <summary>
-    /// Safely gets the value or computes default if failed
-    /// </summary>
-    public static async Task<T> GetValueOrDefaultAsync<T>(this Task<Result<T>> resultTask, Func<Error, T> defaultValueFactory)
-    {
-        var result = await resultTask;
-        return result.IsSuccess ? result.Value : defaultValueFactory(result.Error);
-    }
-
-    /// <summary>
-    /// Safely gets the value or computes default asynchronously if failed
-    /// </summary>
-    public static async Task<T> GetValueOrDefaultAsync<T>(this Task<Result<T>> resultTask, Func<Error, Task<T>> defaultValueFactory)
-    {
-        var result = await resultTask;
-        if (result.IsSuccess)
-            return result.Value;
-        
-        return await defaultValueFactory(result.Error);
+        if (batch.Count > 0) yield return batch.AsReadOnly();
     }
 
     #endregion

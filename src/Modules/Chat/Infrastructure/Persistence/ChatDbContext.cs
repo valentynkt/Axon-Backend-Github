@@ -11,6 +11,7 @@ using Axon.BuildingBlocks.Persistence.Common;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Domain.Primitives;

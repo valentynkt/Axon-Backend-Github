@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 

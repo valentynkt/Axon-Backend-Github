@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Domain.Primitives;
 using System.ComponentModel.DataAnnotations;
+using BuildingBlocks.Core.Domain.Entities.Base;
 
 namespace BuildingBlocks.Infrastructure.Outbox;
 

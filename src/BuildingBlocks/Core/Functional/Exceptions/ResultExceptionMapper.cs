@@ -1,5 +1,13 @@
-using BuildingBlocks.Core.Diagnostics;
+using System.Data.Common;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Security;
+using System.Text.Json;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Core.Functional.Results;
+using Microsoft.EntityFrameworkCore;
 
 namespace BuildingBlocks.Core.Functional.Exceptions;
 
@@ -195,47 +203,90 @@ public static class ResultExceptionMapper
 
     /// <summary>
     /// Creates an appropriate exception from an Error based on error type.
-    /// Maps error types to corresponding .NET exception types.
+    /// Maps error types to corresponding .NET and domain exception types.
+    /// Prefers domain exceptions when available for better error context.
     /// </summary>
     private static Exception CreateExceptionFromError(Error error)
     {
-        var baseException = error.Exception ?? new InvalidOperationException(error.Message);
+        var baseException = error.InnerException;
 
         return error.Type switch
         {
-            ErrorType.Validation => new ValidationException(error.Message, baseException),
-            ErrorType.NotFound => new NotFoundException(error.Message, baseException),
-            ErrorType.Conflict => new ConflictException(error.Message, baseException),
-            ErrorType.Authorization => new UnauthorizedAccessException(error.Message, baseException),
-            ErrorType.Cancellation => new OperationCanceledException(error.Message, baseException),
-            ErrorType.BusinessRule => new BadRequestException(error.Message, baseException),
-            ErrorType.Aggregate => new AggregateException(error.Message, baseException),
-            ErrorType.System => new SystemException(error.Message, baseException),
-            _ => new InvalidOperationException(error.Message, baseException)
+            // 4xx Client Errors - Use domain exceptions where appropriate
+            ErrorType.Validation => new DomainException(error),
+            ErrorType.NotFound => new DomainException(error),
+            ErrorType.Conflict => new DomainException(error),
+            ErrorType.BusinessRule => new DomainException(error),
+            ErrorType.Unauthorized => new UnauthorizedAccessException(error.Message, baseException),
+            ErrorType.Forbidden => new UnauthorizedAccessException(error.Message, baseException),
+            ErrorType.PreconditionFailed => new InvalidOperationException(error.Message, baseException),
+            ErrorType.RateLimit => new InvalidOperationException(error.Message, baseException),
+            ErrorType.Cancelled => new OperationCanceledException(error.Message, baseException),
+            ErrorType.Serialization => new JsonException(error.Message, baseException),
+            ErrorType.Concurrency => new ConcurrencyException(error.Message),
+            
+            // 5xx Server Errors - Map to system exceptions
+            ErrorType.Internal => new InvalidOperationException(error.Message, baseException),
+            ErrorType.Configuration => new InvalidOperationException(error.Message, baseException),
+            ErrorType.External => new HttpRequestException(error.Message, baseException),
+            ErrorType.Network => baseException switch
+            {
+                SocketException => baseException,
+                HttpRequestException => baseException,
+                _ => new HttpRequestException(error.Message, baseException)
+            },
+            ErrorType.Timeout => new TimeoutException(error.Message, baseException),
+            ErrorType.Unavailable => new InvalidOperationException(error.Message, baseException),
+            ErrorType.Persistence => baseException switch
+            {
+                DbException => baseException,
+                DbUpdateException => baseException,
+                _ => new InvalidOperationException(error.Message, baseException)
+            },
+            
+            // Domain/Composed Errors
+            ErrorType.Aggregate => new DomainException(error),
+            ErrorType.Security => new SecurityException(error.Message, baseException),
+            
+            // Fallback
+            _ => new DomainException(error)
         };
     }
 
     /// <summary>
     /// Creates an Error from an exception with appropriate categorization.
-    /// Preserves as much context as possible from the original exception.
+    /// Leverages the comprehensive Error.FromException method for consistent mapping.
+    /// Preserves round-trip consistency for domain exceptions.
     /// </summary>
     private static Error CreateErrorFromException(Exception exception)
     {
+        // If it's already a DomainException, extract its Error directly
+        if (exception is DomainException domainEx)
+        {
+            return domainEx.Error;
+        }
+
         // If the exception already contains an Error (from our system), extract it
         if (exception.Data.Contains("AxonError") && exception.Data["AxonError"] is Error existingError)
         {
             return existingError;
         }
 
-        // Create new error based on exception type
+        // Leverage the comprehensive Error.FromException method which handles all exception types
         var error = Error.FromException(exception);
 
-        // Store the original exception in the error for future reference
-        var errorWithException = error.WithException(exception);
-
         // Add the error to exception data for round-trip consistency
-        exception.Data["AxonError"] = errorWithException;
+        try
+        {
+            exception.Data["AxonError"] = error;
+        }
+#pragma warning disable CA1031 // Do not catch general exception types
+        catch
+        {
+            // Some exceptions don't support Data modification; ignore silently
+        }
+#pragma warning restore CA1031
 
-        return errorWithException;
+        return error;
     }
 }

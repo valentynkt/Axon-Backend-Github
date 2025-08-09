@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Diagnostics.Exceptions;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Functional.Extensions;
 
@@ -62,7 +63,7 @@ public static class ExceptionExtensions
     {
         try
         {
-            var result = await operation();
+            var result = await operation().ConfigureAwait(false);
             return Result<T>.Success(result);
         }
         catch (DomainException ex)
@@ -78,7 +79,7 @@ public static class ExceptionExtensions
     {
         try
         {
-            await operation();
+            await operation().ConfigureAwait(false);
             return Result.Success();
         }
         catch (DomainException ex)

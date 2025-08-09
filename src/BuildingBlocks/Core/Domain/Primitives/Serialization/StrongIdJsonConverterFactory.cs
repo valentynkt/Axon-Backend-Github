@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
@@ -7,130 +6,107 @@ using System.Text.Json.Serialization;
 namespace BuildingBlocks.Core.Domain.Primitives.Serialization;
 
 /// <summary>
-/// Robust JSON converter factory for strongly-typed identifiers.
-/// Handles null values, complex constructors, and provides comprehensive error handling.
+/// JSON converter factory for StrongId&lt;&gt; (record-class) identifiers.
+/// - Detects any type whose base is StrongId&lt;TPrimitive&gt;
+/// - Compiles a fast ctor(TPrimitive) for deserialization
+/// - Handles null tokens and guards against default(TPrimitive)
 /// </summary>
-public class StrongIdJsonConverterFactory : JsonConverterFactory
+public sealed class StrongIdJsonConverterFactory : JsonConverterFactory
 {
     public override bool CanConvert(Type typeToConvert)
-    {
-        return IsStrongIdType(typeToConvert);
-    }
+        => TryGetStrongIdPrimitive(typeToConvert, out _);
 
     public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
-        var valueType = GetStrongIdValueType(typeToConvert);
-        var converterType = typeof(StrongIdJsonConverter<,>).MakeGenericType(typeToConvert, valueType);
+        // If called for nullable reference sites (TStrongId?), CLR type is still TStrongId.
+        if (!TryGetStrongIdPrimitive(typeToConvert, out var primitiveType))
+            throw new InvalidOperationException($"Type {typeToConvert} is not a StrongId<>.");
+
+        var converterType = typeof(StrongIdConverter<,>).MakeGenericType(typeToConvert, primitiveType);
         return (JsonConverter)Activator.CreateInstance(converterType)!;
     }
 
-    private static bool IsStrongIdType(Type type)
+    private static bool TryGetStrongIdPrimitive(Type candidate, out Type primitiveType)
     {
-        var current = type;
-        while (current != null && current != typeof(object))
+        // Walk inheritance chain to find StrongId<TPrimitive>
+        var current = candidate;
+        while (current is not null && current != typeof(object))
         {
             if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(StrongId<>))
+            {
+                primitiveType = current.GetGenericArguments()[0];
                 return true;
-            current = current.BaseType;
+            }
+            current = current.BaseType!;
         }
+
+        primitiveType = null!;
         return false;
     }
 
-    private static Type GetStrongIdValueType(Type strongIdType)
-    {
-        var current = strongIdType;
-        while (current != null && current != typeof(object))
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(StrongId<>))
-                return current.GetGenericArguments()[0];
-            current = current.BaseType;
-        }
-        throw new ArgumentException($"Type {strongIdType} is not a StrongId");
-    }
-}
-
-public class StrongIdJsonConverter<TStrongId, TValue> : JsonConverter<TStrongId>
-    where TStrongId : StrongId<TValue>
-    where TValue : struct, IComparable<TValue>, IEquatable<TValue>
-{
-    private static readonly ConcurrentDictionary<Type, Func<TValue, TStrongId>> _factoryCache = new();
-    
-    public override TStrongId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        // Handle null values gracefully
-        if (reader.TokenType == JsonTokenType.Null)
-        {
-            throw new JsonException($"Cannot deserialize null value to StrongId type {typeToConvert.Name}");
-        }
-        
-        try
-        {
-            var value = JsonSerializer.Deserialize<TValue>(ref reader, options);
-            return CreateInstance(typeToConvert, value);
-        }
-        catch (JsonException)
-        {
-            throw; // Re-throw JSON exceptions
-        }
-        catch (Exception ex)
-        {
-            throw new JsonException($"Failed to deserialize {typeToConvert.Name}: {ex.Message}", ex);
-        }
-    }
-
-    public override void Write(Utf8JsonWriter writer, TStrongId value, JsonSerializerOptions options)
-    {
-        if (value is null)
-        {
-            writer.WriteNullValue();
-            return;
-        }
-        
-        JsonSerializer.Serialize(writer, value.Value, options);
-    }
-
     /// <summary>
-    /// Creates StrongId instance using cached factory with robust constructor resolution
+    /// Non-nullable converter for StrongId-derived reference types.
+    /// Also handles null JSON tokens gracefully (returns null).
     /// </summary>
-    private static TStrongId CreateInstance(Type strongIdType, TValue value)
+    private sealed class StrongIdConverter<TStrongId, TPrimitive> : JsonConverter<TStrongId>
+        where TStrongId : StrongId<TPrimitive>
+        where TPrimitive : struct, IComparable<TPrimitive>, IEquatable<TPrimitive>
     {
-        var factory = _factoryCache.GetOrAdd(strongIdType, type =>
-        {
-            // Try multiple constructor resolution strategies
-            var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                .Where(c => c.GetParameters().Length == 1)
-                .Where(c => c.GetParameters()[0].ParameterType == typeof(TValue))
-                .OrderBy(c => c.IsPublic ? 0 : 1) // Prefer public constructors
-                .ToArray();
+        private static readonly Func<TPrimitive, TStrongId> _factory = CompileFactory();
 
-            if (constructors.Length == 0)
+        public override TStrongId? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return null; // reference type: allow nulls
+
+            // Deserialize underlying primitive
+            var value = JsonSerializer.Deserialize<TPrimitive>(ref reader, options);
+
+            // Guard against default(TPrimitive) (StrongId base would throw anyway)
+            if (EqualityComparer<TPrimitive>.Default.Equals(value, default))
+                throw new JsonException($"Cannot deserialize default({typeof(TPrimitive).Name}) to {typeof(TStrongId).Name}.");
+
+            return _factory(value);
+        }
+
+        public override void Write(Utf8JsonWriter writer, TStrongId value, JsonSerializerOptions options)
+        {
+            if (value is null)
             {
-                throw new InvalidOperationException(
-                    $"No suitable constructor found for {type.Name} that accepts {typeof(TValue).Name}");
+                writer.WriteNullValue();
+                return;
             }
 
-            var constructor = constructors[0];
-            
-            // Create compiled factory for performance
-            var parameter = Expression.Parameter(typeof(TValue), "value");
-            var newExpression = Expression.New(constructor, parameter);
-            var lambda = Expression.Lambda<Func<TValue, TStrongId>>(newExpression, parameter);
-            
-            return lambda.Compile();
-        });
+            JsonSerializer.Serialize(writer, value.Value, options);
+        }
 
-        return factory(value);
+        private static Func<TPrimitive, TStrongId> CompileFactory()
+        {
+            // Prefer public ctor(TPrimitive), fallback to non-public if necessary
+            var ctor = typeof(TStrongId)
+                .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .FirstOrDefault(c =>
+                {
+                    var p = c.GetParameters();
+                    return p.Length == 1 && p[0].ParameterType == typeof(TPrimitive);
+                });
+
+            if (ctor is null)
+                throw new InvalidOperationException(
+                    $"{typeof(TStrongId).Name} must expose a constructor accepting ({typeof(TPrimitive).Name} value).");
+
+            var param = Expression.Parameter(typeof(TPrimitive), "v");
+            var body  = Expression.New(ctor, param);
+            return Expression.Lambda<Func<TPrimitive, TStrongId>>(body, param).Compile();
+        }
     }
 }
 
 /// <summary>
-/// Extension methods for StrongId JSON configuration
+/// JSON options helper to register StrongId support.
 /// </summary>
 public static class StrongIdJsonExtensions
 {
-    /// <summary>
-    /// Configure JSON options to use StrongId converters
-    /// </summary>
     public static JsonSerializerOptions AddStrongIdSupport(this JsonSerializerOptions options)
     {
         options.Converters.Add(new StrongIdJsonConverterFactory());

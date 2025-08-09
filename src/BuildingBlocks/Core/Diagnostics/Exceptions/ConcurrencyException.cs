@@ -13,17 +13,17 @@ public sealed class ConcurrencyException : DomainException
     public string? EntityId { get; }
     public string? ExpectedVersion { get; }
     public string? ActualVersion { get; }
-    
+
     public ConcurrencyException(string message)
         : base(CreateError(message, null, null, null, null))
     {
     }
-    
+
     public ConcurrencyException(
-        string message, 
-        string entityType, 
-        string entityId, 
-        string expectedVersion, 
+        string message,
+        string entityType,
+        string entityId,
+        string expectedVersion,
         string actualVersion)
         : base(CreateError(message, entityType, entityId, expectedVersion, actualVersion))
     {
@@ -32,31 +32,27 @@ public sealed class ConcurrencyException : DomainException
         ExpectedVersion = expectedVersion;
         ActualVersion = actualVersion;
     }
-    
+
     private static Error CreateError(
-        string message, 
-        string? entityType, 
-        string? entityId, 
-        string? expectedVersion, 
+        string message,
+        string? entityType,
+        string? entityId,
+        string? expectedVersion,
         string? actualVersion)
     {
-        var metadata = new Dictionary<string, object>();
-        
-        if (!string.IsNullOrEmpty(entityType))
-            metadata["EntityType"] = entityType;
-        if (!string.IsNullOrEmpty(entityId))
-            metadata["EntityId"] = entityId;
-        if (!string.IsNullOrEmpty(expectedVersion))
-            metadata["ExpectedVersion"] = expectedVersion;
-        if (!string.IsNullOrEmpty(actualVersion))
-            metadata["ActualVersion"] = actualVersion;
-        
-        return Error.Conflict(
+        var md = new Dictionary<string, object>();
+        if (!string.IsNullOrEmpty(entityType)) md["EntityType"] = entityType;
+        if (!string.IsNullOrEmpty(entityId)) md["EntityId"] = entityId;
+        if (!string.IsNullOrEmpty(expectedVersion)) md["ExpectedVersion"] = expectedVersion;
+        if (!string.IsNullOrEmpty(actualVersion)) md["ActualVersion"] = actualVersion;
+
+        // Use precise error type
+        return Error.Concurrency(
             message,
-            "CONCURRENCY_VIOLATION",
-            metadata.Count > 0 ? metadata : null);
-    }    
-    // Serialization constructor
+            "CONCURRENCY_CONFLICT",
+            md.Count > 0 ? md : null);
+    }
+
     private ConcurrencyException(SerializationInfo info, StreamingContext context)
         : base(info, context)
     {
@@ -65,7 +61,7 @@ public sealed class ConcurrencyException : DomainException
         ExpectedVersion = info.GetString(nameof(ExpectedVersion));
         ActualVersion = info.GetString(nameof(ActualVersion));
     }
-    
+
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
         base.GetObjectData(info, context);

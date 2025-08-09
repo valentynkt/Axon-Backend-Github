@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
