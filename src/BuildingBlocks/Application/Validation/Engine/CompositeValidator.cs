@@ -2,13 +2,16 @@ using BuildingBlocks.Application.Abstractions.Validation;
 
 namespace BuildingBlocks.Application.Validation;
 
-public enum CompositeMode 
-{ 
-    Sequential, 
-    Parallel 
+/// <summary>
+/// Internal helper that composes multiple validators into one, supporting sequential or parallel execution.
+/// </summary>
+internal enum CompositeMode
+{
+    Sequential,
+    Parallel
 }
 
-public sealed class CompositeValidator<T> : IAppValidator<T>
+internal sealed class CompositeValidator<T> : IAppValidator<T>
 {
     private readonly IReadOnlyList<IAppValidator<T>> _validators;
     private readonly CompositeMode _mode;
@@ -19,7 +22,7 @@ public sealed class CompositeValidator<T> : IAppValidator<T>
         CompositeMode mode = CompositeMode.Sequential,
         bool shortCircuitOnError = false)
     {
-        _validators = validators.ToArray();
+        _validators = validators?.ToArray() ?? Array.Empty<IAppValidator<T>>();
         _mode = mode;
         _shortCircuitOnError = shortCircuitOnError;
     }
@@ -31,7 +34,7 @@ public sealed class CompositeValidator<T> : IAppValidator<T>
         var current = ValidationResult.Success;
         foreach (var v in _validators)
         {
-            var r = v.Validate(instance, context);
+            var r = v.Validate(instance!, context);
             current = ValidationResult.Combine(current, r);
             if (_shortCircuitOnError && !r.IsValid) break;
         }
@@ -47,14 +50,14 @@ public sealed class CompositeValidator<T> : IAppValidator<T>
             var current = ValidationResult.Success;
             foreach (var v in _validators)
             {
-                var r = await v.ValidateAsync(instance, context, ct);
+                var r = await v.ValidateAsync(instance!, context, ct);
                 current = ValidationResult.Combine(current, r);
                 if (_shortCircuitOnError && !r.IsValid) break;
             }
             return current.GroupByField();
         }
 
-        var tasks = _validators.Select(v => v.ValidateAsync(instance, context, ct));
+        var tasks = _validators.Select(v => v.ValidateAsync(instance!, context, ct));
         var results = await Task.WhenAll(tasks);
         return ValidationResult.Combine(results).GroupByField();
     }

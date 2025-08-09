@@ -1,9 +1,7 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Application.Abstractions.Persistence;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Write;
@@ -16,115 +14,103 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     where TAggregate : class, IAggregateRoot<TId>
     where TId : IStrongId
 {
-    protected DbContext Context { get; }
-    protected DbSet<TAggregate> DbSet { get; }
+    protected readonly DbContext _context;
+    protected readonly DbSet<TAggregate> _dbSet;
 
     public EfWriteRepository(DbContext context)
     {
-        Context = context ?? throw new ArgumentNullException(nameof(context));
-        DbSet = Context.Set<TAggregate>();
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _dbSet = _context.Set<TAggregate>();
     }
 
-    public virtual async Task<TAggregate?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
-    {
-        return await DbSet.FindAsync([id], cancellationToken);
-    }
-
-    public virtual async Task<TAggregate?> GetByIdAsync(
-        TId id,
-        params Expression<Func<TAggregate, object>>[] includes)
-    {
-        var query = DbSet.AsQueryable();
-        
-        foreach (var include in includes)
-        {
-            query = query.Include(include);
-        }
-        
-        return await query.FirstOrDefaultAsync(CreateIdPredicate(id));
-    }
-
-    public virtual async Task<TAggregate> AddAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
+    // ——— C R E A T E ———
+    public virtual async Task<TAggregate> AddAsync(TAggregate aggregate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
         
-        var entry = await DbSet.AddAsync(aggregate, cancellationToken);
+        var entry = await _dbSet.AddAsync(aggregate, ct);
         return entry.Entity;
     }
 
     public virtual async Task<IReadOnlyList<TAggregate>> AddRangeAsync(
-        IReadOnlyList<TAggregate> aggregates,
-        CancellationToken cancellationToken = default)
+        IReadOnlyList<TAggregate> aggregates, 
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
         
         var aggregatesList = aggregates.ToList();
-        await DbSet.AddRangeAsync(aggregatesList, cancellationToken);
+        await _dbSet.AddRangeAsync(aggregatesList, ct);
         return aggregatesList.AsReadOnly();
     }
 
-    public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
+    // ——— U P D A T E ———
+    public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
         
-        var entry = DbSet.Update(aggregate);
+        var entry = _dbSet.Update(aggregate);
         return Task.FromResult(entry.Entity);
     }
 
     public virtual Task<IReadOnlyList<TAggregate>> UpdateRangeAsync(
-        IReadOnlyList<TAggregate> aggregates,
-        CancellationToken cancellationToken = default)
+        IReadOnlyList<TAggregate> aggregates, 
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
         
         var aggregatesList = aggregates.ToList();
-        DbSet.UpdateRange(aggregatesList);
+        _dbSet.UpdateRange(aggregatesList);
         return Task.FromResult<IReadOnlyList<TAggregate>>(aggregatesList.AsReadOnly());
     }
 
-    public virtual async Task DeleteAsync(TId id, CancellationToken cancellationToken = default)
+    // ——— R E A D (for modification) ———
+    public virtual async Task<TAggregate?> GetByIdAsync(TId id, CancellationToken ct = default)
     {
-        var aggregate = await GetByIdAsync(id, cancellationToken);
+        return await _dbSet.FindAsync([id], ct);
+    }
+
+    // ——— D E L E T E ———
+    public virtual async Task DeleteAsync(TId id, CancellationToken ct = default)
+    {
+        var aggregate = await GetByIdAsync(id, ct);
         if (aggregate != null)
         {
-            DbSet.Remove(aggregate);
+            _dbSet.Remove(aggregate);
         }
     }
 
-    public virtual Task DeleteAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
+    public virtual Task DeleteAsync(TAggregate aggregate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
-        DbSet.Remove(aggregate);
+        _dbSet.Remove(aggregate);
         return Task.CompletedTask;
     }
 
-    public virtual Task DeleteRangeAsync(
-        IReadOnlyList<TAggregate> aggregates,
-        CancellationToken cancellationToken = default)
+    public virtual Task DeleteRangeAsync(IReadOnlyList<TAggregate> aggregates, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
-        DbSet.RemoveRange(aggregates);
+        _dbSet.RemoveRange(aggregates);
         return Task.CompletedTask;
     }
 
-    public virtual async Task<bool> ExistsAsync(TId id, CancellationToken cancellationToken = default)
+    // ——— E x i s t e n c e / A n y ———
+    public virtual async Task<bool> ExistsAsync(TId id, CancellationToken ct = default)
     {
-        return await DbSet.AnyAsync(CreateIdPredicate(id), cancellationToken);
+        return await _dbSet.AnyAsync(CreateIdPredicate(id), ct);
     }
 
-    public virtual async Task<bool> AnyAsync(
-        Expression<Func<TAggregate, bool>> predicate,
-        CancellationToken cancellationToken = default)
+    public virtual async Task<bool> AnyAsync(Expression<Func<TAggregate, bool>> predicate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(predicate);
-        return await DbSet.AnyAsync(predicate, cancellationToken);
+        return await _dbSet.AnyAsync(predicate, ct);
     }
 
-    public virtual async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<bool> AnyAsync(CancellationToken ct = default)
     {
-        return await DbSet.AnyAsync(cancellationToken);
+        return await _dbSet.AnyAsync(ct);
     }
 
+    // ——— H e l p e r  M e t h o d s ———
     /// <summary>
     /// Creates a predicate expression for finding aggregate by ID
     /// </summary>
@@ -166,17 +152,25 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
             "Please ensure the aggregate has a property named 'Id' or override CreateIdPredicate method.");
     }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            Context?.Dispose();
-        }
-    }
-
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        // Repository doesn't own the DbContext, so we don't dispose it
+    }
+}
+
+/// <summary>
+/// Convenience implementation for StrongId&lt;Guid&gt;-based aggregates
+/// </summary>
+public class EfWriteRepository<TAggregate> : EfWriteRepository<TAggregate, StrongId<Guid>>, IWriteRepository<TAggregate>
+    where TAggregate : class, IAggregateRoot<StrongId<Guid>>
+{
+    public EfWriteRepository(DbContext context) : base(context)
+    {
     }
 }

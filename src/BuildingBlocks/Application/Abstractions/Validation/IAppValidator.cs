@@ -1,3 +1,5 @@
+using BuildingBlocks.Application.Validation;
+
 namespace BuildingBlocks.Application.Abstractions.Validation;
 
 public interface IAppValidator<in T>

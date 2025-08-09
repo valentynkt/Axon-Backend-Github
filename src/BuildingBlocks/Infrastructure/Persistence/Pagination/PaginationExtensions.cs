@@ -1,214 +1,195 @@
+using System.Linq.Expressions;
+using System.Reflection;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Diagnostics;
-using BuildingBlocks.Core.Diagnostics.Errors;
 using Microsoft.EntityFrameworkCore;
-using Sieve.Models;
-using Sieve.Services;
+using static BuildingBlocks.Core.Abstractions.Pagination.SortHelpers;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Pagination;
 
 /// <summary>
-/// Extension methods for efficient pagination with optimized query patterns
-/// Eliminates N+1 problems and provides clean API for paginated queries
+/// Single, Core-aligned pagination extensions:
+/// - Works with <see cref="IPageRequest"/> and optional <see cref="ISortablePageQuery{TResponse}"/>
+/// - Supports IncludeTotalCount (exact totals) and countless mode (PageSize+1)
+/// - Deterministic, nested-path sorting via <see cref="SortCriteria"/> (e.g., "User.Name")
+/// - No external (Sieve) dependency
 /// </summary>
 public static class PaginationExtensions
 {
+    // Keep in sync with Core/PageQueryBase<TResponse>.MaxPageSize
+    private const int MaxPageSize = 100;
+
+    // =====================================================================
+    // EF Core IQueryable overloads
+    // =====================================================================
+
     /// <summary>
-    /// Maximum allowed page size to prevent resource exhaustion
+    /// Paginate with Core request + optional sort criteria.
+    /// If <paramref name="sortBy"/> is null and <paramref name="request"/> implements
+    /// <see cref="ISortablePageQuery{TResponse}"/>, EffectiveSortBy is used automatically.
     /// </summary>
-    public const int MaxPageSize = 1000;
-    
-    /// <summary>
-    /// Default page size when none is specified
-    /// </summary>
-    public const int DefaultPageSize = 10;
-    
-    /// <summary>
-    /// Applies pagination to a queryable with optimized database queries
-    /// Uses single query approach to avoid N+1 problems
-    /// </summary>
-    /// <typeparam name="TEntity">The entity type</typeparam>
-    /// <param name="queryable">The source queryable</param>
-    /// <param name="pageRequest">Pagination parameters</param>
-    /// <param name="sieveProcessor">Sieve processor for filtering and sorting</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Paginated result with items and metadata</returns>
-    public static async Task<IPageList<TEntity>> ToPagedResultAsync<TEntity>(
-        this IQueryable<TEntity> queryable,
-        IPageRequest pageRequest,
-        ISieveProcessor sieveProcessor,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        ArgumentNullException.ThrowIfNull(queryable);
-        ArgumentNullException.ThrowIfNull(pageRequest);
-        ArgumentNullException.ThrowIfNull(sieveProcessor);
-        
-        // Validate pagination parameters
-        var validationResult = ValidatePageRequest(pageRequest);
-        if (validationResult != null)
-        {
-            throw new ArgumentException(validationResult.Message, nameof(pageRequest));
-        }
-        
-        var sieveModel = CreateSieveModel(pageRequest);
-        
-        // Apply filtering and sorting, but not pagination yet
-        var filteredQuery = sieveProcessor.Apply(sieveModel, queryable, applyPagination: false);
-        
-        // Get total count efficiently
-        var totalCount = await filteredQuery.CountAsync(cancellationToken);
-        
-        if (totalCount == 0)
-        {
-            return CreateEmptyPagedResult<TEntity>(pageRequest.PageNumber, pageRequest.PageSize);
-        }
-        
-        // Apply pagination to the filtered query
-        var paginatedQuery = sieveProcessor.Apply(sieveModel, filteredQuery, 
-            applyFiltering: false, applySorting: false);
-        
-        // Fetch items
-        var items = await paginatedQuery.ToListAsync(cancellationToken);
-        
-        return CreatePagedResult(items, pageRequest.PageNumber, pageRequest.PageSize, totalCount);
-    }
-    
-    /// <summary>
-    /// Applies pagination to a queryable without Sieve processing
-    /// For simple pagination without filtering or sorting
-    /// </summary>
-    /// <typeparam name="TEntity">The entity type</typeparam>
-    /// <param name="queryable">The source queryable</param>
-    /// <param name="pageNumber">Page number (1-based)</param>
-    /// <param name="pageSize">Number of items per page</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Paginated result with items and metadata</returns>
-    public static async Task<IPageList<TEntity>> ToPagedResultAsync<TEntity>(
-        this IQueryable<TEntity> queryable,
-        int pageNumber,
-        int pageSize,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        ArgumentNullException.ThrowIfNull(queryable);
-        
-        if (pageNumber < 1)
-            throw new ArgumentException("Page number must be greater than 0", nameof(pageNumber));
-        
-        if (pageSize < 1 || pageSize > MaxPageSize)
-            throw new ArgumentException($"Page size must be between 1 and {MaxPageSize}", nameof(pageSize));
-        
-        // Get total count efficiently
-        var totalCount = await queryable.CountAsync(cancellationToken);
-        
-        if (totalCount == 0)
-        {
-            return CreateEmptyPagedResult<TEntity>(pageNumber, pageSize);
-        }
-        
-        // Apply pagination
-        var items = await queryable
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
-        
-        return CreatePagedResult(items, pageNumber, pageSize, totalCount);
-    }
-    
-    /// <summary>
-    /// Applies pagination to an in-memory collection
-    /// Use only for small datasets that are already loaded
-    /// </summary>
-    /// <typeparam name="TEntity">The entity type</typeparam>
-    /// <param name="source">The source collection</param>
-    /// <param name="pageNumber">Page number (1-based)</param>
-    /// <param name="pageSize">Number of items per page</param>
-    /// <returns>Paginated result with items and metadata</returns>
-    public static IPageList<TEntity> ToPagedResult<TEntity>(
-        this IEnumerable<TEntity> source,
-        int pageNumber,
-        int pageSize)
-        where TEntity : class
+    public static async Task<PagedResult<T>> ToPagedResultAsync<T>(
+        this IQueryable<T> source,
+        IPageRequest request,
+        IReadOnlyList<SortCriteria>? sortBy = null,
+        CancellationToken ct = default)
+        where T : class
     {
         ArgumentNullException.ThrowIfNull(source);
-        
-        if (pageNumber < 1)
-            throw new ArgumentException("Page number must be greater than 0", nameof(pageNumber));
-        
-        if (pageSize < 1 || pageSize > MaxPageSize)
-            throw new ArgumentException($"Page size must be between 1 and {MaxPageSize}", nameof(pageSize));
-        
-        var sourceList = source as IReadOnlyList<TEntity> ?? source.ToList().AsReadOnly();
-        var totalCount = sourceList.Count;
-        
-        if (totalCount == 0)
+        ArgumentNullException.ThrowIfNull(request);
+
+        var (page, pageSize) = ValidateAndNormalize(request);
+
+        // Determine sorting (prefer ISortablePageQuery.EffectiveSortBy when available)
+        if (sortBy is null && request is ISortablePageQuery<PagedResult<T>> sortable)
+            sortBy = sortable.EffectiveSortBy;
+
+        if (sortBy is { Count: > 0 })
+            source = ApplySorting(source, EnsureUniqueOrder(sortBy, "Id"));
+
+        if (request.IncludeTotalCount)
         {
-            return CreateEmptyPagedResult<TEntity>(pageNumber, pageSize);
+            // Exact totals path
+            var total = await source.CountAsync(ct);
+
+            var items = total == 0
+                ? Array.Empty<T>()
+                : await source
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(ct);
+
+            var meta = PaginationMeta.CreateWithTotals(
+                totalCount: total,
+                page: page,
+                pageSize: pageSize,
+                currentPageSize: items.Count);
+
+            return new PagedResult<T>(items.AsReadOnly(), meta);
         }
-        
-        var items = sourceList
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
-        
-        return CreatePagedResult(items, pageNumber, pageSize, totalCount);
-    }
-    
-    /// <summary>
-    /// Creates a Sieve model from page request parameters
-    /// </summary>
-    /// <param name="pageRequest">The page request</param>
-    /// <returns>Configured SieveModel</returns>
-    private static SieveModel CreateSieveModel(IPageRequest pageRequest)
-    {
-        return new SieveModel
+        else
         {
-            PageSize = pageRequest.PageSize,
-            Page = pageRequest.PageNumber,
-            Sorts = pageRequest.SortOrder,
-            Filters = pageRequest.Filters
-        };
-    }
-    
-    /// <summary>
-    /// Validates page request parameters
-    /// </summary>
-    /// <param name="pageRequest">The page request to validate</param>
-    /// <returns>Error if validation fails, null if valid</returns>
-    private static Error? ValidatePageRequest(IPageRequest pageRequest)
-    {
-        if (pageRequest.PageNumber < 1)
-            return PaginationErrors.InvalidPageNumber;
-        
-        if (pageRequest.PageSize < 1)
-            return PaginationErrors.InvalidPageSize;
-        
-        if (pageRequest.PageSize > MaxPageSize)
-            return PaginationErrors.PageSizeExceedsMaximum(MaxPageSize);
-        
-        return null;
+            // Countless path (PageSize+1 trick to detect HasNext)
+            var itemsPlusOne = await source
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize + 1)
+                .ToListAsync(ct);
+
+            var hasNext = itemsPlusOne.Count > pageSize;
+            var items = hasNext ? itemsPlusOne.Take(pageSize).ToList() : itemsPlusOne;
+
+            var meta = PaginationMeta.CreateWithoutTotals(
+                page: page,
+                pageSize: pageSize,
+                currentPageSize: items.Count,
+                hasNext: hasNext);
+
+            return new PagedResult<T>(items.AsReadOnly(), meta);
+        }
     }
 
     /// <summary>
-    /// Creates a paginated result with items and metadata
+    /// Ideal path when using PageQueryBase&lt;T&gt;: request implements both IPageRequest and ISortablePageQuery.
     /// </summary>
-    private static PagedResult<TEntity> CreatePagedResult<TEntity>(
-        IReadOnlyList<TEntity> items, 
-        int pageNumber, 
-        int pageSize, 
-        long totalCount)
+    public static Task<PagedResult<T>> ToPagedResultAsync<T, TQuery>(
+        this IQueryable<T> source,
+        TQuery query,
+        CancellationToken ct = default)
+        where T : class
+        where TQuery : IPageRequest, ISortablePageQuery<PagedResult<T>>
+        => source.ToPagedResultAsync(query, query.EffectiveSortBy, ct);
+
+    // =====================================================================
+    // In-memory IEnumerable overload (use sparingly; prefer IQueryable)
+    // =====================================================================
+
+    public static PagedResult<T> ToPagedResult<T>(
+        this IEnumerable<T> source,
+        int pageNumber,
+        int pageSize)
+        where T : class
     {
-        var meta = new PaginationMeta(pageNumber, pageSize, totalCount);
-        return new PagedResult<TEntity>(items, meta);
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (pageNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(pageNumber), PaginationErrors.InvalidPageNumber.Message);
+        if (pageSize < 1)
+            throw new ArgumentOutOfRangeException(nameof(pageSize), PaginationErrors.InvalidPageSize.Message);
+        if (pageSize > MaxPageSize)
+            throw new ArgumentOutOfRangeException(nameof(pageSize), PaginationErrors.PageSizeExceedsMaximum(MaxPageSize).Message);
+
+        var list = source as IReadOnlyList<T> ?? source.ToList().AsReadOnly();
+
+        if (list.Count == 0)
+        {
+            var emptyMeta = PaginationMeta.CreateWithTotals(0, pageNumber, pageSize, 0);
+            return new PagedResult<T>(Array.Empty<T>(), emptyMeta);
+        }
+
+        var items = list.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
+        var meta = PaginationMeta.CreateWithTotals(list.Count, pageNumber, pageSize, items.Count);
+
+        return new PagedResult<T>(items.AsReadOnly(), meta);
+    }
+
+    // =====================================================================
+    // Helpers
+    // =====================================================================
+
+    private static (int page, int pageSize) ValidateAndNormalize(IPageRequest request)
+    {
+        var page = request.PageNumber;
+        var size = request.PageSize;
+
+        if (page < 1)
+            throw new ArgumentOutOfRangeException(nameof(request.PageNumber), PaginationErrors.InvalidPageNumber.Message);
+        if (size < 1)
+            throw new ArgumentOutOfRangeException(nameof(request.PageSize), PaginationErrors.InvalidPageSize.Message);
+        if (size > MaxPageSize)
+            throw new ArgumentOutOfRangeException(nameof(request.PageSize), PaginationErrors.PageSizeExceedsMaximum(MaxPageSize).Message);
+
+        return (page, size);
     }
 
     /// <summary>
-    /// Creates an empty paginated result
+    /// Apply dynamic OrderBy/ThenBy based on SortCriteria (supports nested paths like "Foo.Bar.Baz").
     /// </summary>
-    private static PagedResult<TEntity> CreateEmptyPagedResult<TEntity>(int pageNumber, int pageSize)
+    private static IQueryable<T> ApplySorting<T>(IQueryable<T> query, IReadOnlyList<SortCriteria> sort)
     {
-        var meta = new PaginationMeta(pageNumber, pageSize, 0);
-        return new PagedResult<TEntity>(Array.Empty<TEntity>(), meta);
+        if (sort.Count == 0) return query;
+
+        IOrderedQueryable<T>? ordered = null;
+
+        foreach (var s in sort)
+        {
+            var parameter = Expression.Parameter(typeof(T), "x");
+
+            // Allow nested property paths ("Foo.Bar.Baz")
+            Expression property = parameter;
+            foreach (var part in s.PropertyName.Split('.'))
+            {
+                var prop = property.Type.GetProperty(
+                    part,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                           ?? throw new ArgumentException($"Property '{part}' not found on '{property.Type.Name}'");
+
+                property = Expression.Property(property, prop);
+            }
+
+            var lambda = Expression.Lambda(property, parameter);
+
+            var methodName =
+                ordered == null
+                    ? (s.Direction == SortDirection.Asc ? "OrderBy" : "OrderByDescending")
+                    : (s.Direction == SortDirection.Asc ? "ThenBy" : "ThenByDescending");
+
+            var method = typeof(Queryable).GetMethods()
+                .First(m => m.Name == methodName && m.GetParameters().Length == 2)
+                .MakeGenericMethod(typeof(T), property.Type);
+
+            ordered = (IOrderedQueryable<T>)method.Invoke(null, new object[] { ordered ?? query, lambda })!;
+        }
+
+        return ordered ?? query;
     }
 }

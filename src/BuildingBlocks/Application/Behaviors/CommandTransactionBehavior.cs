@@ -1,4 +1,3 @@
-using System.Data;
 using System.Diagnostics;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -8,16 +7,16 @@ using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Application.Outbox;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Core.Abstractions.CQRS; // for ICommand<TResponse>
+using BuildingBlocks.Core.Abstractions.CQRS;
 using System.Reflection;
+using IsolationLevel = System.Data.IsolationLevel;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// DB transaction wrapper for commands with domain-event integration and optional outbox.
+/// DB transaction wrapper for commands with domain event handling.
 /// - Commands only (compile-time constrained)
-/// - Begins EF transaction, executes handler, stores events to outbox (if enabled), commits
-/// - Post-commit: trigger outbox processor OR legacy dispatch
+/// - Begins EF transaction, executes handler, collects domain events, commits
 /// - Always clears domain events after commit to avoid re-dispatch
 /// - Static ActivitySource for consistent tracing
 /// </summary>
@@ -28,7 +27,7 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
     private static readonly ActivitySource ActivitySource = new("Axon.Application.Transactions");
 
     private readonly DbContext _dbContext;
-    private readonly IDomainEventDispatcher _domainEventDispatcher;
+    // private readonly IDomainEventDispatcher _domainEventDispatcher;
     private readonly IOutboxService? _outboxService;
     private readonly IOutboxProcessor? _outboxProcessor;
     private readonly IOptions<TransactionOptions> _options;
@@ -36,14 +35,14 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
 
     public CommandTransactionBehavior(
         DbContext dbContext,
-        IDomainEventDispatcher domainEventDispatcher,
+      //  IDomainEventDispatcher domainEventDispatcher,
         ILogger<CommandTransactionBehavior<TRequest, TResponse>> logger,
         IOutboxService? outboxService = null,
         IOutboxProcessor? outboxProcessor = null,
         IOptions<TransactionOptions>? options = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _domainEventDispatcher = domainEventDispatcher ?? throw new ArgumentNullException(nameof(domainEventDispatcher));
+     //   _domainEventDispatcher = domainEventDispatcher ?? throw new ArgumentNullException(nameof(domainEventDispatcher));
         _outboxService = outboxService;
         _outboxProcessor = outboxProcessor;
         _options = options ?? Options.Create(new TransactionOptions());
@@ -287,7 +286,7 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
         {
             try
             {
-                await _domainEventDispatcher.DispatchAsync(domainEvents, CancellationToken.None);
+               // await _domainEventDispatcher.DispatchAsync(domainEvents, CancellationToken.None);
                 _logger.LogDebug("Dispatched {Count} domain events (legacy path) for tx {TxId}", domainEvents.Count, txId);
             }
             catch (Exception ex)

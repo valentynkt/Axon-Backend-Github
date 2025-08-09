@@ -2,10 +2,8 @@ using System.Linq.Expressions;
 using BuildingBlocks.Application.Abstractions.Persistence;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common;
-using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -16,8 +14,8 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 /// This is the correct decorator for entities that implement IAggregateRoot
 /// </summary>
 public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBase<TAggregate, TId>, IReadRepository<TAggregate, TId>
-    where TAggregate : class, IIdentifiable<TId>
-    where TId : IStrongId
+    where TAggregate : class
+    where TId : notnull
 {
     private readonly IReadRepository<TAggregate, TId> _inner;
 
@@ -31,7 +29,7 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     }
 
-    public async Task<TAggregate?> FindByIdAsync(TId id, CancellationToken cancellationToken = default)
+    public async Task<TAggregate?> FindByIdAsync(TId id, CancellationToken ct = default)
     {
         var cacheKey = GetCacheKey(id);
         
@@ -40,7 +38,7 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
             return cachedEntity;
         }
 
-        var entity = await _inner.FindByIdAsync(id, cancellationToken);
+        var entity = await _inner.FindByIdAsync(id, ct);
         
         if (entity != null)
         {
@@ -52,71 +50,23 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
 
     public async Task<TAggregate?> FindOneAsync(
         Expression<Func<TAggregate, bool>> predicate,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         // For complex predicates, we skip caching to avoid cache key complexity
-        return await _inner.FindOneAsync(predicate, cancellationToken);
+        return await _inner.FindOneAsync(predicate, ct);
     }
 
     public async Task<IReadOnlyList<TAggregate>> FindAsync(
         Expression<Func<TAggregate, bool>> predicate,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         // For complex queries, we skip caching
-        return await _inner.FindAsync(predicate, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<TAggregate>> RawQueryAsync(
-        string query,
-        CancellationToken cancellationToken = default,
-        params object[] queryParams)
-    {
-        // Raw queries are not cached due to complexity
-        return await _inner.RawQueryAsync(query, cancellationToken, queryParams);
-    }
-
-    public async Task<long> CountAsync(
-        Expression<Func<TAggregate, bool>>? predicate = null,
-        CancellationToken cancellationToken = default)
-    {
-        // Only cache simple count operations (no predicate)
-        if (predicate == null)
-        {
-            var cacheKey = GetCountCacheKey();
-            
-            if (TryGetCache<long>(cacheKey, out var cachedCount))
-            {
-                return cachedCount;
-            }
-
-            var count = await _inner.CountAsync(predicate, cancellationToken);
-            SetCache(cacheKey, count);
-            return count;
-        }
-
-        return await _inner.CountAsync(predicate, cancellationToken);
-    }
-
-    public async Task<bool> AnyAsync(
-        Expression<Func<TAggregate, bool>>? predicate = null,
-        CancellationToken cancellationToken = default)
-    {
-        return await _inner.AnyAsync(predicate, cancellationToken);
-    }
-
-    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
-    {
-        return await _inner.AnyAsync(cancellationToken);
-    }
-
-    public async Task<long> CountAsync(CancellationToken cancellationToken = default)
-    {
-        return await _inner.CountAsync(cancellationToken);
+        return await _inner.FindAsync(predicate, ct);
     }
 
     public async Task<IReadOnlyList<TAggregate>> GetByIdsAsync(
         IReadOnlyList<TId> ids,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         var results = new List<TAggregate>();
         var uncachedIds = new List<TId>();
@@ -138,14 +88,14 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         // Fetch uncached entities
         if (uncachedIds.Count > 0)
         {
-            var uncachedEntities = await _inner.GetByIdsAsync(uncachedIds, cancellationToken);
+            var uncachedEntities = await _inner.GetByIdsAsync(uncachedIds, ct);
             
             // Cache the newly fetched entities
             foreach (var entity in uncachedEntities)
             {
-                if (entity.Id != null)
+                if (entity is IIdentifiable<TId> identifiable && identifiable.Id != null)
                 {
-                    var cacheKey = GetCacheKey(entity.Id);
+                    var cacheKey = GetCacheKey(identifiable.Id);
                     SetCache(cacheKey, entity);
                 }
             }
@@ -158,17 +108,18 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
 
     public async Task<IPageList<TAggregate>> GetPagedAsync<TPageRequest>(
         TPageRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
         where TPageRequest : IPageRequest
     {
-        return await _inner.GetPagedAsync(request, cancellationToken);
+        // Paged queries are not cached due to complexity
+        return await _inner.GetPagedAsync(request, ct);
     }
 
     public async Task<IPageList<TAggregate>> GetPagedAsync(
         Expression<Func<TAggregate, bool>>? predicate,
         int pageNumber,
         int pageSize,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         // For complex predicates, we skip caching
         if (predicate == null)
@@ -180,33 +131,72 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
                 return cachedResult!;
             }
 
-            var result = await _inner.GetPagedAsync(predicate, pageNumber, pageSize, cancellationToken);
+            var result = await _inner.GetPagedAsync(predicate, pageNumber, pageSize, ct);
             SetCache(cacheKey, result);
             return result;
         }
 
-        return await _inner.GetPagedAsync(predicate, pageNumber, pageSize, cancellationToken);
+        return await _inner.GetPagedAsync(predicate, pageNumber, pageSize, ct);
     }
 
-    public IQueryable<TAggregate> Query()
+    public async Task<long> CountAsync(
+        Expression<Func<TAggregate, bool>>? predicate = null,
+        CancellationToken ct = default)
     {
-        // IQueryable cannot be cached as it represents a query expression tree
-        return _inner.Query();
+        // Only cache simple count operations (no predicate)
+        if (predicate == null)
+        {
+            var cacheKey = GetCountCacheKey();
+            
+            if (TryGetCache<long>(cacheKey, out var cachedCount))
+            {
+                return cachedCount;
+            }
+
+            var count = await _inner.CountAsync(predicate, ct);
+            SetCache(cacheKey, count);
+            return count;
+        }
+
+        return await _inner.CountAsync(predicate, ct);
     }
 
-    public async Task<TResult> ExecuteCompiledQueryAsync<TResult>(
-        Func<IQueryable<TAggregate>, Task<TResult>> compiledQuery,
-        CancellationToken cancellationToken = default)
+    public async Task<long> CountAsync(CancellationToken ct)
     {
-        return await _inner.ExecuteCompiledQueryAsync(compiledQuery, cancellationToken);
+        return await CountAsync(null, ct);
+    }
+
+    public async Task<bool> AnyAsync(
+        Expression<Func<TAggregate, bool>>? predicate = null,
+        CancellationToken ct = default)
+    {
+        return await _inner.AnyAsync(predicate, ct);
+    }
+
+    public async Task<bool> AnyAsync(CancellationToken ct)
+    {
+        return await AnyAsync(null, ct);
     }
 
     public void Dispose()
     {
-        if (_inner is IDisposable disposableInner)
-        {
-            disposableInner.Dispose();
-        }
+        _inner?.Dispose();
         GC.SuppressFinalize(this);
+    }
+}
+
+/// <summary>
+/// Convenience implementation for Guid-based cached read repository
+/// </summary>
+public class CachedReadRepositoryForAggregates<TAggregate> : CachedReadRepositoryForAggregates<TAggregate, Guid>
+    where TAggregate : class, IIdentifiable<Guid>
+{
+    public CachedReadRepositoryForAggregates(
+        IReadRepository<TAggregate, Guid> inner,
+        IMemoryCache cache,
+        ILogger<CachedReadRepositoryForAggregates<TAggregate>> logger,
+        TimeSpan? cacheExpiration = null)
+        : base(inner, cache, logger, cacheExpiration)
+    {
     }
 }

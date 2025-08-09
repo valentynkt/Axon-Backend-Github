@@ -1,5 +1,4 @@
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Primitives;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -24,146 +23,132 @@ public sealed record CacheConfiguration
 
 /// <summary>
 /// Abstract base class providing shared caching functionality for repository decorators.
-/// Refactored to follow SOLID principles with better separation of concerns and improved testability.
+/// Generic version for any ID type (used by read repositories).
 /// </summary>
 public abstract class CacheManagerBase<TEntity, TId>
-    where TEntity : class, IIdentifiable<TId>
-    where TId : IStrongId
+    where TEntity : class
+    where TId : notnull
 {
     private readonly IMemoryCache _cache;
     private readonly ILogger _logger;
-    private readonly CacheConfiguration _configuration;
+    private readonly TimeSpan _cacheExpiration;
+    private readonly string _entityTypeName;
 
     protected CacheManagerBase(
         IMemoryCache cache,
         ILogger logger,
-        CacheConfiguration? configuration = null)
+        TimeSpan? cacheExpiration = null)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _configuration = configuration ?? CacheConfiguration.ForEntity<TEntity>();
+        _cacheExpiration = cacheExpiration ?? TimeSpan.FromMinutes(15);
+        _entityTypeName = typeof(TEntity).Name;
     }
 
-    /// <summary>Generates a cache key for a specific entity ID using the configured prefix.</summary>
-    protected virtual string CreateCacheKey(TId id) => $"{_configuration.KeyPrefix}{id}";
-
-    /// <summary>Generates a cache key for collection operations.</summary>
-    protected virtual string CreateCollectionCacheKey(string suffix) => $"{_configuration.KeyPrefix}{suffix}";
-
-    /// <summary>Gets cache key for "get all" operations.</summary>
-    protected string GetAllCacheKey() => CreateCollectionCacheKey("All");
+    /// <summary>Generates a cache key for a specific entity ID.</summary>
+    protected virtual string GetCacheKey(TId id) => $"{_entityTypeName}_{id}";
 
     /// <summary>Gets cache key for paginated results.</summary>
-    protected string GetPagedCacheKey(int pageNumber, int pageSize) => CreateCollectionCacheKey($"Paged_{pageNumber}_{pageSize}");
+    protected string GetPagedCacheKey(int pageNumber, int pageSize) => 
+        $"{_entityTypeName}_Paged_{pageNumber}_{pageSize}";
 
     /// <summary>Gets cache key for count operations.</summary>
-    protected string GetCountCacheKey() => CreateCollectionCacheKey("Count");
+    protected string GetCountCacheKey() => $"{_entityTypeName}_Count";
 
     /// <summary>Sets a value in the cache with the configured expiration.</summary>
-    protected virtual void SetCache<T>(string key, T value, TimeSpan? expiration = null)
+    protected virtual void SetCache<T>(string key, T value)
     {
-        var cacheExpiration = expiration ?? _configuration.DefaultExpiration;
-        _cache.Set(key, value!, cacheExpiration);
+        _cache.Set(key, value!, _cacheExpiration);
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Cached {EntityType} with key {CacheKey} for {Expiration}",
-                typeof(TEntity).Name, key, cacheExpiration);
+                _entityTypeName, key, _cacheExpiration);
         }
     }
 
     /// <summary>Tries to get a value from the cache.</summary>
-    protected virtual bool TryGetFromCache<T>(string key, out T? value)
+    protected virtual bool TryGetCache<T>(string key, out T? value)
     {
-        var found = _cache.TryGetValue(key, out value);
-
-        if (found && _logger.IsEnabled(LogLevel.Debug))
+        if (_cache.TryGetValue(key, out value))
         {
-            _logger.LogDebug("Cache hit for {EntityType} with key {CacheKey}",
-                typeof(TEntity).Name, key);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Cache hit for {EntityType} with key {CacheKey}", 
+                    _entityTypeName, key);
+            }
+            return true;
         }
-
-        return found;
-    }
-
-    /// <summary>Removes a specific cache entry.</summary>
-    protected virtual void RemoveFromCache(string key)
-    {
-        _cache.Remove(key);
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogDebug("Invalidated cache for {EntityType} with key {CacheKey}",
-                typeof(TEntity).Name, key);
+            _logger.LogDebug("Cache miss for {EntityType} with key {CacheKey}", 
+                _entityTypeName, key);
         }
+        return false;
     }
 
     /// <summary>Invalidates cache for a specific entity ID.</summary>
-    protected void InvalidateCacheForEntity(TId id) => RemoveFromCache(CreateCacheKey(id));
-
-    /// <summary>
-    /// Invalidates collection-related cache entries.
-    /// This includes "get all", paged results, and counts.
-    /// </summary>
-    protected void InvalidateCollectionCaches()
+    protected virtual void InvalidateCache(TId id)
     {
-        RemoveFromCache(GetAllCacheKey());
-        RemoveFromCache(GetCountCacheKey());
-
-        // Note: In a production environment with high cache volume,
-        // consider implementing a cache tag-based invalidation strategy
+        var key = GetCacheKey(id);
+        _cache.Remove(key);
+        
         if (_logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Invalidated collection cache entries for {EntityType}", typeof(TEntity).Name);
+        {
+            _logger.LogDebug("Invalidated cache for {EntityType} with key {CacheKey}", 
+                _entityTypeName, key);
+        }
     }
 
-    /// <summary>
-    /// Invalidates cache entries related to a specific entity:
-    /// the entity itself and common aggregate cache entries.
-    /// </summary>
-    protected void InvalidateRelatedCaches(TId id)
+    /// <summary>Invalidates all related cache entries.</summary>
+    protected virtual void InvalidateRelatedCache(TId id)
     {
-        InvalidateCacheForEntity(id);
-        InvalidateCollectionCaches();
+        InvalidateCache(id);
+        
+        // Also invalidate collection-level caches
+        _cache.Remove(GetCountCacheKey());
+        
+        // Remove all paged cache entries (simplified approach)
+        // In production, consider using cache tags or a more sophisticated approach
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Invalidated related caches for {EntityType} with ID {Id}", 
+                _entityTypeName, id);
+        }
     }
 
-    /// <summary>Invalidates cache entries for multiple entities.</summary>
-    protected void InvalidateRelatedCaches(IEnumerable<TId> ids)
+    /// <summary>Invalidates cache for multiple entities.</summary>
+    protected virtual void InvalidateRelatedCache(IEnumerable<TId> ids)
     {
         foreach (var id in ids)
         {
-            InvalidateCacheForEntity(id);
+            InvalidateCache(id);
         }
-        InvalidateCollectionCaches();
+        
+        // Also invalidate collection-level caches
+        _cache.Remove(GetCountCacheKey());
+        
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Invalidated caches for {Count} {EntityType} entities", 
+                ids.Count(), _entityTypeName);
+        }
     }
+}
 
-    /// <summary>
-    /// Gets the value from cache if available; otherwise uses <paramref name="factory"/>
-    /// to create it, stores it, and returns it.
-    /// </summary>
-    protected virtual T GetOrCreate<T>(string key, Func<T> factory, TimeSpan? expiration = null)
+/// <summary>
+/// Specialized cache manager for entities with strong IDs (used by write repositories).
+/// </summary>
+public abstract class StrongIdCacheManagerBase<TEntity, TId> : CacheManagerBase<TEntity, TId>
+    where TEntity : class, IAggregateRoot<TId>
+    where TId : IStrongId
+{
+    protected StrongIdCacheManagerBase(
+        IMemoryCache cache,
+        ILogger logger,
+        TimeSpan? cacheExpiration = null)
+        : base(cache, logger, cacheExpiration)
     {
-        if (TryGetFromCache<T>(key, out var existing) && existing is not null)
-            return existing;
-
-        var value = factory();
-        SetCache(key, value, expiration);
-        return value;
-    }
-
-    /// <summary>
-    /// Async variant of <see cref="GetOrCreate{T}"/> with cancellation support.
-    /// </summary>
-    protected virtual async Task<T> GetOrCreateAsync<T>(
-        string key,
-        Func<CancellationToken, Task<T>> factory,
-        TimeSpan? expiration = null,
-        CancellationToken ct = default)
-    {
-        if (TryGetFromCache<T>(key, out var existing) && existing is not null)
-            return existing;
-
-        var value = await factory(ct).ConfigureAwait(false);
-        SetCache(key, value, expiration);
-        return value;
     }
 }

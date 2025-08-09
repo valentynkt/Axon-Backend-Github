@@ -4,6 +4,9 @@ using BuildingBlocks.Application.Abstractions.Validation;
 
 namespace BuildingBlocks.Application.Validation;
 
+/// <summary>
+/// Lightweight OpenTelemetry metrics for validation. Optional at DI time.
+/// </summary>
 public sealed class ValidationMetrics
 {
     private readonly Meter _meter;
@@ -47,10 +50,8 @@ public sealed class ValidationMetrics
         _requestsCounter.Add(1, tags);
         _durationHistogram.Record(durationMs, tags);
 
-        if (!isValid && result != null)
-        {
+        if (!isValid && result is not null)
             RecordErrors(requestType, result.Errors);
-        }
 
         var activity = Activity.Current;
         if (activity != null)
@@ -59,7 +60,7 @@ public sealed class ValidationMetrics
             activity.SetTag("axon.validation.error_count", errorCount);
             activity.SetTag("axon.validation.duration_ms", durationMs);
 
-            if (!isValid && result != null)
+            if (!isValid && result is not null)
             {
                 var topErrors = result.Errors.Take(3).ToList();
                 for (var i = 0; i < topErrors.Count; i++)
@@ -73,20 +74,20 @@ public sealed class ValidationMetrics
 
     private void RecordErrors(string requestType, IReadOnlyList<ValidationError> errors)
     {
-        var errorGroups = errors
-            .GroupBy(e => (e.Field ?? "_global", e.Code))
-            .Take(10); // Cap at top 10 unique error types to prevent cardinality explosion
+        var groups = errors
+            .GroupBy(e => new { Field = e.Field ?? "_global", e.Code })
+            .Take(10); // cap to avoid high cardinality
 
-        foreach (var group in errorGroups)
+        foreach (var g in groups)
         {
             var tags = new TagList
             {
                 { "request.type", requestType },
-                { "field", group.Key.Item1 },
-                { "code", group.Key.Code }
+                { "field", g.Key.Field },
+                { "code", g.Key.Code }
             };
 
-            _errorsCounter.Add(group.Count(), tags);
+            _errorsCounter.Add(g.Count(), tags);
         }
     }
 }

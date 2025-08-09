@@ -1,5 +1,5 @@
 using System.Reflection;
-using BuildingBlocks.Utils;
+// using BuildingBlocks.Utils; // TODO: TypeProvider needs to be restored or replaced
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +18,11 @@ public static class MinimalApiExtensions
 
         var scanAssemblies = assemblies.Length > 0
             ? assemblies
-            : TypeProvider.GetReferencedAssemblies(Assembly.GetCallingAssembly())
-                .Concat(TypeProvider.GetApplicationPartAssemblies(Assembly.GetCallingAssembly()))
-                .Distinct()
-                .ToArray();
+            : new[] { Assembly.GetCallingAssembly() }; // TODO: Restore TypeProvider functionality
+            // : TypeProvider.GetReferencedAssemblies(Assembly.GetCallingAssembly())
+            //     .Concat(TypeProvider.GetApplicationPartAssemblies(Assembly.GetCallingAssembly()))
+            //     .Distinct()
+            //     .ToArray();
 
         applicationBuilder.Services.Scan(scan => scan
             .FromAssemblies(scanAssemblies)

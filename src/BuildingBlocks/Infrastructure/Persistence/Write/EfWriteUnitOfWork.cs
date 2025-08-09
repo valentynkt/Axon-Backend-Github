@@ -1,8 +1,11 @@
 using System.Data;
+using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
@@ -11,28 +14,33 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// </summary>
 internal sealed class EfTransaction : ITransaction
 {
-    private readonly Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction _transaction;
+    private readonly IDbContextTransaction _transaction;
     private bool _disposed;
 
-    public EfTransaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+    public EfTransaction(IDbContextTransaction transaction)
     {
         _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
-        Id = _transaction.TransactionId.ToString();
+        TransactionId = _transaction.TransactionId.ToString();
     }
 
-    public string Id { get; }
-    public string TransactionId => Id;
+    public string TransactionId { get; }
     public bool IsCompleted { get; private set; }
 
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
+    public async Task CommitAsync(CancellationToken ct = default)
     {
-        await _transaction.CommitAsync(cancellationToken);
+        if (IsCompleted)
+            throw new InvalidOperationException("Transaction has already been completed.");
+            
+        await _transaction.CommitAsync(ct);
         IsCompleted = true;
     }
 
-    public async Task RollbackAsync(CancellationToken cancellationToken = default)
+    public async Task RollbackAsync(CancellationToken ct = default)
     {
-        await _transaction.RollbackAsync(cancellationToken);
+        if (IsCompleted)
+            throw new InvalidOperationException("Transaction has already been completed.");
+            
+        await _transaction.RollbackAsync(ct);
         IsCompleted = true;
     }
 
@@ -50,218 +58,198 @@ internal sealed class EfTransaction : ITransaction
 /// Generic Entity Framework Unit of Work implementation
 /// Handles transactional consistency and domain event processing
 /// </summary>
-public class EfWriteUnitOfWork<TContext> : IWriteUnitOfWork<TContext>
-    where TContext : class, IWriteDbContext<object>
+public class EfWriteUnitOfWork : IWriteUnitOfWork
 {
-    private readonly TContext _context;
+    private readonly DbContext _context;
+    private readonly IDomainEventDispatcher? _eventDispatcher;
+    private IDbContextTransaction? _currentTransaction;
     private bool _disposed;
 
-    public EfWriteUnitOfWork(TContext context)
+    public EfWriteUnitOfWork(DbContext context, IDomainEventDispatcher? eventDispatcher = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _eventDispatcher = eventDispatcher;
     }
 
-    public TContext Context => _context;
-
-    public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    // ——— P e r s i s t e n c e ———
+    public virtual async Task<int> SaveChangesAsync(CancellationToken ct = default)
     {
-        var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-        return await dbContext.SaveChangesAsync(cancellationToken);
+        return await _context.SaveChangesAsync(ct);
     }
 
-    public async Task<int> SaveChangesAndDispatchEventsAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<int> SaveChangesAndDispatchEventsAsync(CancellationToken ct = default)
     {
-        var result = await SaveChangesAsync(cancellationToken);
+        // Collect domain events before saving
+        var domainEvents = GetDomainEvents().ToList();
         
-        // TODO: Add domain event dispatching logic here
-        // This would typically dispatch domain events after successful persistence
+        // Save changes to database
+        var result = await SaveChangesAsync(ct);
+        
+        // Dispatch domain events after successful persistence
+        if (_eventDispatcher != null && domainEvents.Any())
+        {
+            foreach (var @event in domainEvents)
+            {
+                await _eventDispatcher.PublishAsync(@event, ct);
+            }
+        }
+        
+        // Clear domain events after dispatching
+        ClearDomainEvents();
         
         return result;
     }
 
-    public async Task<Result<ITransaction>> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    // ——— T r a n s a c t i o n ———
+    public virtual async Task<Result<ITransaction>> BeginTransactionAsync(CancellationToken ct = default)
     {
         try
         {
-            var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-            if (dbContext.Database.CurrentTransaction == null)
+            if (_currentTransaction != null)
             {
-                var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-                return Result<ITransaction>.Success(new EfTransaction(transaction));
+                // Return existing transaction wrapped in our interface
+                return Result<ITransaction>.Success(new EfTransaction(_currentTransaction));
             }
-            return Result<ITransaction>.Success(new EfTransaction(dbContext.Database.CurrentTransaction));
+
+            _currentTransaction = await _context.Database.BeginTransactionAsync(ct);
+            return Result<ITransaction>.Success(new EfTransaction(_currentTransaction));
         }
         catch (Exception ex)
         {
-            return Result<ITransaction>.Failure(new BuildingBlocks.Core.Diagnostics.Errors.Error("TRANSACTION_START_FAILED", ex.Message));
+            return Result<ITransaction>.Failure(
+                new Error("TRANSACTION_START_FAILED", $"Failed to start transaction: {ex.Message}"));
         }
     }
 
-    public async Task<Result<ITransaction>> BeginTransactionAsync(IsolationLevel level, CancellationToken cancellationToken = default)
+    public virtual async Task<Result<ITransaction>> BeginTransactionAsync(
+        IsolationLevel level, 
+        CancellationToken ct = default)
     {
         try
         {
-            var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-            if (dbContext.Database.CurrentTransaction == null)
+            if (_currentTransaction != null)
             {
-                var transaction = await dbContext.Database.BeginTransactionAsync(level, cancellationToken);
-                return Result<ITransaction>.Success(new EfTransaction(transaction));
+                // Return existing transaction wrapped in our interface
+                return Result<ITransaction>.Success(new EfTransaction(_currentTransaction));
             }
-            return Result<ITransaction>.Success(new EfTransaction(dbContext.Database.CurrentTransaction));
+
+            _currentTransaction = await _context.Database.BeginTransactionAsync(level, ct);
+            return Result<ITransaction>.Success(new EfTransaction(_currentTransaction));
         }
         catch (Exception ex)
         {
-            return Result<ITransaction>.Failure(new BuildingBlocks.Core.Diagnostics.Errors.Error("TRANSACTION_START_FAILED", ex.Message));
+            return Result<ITransaction>.Failure(
+                new Error("TRANSACTION_START_FAILED", $"Failed to start transaction: {ex.Message}"));
         }
     }
 
-    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+    public virtual async Task CommitTransactionAsync(CancellationToken ct = default)
     {
-        var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-        var transaction = dbContext.Database.CurrentTransaction;
-        if (transaction != null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
+        if (_currentTransaction == null)
+            throw new InvalidOperationException("No active transaction to commit.");
+
+        await _currentTransaction.CommitAsync(ct);
+        await _currentTransaction.DisposeAsync();
+        _currentTransaction = null;
     }
 
-    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+    public virtual async Task RollbackTransactionAsync(CancellationToken ct = default)
     {
-        var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-        var transaction = dbContext.Database.CurrentTransaction;
-        if (transaction != null)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-        }
+        if (_currentTransaction == null)
+            throw new InvalidOperationException("No active transaction to rollback.");
+
+        await _currentTransaction.RollbackAsync(ct);
+        await _currentTransaction.DisposeAsync();
+        _currentTransaction = null;
     }
 
-    public bool HasChanges
+    public bool HasChanges => _context.ChangeTracker.HasChanges();
+
+    public bool HasActiveTransaction => _currentTransaction != null;
+
+    public string? CurrentTransactionId => _currentTransaction?.TransactionId.ToString();
+
+    // ——— D o m a i n  e v e n t s ———
+    public virtual IReadOnlyList<IDomainEvent> GetDomainEvents()
     {
-        get
-        {
-            var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-            return dbContext.ChangeTracker.HasChanges();
-        }
+        var domainEntities = _context.ChangeTracker
+            .Entries<IHasDomainEvents>()
+            .Where(x => x.Entity.DomainEvents?.Any() == true)
+            .Select(x => x.Entity)
+            .ToList();
+
+        var domainEvents = domainEntities
+            .SelectMany(x => x.DomainEvents)
+            .ToList();
+
+        return domainEvents.AsReadOnly();
     }
 
-    public bool HasActiveTransaction
+    public bool HasDomainEvents => GetDomainEvents().Any();
+
+    public virtual void ClearDomainEvents()
     {
-        get
-        {
-            var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-            return dbContext.Database.CurrentTransaction != null;
-        }
+        var domainEntities = _context.ChangeTracker
+            .Entries<IHasDomainEvents>()
+            .Where(x => x.Entity.DomainEvents?.Any() == true)
+            .Select(x => x.Entity)
+            .ToList();
+
+        domainEntities.ForEach(entity => entity.ClearDomainEvents());
     }
 
-    public string? CurrentTransactionId
+    // ——— E x e c u t e  i n  t x ———
+    public virtual async Task<T> ExecuteInTransactionAsync<T>(
+        Func<Task<T>> operation, 
+        CancellationToken ct = default)
     {
-        get
-        {
-            var dbContext = _context as DbContext ?? throw new InvalidOperationException("Context must inherit from DbContext");
-            return dbContext.Database.CurrentTransaction?.TransactionId.ToString();
-        }
-    }
-
-    public bool HasDomainEvents => GetDomainEvents().Count > 0;
-
-    public IReadOnlyList<IDomainEvent> GetDomainEvents()
-    {
-        return _context.GetDomainEvents();
-    }
-
-    public void ClearDomainEvents()
-    {
-        _context.ClearDomainEvents();
-    }
-
-    public async Task<T> ExecuteInTransactionAsync<T>(
-        Func<Task<T>> operation,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
+        var strategy = _context.Database.CreateExecutionStrategy();
         
-        var transactionStarted = false;
-        
-        try
+        return await strategy.ExecuteAsync(async () =>
         {
-            if (!HasActiveTransaction)
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+            try
             {
-                var transactionResult = await BeginTransactionAsync(cancellationToken);
-                if (transactionResult.IsFailure)
-                {
-                    throw new InvalidOperationException($"Failed to begin transaction: {transactionResult.Error.Message}");
-                }
-                transactionStarted = true;
+                var result = await operation();
+                await transaction.CommitAsync(ct);
+                return result;
             }
-            
-            var result = await operation();
-            
-            if (transactionStarted)
+            catch
             {
-                await CommitTransactionAsync(cancellationToken);
+                await transaction.RollbackAsync(ct);
+                throw;
             }
-            
-            return result;
-        }
-        catch
-        {
-            if (transactionStarted && HasActiveTransaction)
-            {
-                await RollbackTransactionAsync(cancellationToken);
-            }
-            throw;
-        }
+        });
     }
 
-    public async Task ExecuteInTransactionAsync(
-        Func<Task> operation,
-        CancellationToken cancellationToken = default)
+    public virtual async Task ExecuteInTransactionAsync(
+        Func<Task> operation, 
+        CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(operation);
-        
-        var transactionStarted = false;
-        
-        try
+        await ExecuteInTransactionAsync(async () =>
         {
-            if (!HasActiveTransaction)
-            {
-                var transactionResult = await BeginTransactionAsync(cancellationToken);
-                if (transactionResult.IsFailure)
-                {
-                    throw new InvalidOperationException($"Failed to begin transaction: {transactionResult.Error.Message}");
-                }
-                transactionStarted = true;
-            }
-            
             await operation();
-            
-            if (transactionStarted)
-            {
-                await CommitTransactionAsync(cancellationToken);
-            }
-        }
-        catch
-        {
-            if (transactionStarted && HasActiveTransaction)
-            {
-                await RollbackTransactionAsync(cancellationToken);
-            }
-            throw;
-        }
+            return 0; // Dummy return value
+        }, ct);
     }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed && disposing)
-        {
-            _context?.Dispose();
-            _disposed = true;
-        }
-    }
-
+    // ——— D i s p o s a l ———
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                _currentTransaction?.Dispose();
+                _context?.Dispose();
+            }
+            _disposed = true;
+        }
     }
 }

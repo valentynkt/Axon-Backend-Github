@@ -4,8 +4,9 @@ using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Application.Validation;
-using BuildingBlocks.Application.Abstractions.Validation;
+
 using System.Diagnostics;
+using BuildingBlocks.Application.Abstractions.Validation;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -23,12 +24,12 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
 {
     private readonly IValidationService _validationService;
     private readonly ILogger<RequestValidationBehavior<TRequest, TResponse>> _logger;
-    private readonly IValidationContext? _validationContext;
+    private readonly Validation.IValidationContext? _validationContext;
 
     public RequestValidationBehavior(
         IValidationService validationService,
         ILogger<RequestValidationBehavior<TRequest, TResponse>> logger,
-        IValidationContext? validationContext = null)
+        Validation.IValidationContext? validationContext = null)
     {
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -41,7 +42,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         CancellationToken cancellationToken)
     {
         // Check skip conditions
-        if (ShouldSkipValidation(request))
+        if (RequestValidationBehavior<TRequest, TResponse>.ShouldSkipValidation(request))
         {
             _logger.LogDebug("Skipping validation for {RequestType}", typeof(TRequest).Name);
             return await next();
@@ -58,7 +59,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         stopwatch.Stop();
 
         // Emit metrics
-        EmitMetrics(requestType, validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
+        RequestValidationBehavior<TRequest, TResponse>.EmitMetrics(requestType, validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
 
         if (!validationResult.IsValid)
         {
@@ -93,10 +94,10 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         return await next();
     }
 
-    private bool ShouldSkipValidation(TRequest request)
+    private static bool ShouldSkipValidation(TRequest request)
     {
         // Check for SkipValidation attribute
-        var skipAttribute = request.GetType().GetCustomAttributes(typeof(SkipValidationAttribute), false).Any();
+        var skipAttribute = request.GetType().GetCustomAttributes(typeof(SkipValidationAttribute), false).Length != 0;
         if (skipAttribute) return true;
 
         // Check if request implements ISystemCommand (trusted path)
@@ -105,7 +106,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         return false;
     }
 
-    private void EmitMetrics(string requestType, bool isValid, int errorCount, long elapsedMs)
+    private static void EmitMetrics(string requestType, bool isValid, int errorCount, long elapsedMs)
     {
         var activity = Activity.Current;
         if (activity != null)

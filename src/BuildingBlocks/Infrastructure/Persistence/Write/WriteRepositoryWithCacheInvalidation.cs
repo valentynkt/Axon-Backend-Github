@@ -3,7 +3,7 @@ using BuildingBlocks.Application.Abstractions.Persistence;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common;
-using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +14,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// Follows the Decorator pattern and maintains CQRS separation
 /// Automatically invalidates cache entries after write operations
 /// </summary>
-public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : CacheManagerBase<TEntity, TId>, IWriteRepository<TEntity, TId>
+public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheManagerBase<TEntity, TId>, IWriteRepository<TEntity, TId>
     where TEntity : class, IAggregateRoot<TId>
     where TId : IStrongId
 {
@@ -103,12 +103,7 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : CacheManagerBa
         return await _inner.GetByIdAsync(id, cancellationToken);
     }
 
-    public async Task<TEntity?> GetByIdAsync(TId id, params Expression<Func<TEntity, object>>[] includes)
-    {
-        // This is a read operation in a write repository
-        // We don't cache here as it's meant for write scenarios
-        return await _inner.GetByIdAsync(id, includes);
-    }
+
 
     public async Task DeleteAsync(TId id, CancellationToken cancellationToken = default)
     {

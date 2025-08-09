@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Functional.Validation;
 
 namespace BuildingBlocks.Core.Abstractions.CQRS;
 

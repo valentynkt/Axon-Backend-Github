@@ -114,6 +114,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Core\Abstractions\Events\" />
     <Folder Include="Core\Domain\Events\" />
     <Folder Include="Web\Endpoints\" />
     <Folder Include="Web\Middleware\" />

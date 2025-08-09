@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Application.Abstractions.Persistence;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Model;
+
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Caching;
 using BuildingBlocks.Infrastructure.Persistence.Common;
@@ -148,12 +148,20 @@ public static class Extensions
     /// </summary>
     public static IServiceCollection AddPersistenceServices(this IServiceCollection services)
     {
-        // Register repositories (using generic EF implementations for now)
-        services.AddScoped(typeof(IReadRepository<,>), typeof(EfReadRepository<,>));
-        services.AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>));
+        // Register repositories with Application layer interfaces
+        services.AddScoped(typeof(BuildingBlocks.Application.Abstractions.Persistence.IReadRepository<,>), 
+                          typeof(EfReadRepository<,>));
+        services.AddScoped(typeof(BuildingBlocks.Application.Abstractions.Persistence.IWriteRepository<,>), 
+                          typeof(EfWriteRepository<,>));
+        
+        // Register convenience overloads for Guid-based repositories
+        services.AddScoped(typeof(BuildingBlocks.Application.Abstractions.Persistence.IReadRepository<>), 
+                          typeof(EfReadRepository<>));
+        services.AddScoped(typeof(BuildingBlocks.Application.Abstractions.Persistence.IWriteRepository<>), 
+                          typeof(EfWriteRepository<>));
         
         // Register Unit of Work
-        services.AddScoped(typeof(IWriteUnitOfWork<>), typeof(EfWriteUnitOfWork<>));
+        services.AddScoped<BuildingBlocks.Application.Abstractions.Persistence.IWriteUnitOfWork, EfWriteUnitOfWork>();
         
         // Register infrastructure services
         services.AddScoped<ISeedManager, SeedManager>();
@@ -412,10 +420,10 @@ public static class Extensions
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (typeof(IEntity).IsAssignableFrom(entityType.ClrType))
+            if (typeof(ISoftDeletable).IsAssignableFrom(entityType.ClrType))
             {
                 var parameter = Expression.Parameter(entityType.ClrType, "entity");
-                var property = Expression.Property(parameter, nameof(IEntity.IsDeleted));
+                var property = Expression.Property(parameter, nameof(ISoftDeletable.IsDeleted));
                 var filter = Expression.Lambda(Expression.Not(property), parameter);
                 entityType.SetQueryFilter(filter);
             }
