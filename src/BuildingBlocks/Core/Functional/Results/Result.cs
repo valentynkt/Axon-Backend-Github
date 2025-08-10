@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using BuildingBlocks.Core.Functional.Options;
 using BuildingBlocks.Core.Diagnostics.Errors;
 
@@ -37,9 +38,12 @@ public readonly record struct Result<T> : IResult<T>
         ? _error!
         : throw new InvalidOperationException("Cannot access error of successful result");
 
+    // Implements IResult.Match (non-generic)
     public TResult Match<TResult>(Func<TResult> success, Func<Error, TResult> failure)
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(success);
+        ArgumentNullException.ThrowIfNull(failure);
+        return IsSuccess ? success() : failure(_error!);
     }
 
     #region Factories
@@ -186,6 +190,40 @@ public readonly record struct Result<T> : IResult<T>
     public T? ToNullable() => IsSuccess ? _value : default;
 
     public Result<TNew> Select<TNew>(Func<T, TNew> selector) => Map(selector);
+
+    // LINQ SelectMany (monadic bind) with projector
+    public Result<TResult> SelectMany<TMid, TResult>(
+        Func<T, Result<TMid>> binder,
+        Func<T, TMid, TResult> projector)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+        ArgumentNullException.ThrowIfNull(projector);
+
+        if (IsFailure) return _error!;
+        var mid = binder(_value!);
+        return mid.IsFailure ? mid.Error : Result<TResult>.Success(projector(_value!, mid.Value));
+    }
+
+    // LINQ SelectMany shorthand
+    public Result<TNew> SelectMany<TNew>(Func<T, Result<TNew>> binder) => Bind(binder);
+    #endregion
+
+    #region Flow helpers
+    public bool TryGetValue([NotNullWhen(true)] out T? value, out Error? error)
+    {
+        if (IsSuccess)
+        {
+            value = _value!;
+            error = null;
+            return true;
+        }
+        value = default;
+        error = _error!;
+        return false;
+    }
+
+    public void Deconstruct(out bool isSuccess, out T? value, out Error? error)
+        => (isSuccess, value, error) = (IsSuccess, IsSuccess ? _value : default, _error);
     #endregion
 
     #region Operators

@@ -108,7 +108,7 @@ public static class ResultActionResultExtensions
         {
             return location != null 
                 ? new AcceptedResult(location, result.Value)
-                : new AcceptedResult(null, result.Value);
+                : new AcceptedResult((string?)null, result.Value);
         }
         
         var problemDetails = result.Error.ToProblemDetails(

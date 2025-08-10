@@ -12,13 +12,13 @@ public static class CommonSpecifications
     // ---------- Null / Empty ----------
 
     public static Specification<T?> IsNotNull<T>() where T : class
-        => Specification<T?>.Create(x => x is not null);
+        => Specification<T?>.Create(x => x != null);
 
     public static Specification<string?> NonEmptyString()
         => Specification<string?>.Create(s => !string.IsNullOrWhiteSpace(s));
 
     public static Specification<ICollection<T>?> NonEmptyCollection<T>()
-        => Specification<ICollection<T>?>.Create(c => c is { Count: > 0 });
+        => Specification<ICollection<T>?>.Create(c => c != null && c.Count > 0);
 
     // ---------- Comparables ----------
 

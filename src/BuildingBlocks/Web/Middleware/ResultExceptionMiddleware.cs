@@ -98,7 +98,7 @@ public sealed class ResultExceptionMiddleware
                 problemDetails.errorType,
                 stackTrace = exception.StackTrace,
                 innerException = exception.InnerException?.Message,
-                metadata = error.Metadata.Count > 0 ? error.Metadata : null
+                metadata = error.Metadata?.Count > 0 ? error.Metadata : null
             };
 
             var detailedJson = JsonSerializer.Serialize(detailedProblem, _jsonOptions);
@@ -133,7 +133,7 @@ public sealed class ResultExceptionMiddleware
                 "Resource Not Found",
                 error.Message),
 
-            ErrorType.Authorization => (
+            ErrorType.Unauthorized => (
                 HttpStatusCode.Unauthorized,
                 "Unauthorized Access",
                 error.Message),
@@ -148,7 +148,7 @@ public sealed class ResultExceptionMiddleware
                 "Business Rule Violation",
                 error.Message),
 
-            ErrorType.Cancellation => (
+            ErrorType.Cancelled => (
                 HttpStatusCode.RequestTimeout,
                 "Operation Cancelled",
                 "The operation was cancelled before completion."),
@@ -158,7 +158,7 @@ public sealed class ResultExceptionMiddleware
                 "Multiple Errors",
                 error.Message),
 
-            ErrorType.System => (
+            ErrorType.Internal => (
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 "An unexpected error occurred. Please try again later."),
@@ -218,11 +218,11 @@ public sealed class ResultExceptionMiddleware
         {
             ErrorType.Validation => $"{baseUri}#section-6.5.1", // Bad Request
             ErrorType.NotFound => $"{baseUri}#section-6.5.4", // Not Found
-            ErrorType.Authorization => $"{baseUri}#section-6.5.1", // Unauthorized
+            ErrorType.Unauthorized => $"{baseUri}#section-6.5.1", // Unauthorized
             ErrorType.Conflict => $"{baseUri}#section-6.5.8", // Conflict
             ErrorType.BusinessRule => "https://tools.ietf.org/html/rfc4918#section-11.2", // Unprocessable Entity
-            ErrorType.Cancellation => $"{baseUri}#section-6.5.7", // Request Timeout
-            ErrorType.System => $"{baseUri}#section-6.6.1", // Internal Server Error
+            ErrorType.Cancelled => $"{baseUri}#section-6.5.7", // Request Timeout
+            ErrorType.Internal => $"{baseUri}#section-6.6.1", // Internal Server Error
             _ => $"{baseUri}#section-6.6.1"
         };
     }
@@ -273,7 +273,7 @@ public sealed class ResultExceptionMiddleware
             error.Message);
 
         // Log additional metadata if present
-        if (error.Metadata.Count > 0)
+        if (error.Metadata?.Count > 0)
         {
             _logger.LogDebug("Error metadata: {@Metadata}", error.Metadata);
         }

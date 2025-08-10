@@ -30,7 +30,7 @@ public class PersistMessage : IVersioned
     public int RetryCount { get; private set; }
     public MessageStatus MessageStatus { get; private set; }
     public MessageDeliveryType DeliveryType { get; private set; }
-    public long Version { get; set; }
+    public uint Version { get; set; }
 
     public void ChangeState(MessageStatus messageStatus)
     {

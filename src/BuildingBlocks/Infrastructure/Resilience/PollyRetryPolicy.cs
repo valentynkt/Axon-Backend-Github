@@ -61,7 +61,7 @@ public sealed class PollyRetryPolicy : IRetryPolicy
                 onRetry: (outcome, timespan, retryCount, context) =>
                 {
                     _logger.LogWarning("Retry attempt {RetryCount}/{MaxRetries} after {Delay}ms. Exception: {Exception}",
-                        retryCount, maxRetries, timespan.TotalMilliseconds, outcome.Exception?.Message);
+                        retryCount, maxRetries, timespan.TotalMilliseconds, outcome.Message);
                 });
 
         try

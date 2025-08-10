@@ -20,8 +20,8 @@ public sealed class ConversationMustHaveOwnerRuleTests
 
         // Assert
         isBroken.ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.CONVERSATION.OWNER_REQUIRED");
-        rule.Message.ShouldBe("Conversation must have an owner.");
+        rule.Code.ShouldBe("CHAT_CONVERSATION_OWNER_REQUIRED");
+        rule.Message.ShouldBe("Conversation owner must be specified.");
     }
 
     [Test]

@@ -2,7 +2,7 @@ namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
 public sealed class ObservabilityOptions
 {
-    public required string InstrumentationName { get; init; }
+    public string InstrumentationName { get; init; } = string.Empty;
     public string? ServiceName { get; init; }
     public bool MetricsEnabled { get; init; } = true;
     public bool TracingEnabled { get; init; } = true;

@@ -34,7 +34,7 @@ public static class OpenTelemetryExtensions
     public static WebApplicationBuilder AddCustomObservability(this WebApplicationBuilder builder)
     {
         Activity.DefaultIdFormat = ActivityIdFormat.W3C;
-        builder.Services.AddSingleton<IDiagnosticsProvider, CustomeDiagnosticsProvider>();
+        builder.Services.AddSingleton<IDiagnosticsProvider, CustomDiagnosticsProvider>();
         builder.AddCoreDiagnostics();
 
         builder.Services.AddValidateOptions<ObservabilityOptions>();

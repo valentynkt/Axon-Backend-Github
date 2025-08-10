@@ -561,13 +561,13 @@ where TWContext : DbContext
     }
 
     public Task<T?> FindAsync<T, TKey>(TKey id)
-    where T : class, IEntity<object>
+    where T : class, IEntity<IStrongId>
     {
         return ExecuteDbContextAsync(db => db.Set<T>().FindAsync(id).AsTask());
     }
 
     public Task<T?> FirstOrDefaultAsync<T>()
-    where T : class, IEntity<object>
+    where T : class, IEntity<IStrongId>
     {
         return ExecuteDbContextAsync(db => db.Set<T>().FirstOrDefaultAsync());
     }

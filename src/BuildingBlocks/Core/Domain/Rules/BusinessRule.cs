@@ -24,7 +24,7 @@ public abstract class BusinessRule : IBusinessRule
     /// <summary>
     /// Default implementation for synchronous rules. Override for sync-only rules for better performance.
     /// </summary>
-    public virtual bool IsBroken() => IsBrokenAsync(CancellationToken.None).GetAwaiter().GetResult();
+    public virtual bool IsBroken() => IsBroken() ;
 
     public abstract ValueTask<bool> IsBrokenAsync(CancellationToken ct = default);
 

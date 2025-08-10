@@ -1,110 +1,79 @@
-using System.Collections.Immutable;
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
+using System.Reflection;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
-using BuildingBlocks.Web;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
 /// <summary>
-/// Base class for write-side database contexts in CQRS architecture
-/// Handles aggregates, domain events, audit tracking, and transactions
+/// Base class for write-side DbContexts (CQRS).
+/// Responsibilities here:
+/// - Provider schema + configuration
+/// - Transaction helpers
+/// - Minimal, provider-safe auditing hook (override)
+/// - Domain event collection (no dispatch)
+/// - Global soft-delete filter (if bool property "IsDeleted" exists)
+/// - Concurrency token convention for 'Version' (uint/int/long) when present
 /// </summary>
-public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<TModule> 
+public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<TModule>
     where TModule : class
 {
-    private readonly ICurrentUserProvider? _currentUserProvider;
     private readonly ILogger<WriteDbContextBase<TModule>> _logger;
-    private Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? _currentTransaction;
+    private IDbContextTransaction? _currentTransaction;
 
     protected WriteDbContextBase(
         DbContextOptions options,
-        ICurrentUserProvider? currentUserProvider = null,
         ILogger<WriteDbContextBase<TModule>>? logger = null) : base(options)
     {
-        _currentUserProvider = currentUserProvider;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WriteDbContextBase<TModule>>.Instance;
+        ChangeTracker.LazyLoadingEnabled = false;
     }
 
-    /// <summary>
-    /// Module name for schema separation - must be implemented by derived classes
-    /// </summary>
     public abstract string ModuleName { get; }
 
-    /// <summary>
-    /// Check if context has active transaction
-    /// </summary>
-    public virtual bool HasActiveTransaction => _currentTransaction != null;
-    /// <summary>
-    /// Get current transaction ID for tracking
-    /// </summary>
-    public virtual string? CurrentTransactionId => _currentTransaction?.TransactionId.ToString();
+    public bool HasActiveTransaction => _currentTransaction != null;
+    public string? CurrentTransactionId => _currentTransaction?.TransactionId.ToString();
 
-    /// <summary>
-    /// Create execution strategy for resilience
-    /// </summary>
-    public virtual Microsoft.EntityFrameworkCore.Storage.IExecutionStrategy CreateExecutionStrategy() => 
-        Database.CreateExecutionStrategy();
+    public IExecutionStrategy CreateExecutionStrategy() => Database.CreateExecutionStrategy();
 
-    /// <summary>
-    /// Configure model for module-specific schema and conventions
-    /// </summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Set module-specific schema
+        // Module schema (when supported)
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
-        
-        // Apply configurations from assembly
+
+        // Apply configurations
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
-        
-        // Configure audit properties for all aggregate roots
-        ConfigureAuditProperties(modelBuilder);
-        
-        // Configure domain event handling
-        ConfigureDomainEventProperties(modelBuilder);
-        
+
+        // Conventions
+        ApplySoftDeleteQueryFilter(modelBuilder);
+        WriteDbContextBase<TModule>.ApplyVersionConcurrencyToken(modelBuilder);
+
         base.OnModelCreating(modelBuilder);
     }
 
-    /// <summary>
-    /// Begin a new database transaction
-    /// </summary>
-    public virtual async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
-    {
-        if (_currentTransaction != null)
-        {
-            _logger.LogWarning("Transaction already started for module {Module}. Current transaction ID: {TransactionId}", 
-                ModuleName, _currentTransaction.TransactionId);
-            return;
-        }
+    // --------- Transactions ---------
 
-        _logger.LogDebug("Beginning transaction for module {Module}", ModuleName);
-        _currentTransaction = await Database.BeginTransactionAsync(
-            System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-    }    /// <summary>
-    /// Commit the current transaction
-    /// </summary>
-    public virtual async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+    public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        if (_currentTransaction == null)
-        {
-            _logger.LogWarning("No active transaction to commit for module {Module}", ModuleName);
-            return;
-        }
+        if (_currentTransaction != null) return;
+        _currentTransaction = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+    }
 
+    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        if (_currentTransaction == null) return;
         try
         {
-            _logger.LogDebug("Committing transaction for module {Module}: {TransactionId}", 
-                ModuleName, _currentTransaction.TransactionId);
-            
             await base.SaveChangesAsync(cancellationToken);
             await _currentTransaction.CommitAsync(cancellationToken);
         }
-        catch (System.Exception ex)
+        catch
         {
-            _logger.LogError(ex, "Failed to commit transaction for module {Module}", ModuleName);
             await RollbackTransactionAsync(cancellationToken);
             throw;
         }
@@ -115,229 +84,183 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
     }
 
-    /// <summary>
-    /// Rollback the current transaction
-    /// </summary>
-    public virtual async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
     {
-        if (_currentTransaction == null)
-        {
-            _logger.LogWarning("No active transaction to rollback for module {Module}", ModuleName);
-            return;
-        }
-
+        if (_currentTransaction == null) return;
         try
         {
-            _logger.LogDebug("Rolling back transaction for module {Module}: {TransactionId}", 
-                ModuleName, _currentTransaction.TransactionId);
-            
             await _currentTransaction.RollbackAsync(cancellationToken);
-        }
-        catch (System.Exception ex)
-        {
-            _logger.LogError(ex, "Failed to rollback transaction for module {Module}", ModuleName);
-            throw;
         }
         finally
         {
             await _currentTransaction.DisposeAsync();
             _currentTransaction = null;
         }
-    }    /// <summary>
-    /// Execute operation within transaction scope
-    /// </summary>
-    public virtual async Task ExecuteTransactionalAsync(CancellationToken cancellationToken = default)
+    }
+
+    public async Task ExecuteTransactionalAsync(
+        Func<Task> operation,
+        CancellationToken cancellationToken = default)
     {
         var strategy = CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await Database.BeginTransactionAsync(
-                System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+            await using var tx = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
             try
             {
-                await SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                await operation();
+                await base.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
             }
             catch
             {
-                await transaction.RollbackAsync(cancellationToken);
+                await tx.RollbackAsync(cancellationToken);
                 throw;
             }
         });
     }
 
-    /// <summary>
-    /// Execute operation within transaction scope and return result
-    /// </summary>
-    public virtual async Task<T> ExecuteTransactionalAsync<T>(
-        Func<Task<T>> operation, 
+    public async Task<T> ExecuteTransactionalAsync<T>(
+        Func<Task<T>> operation,
         CancellationToken cancellationToken = default)
     {
-        var wasTransactionActive = HasActiveTransaction;
-        
-        if (!wasTransactionActive)
+        var strategy = CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            await BeginTransactionAsync(cancellationToken);
-        }
+            await using var tx = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+            try
+            {
+                var result = await operation();
+                await base.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch
+            {
+                await tx.RollbackAsync(cancellationToken);
+                throw;
+            }
+        });
+    }
 
-        try
-        {
-            var result = await operation();
-            
-            if (!wasTransactionActive)
-            {
-                await CommitTransactionAsync(cancellationToken);
-            }
-            
-            return result;
-        }
-        catch
-        {
-            if (!wasTransactionActive)
-            {
-                await RollbackTransactionAsync(cancellationToken);
-            }
-            throw;
-        }
-    }    /// <summary>
-    /// Override SaveChangesAsync to handle domain events and audit tracking
-    /// </summary>
+    // --------- SaveChanges (auditing hook + concurrency handling) ---------
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // Apply audit information before saving
-        ApplyAuditInformation();
-        
+        ApplyAuditInformation(); // hook for derived contexts
         try
         {
             return await base.SaveChangesAsync(cancellationToken);
         }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
+        catch (DbUpdateConcurrencyException ex)
         {
+            // Standard reconciliation: refresh and re-throw for upper layer handling if needed.
             foreach (var entry in ex.Entries)
             {
                 var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
-                
-                if (databaseValues == null)
-                {
-                    _logger.LogError("The record no longer exists in the database for module {Module}", ModuleName);
-                    throw;
-                }
-
-                // Refresh the original values to bypass next concurrency check
+                if (databaseValues is null) continue;
                 entry.OriginalValues.SetValues(databaseValues);
             }
-
-            return await base.SaveChangesAsync(cancellationToken);
+            throw;
         }
     }
 
     /// <summary>
-    /// Get domain events from all aggregate roots
+    /// Collect domain events from tracked aggregates.
+    /// Duck-types entities exposing a readable property named 'DomainEvents'
+    /// of IEnumerable&lt;IDomainEvent&gt; (or compatible), returning a flat list.
     /// </summary>
-    public virtual IReadOnlyList<IDomainEvent> GetDomainEvents()
+    public IReadOnlyList<IDomainEvent> GetDomainEvents()
     {
-        var domainEntities = ChangeTracker
-            .Entries<IAggregate>()
-            .Where(x => x.Entity.DomainEvents.Any())
-            .Select(x => x.Entity)
-            .ToList();
+        var events = new List<IDomainEvent>(capacity: 32);
 
-        var domainEvents = domainEntities
-            .SelectMany(x => x.DomainEvents)
-            .ToImmutableList();
-
-        return domainEvents;
-    }    /// <summary>
-    /// Clear all domain events after processing
-    /// </summary>
-    public virtual void ClearDomainEvents()
-    {
-        var domainEntities = ChangeTracker
-            .Entries<IAggregate>()
-            .Where(x => x.Entity.DomainEvents.Any())
-            .Select(x => x.Entity)
-            .ToList();
-
-        domainEntities.ForEach(entity => entity.ClearDomainEvents());
-    }
-
-    /// <summary>
-    /// Apply audit information to tracked entities
-    /// </summary>
-    protected virtual void ApplyAuditInformation()
-    {
-        var currentUser = _currentUserProvider?.GetCurrentUserId() ?? 0;
-        var now = DateTime.UtcNow;
-
-        foreach (var entry in ChangeTracker.Entries<IAggregate>())
+        foreach (var entry in ChangeTracker.Entries())
         {
-            switch (entry.State)
-            {
-                case EntityState.Added:
-                    entry.Entity.CreatedBy = currentUser;
-                    entry.Entity.CreatedAt = now;
-                    entry.Entity.LastModifiedBy = currentUser;
-                    entry.Entity.LastModified = now;
-                    break;
+            if (entry.Entity is null) continue;
 
-                case EntityState.Modified:
-                    entry.Entity.LastModifiedBy = currentUser;
-                    entry.Entity.LastModified = now;
-                    entry.Entity.Version++;
-                    break;
+            var getter = DomainEventsGetterCache.Get(entry.Entity.GetType());
+            if (getter is null) continue;
 
-                case EntityState.Deleted:
-                    entry.State = EntityState.Modified;
-                    entry.Entity.LastModifiedBy = currentUser;
-                    entry.Entity.LastModified = now;
-                    entry.Entity.IsDeleted = true;
-                    entry.Entity.Version++;
-                    break;
-            }
+            if (getter(entry.Entity) is IEnumerable<IDomainEvent> list)
+                events.AddRange(list);
         }
-    }    
-    
-    // ToDo: Consider refactoring to use the clean AuditingIntercepto approach.
+
+        return events;
+    }
+
     /// <summary>
-    /// Configure audit properties for all aggregate roots
+    /// Clears domain events on tracked aggregates that expose a 'ClearDomainEvents()' method.
     /// </summary>
-    protected virtual void ConfigureAuditProperties(ModelBuilder modelBuilder)
+    public void ClearDomainEvents()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.Entity is null) continue;
+
+            var clearer = DomainEventsClearerCache.Get(entry.Entity.GetType());
+            clearer?.Invoke(entry.Entity);
+        }
+    }
+
+    [Obsolete("Use Application TransactionBehavior + IDomainEventCollector. Do not dispatch from DbContext.")]
+    public Task<int> SaveChangesAndDispatchDomainEventsAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Dispatch must be coordinated by Application layer behaviors.");
+
+    // --------- Hooks & Conventions ---------
+
+    /// <summary>
+    /// Override to apply auditing (CreatedAt/By, UpdatedAt/By, etc.) using your own interfaces/conventions.
+    /// Default: no-op to keep base decoupled from specific domain contracts.
+    /// </summary>
+    protected virtual void ApplyAuditInformation() { }
+
+    private void ApplySoftDeleteQueryFilter(ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (typeof(IAggregate).IsAssignableFrom(entityType.ClrType))
+            // Only for real entity types.
+            if (entityType.IsOwned() || entityType.ClrType.IsAbstract) continue;
+
+            var isDeletedProp = entityType.FindProperty("IsDeleted");
+            if (isDeletedProp?.ClrType == typeof(bool))
             {
-                var builder = modelBuilder.Entity(entityType.ClrType);
-                
-                // Configure audit properties
-                builder.Property<long>("CreatedBy").IsRequired();
-                builder.Property<DateTime>("CreatedAt").IsRequired();
-                builder.Property<long>("LastModifiedBy").IsRequired();
-                builder.Property<DateTime>("LastModified").IsRequired();
-                builder.Property<long>("Version").IsRequired();
-                builder.Property<bool>("IsDeleted").IsRequired().HasDefaultValue(false);
-                
-                // Add global query filter for soft deletes
                 var parameter = Expression.Parameter(entityType.ClrType, "e");
-                var property = Expression.Property(parameter, "IsDeleted");
-                var filter = Expression.Lambda(Expression.Not(property), parameter);
-                builder.HasQueryFilter(filter);
+                // EF.Property<bool>(e, "IsDeleted") == false
+                var body = Expression.Equal(
+                    Expression.Call(
+                        typeof(EF).GetMethod(nameof(EF.Property))!.MakeGenericMethod(typeof(bool)),
+                        parameter,
+                        Expression.Constant("IsDeleted")),
+                    Expression.Constant(false));
+
+                var lambda = Expression.Lambda(body, parameter);
+                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
             }
         }
     }
 
-    /// <summary>
-    /// Configure domain event properties (placeholder for future event sourcing)
-    /// </summary>
-    protected virtual void ConfigureDomainEventProperties(ModelBuilder modelBuilder)
+    private static void ApplyVersionConcurrencyToken(ModelBuilder modelBuilder)
     {
-        // Domain events are handled in-memory and not persisted directly
-        // This method is reserved for future event sourcing implementation
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var versionProp =
+                entityType.FindProperty("Version") ??
+                entityType.FindProperty("RowVersion");
+
+            if (versionProp is null) continue;
+
+            // Accept uint/int/long (common patterns)
+            var t = versionProp.ClrType;
+            if (t == typeof(uint) || t == typeof(int) || t == typeof(long) || t == typeof(byte[]))
+            {
+                modelBuilder
+                    .Entity(entityType.ClrType)
+                    .Property(versionProp.Name)
+                    .IsConcurrencyToken();
+            }
+        }
     }
 
-    /// <summary>
-    /// Dispose resources
-    /// </summary>
     public override void Dispose()
     {
         _currentTransaction?.Dispose();
@@ -345,16 +268,59 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Dispose resources asynchronously
-    /// </summary>
     public override async ValueTask DisposeAsync()
     {
         if (_currentTransaction != null)
-        {
             await _currentTransaction.DisposeAsync();
-        }
+
         await base.DisposeAsync();
         GC.SuppressFinalize(this);
+    }
+
+    // --------- Reflection helpers (cached) ---------
+
+    private static class DomainEventsGetterCache
+    {
+        private static readonly ConcurrentDictionary<Type, Func<object, object?>?> Cache = new();
+
+        public static Func<object, object?>? Get(Type type) =>
+            Cache.GetOrAdd(type, Create);
+
+        private static Func<object, object?>? Create(Type type)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var prop = type.GetProperty("DomainEvents", flags);
+            if (prop is null) return null;
+
+            // Must be IEnumerable<IDomainEvent> compatible
+            if (!typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
+                return null;
+
+            var obj = Expression.Parameter(typeof(object), "o");
+            var cast = Expression.Convert(obj, type);
+            var read = Expression.Property(cast, prop);
+            var box = Expression.Convert(read, typeof(object));
+            return Expression.Lambda<Func<object, object?>>(box, obj).Compile();
+        }
+    }
+
+    private static class DomainEventsClearerCache
+    {
+        private static readonly ConcurrentDictionary<Type, Action<object>?> Cache = new();
+
+        public static Action<object>? Get(Type type) =>
+            Cache.GetOrAdd(type, Create);
+
+        private static Action<object>? Create(Type type)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var method = type.GetMethod("ClearDomainEvents", flags, Array.Empty<Type>());
+            if (method is null) return null;
+
+            var obj = Expression.Parameter(typeof(object), "o");
+            var cast = Expression.Convert(obj, type);
+            var call = Expression.Call(cast, method);
+            return Expression.Lambda<Action<object>>(call, obj).Compile();
+        }
     }
 }

@@ -34,10 +34,6 @@ public class ProblemDetailsMiddleware
         {
             await _next(context);
         }
-        catch (DomainException ex)
-        {
-            await HandleDomainExceptionAsync(context, ex);
-        }
         catch (ValidationException ex)
         {
             await HandleValidationExceptionAsync(context, ex);
@@ -45,6 +41,10 @@ public class ProblemDetailsMiddleware
         catch (BusinessRuleException ex)
         {
             await HandleBusinessRuleExceptionAsync(context, ex);
+        }
+        catch (DomainException ex)
+        {
+            await HandleDomainExceptionAsync(context, ex);
         }
         catch (Exception ex)
         {
@@ -130,7 +130,7 @@ public class ProblemDetailsMiddleware
             "An unexpected error occurred.",
             "INTERNAL_SERVER_ERROR")
             .WithSource(exception.GetType().Name)
-            .WithMetadata("exceptionType", exception.GetType().FullName);
+            .WithMetadata("exceptionType", exception.GetType().FullName ?? exception.GetType().Name);
             
         var problemDetails = error.ToProblemDetails(
             instance: context.Request.Path,

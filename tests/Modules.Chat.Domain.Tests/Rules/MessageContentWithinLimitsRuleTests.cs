@@ -21,7 +21,7 @@ public sealed class MessageContentWithinLimitsRuleTests
 
         // Assert
         isBroken.ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.MESSAGE.EMPTY");
+        rule.Code.ShouldBe("CHAT_MESSAGE_CONTENT_EMPTY");
         rule.Message.ShouldBe("Message content cannot be empty.");
     }
 
@@ -33,7 +33,7 @@ public sealed class MessageContentWithinLimitsRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.MESSAGE.EMPTY");
+        rule.Code.ShouldBe("CHAT_MESSAGE_CONTENT_EMPTY");
     }
 
     [Test]
@@ -44,7 +44,7 @@ public sealed class MessageContentWithinLimitsRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.MESSAGE.EMPTY");
+        rule.Code.ShouldBe("CHAT_MESSAGE_CONTENT_EMPTY");
     }
 
     [Test]
@@ -77,7 +77,7 @@ public sealed class MessageContentWithinLimitsRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.MESSAGE.TOO_LONG");
+        rule.Code.ShouldBe("CHAT_MESSAGE_CONTENT_TOO_LONG");
         rule.Message.ShouldBe($"Message content cannot exceed {MaxLength} characters.");
     }
 }

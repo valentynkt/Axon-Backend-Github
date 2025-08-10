@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using BuildingBlocks.Application.Outbox;
+using BuildingBlocks.Core.Domain.Events;
 
 namespace BuildingBlocks.Infrastructure.Outbox;
 
 /// <summary>
 /// Entity Framework implementation of the outbox repository.
-/// Optimized for high-throughput event processing with efficient queries.
+/// Converts between Infrastructure entities (OutboxEntry) and Application DTOs (OutboxEventEntry).
 /// </summary>
 public sealed class EfOutboxRepository : IOutboxRepository
 {
@@ -19,102 +21,45 @@ public sealed class EfOutboxRepository : IOutboxRepository
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task AddAsync(IReadOnlyList<OutboxEntry> entries, CancellationToken cancellationToken = default)
+    public async Task<int> AddEventsAsync(
+        IReadOnlyList<IDomainEvent> events,
+        Guid transactionId,
+        string? traceId = null,
+        Guid? requestId = null,
+        IReadOnlyDictionary<string, object>? metadata = null,
+        CancellationToken cancellationToken = default)
     {
-        if (!entries.Any()) return;
+        if (!events.Any()) return 0;
 
         try
         {
+            var entries = events.Select(domainEvent => new OutboxEntry(
+                id: OutboxEntryId.New(),
+                transactionId: transactionId,
+                eventType: domainEvent.GetType().AssemblyQualifiedName!,
+                eventData: JsonSerializer.Serialize((object)domainEvent, domainEvent.GetType()),
+                traceId: traceId,
+                requestId: requestId,
+                tenantId: null, // plug tenant if/when needed
+                metadata: metadata != null ? JsonSerializer.Serialize(metadata) : null
+            )).ToList();
+
             _dbContext.Set<OutboxEntry>().AddRange(entries);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            _logger.LogDebug("Added {EntryCount} outbox entries to database", entries.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to add {EntryCount} outbox entries", entries.Count);
-            throw;
-        }
-    }
-
-    public async Task UpdateAsync(OutboxEntry entry, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _dbContext.Set<OutboxEntry>().Update(entry);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            _logger.LogDebug("Updated outbox entry {EntryId} status to {Status}", entry.Id, entry.Status);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            _logger.LogWarning(ex,
-                "Concurrency conflict when updating outbox entry {EntryId}. Entry may have been processed by another instance",
-                entry.Id);
-            
-            // Reload the entry to get current state
-            await _dbContext.Entry(entry).ReloadAsync(cancellationToken);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update outbox entry {EntryId}", entry.Id);
-            throw;
-        }
-    }
-
-    public async Task UpdateBatchAsync(IReadOnlyList<OutboxEntry> entries, CancellationToken cancellationToken = default)
-    {
-        if (!entries.Any()) return;
-
-        try
-        {
-            _dbContext.Set<OutboxEntry>().UpdateRange(entries);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            _logger.LogDebug("Updated {EntryCount} outbox entries in batch", entries.Count);
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            _logger.LogWarning(ex,
-                "Concurrency conflict when updating {EntryCount} outbox entries in batch. Some entries may have been processed by another instance",
-                entries.Count);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update {EntryCount} outbox entries in batch", entries.Count);
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<OutboxEntry>> GetPendingByTransactionAsync(
-        Guid transactionId, 
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var entries = await _dbContext.Set<OutboxEntry>()
-                .Where(e => e.TransactionId == transactionId && e.Status == OutboxEntryStatus.Pending)
-                .OrderBy(e => e.CreatedAt)
-                .ToListAsync(cancellationToken);
-
-            _logger.LogDebug(
-                "Found {EntryCount} pending outbox entries for transaction {TransactionId}",
+            _logger.LogDebug("Added {EventCount} domain events to outbox for transaction {TransactionId}",
                 entries.Count, transactionId);
 
-            return entries;
+            return entries.Count;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
-                "Failed to get pending outbox entries for transaction {TransactionId}",
-                transactionId);
+            _logger.LogError(ex, "Failed to add {EventCount} events to outbox", events.Count);
             throw;
         }
     }
 
-    public async Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(
+    public async Task<IReadOnlyList<OutboxEventEntry>> GetPendingAsync(
         int batchSize = 100,
         int processingTimeoutMinutes = 30,
         string? tenantId = null,
@@ -123,26 +68,25 @@ public sealed class EfOutboxRepository : IOutboxRepository
         try
         {
             var cutoffTime = DateTime.UtcNow.AddMinutes(-processingTimeoutMinutes);
-            
+
             var query = _dbContext.Set<OutboxEntry>()
-                .Where(e => 
-                    (e.Status == OutboxEntryStatus.Pending) ||
+                .AsNoTracking()
+                .Where(e =>
+                    e.Status == OutboxEntryStatus.Pending ||
                     (e.Status == OutboxEntryStatus.Processing && e.ProcessingStartedAt < cutoffTime) ||
                     (e.Status == OutboxEntryStatus.Failed && (e.NextRetryAt == null || e.NextRetryAt <= DateTime.UtcNow)));
 
             if (!string.IsNullOrWhiteSpace(tenantId))
-            {
                 query = query.Where(e => e.TenantId == tenantId);
-            }
 
-            var entries = await query
+            var entities = await query
                 .OrderBy(e => e.CreatedAt)
                 .Take(batchSize)
                 .ToListAsync(cancellationToken);
 
-            _logger.LogDebug(
-                "Found {EntryCount} pending outbox entries ready for processing (tenant: {TenantId})",
-                entries.Count, tenantId ?? "all");
+            var entries = entities.Select(ToOutboxEventEntry).ToList();
+
+            _logger.LogDebug("Found {EntryCount} pending outbox entries ready for processing", entries.Count);
 
             return entries;
         }
@@ -153,88 +97,255 @@ public sealed class EfOutboxRepository : IOutboxRepository
         }
     }
 
-    public async Task<IReadOnlyList<OutboxEntry>> GetFailedReadyForRetryAsync(
+    public async Task<IReadOnlyList<OutboxEventEntry>> GetPendingByTransactionAsync(
+        Guid transactionId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
+                .Where(e => e.TransactionId == transactionId && e.Status == OutboxEntryStatus.Pending)
+                .OrderBy(e => e.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            var entries = entities.Select(ToOutboxEventEntry).ToList();
+
+            _logger.LogDebug("Found {EntryCount} pending entries for transaction {TransactionId}",
+                entries.Count, transactionId);
+
+            return entries;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get pending entries for transaction {TransactionId}", transactionId);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<OutboxEventEntry>> GetFailedReadyForRetryAsync(
         int maxEntries = 100,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var now = DateTime.UtcNow;
-            
-            var entries = await _dbContext.Set<OutboxEntry>()
-                .Where(e => e.Status == OutboxEntryStatus.Failed && 
-                           (e.NextRetryAt == null || e.NextRetryAt <= now))
+
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
+                .Where(e => e.Status == OutboxEntryStatus.Failed &&
+                            (e.NextRetryAt == null || e.NextRetryAt <= now))
                 .OrderBy(e => e.CreatedAt)
                 .Take(maxEntries)
                 .ToListAsync(cancellationToken);
 
-            _logger.LogDebug("Found {EntryCount} failed outbox entries ready for retry", entries.Count);
+            var entries = entities.Select(ToOutboxEventEntry).ToList();
+
+            _logger.LogDebug("Found {EntryCount} failed entries ready for retry", entries.Count);
 
             return entries;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get failed outbox entries ready for retry");
+            _logger.LogError(ex, "Failed to get failed entries ready for retry");
             throw;
         }
     }
 
-    public async Task<IReadOnlyList<OutboxEntry>> GetDeadLetterEntriesAsync(
+    public async Task<IReadOnlyList<OutboxEventEntry>> GetDeadLetterEntriesAsync(
         int maxEntries = 100,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var entries = await _dbContext.Set<OutboxEntry>()
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
                 .Where(e => e.Status == OutboxEntryStatus.DeadLetter)
                 .OrderBy(e => e.CreatedAt)
                 .Take(maxEntries)
                 .ToListAsync(cancellationToken);
 
-            _logger.LogDebug("Found {EntryCount} dead letter outbox entries", entries.Count);
+            var entries = entities.Select(ToOutboxEventEntry).ToList();
+
+            _logger.LogDebug("Found {EntryCount} dead letter entries", entries.Count);
 
             return entries;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get dead letter outbox entries");
+            _logger.LogError(ex, "Failed to get dead letter entries");
             throw;
         }
     }
 
-    public async Task<OutboxEntry?> GetByIdAsync(OutboxEntryId id, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            return await _dbContext.Set<OutboxEntry>()
-                .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get outbox entry by ID {EntryId}", id);
-            throw;
-        }
-    }
-
-    public async Task<IReadOnlyList<OutboxEntry>> GetByIdsAsync(
-        IReadOnlyList<OutboxEntryId> ids, 
+    public async Task<IReadOnlyList<OutboxEventEntry>> GetByIdsAsync(
+        IReadOnlyList<Guid> ids,
         CancellationToken cancellationToken = default)
     {
         if (!ids.Any()) return [];
 
         try
         {
-            var entries = await _dbContext.Set<OutboxEntry>()
-                .Where(e => ids.Contains(e.Id))
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
+                .Where(e => ids.Contains(e.Id.Value))
                 .ToListAsync(cancellationToken);
 
-            _logger.LogDebug("Retrieved {EntryCount} outbox entries by IDs", entries.Count);
+            var entries = entities.Select(ToOutboxEventEntry).ToList();
+
+            _logger.LogDebug("Retrieved {EntryCount} entries by IDs", entries.Count);
 
             return entries;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get outbox entries by IDs");
+            _logger.LogError(ex, "Failed to get entries by IDs");
+            throw;
+        }
+    }
+
+    public async Task MarkAsProcessingAsync(
+        IReadOnlyList<OutboxEventEntry> entries,
+        CancellationToken cancellationToken = default)
+    {
+        if (!entries.Any()) return;
+
+        try
+        {
+            var ids = entries.Select(e => e.Id).ToList();
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .Where(e => ids.Contains(e.Id.Value))
+                .ToListAsync(cancellationToken);
+
+            foreach (var entity in entities)
+            {
+                entity.MarkAsProcessing();
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogDebug("Marked {EntryCount} entries as processing", entries.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark {EntryCount} entries as processing", entries.Count);
+            throw;
+        }
+    }
+
+    public async Task MarkAsCompletedAsync(
+        IReadOnlyList<OutboxEventEntry> entries,
+        CancellationToken cancellationToken = default)
+    {
+        if (!entries.Any()) return;
+
+        try
+        {
+            var ids = entries.Select(e => e.Id).ToList();
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .Where(e => ids.Contains(e.Id.Value))
+                .ToListAsync(cancellationToken);
+
+            foreach (var entity in entities)
+            {
+                entity.MarkAsCompleted();
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogDebug("Marked {EntryCount} entries as completed", entries.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark {EntryCount} entries as completed", entries.Count);
+            throw;
+        }
+    }
+
+    public async Task MarkAsFailedAsync(
+        IReadOnlyList<OutboxFailureInfo> failureInfos,
+        int baseRetryDelayMinutes,
+        int maxRetries,
+        CancellationToken cancellationToken = default)
+    {
+        // OutboxService already computed backoff & dead-letter; ignore legacy params.
+        await MarkAsFailedAsync(failureInfos, cancellationToken);
+    }
+
+    public async Task MarkAsFailedAsync(
+        IReadOnlyList<OutboxFailureInfo> failureInfos,
+        CancellationToken cancellationToken = default)
+    {
+        if (!failureInfos.Any()) return;
+
+        try
+        {
+            var ids = failureInfos.Select(f => f.EntryId).ToList();
+            var entities = await _dbContext.Set<OutboxEntry>()
+                .Where(e => ids.Contains(e.Id.Value))
+                .ToListAsync(cancellationToken);
+
+            foreach (var entity in entities)
+            {
+                var failure = failureInfos.First(f => f.EntryId == entity.Id.Value);
+
+                // record error
+                entity.LastError = failure.ErrorMessage.Length > 2000
+                    ? failure.ErrorMessage[..2000]
+                    : failure.ErrorMessage;
+
+                if (failure.MoveToDeadLetter)
+                {
+                    entity.MoveToDeadLetter(entity.LastError);
+                }
+                else
+                {
+                    // treat as failed with computed next retry; increment retry count here
+                    entity.Status = OutboxEntryStatus.Failed;
+                    entity.RetryCount = entity.RetryCount + 1;
+                    entity.ProcessingStartedAt = null;
+                    entity.NextRetryAt = failure.NextRetryAtUtc;
+                    entity.Version++;
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogDebug("Marked {EntryCount} entries as failed", failureInfos.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark {EntryCount} entries as failed", failureInfos.Count);
+            throw;
+        }
+    }
+
+    public async Task ResetDeadLetterToPendingAsync(
+        IReadOnlyList<Guid>? entryIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = _dbContext.Set<OutboxEntry>()
+                .Where(e => e.Status == OutboxEntryStatus.DeadLetter);
+
+            if (entryIds is { Count: > 0 })
+                query = query.Where(e => entryIds.Contains(e.Id.Value));
+
+            var entities = await query.ToListAsync(cancellationToken);
+
+            foreach (var entity in entities)
+            {
+                entity.ResetToPending();
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogDebug("Reset {EntryCount} dead letter entries to pending", entities.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reset dead letter entries to pending");
             throw;
         }
     }
@@ -243,10 +354,8 @@ public sealed class EfOutboxRepository : IOutboxRepository
     {
         try
         {
-            var now = DateTime.UtcNow;
-            
-            // Get counts by status efficiently in a single query
             var statusCounts = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
                 .GroupBy(e => e.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
@@ -257,23 +366,23 @@ public sealed class EfOutboxRepository : IOutboxRepository
             var failedCount = statusCounts.FirstOrDefault(s => s.Status == OutboxEntryStatus.Failed)?.Count ?? 0;
             var deadLetterCount = statusCounts.FirstOrDefault(s => s.Status == OutboxEntryStatus.DeadLetter)?.Count ?? 0;
 
-            // Get oldest pending and processing timestamps
             var oldestPending = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
                 .Where(e => e.Status == OutboxEntryStatus.Pending)
                 .OrderBy(e => e.CreatedAt)
                 .Select(e => e.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
             var oldestProcessing = await _dbContext.Set<OutboxEntry>()
+                .AsNoTracking()
                 .Where(e => e.Status == OutboxEntryStatus.Processing)
                 .OrderBy(e => e.ProcessingStartedAt)
                 .Select(e => e.ProcessingStartedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            // Calculate average processing time for completed entries (last 1000)
             var completedEntries = await _dbContext.Set<OutboxEntry>()
-                .Where(e => e.Status == OutboxEntryStatus.Completed && 
-                           e.ProcessedAt != null)
+                .AsNoTracking()
+                .Where(e => e.Status == OutboxEntryStatus.Completed && e.ProcessedAt != null)
                 .OrderByDescending(e => e.ProcessedAt)
                 .Select(e => new { e.CreatedAt, ProcessedAt = e.ProcessedAt!.Value })
                 .Take(1000)
@@ -282,9 +391,8 @@ public sealed class EfOutboxRepository : IOutboxRepository
             TimeSpan? averageProcessingTime = null;
             if (completedEntries.Count != 0)
             {
-                var totalProcessingTime = completedEntries
-                    .Sum(e => (e.ProcessedAt - e.CreatedAt).TotalMilliseconds);
-                averageProcessingTime = TimeSpan.FromMilliseconds(totalProcessingTime / completedEntries.Count);
+                var totalMs = completedEntries.Sum(e => (e.ProcessedAt - e.CreatedAt).TotalMilliseconds);
+                averageProcessingTime = TimeSpan.FromMilliseconds(totalMs / completedEntries.Count);
             }
 
             var statistics = new OutboxStatistics(
@@ -297,8 +405,7 @@ public sealed class EfOutboxRepository : IOutboxRepository
                 OldestProcessingStartedAt: oldestProcessing,
                 AverageProcessingTime: averageProcessingTime);
 
-            _logger.LogDebug(
-                "Outbox statistics: Pending={PendingCount}, Processing={ProcessingCount}, Completed={CompletedCount}, Failed={FailedCount}, DeadLetter={DeadLetterCount}",
+            _logger.LogDebug("Outbox statistics: Pending={PendingCount}, Processing={ProcessingCount}, Completed={CompletedCount}, Failed={FailedCount}, DeadLetter={DeadLetterCount}",
                 pendingCount, processingCount, completedCount, failedCount, deadLetterCount);
 
             return statistics;
@@ -318,27 +425,23 @@ public sealed class EfOutboxRepository : IOutboxRepository
         try
         {
             var cutoffDate = DateTime.UtcNow - retentionPeriod;
-            
-            // Use ExecuteDeleteAsync for better performance (EF Core 7+)
-            // For large datasets, this is much more efficient than loading and deleting entities
+
             int deletedCount;
-            
             try
             {
                 deletedCount = await _dbContext.Set<OutboxEntry>()
-                    .Where(e => e.Status == OutboxEntryStatus.Completed && 
-                               e.ProcessedAt != null && 
-                               e.ProcessedAt < cutoffDate)
+                    .Where(e => e.Status == OutboxEntryStatus.Completed &&
+                                e.ProcessedAt != null &&
+                                e.ProcessedAt < cutoffDate)
                     .Take(batchSize)
                     .ExecuteDeleteAsync(cancellationToken);
             }
             catch (NotSupportedException)
             {
-                // Fallback for older EF Core versions or providers that don't support ExecuteDeleteAsync
                 var entriesToDelete = await _dbContext.Set<OutboxEntry>()
-                    .Where(e => e.Status == OutboxEntryStatus.Completed && 
-                               e.ProcessedAt != null && 
-                               e.ProcessedAt < cutoffDate)
+                    .Where(e => e.Status == OutboxEntryStatus.Completed &&
+                                e.ProcessedAt != null &&
+                                e.ProcessedAt < cutoffDate)
                     .Take(batchSize)
                     .ToListAsync(cancellationToken);
 
@@ -356,23 +459,44 @@ public sealed class EfOutboxRepository : IOutboxRepository
 
             if (deletedCount > 0)
             {
-                _logger.LogInformation(
-                    "Cleaned up {DeletedCount} completed outbox entries older than {RetentionPeriod}",
+                _logger.LogInformation("Cleaned up {DeletedCount} completed outbox entries older than {RetentionPeriod}",
                     deletedCount, retentionPeriod);
-            }
-            else
-            {
-                _logger.LogDebug("No completed outbox entries found for cleanup");
             }
 
             return deletedCount;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
-                "Failed to cleanup completed outbox entries older than {RetentionPeriod}",
-                retentionPeriod);
+            _logger.LogError(ex, "Failed to cleanup completed outbox entries older than {RetentionPeriod}", retentionPeriod);
             throw;
         }
     }
+
+    private static OutboxEventEntry ToOutboxEventEntry(OutboxEntry entity)
+        => new(
+            Id: entity.Id.Value,
+            TransactionId: entity.TransactionId,
+            EventType: entity.EventType,
+            EventData: entity.EventData,
+            Status: ToOutboxEventStatus(entity.Status),
+            RetryCount: entity.RetryCount,
+            CreatedAt: entity.CreatedAt,
+            ProcessingStartedAt: entity.ProcessingStartedAt,
+            ProcessedAt: entity.ProcessedAt,
+            LastError: entity.LastError,
+            NextRetryAt: entity.NextRetryAt,
+            TraceId: entity.TraceId,
+            RequestId: entity.RequestId,
+            TenantId: entity.TenantId,
+            Metadata: entity.Metadata);
+
+    private static OutboxEventStatus ToOutboxEventStatus(OutboxEntryStatus infraStatus) => infraStatus switch
+    {
+        OutboxEntryStatus.Pending => OutboxEventStatus.Pending,
+        OutboxEntryStatus.Processing => OutboxEventStatus.Processing,
+        OutboxEntryStatus.Completed => OutboxEventStatus.Completed,
+        OutboxEntryStatus.Failed => OutboxEventStatus.Failed,
+        OutboxEntryStatus.DeadLetter => OutboxEventStatus.DeadLetter,
+        _ => throw new ArgumentOutOfRangeException(nameof(infraStatus), infraStatus, "Unknown outbox status")
+    };
 }

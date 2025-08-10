@@ -6,62 +6,48 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
-/// Unified database context interface (Infrastructure port).
-/// 
-/// Clean Architecture guidance:
-/// - <b>Domain</b>: must not depend on this.
-/// - <b>Application</b>: avoid using DbContext directly; prefer repositories/UoW ports.
-/// - <b>Infrastructure</b>: provides the implementation (EF Core, Dapper, etc.).
-/// 
-/// Keep the surface provider-agnostic where possible. EF-specific helpers are marked as Advanced.
+/// Unified database context port (Infrastructure).
+/// NOTE:
+/// - Domain must not depend on this.
+/// - Application should prefer repositories/UoW and pipeline behaviors.
+/// - Infrastructure provides EF (or other) implementations.
 /// </summary>
 public interface IDbContext : IDisposable
 {
-    /// <summary>
-    /// Returns a <see cref="DbSet{TEntity}"/> for the given entity type.
-    /// Application code should prefer repositories over raw DbSet access.
-    /// </summary>
+    /// <summary>DbSet accessor. Prefer repositories in Application.</summary>
     DbSet<TEntity> Set<TEntity>() where TEntity : class;
 
-    /// <summary>
-    /// Persist pending changes.
-    /// </summary>
+    /// <summary>Persist pending changes.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
-    // ——— Transaction control ———
-
+    // ---------- Transactions (Infra-owned) ----------
     Task BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task CommitTransactionAsync(CancellationToken cancellationToken = default);
     Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Whether an infrastructure transaction is active (diagnostics only).</summary>
+    /// <summary>True if a database transaction is currently active.</summary>
     bool HasActiveTransaction { get; }
 
-    /// <summary>Opaque id for logging/correlation (diagnostics only).</summary>
+    /// <summary>Opaque transaction id for diagnostics/correlation.</summary>
     string? CurrentTransactionId { get; }
 
-    /// <summary>
-    /// Provider execution strategy (EF-specific). Marked Advanced to discourage use in Application layer.
-    /// </summary>
+    /// <summary>Provider execution strategy (EF-specific).</summary>
     [EditorBrowsable(EditorBrowsableState.Advanced)]
     IExecutionStrategy CreateExecutionStrategy();
 
-    /// <summary>
-    /// Execute the given operation inside a transaction boundary.
-    /// </summary>
+    /// <summary>Execute an operation within a transaction boundary.</summary>
     Task ExecuteTransactionalAsync(
         Func<Task> operation,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Execute the given operation inside a transaction boundary and return a result.
-    /// </summary>
+    /// <summary>Execute an operation within a transaction boundary and return a result.</summary>
     Task<T> ExecuteTransactionalAsync<T>(
         Func<Task<T>> operation,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Collect domain events from tracked aggregates (to be published by the Application layer).
+    /// Collect domain events from tracked aggregates (for Application post-commit publishing).
+    /// Implementations should not dispatch here; only collect.
     /// </summary>
     IReadOnlyList<IDomainEvent> GetDomainEvents();
 }

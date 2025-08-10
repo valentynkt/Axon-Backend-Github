@@ -5,7 +5,7 @@ using FastEndpoints.Swagger;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddApplicationServices(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 

@@ -51,11 +51,9 @@ public static class ProblemDetailsServiceExtensions
                 #endif
             };
             
-            // Map specific exceptions to problem details
-            options.Map<DomainException>(ex => ex.Error.ToProblemDetails());
-            options.Map<ValidationException>(ex => 
-                ex.Errors.ToValidationProblemDetails());
-            options.Map<BusinessRuleException>(ex => ex.Error.ToProblemDetails());
+            // Custom exception handling is moved to middleware
+            // .NET 9.0 ProblemDetailsOptions doesn't support Map method
+            // Exception mapping will be handled in the custom middleware
             
             // Apply custom configuration
             configure?.Invoke(options);

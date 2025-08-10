@@ -19,12 +19,12 @@ public sealed class LoggingOptions
     /// <summary>
     /// Whether to log request parameters (be careful with sensitive data).
     /// </summary>
-    public bool LogRequestParameters { get; set; } = false;
+    public bool LogRequestParameters { get; set; }
 
     /// <summary>
     /// Whether to log response data (can be verbose).
     /// </summary>
-    public bool LogResponseData { get; set; } = false;
+    public bool LogResponseData { get; set; }
 
     /// <summary>
     /// Maximum length of logged request/response data to prevent log spam.

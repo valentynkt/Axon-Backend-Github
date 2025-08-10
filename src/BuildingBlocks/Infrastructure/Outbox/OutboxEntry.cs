@@ -256,12 +256,12 @@ public sealed class OutboxEntry : Entity<OutboxEntryId>
 /// <summary>
 /// Strong ID for outbox entries
 /// </summary>
-public sealed record OutboxEntryId(Guid Value) : IStrongId
+public sealed record OutboxEntryId : StrongId<Guid>
 {
+    private OutboxEntryId(Guid value) : base(value) { }
+    
     public static OutboxEntryId New() => new(Guid.NewGuid());
     public static OutboxEntryId From(Guid value) => new(value);
-    
-    public override string ToString() => Value.ToString();
 }
 
 /// <summary>

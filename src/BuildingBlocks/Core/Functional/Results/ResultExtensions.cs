@@ -54,7 +54,7 @@ public static class ResultExtensions
         return r;
     }
 
-    public static async Task<Result<T>> OnFailureAsync<T>(this Task.Result<T> task, Func<Error, Task> action)
+    public static async Task<Result<T>> OnFailureAsync<T>(this Task<Result<T>> task, Func<Error, Task> action)
     {
         ArgumentNullException.ThrowIfNull(task);
         ArgumentNullException.ThrowIfNull(action);
@@ -172,13 +172,13 @@ public static class ResultExtensions
     public static async Task<Result<T>> ToResultAsync<T>(this Task<T> task, Func<Exception, Error>? map = null)
     {
         try { return Result<T>.Success(await task.ConfigureAwait(false)); }
-        catch (Exception ex) { return Result<T>.Failure(map?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex)); }
+        catch (Exception ex) { return Result<T>.Failure(map?.Invoke(ex) ?? Error.Internal(ex.Message, exception: ex)); }
     }
 
     public static async Task<Result> ToResultAsync(this Task task, Func<Exception, Error>? map = null)
     {
         try { await task.ConfigureAwait(false); return Result.Success(); }
-        catch (Exception ex) { return Result.Failure(map?.Invoke(ex) ?? Error.InternalError(ex.Message, innerException: ex)); }
+        catch (Exception ex) { return Result.Failure(map?.Invoke(ex) ?? Error.Internal(ex.Message, exception: ex)); }
     }
 
     public static async Task<T?> GetValueOrDefaultAsync<T>(this Task<Result<T>> task, T? defaultValue = default)

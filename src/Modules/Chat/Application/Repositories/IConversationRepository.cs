@@ -67,3 +67,13 @@ public interface IConversationReadRepository : IReadRepository<Conversation, Con
         int pageSize, 
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Unified conversation repository interface that delegates to read/write repositories
+/// This interface should be used in application handlers for convenience
+/// </summary>
+public interface IConversationRepository : IConversationWriteRepository, IConversationReadRepository
+{
+    // Inherits all methods from both write and read repositories
+    // This provides a unified interface for application handlers that need both operations
+}

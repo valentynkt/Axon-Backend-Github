@@ -1,18 +1,10 @@
 using BuildingBlocks.Application.Events.Collecting;
-using BuildingBlocks.Application.Events.Notifications;
-using BuildingBlocks.Application.Events.Enveloping;
-using BuildingBlocks.Application.Events.Publishing;
 using BuildingBlocks.Application.Events.Dispatching;
-using BuildingBlocks.Application.Events.Serialization;
-using BuildingBlocks.Application.Events.Consumption;
-using BuildingBlocks.Application.Events.Consumption.Inbox;
-using BuildingBlocks.Application.Events.Consumption.Errors;
-using BuildingBlocks.Application.Events.Consumption.Retry;
-using BuildingBlocks.Application.Events.Consumption.DeadLetter;
-using BuildingBlocks.Application.Outbox.Retry;
-using BuildingBlocks.Application.Outbox.Monitoring;
-using Microsoft.Extensions.Configuration;
+using BuildingBlocks.Application.Events.Mapping;
+using BuildingBlocks.Application.Events.Notifications;
+using BuildingBlocks.Application.Events.Publishing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BuildingBlocks.Application.Configuration;
 
@@ -29,117 +21,64 @@ public static class ApplicationEventingRegistration
     }
 
     /// <summary>
-    /// Registers integration event pipeline for cross-boundary publishing (Lane B).
-    /// Includes enveloping, publisher port, and pure Application dispatcher.
+    /// Registers the outbound integration event pipeline (Lane B) with NO custom mappers.
+    /// Useful default: dispatcher + publisher, mapper returns null (no mappings).
     /// </summary>
     public static IServiceCollection AddIntegrationEventPipeline(this IServiceCollection services)
     {
-        // Enveloping infrastructure
-        services.AddSingleton<IEventTypeNameResolver, DefaultEventTypeNameResolver>();
-        services.AddSingleton<IEnvelopeHeaderPolicy, DefaultEnvelopeHeaderPolicy>();
-        services.AddSingleton<IIntegrationEventEnvelopeFactory, DefaultIntegrationEventEnvelopeFactory>();
+        // Publisher port (Application default – Infra should override)
+        services.TryAddScoped<IIntegrationEventPublisher, NoOpIntegrationEventPublisher>();
 
-        // Context accessor (AsyncLocal)
-        services.AddSingleton<IEnvelopeContextAccessor, AsyncLocalEnvelopeContextAccessor>();
+        // Mapper: empty composite (safe default, returns null for all)
+        services.AddScoped<IEventMapper>(_ => new CompositeEventMapper(Array.Empty<IEventMapper>()));
 
-        // Publisher port (NoOp in Application; real implementation comes from Infrastructure in Phase 2)
-        services.AddSingleton<IIntegrationEventPublisher, NoOpIntegrationEventPublisher>();
-
-        // Serializer
-        services.AddSingleton<IEventSerializer, SystemTextJsonEventSerializer>();
-
-        // Pure Application dispatcher (replaces legacy EventDispatcher)
-        services.AddScoped<IEventDispatcher, IntegrationEventDispatcher>();
-
-        // Outbox retry and monitoring policies
-        services.AddSingleton<IOutboxBackoffPolicy, DefaultOutboxBackoffPolicy>();
-        services.AddSingleton<IOutboxMetrics, NoOpOutboxMetrics>();
+        // Dispatcher
+        services.AddScoped<IIntegrationEventDispatcher, IntegrationEventDispatcher>();
 
         return services;
     }
 
     /// <summary>
-    /// Registers inbound integration event pipeline for consuming external events (Story 9 + 10).
-    /// Includes inbox pattern for idempotency, handler registry, dispatcher, retry policies, and dead-letter handling.
+    /// Registers the outbound integration event pipeline (Lane B) with concrete mapper types.
+    /// Pass one or more types that implement IEventMapper.
+    /// Example: services.AddIntegrationEventPipeline(typeof(OrderPlacedMapper), typeof(UserCreatedMapper));
     /// </summary>
-    public static IServiceCollection AddInboundIntegrationEventPipeline(this IServiceCollection services)
+    public static IServiceCollection AddIntegrationEventPipeline(this IServiceCollection services, params Type[] mapperTypes)
     {
-        return services.AddInboundIntegrationEventPipeline(_ => { });
-    }
+        // Validate and register leaf mappers so we can compose them without DI self-recursion.
+        mapperTypes ??= Array.Empty<Type>();
+        foreach (var t in mapperTypes)
+        {
+            if (!typeof(IEventMapper).IsAssignableFrom(t))
+                throw new ArgumentException($"Type '{t.FullName}' must implement {nameof(IEventMapper)}.", nameof(mapperTypes));
 
-    /// <summary>
-    /// Registers inbound integration event pipeline with configuration options.
-    /// </summary>
-    public static IServiceCollection AddInboundIntegrationEventPipeline(
-        this IServiceCollection services,
-        Action<InboxOptions> configureOptions)
-    {
-        // Configure inbox options
-        services.Configure(configureOptions);
+            services.AddScoped(t); // register concrete mapper type
+        }
 
-        // Inbox store for idempotency (NoOp in Application; real implementation comes from Infrastructure)
-        services.AddSingleton<IInboxStore, NoOpInboxStore>();
+        services.TryAddScoped<IIntegrationEventPublisher, NoOpIntegrationEventPublisher>();
 
-        // Handler registry for resolving event handlers from DI
-        services.AddScoped<IIntegrationEventHandlerRegistry, IntegrationEventHandlerRegistry>();
+        // Compose a CompositeEventMapper from the provided leaf types only.
+        services.AddScoped<IEventMapper>(sp =>
+        {
+            var leaves = mapperTypes
+                .Select(t => (IEventMapper)sp.GetRequiredService(t))
+                .ToArray();
 
-        // Error classification for retry/dead-letter decisions (Story 10)
-        services.AddSingleton<IInboundErrorClassifier, DefaultInboundErrorClassifier>();
+            return new CompositeEventMapper(leaves);
+        });
 
-        // Retry policy for exponential backoff and jitter (Story 10)
-        services.AddSingleton<IInboxRetryPolicy, DefaultInboxRetryPolicy>();
-
-        // Dead-letter store for permanently failed messages (Story 10)
-        // NoOp in Application; real implementation comes from Infrastructure
-        services.AddSingleton<IInboxDeadLetterStore, NoOpInboxDeadLetterStore>();
-
-        // Inbound dispatcher for processing integration event envelopes
-        services.AddScoped<IInboundIntegrationEventDispatcher, InboundIntegrationEventDispatcher>();
-
+        services.AddScoped<IIntegrationEventDispatcher, IntegrationEventDispatcher>();
         return services;
     }
 
     /// <summary>
-    /// Registers inbound integration event pipeline with configuration binding.
-    /// </summary>
-    public static IServiceCollection AddInboundIntegrationEventPipeline(
-        this IServiceCollection services,
-        IConfiguration configuration,
-        string configurationSectionName = "Inbox")
-    {
-        // Bind configuration to options
-        services.Configure<InboxOptions>(configuration.GetSection(configurationSectionName));
-
-        // Inbox store for idempotency (NoOp in Application; real implementation comes from Infrastructure)
-        services.AddSingleton<IInboxStore, NoOpInboxStore>();
-
-        // Handler registry for resolving event handlers from DI
-        services.AddScoped<IIntegrationEventHandlerRegistry, IntegrationEventHandlerRegistry>();
-
-        // Error classification for retry/dead-letter decisions (Story 10)
-        services.AddSingleton<IInboundErrorClassifier, DefaultInboundErrorClassifier>();
-
-        // Retry policy for exponential backoff and jitter (Story 10)
-        services.AddSingleton<IInboxRetryPolicy, DefaultInboxRetryPolicy>();
-
-        // Dead-letter store for permanently failed messages (Story 10)
-        // NoOp in Application; real implementation comes from Infrastructure
-        services.AddSingleton<IInboxDeadLetterStore, NoOpInboxDeadLetterStore>();
-
-        // Inbound dispatcher for processing integration event envelopes
-        services.AddScoped<IInboundIntegrationEventDispatcher, InboundIntegrationEventDispatcher>();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers complete eventing pipeline including both inbound and outbound lanes.
+    /// Convenience method: registers both Lane A and Lane B with the safe defaults
+    /// (no custom mappers – you can call the overload above later to add them).
     /// </summary>
     public static IServiceCollection AddApplicationEventing(this IServiceCollection services)
     {
         services.AddInProcessDomainEventNotifications();
         services.AddIntegrationEventPipeline();
-        services.AddInboundIntegrationEventPipeline();
         return services;
     }
 }

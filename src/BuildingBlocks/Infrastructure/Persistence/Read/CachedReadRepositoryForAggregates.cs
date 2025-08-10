@@ -184,19 +184,3 @@ public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBa
         GC.SuppressFinalize(this);
     }
 }
-
-/// <summary>
-/// Convenience implementation for Guid-based cached read repository
-/// </summary>
-public class CachedReadRepositoryForAggregates<TAggregate> : CachedReadRepositoryForAggregates<TAggregate, Guid>
-    where TAggregate : class, IIdentifiable<Guid>
-{
-    public CachedReadRepositoryForAggregates(
-        IReadRepository<TAggregate, Guid> inner,
-        IMemoryCache cache,
-        ILogger<CachedReadRepositoryForAggregates<TAggregate>> logger,
-        TimeSpan? cacheExpiration = null)
-        : base(inner, cache, logger, cacheExpiration)
-    {
-    }
-}

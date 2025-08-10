@@ -1,6 +1,7 @@
-using BuildingBlocks.Core.Functional.Results;
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Functional.Railway;
 
@@ -294,9 +295,10 @@ public static class RailwayExtensions
     }
 
     /// <summary>
-    /// Conditional bind - executes the binder only if the condition is met.
-    /// If condition is false, returns the original result unchanged.
+    /// Conditional bind - legacy overload (surprising for differing T/TNew). Prefer BindIfSame or the overload with a default factory.
     /// </summary>
+    [Obsolete("This overload is surprising because it returns Result<TNew> and cannot 'return the original result'. " +
+              "Use BindIfSame for same-type results or the BindIf overload with defaultValueFactory.")]
     public static Result<TNew> BindIf<T, TNew>(
         this Result<T> result,
         bool condition,
@@ -332,6 +334,19 @@ public static class RailwayExtensions
         return predicate(result.Value)
             ? binder(result.Value)
             : Result<TNew>.Success(defaultValueFactory(result.Value));
+    }
+
+    /// <summary>
+    /// Conditional bind that preserves the same type: if condition is false, returns the original result.
+    /// </summary>
+    public static Result<T> BindIfSame<T>(
+        this Result<T> result,
+        bool condition,
+        Func<T, Result<T>> binder)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+        if (result.IsFailure) return result;
+        return condition ? binder(result.Value) : result;
     }
 
     /// <summary>
@@ -396,14 +411,23 @@ public static class RailwayExtensions
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        
+
         if (maxAttempts <= 0)
             throw new ArgumentException("Max attempts must be greater than 0", nameof(maxAttempts));
 
         var delay = baseDelay ?? TimeSpan.FromMilliseconds(100);
-        var retryableTypes = retryableErrorTypes ?? [ErrorType.System, ErrorType.Cancellation];
 
-        Result<T> lastResult = Result<T>.Failure(Error.System("Retry not attempted"));
+        // Sensible transient defaults aligned with Axon ErrorType
+        var retryableTypes = retryableErrorTypes ?? new[]
+        {
+            ErrorType.Timeout,
+            ErrorType.Unavailable,
+            ErrorType.Network,
+            ErrorType.External,
+            ErrorType.Concurrency
+        };
+
+        Result<T> lastResult = Result<T>.Failure(Error.Internal("Retry not attempted"));
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {

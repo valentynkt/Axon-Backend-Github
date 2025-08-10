@@ -81,16 +81,24 @@ public static class ErrorProblemDetailsExtensions
         };
         
         // Group errors by property name if available
+        var errorGroups = new Dictionary<string, List<string>>();
+        
         foreach (var error in errors)
         {
             var propertyName = error.Metadata?.GetValueOrDefault("PropertyName")?.ToString() 
                 ?? error.Metadata?.GetValueOrDefault("propertyName")?.ToString()
                 ?? "General";
                 
-            if (!validationDetails.Errors.ContainsKey(propertyName))
-                validationDetails.Errors[propertyName] = [];
+            if (!errorGroups.ContainsKey(propertyName))
+                errorGroups[propertyName] = new List<string>();
                 
-            validationDetails.Errors[propertyName].Add(error.Message);
+            errorGroups[propertyName].Add(error.Message);
+        }
+        
+        // Convert to the required string[] format
+        foreach (var (key, value) in errorGroups)
+        {
+            validationDetails.Errors[key] = value.ToArray();
         }
         
         // Add common extensions

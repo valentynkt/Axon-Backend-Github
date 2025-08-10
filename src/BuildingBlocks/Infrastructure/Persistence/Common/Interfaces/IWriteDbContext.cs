@@ -4,33 +4,16 @@ using BuildingBlocks.Core.Domain.Events;
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
-/// Write-side database context (Infrastructure port) used by UoW/repositories.
-/// 
-/// Clean Architecture guidance:
-/// - Application orchestrates via UoW/Repositories; Domain should not see this.
-/// - Domain events are gathered from aggregates and dispatched by Application orchestration.
+/// Write-side context port (CQRS). Used by repositories/UoW under Application behaviors.
 /// </summary>
 public interface IWriteDbContext<TModule> : IDbContext where TModule : class
 {
-    /// <summary>
-    /// Logical module name (schema/tenant separation, diagnostics).
-    /// </summary>
+    /// <summary>Logical module name (schema/diagnostics separation).</summary>
     string ModuleName { get; }
 
-    /// <summary>
-    /// Get domain events from tracked aggregates for event publication.
-    /// </summary>
+    /// <summary>Collect domain events from tracked aggregates.</summary>
     new IReadOnlyList<IDomainEvent> GetDomainEvents();
 
-    /// <summary>
-    /// Clear collected domain events after publication.
-    /// </summary>
+    /// <summary>Clear tracked domain events after publication.</summary>
     void ClearDomainEvents();
-
-    /// <summary>
-    /// Persist changes and dispatch domain events in a single call.
-    /// Prefer orchestrating from Application, implemented in Infrastructure.
-    /// </summary>
-    Task<int> SaveChangesAndDispatchDomainEventsAsync(
-        CancellationToken cancellationToken = default);
 }

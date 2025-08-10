@@ -1,6 +1,7 @@
 using BuildingBlocks.Application.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace BuildingBlocks.Application.Configuration;
 
@@ -26,38 +27,28 @@ public static class ApplicationConfigurationExtensions
 
         return services;
     }
+    
 
     /// <summary>
-    /// Registers all application layer services.
-    /// </summary>
-    /// <param name="services">The service collection</param>
-    /// <returns>The service collection for chaining</returns>
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
-    {
-        // Add caching services
-        services.AddCachingServices();
-
-        // Add pipeline behaviors in correct order
-        services.AddPipelineBehaviors();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Adds complete application layer configuration including services, options, and behaviors.
+    /// Registers all application layer services with configuration and environment.
     /// </summary>
     /// <param name="services">The service collection</param>
     /// <param name="configuration">The configuration instance</param>
+    /// <param name="environment">The host environment</param>
     /// <returns>The service collection for chaining</returns>
-    public static IServiceCollection AddApplicationLayer(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    public static IServiceCollection AddApplicationServices(
+        this IServiceCollection services, 
+        IConfiguration configuration, 
+        IHostEnvironment environment)
     {
         // Configure application options
         services.ConfigureApplicationOptions(configuration);
+        
+        // Add caching services
+        services.AddCachingServices();
 
-        // Register application services
-        services.AddApplicationServices();
+        // Add pipeline behaviors in correct order with configuration and environment
+        services.AddPipelineBehaviors(configuration, environment);
 
         return services;
     }

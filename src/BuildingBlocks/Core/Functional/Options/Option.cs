@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Core.Functional.Options;
@@ -144,6 +145,17 @@ public readonly record struct Option<T> : IOption<T>
 
     /// <summary>LINQ SelectMany overload (without projector).</summary>
     public Option<TNew> SelectMany<TNew>(Func<T, Option<TNew>> binder) => Bind(binder);
+    #endregion
+
+    #region Flow helpers
+    public bool TryGetValue([NotNullWhen(true)] out T? value)
+    {
+        value = _hasValue ? _value : default;
+        return _hasValue;
+    }
+
+    public void Deconstruct(out bool isSome, out T? value)
+        => (isSome, value) = (_hasValue, _hasValue ? _value : default);
     #endregion
 
     #region Operators

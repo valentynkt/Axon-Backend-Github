@@ -1,43 +1,24 @@
-using BuildingBlocks.Application.Events.Enveloping;
+using BuildingBlocks.Core.Abstractions.Events;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Application.Events.Publishing;
 
-/// <summary>
-/// No-operation implementation of IIntegrationEventPublisher for development/testing.
-/// Logs envelope publishing without actually sending to any transport.
-/// </summary>
 public sealed class NoOpIntegrationEventPublisher : IIntegrationEventPublisher
 {
     private readonly ILogger<NoOpIntegrationEventPublisher> _logger;
+    public NoOpIntegrationEventPublisher(ILogger<NoOpIntegrationEventPublisher> logger) => _logger = logger;
 
-    public NoOpIntegrationEventPublisher(ILogger<NoOpIntegrationEventPublisher> logger)
+    public Task PublishAsync(IEnumerable<IIntegrationEvent> events, CancellationToken ct = default)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    public Task PublishAsync(IReadOnlyList<IntegrationEventEnvelope> envelopes, CancellationToken ct = default)
-    {
-        if (envelopes.Count == 0)
+        var list = events?.ToList() ?? [];
+        if (list.Count == 0)
         {
-            _logger.LogDebug("NoOp publisher: no envelopes to publish");
+            _logger.LogDebug("NoOp publisher: no integration events to publish");
             return Task.CompletedTask;
         }
 
-        _logger.LogDebug(
-            "NoOp publisher: published {Count} envelopes - {Types}",
-            envelopes.Count,
-            string.Join(", ", envelopes.Select(e => e.Type)));
-
-        foreach (var envelope in envelopes)
-        {
-            _logger.LogTrace(
-                "NoOp envelope {EnvelopeId}: {Type} with {HeaderCount} headers",
-                envelope.EnvelopeId,
-                envelope.Type,
-                envelope.Headers.Count);
-        }
-
+        _logger.LogDebug("NoOp publisher: published {Count} integration events - {Types}",
+            list.Count, string.Join(", ", list.Select(e => e.GetType().Name)));
         return Task.CompletedTask;
     }
 }

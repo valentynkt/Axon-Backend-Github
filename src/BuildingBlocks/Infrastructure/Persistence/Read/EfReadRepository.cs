@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Pagination;
@@ -236,20 +237,22 @@ public class EfReadRepository<TReadModel> : EfReadRepository<TReadModel, Guid>, 
 /// <summary>
 /// Internal PageList implementation for pagination
 /// </summary>
-internal class PageList<T> : IPageList<T>
+internal class PageList<T> : IPageList<T>, IEnumerable
 {
     private readonly List<T> _items;
 
-    public PageList(IEnumerable<T> items, int pageNumber, int pageSize, long totalItems)
+    public PageList(IEnumerable<T> items, int pageNumber, int pageSize, long totalItems, PaginationMeta meta)
     {
         _items = items?.ToList() ?? new List<T>();
         PageNumber = pageNumber;
         PageSize = pageSize;
         TotalItems = totalItems;
+        Meta = meta;
         TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
     }
 
     public IReadOnlyList<T> Items => _items.AsReadOnly();
+    public PaginationMeta Meta { get; }
     public int PageNumber { get; }
     public int PageSize { get; }
     public long TotalItems { get; }
@@ -263,5 +266,5 @@ internal class PageList<T> : IPageList<T>
     
     // IEnumerable<T> implementation
     public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
-    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+   IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

@@ -18,8 +18,8 @@ public sealed class TitleUpdateMustBeValidRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.CONVERSATION.TITLE_EMPTY_ON_UPDATE");
-        rule.Message.ShouldBe("Title cannot be empty when set by user.");
+        rule.Code.ShouldBe("CHAT_CONVERSATION_TITLE_EMPTY");
+        rule.Message.ShouldBe("Title cannot be empty.");
     }
 
     [Test]
@@ -30,7 +30,7 @@ public sealed class TitleUpdateMustBeValidRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.CONVERSATION.TITLE_EMPTY_ON_UPDATE");
+        rule.Code.ShouldBe("CHAT_CONVERSATION_TITLE_EMPTY");
     }
 
     [Test]
@@ -41,7 +41,7 @@ public sealed class TitleUpdateMustBeValidRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.CONVERSATION.TITLE_EMPTY_ON_UPDATE");
+        rule.Code.ShouldBe("CHAT_CONVERSATION_TITLE_EMPTY");
     }
 
     [Test]
@@ -74,7 +74,7 @@ public sealed class TitleUpdateMustBeValidRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.CONVERSATION.TITLE_TOO_LONG");
+        rule.Code.ShouldBe("CHAT_CONVERSATION_TITLE_TOO_LONG");
         rule.Message.ShouldBe("Title cannot exceed 200 characters.");
     }
 
@@ -97,7 +97,7 @@ public sealed class TitleUpdateMustBeValidRuleTests
 
         // Act & Assert
         rule.IsBroken().ShouldBeTrue();
-        rule.Code.ShouldBe("CHAT.CONVERSATION.TITLE_TOO_LONG");
+        rule.Code.ShouldBe("CHAT_CONVERSATION_TITLE_TOO_LONG");
     }
 
     [Test]

@@ -4,6 +4,10 @@ namespace BuildingBlocks.Core.Diagnostics.Errors;
 /// Error type categorization for routing, handling, and observability.
 /// Each type maps to specific HTTP status codes and handling strategies.
 /// </summary>
+/// <summary>
+/// Error type categorization for routing, handling, and observability.
+/// Each type maps to specific HTTP status codes and handling strategies.
+/// </summary>
 public enum ErrorType
 {
     // 4xx
@@ -18,6 +22,7 @@ public enum ErrorType
     Cancelled = 9,           // 499 (non-standard but widely used)
     Serialization = 10,      // 400 (serialization/deserialization)
     Concurrency = 11,        // 409/412 (optimistic concurrency)
+    Cancellation = 12,       // 499 (operation cancellation)
     
     // 5xx
     Internal = 50,           // 500
@@ -27,6 +32,11 @@ public enum ErrorType
     Timeout = 54,            // 504
     Unavailable = 55,        // 503 (dependency unavailable)
     Persistence = 56,        // 507 (storage/persistence layer)
+    
+    // Additional 5xx types for compatibility
+    InternalError = 57,      // 500 (alias for Internal)
+    ExternalService = 58,    // 502 (alias for External)
+    System = 59,             // 500 (system-level errors)
     
     // domain / composed
     Aggregate = 90,          // 422 aggregate/combined failures

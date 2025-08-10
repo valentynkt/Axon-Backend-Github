@@ -55,7 +55,7 @@ public sealed class CacheKeyGenerator : ICacheKeyGenerator
         return $"axon:cache:{typeName}:v1:{requestHash}";
     }
 
-    private static string ComputeQueryHash<T>(T query)
+    private static string ComputeQueryHash<T>(T query) where T : notnull
     {
         try
         {

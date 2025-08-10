@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Diagnostics;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Web.Extensions;
 using Grpc.Core;
@@ -60,7 +61,7 @@ public static class ProblemDetailsExtensions
                             (
                                 exceptionType.Message,
                                 exceptionType.GetType().Name,
-                                context.Response.StatusCode = (int)validationException.StatusCode
+                                context.Response.StatusCode = validationException.Error.ToHttpStatusCode()
                             ),
                             BadRequestException =>
                             (

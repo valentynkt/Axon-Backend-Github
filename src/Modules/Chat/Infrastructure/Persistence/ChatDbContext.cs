@@ -13,6 +13,7 @@ using Axon.Modules.Chat.Domain.Conversation.Entities;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Infrastructure.Persistence.StrongIds;
 using BuildingBlocks.Core.Domain.Model;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Read;
@@ -70,6 +71,9 @@ public sealed class ChatWriteDbContext : WriteDbContextBase<ChatWriteDbContext>
 
         // Set default schema for Chat module
         modelBuilder.HasDefaultSchema("chat");
+
+        // Apply StrongId conventions before entity configurations
+        modelBuilder.ApplyStrongIdConventions();
 
         // Apply all entity configurations from assembly
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
@@ -135,6 +139,9 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatReadDbContext>
 
         // Set default schema for Chat module
         modelBuilder.HasDefaultSchema("chat");
+
+        // Apply StrongId conventions before entity configurations
+        modelBuilder.ApplyStrongIdConventions();
 
         // Apply all entity configurations from assembly
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
@@ -253,6 +260,9 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatReadDbContext>
 
         // Set default schema for Chat module
         modelBuilder.HasDefaultSchema("chat");
+
+        // Apply StrongId conventions before entity configurations
+        modelBuilder.ApplyStrongIdConventions();
 
         // Apply all entity configurations from assembly
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
