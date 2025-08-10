@@ -189,6 +189,13 @@ public interface IOutboxRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Marks entries as failed with computed retry information from backoff policy.
+    /// </summary>
+    Task MarkAsFailedAsync(
+        IReadOnlyList<OutboxFailureInfo> failureInfos,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Reset dead letter entries to pending for manual retry.
     /// </summary>
     /// <param name="entryIds">Entry IDs to reset, or null for all dead letters</param>

@@ -6,6 +6,8 @@ using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Application.Outbox;
+using BuildingBlocks.Application.Events.Collecting;
+using BuildingBlocks.Application.Events.Notifications;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using System.Reflection;
@@ -27,7 +29,8 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
     private static readonly ActivitySource ActivitySource = new("Axon.Application.Transactions");
 
     private readonly DbContext _dbContext;
-    // private readonly IDomainEventDispatcher _domainEventDispatcher;
+    private readonly IDomainEventCollector _domainEventCollector;
+    private readonly IPostCommitDomainEventPublisher _postCommitPublisher;
     private readonly IOutboxService? _outboxService;
     private readonly IOutboxProcessor? _outboxProcessor;
     private readonly IOptions<TransactionOptions> _options;
@@ -35,14 +38,16 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
 
     public CommandTransactionBehavior(
         DbContext dbContext,
-      //  IDomainEventDispatcher domainEventDispatcher,
+        IDomainEventCollector domainEventCollector,
+        IPostCommitDomainEventPublisher postCommitPublisher,
         ILogger<CommandTransactionBehavior<TRequest, TResponse>> logger,
         IOutboxService? outboxService = null,
         IOutboxProcessor? outboxProcessor = null,
         IOptions<TransactionOptions>? options = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-     //   _domainEventDispatcher = domainEventDispatcher ?? throw new ArgumentNullException(nameof(domainEventDispatcher));
+        _domainEventCollector = domainEventCollector ?? throw new ArgumentNullException(nameof(domainEventCollector));
+        _postCommitPublisher = postCommitPublisher ?? throw new ArgumentNullException(nameof(postCommitPublisher));
         _outboxService = outboxService;
         _outboxProcessor = outboxProcessor;
         _options = options ?? Options.Create(new TransactionOptions());
@@ -94,7 +99,7 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
             }
 
             // Collect domain events BEFORE commit (outbox write participates in same tx)
-            var domainEvents = CollectDomainEventsSafe();
+            var domainEvents = _domainEventCollector.Collect(_dbContext, clear: true);
 
             if (_outboxService is not null && _options.Value.EnableOutboxProcessing && domainEvents.Count > 0)
             {
@@ -129,10 +134,13 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
             _logger.LogInformation("Tx {TxId} committed for {Request} in {Elapsed}ms (events: {Events})",
                 txId, typeof(TRequest).Name, sw.ElapsedMilliseconds, domainEvents.Count);
 
-            // IMPORTANT: clear domain events after commit in ALL paths
-            ClearDomainEventsSafe();
+            // Post-commit Lane A: in-process domain notifications
+            if (domainEvents.Count > 0)
+            {
+                await _postCommitPublisher.PublishAsync(domainEvents, cancellationToken);
+            }
 
-            // Post-commit processing (fire-and-forget; don’t tie to request cancellation)
+            // Post-commit Lane B: outbox processing (fire-and-forget)
             await PostCommitAsync(domainEvents, txId);
 
             return response;
@@ -199,61 +207,9 @@ public sealed class CommandTransactionBehavior<TRequest, TResponse> : IPipelineB
         return (traceId, requestId, metadata);
     }
 
-    // ---- Domain events collection/clearing with robust shape handling ----
-
-    private List<IDomainEvent> CollectDomainEventsSafe()
-    {
-        var list = new List<IDomainEvent>();
-
-        foreach (var entry in _dbContext.ChangeTracker.Entries())
-        {
-            var entity = entry.Entity;
-            if (entity is null) continue;
-
-            // Preferred: aggregates implement a known interface exposing DomainEvents
-            if (entity is IAggregateRootWithEvents typed && typed.DomainEvents is { Count: > 0 })
-            {
-                list.AddRange(typed.DomainEvents);
-                continue;
-            }
-
-            // Fallback: reflection to read "DomainEvents" property
-            var deProp = entity.GetType().GetProperty("DomainEvents", BindingFlags.Public | BindingFlags.Instance);
-            if (deProp?.GetValue(entity) is IEnumerable<IDomainEvent> events)
-            {
-                list.AddRange(events);
-            }
-        }
-
-        return list;
-    }
-
-    private void ClearDomainEventsSafe()
-    {
-        foreach (var entry in _dbContext.ChangeTracker.Entries())
-        {
-            var entity = entry.Entity;
-            if (entity is null) continue;
-
-            if (entity is IAggregateRootWithEvents typed)
-            {
-                typed.ClearDomainEvents();
-                continue;
-            }
-
-            var clear = entity.GetType().GetMethod("ClearDomainEvents", BindingFlags.Public | BindingFlags.Instance);
-            if (clear is not null)
-            {
-#pragma warning disable CA1031 // Do not catch general exception types
-                try { clear.Invoke(entity, null); } catch { /* ignore */ }
-#pragma warning restore CA1031
-            }
-        }
-    }
-
     // ---- Post-commit paths ----
 
-    private async Task PostCommitAsync(List<IDomainEvent> domainEvents, Guid txId)
+    private async Task PostCommitAsync(IReadOnlyList<IDomainEvent> domainEvents, Guid txId)
     {
         // Prefer outbox processor if available/enabled
         if (_outboxService is not null && _options.Value.EnableOutboxProcessing && _outboxProcessor is not null)

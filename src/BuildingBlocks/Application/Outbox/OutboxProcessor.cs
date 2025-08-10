@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using BuildingBlocks.Application.Outbox.Monitoring;
 using BuildingBlocks.Core.Functional.Results;
 
 namespace BuildingBlocks.Application.Outbox;
@@ -16,6 +17,7 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxProcessor> _logger;
     private readonly OutboxOptions _options;
+    private readonly IOutboxMetrics _metrics;
     private readonly List<string> _recentErrors = new();
     private readonly object _recentErrorsLock = new();
 
@@ -26,11 +28,13 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
     public OutboxProcessor(
         IServiceProvider serviceProvider,
         ILogger<OutboxProcessor> logger,
-        IOptions<OutboxOptions> options)
+        IOptions<OutboxOptions> options,
+        IOutboxMetrics metrics)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -83,6 +87,9 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
                 {
                     _logger.LogError(ex, "Unexpected error in outbox processor main loop");
                     AddRecentError($"Main loop error: {ex.Message}");
+                    
+                    // Record processor loop error metric
+                    _metrics.RecordProcessorLoopError();
 
                     // Wait before retrying to avoid tight loop on persistent errors
                     await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
@@ -263,6 +270,9 @@ public sealed class OutboxProcessor : BackgroundService, IOutboxProcessor
                 
                 activity?.SetTag("entries.cleaned", deletedCount);
             }
+
+            // Record cleanup metrics
+            _metrics.RecordCleanup(deletedCount);
         }
         catch (Exception ex)
         {

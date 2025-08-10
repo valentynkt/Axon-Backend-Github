@@ -203,4 +203,85 @@ public sealed class EventDrivenArchitectureTests : ArchitectureTestBase
         // Log but don't fail - projections might not be used everywhere
         Console.WriteLine($"Potential projection consistency issues: {consistencyViolations.Count}");
     }
+
+    [Test]
+    public void DomainEventNotificationHandlers_ShouldNotReferenceTransport()
+    {
+        // Guardrail test to ensure DomainEventNotification handlers don't reference transport concerns
+        // This enforces the two-lane event handling model (Lane A = in-process only)
+        
+        var transportNamespaces = new[] 
+        { 
+            "MassTransit", 
+            "System.Net.Http", 
+            "Microsoft.AspNetCore",
+            "RabbitMQ",
+            "Kafka"
+        };
+
+        var allTypes = GetAllTypes();
+        var handlerTypes = allTypes
+            .Where(t => t.Name.Contains("Handler") && 
+                       t.GetInterfaces().Any(i => i.IsGenericType && 
+                                                i.GetGenericTypeDefinition().Name.Contains("INotificationHandler")))
+            .ToList();
+
+        var violations = new List<string>();
+
+        foreach (var handlerType in handlerTypes)
+        {
+            // Check if this handler handles DomainEventNotification<T>
+            var notificationInterfaces = handlerType.GetInterfaces()
+                .Where(i => i.IsGenericType && 
+                           i.GetGenericTypeDefinition().Name.Contains("INotificationHandler"))
+                .ToList();
+
+            var handlesDomainEventNotification = notificationInterfaces.Any(i =>
+                i.GetGenericArguments().Any(arg =>
+                    arg.IsGenericType &&
+                    arg.GetGenericTypeDefinition().Name.Contains("DomainEventNotification")));
+
+            if (!handlesDomainEventNotification) continue;
+
+            // Check constructor dependencies
+            var constructors = handlerType.GetConstructors();
+            foreach (var constructor in constructors)
+            {
+                var parameters = constructor.GetParameters();
+                foreach (var param in parameters)
+                {
+                    var paramTypeName = param.ParameterType.FullName ?? param.ParameterType.Name;
+                    var paramNamespace = param.ParameterType.Namespace ?? "";
+
+                    if (transportNamespaces.Any(tn => paramNamespace.StartsWith(tn, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        violations.Add($"Handler {handlerType.Name} has transport dependency: {paramTypeName}");
+                    }
+                }
+            }
+
+            // Check field dependencies
+            var fields = handlerType.GetFields(System.Reflection.BindingFlags.NonPublic | 
+                                             System.Reflection.BindingFlags.Public | 
+                                             System.Reflection.BindingFlags.Instance);
+            foreach (var field in fields)
+            {
+                var fieldTypeName = field.FieldType.FullName ?? field.FieldType.Name;
+                var fieldNamespace = field.FieldType.Namespace ?? "";
+
+                if (transportNamespaces.Any(tn => fieldNamespace.StartsWith(tn, StringComparison.OrdinalIgnoreCase)))
+                {
+                    violations.Add($"Handler {handlerType.Name} has transport field dependency: {fieldTypeName}");
+                }
+            }
+        }
+
+        if (violations.Any())
+        {
+            var violationMessage = string.Join(Environment.NewLine, violations);
+            Assert.Fail($"DomainEventNotification handlers must not reference transport concerns (Lane A = in-process only):{Environment.NewLine}{violationMessage}");
+        }
+
+        Console.WriteLine($"✅ Verified {handlerTypes.Count} notification handlers comply with two-lane event model");
+    }
 }

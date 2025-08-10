@@ -163,4 +163,20 @@ public sealed class OutboxOptions
     /// Whether to enable health checks for outbox processing.
     /// </summary>
     public bool EnableHealthChecks { get; set; } = true;
+
+    /// <summary>
+    /// Maximum retry delay cap for exponential backoff.
+    /// </summary>
+    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// Whether to apply jitter to retry delays to avoid thundering herd.
+    /// </summary>
+    public bool UseJitter { get; set; } = true;
+
+    /// <summary>
+    /// Jitter ratio for retry delays (0.0 to 1.0).
+    /// Jitter is applied as +/- ratio% of the computed delay.
+    /// </summary>
+    public double JitterRatio { get; set; } = 0.2;
 }

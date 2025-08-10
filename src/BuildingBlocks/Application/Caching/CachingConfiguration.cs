@@ -55,14 +55,14 @@ public static class CachingConfiguration
     });
 
     // Add distributed cache (Redis) - only if Redis connection is configured
-    services.AddStackExchangeRedisCache(options =>
-    {
-        using var serviceProvider = services.BuildServiceProvider();
-        var cacheOptions = serviceProvider.GetService<IOptions<CacheOptions>>()?.Value ?? new();
-        
-        options.Configuration = cacheOptions.RedisConnectionString;
-        options.InstanceName = cacheOptions.InstanceName;
-    });
+   // services.AddStackExchangeRedisCache(options =>
+   // {
+   //     using var serviceProvider = services.BuildServiceProvider();
+   //     var cacheOptions = serviceProvider.GetService<IOptions<CacheOptions>>()?.Value ?? new();
+   //     
+   //     options.Configuration = cacheOptions.RedisConnectionString;
+   //     options.InstanceName = cacheOptions.InstanceName;
+   // });
 
     return services;
 }

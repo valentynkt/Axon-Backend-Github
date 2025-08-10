@@ -59,7 +59,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         stopwatch.Stop();
 
         // Emit metrics
-        RequestValidationBehavior<TRequest, TResponse>.EmitMetrics(requestType, validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
+        RequestValidationBehavior<TRequest, TResponse>.EmitMetrics(validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
 
         if (!validationResult.IsValid)
         {
@@ -106,7 +106,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         return false;
     }
 
-    private static void EmitMetrics(string requestType, bool isValid, int errorCount, long elapsedMs)
+    private static void EmitMetrics(bool isValid, int errorCount, long elapsedMs)
     {
         var activity = Activity.Current;
         if (activity != null)

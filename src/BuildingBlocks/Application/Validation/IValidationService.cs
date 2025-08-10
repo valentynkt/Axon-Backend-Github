@@ -1,4 +1,4 @@
-using BuildingBlocks.Application.Abstractions.Validation;
+using BuildingBlocks.Application.Validation;
 
 namespace BuildingBlocks.Application.Validation;
 

@@ -114,4 +114,6 @@ public enum OutboxEventStatus
 public sealed record OutboxFailureInfo(
     Guid EntryId,
     string ErrorMessage,
-    DateTime FailedAt);
+    DateTime FailedAt,
+    DateTime? NextRetryAtUtc = null,
+    bool MoveToDeadLetter = false);

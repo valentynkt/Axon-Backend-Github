@@ -52,7 +52,7 @@ public sealed record ProcessMessageCommandEpic2 : DomainCommandBase<ProcessMessa
     }
 
     // Epic 5 RetryBehavior integration
-    public string? GetRetryPolicyName() => "StandardRetry";
+    public static string? GetRetryPolicyName() => "StandardRetry";
 
     // Epic 5 Cache invalidation integration
     public IEnumerable<string> GetCacheTagsToInvalidate() 
