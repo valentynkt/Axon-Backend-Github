@@ -1,5 +1,6 @@
 using BuildingBlocks.Application.Events.Collecting;
 using BuildingBlocks.Application.Events.Dispatching;
+using BuildingBlocks.Application.Events.Enveloping;
 using BuildingBlocks.Application.Events.Mapping;
 using BuildingBlocks.Application.Events.Notifications;
 using BuildingBlocks.Application.Events.Publishing;
@@ -26,6 +27,8 @@ public static class ApplicationEventingRegistration
     /// </summary>
     public static IServiceCollection AddIntegrationEventPipeline(this IServiceCollection services)
     {
+        services.TryAddSingleton<IEnvelopeContextAccessor, AsyncLocalEnvelopeContextAccessor>();
+
         // Publisher port (Application default – Infra should override)
         services.TryAddScoped<IIntegrationEventPublisher, NoOpIntegrationEventPublisher>();
 

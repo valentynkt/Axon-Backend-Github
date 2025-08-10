@@ -142,7 +142,7 @@ public static class RailwayExtensions
 
         try
         {
-            var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
+            using var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
             var tasks = operationsList.Select(async operation =>
             {
                 await semaphore.WaitAsync(cancellationToken);
@@ -188,7 +188,7 @@ public static class RailwayExtensions
 
         try
         {
-            var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
+            using var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
             var tasks = operationsList.Select(async operation =>
             {
                 await semaphore.WaitAsync(cancellationToken);
@@ -233,7 +233,7 @@ public static class RailwayExtensions
         try
         {
             var results = new ConcurrentBag<T>();
-            var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
+            using var semaphore = new SemaphoreSlim(actualMaxDegree, actualMaxDegree);
 
             var tasks = operationsList.Select(async operation =>
             {

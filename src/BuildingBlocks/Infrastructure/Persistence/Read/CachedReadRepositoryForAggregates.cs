@@ -15,7 +15,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 /// </summary>
 public class CachedReadRepositoryForAggregates<TAggregate, TId> : CacheManagerBase<TAggregate, TId>, IReadRepository<TAggregate, TId>
     where TAggregate : class
-    where TId : notnull
+    where TId : IStrongId
 {
     private readonly IReadRepository<TAggregate, TId> _inner;
 

@@ -1,9 +1,11 @@
 using System.Reflection;
+using BuildingBlocks.Application.Events.Publishing;
 using BuildingBlocks.Infrastructure.Messaging.MassTransit;
 using MassTransit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace BuildingBlocks.Web.Extensions;
@@ -19,21 +21,23 @@ public static class MassTransitExtensions
     {
         services.AddValidateOptions<RabbitMqOptions>();
 
+        // Swap out the Application NoOp publisher with MassTransit-backed publisher
+        services.RemoveAll<IIntegrationEventPublisher>();
+        services.AddSingleton<IIntegrationEventPublisher, MassTransitIntegrationEventPublisher>();
+
         if (env.IsEnvironment("test"))
         {
-            services.AddMassTransitTestHarness(
-                configure =>
-                {
-                    SetupMasstransitConfigurations(services, configure, transportType, assembly);
-                });
+            services.AddMassTransitTestHarness(cfg =>
+            {
+                SetupMasstransitConfigurations(services, cfg, transportType, assembly);
+            });
         }
         else
         {
-            services.AddMassTransit(
-                configure =>
-                {
-                    SetupMasstransitConfigurations(services, configure, transportType, assembly);
-                });
+            services.AddMassTransit(cfg =>
+            {
+                SetupMasstransitConfigurations(services, cfg, transportType, assembly);
+            });
         }
 
         return services;
@@ -46,6 +50,9 @@ public static class MassTransitExtensions
         params Assembly[] assembly
     )
     {
+        // Optional but nice: clean endpoint names
+        configure.SetKebabCaseEndpointNameFormatter();
+
         configure.AddConsumers(assembly);
         configure.AddSagaStateMachines(assembly);
         configure.AddSagas(assembly);
@@ -54,65 +61,58 @@ public static class MassTransitExtensions
         switch (transportType)
         {
             case TransportType.RabbitMq:
-                configure.UsingRabbitMq(
-                    (context, configurator) =>
+                configure.UsingRabbitMq((context, bus) =>
+                {
+                    var configuration = context.GetRequiredService<IConfiguration>();
+                    var aspire = configuration.GetConnectionString("rabbitmq");
+
+                    if (!string.IsNullOrEmpty(aspire))
                     {
-                        var configuration = context.GetRequiredService<IConfiguration>();
+                        bus.Host(new Uri(aspire));
+                    }
+                    else
+                    {
+                        var rabbit = services.GetOptions<RabbitMqOptions>(nameof(RabbitMqOptions));
+                        ArgumentNullException.ThrowIfNull(rabbit);
 
-                        var aspireConnectionString = configuration.GetConnectionString("rabbitmq");
-
-                        if (!string.IsNullOrEmpty(aspireConnectionString))
+                        bus.Host(rabbit.HostName, rabbit.Port ?? 5672, "/", h =>
                         {
-                            configurator.Host(new Uri(aspireConnectionString));
-                        }
-                        else
-                        {
-                            var rabbitMqOptions = services.GetOptions<RabbitMqOptions>(nameof(RabbitMqOptions));
+                            h.Username(rabbit.UserName ?? "guest");
+                            h.Password(rabbit.Password ?? "guest");
+                        });
+                    }
 
-                            ArgumentNullException.ThrowIfNull(rabbitMqOptions);
+                    // Optional: consumer-side idempotent publish
+                    bus.UseInMemoryOutbox();
 
-                            configurator.Host(
-                                rabbitMqOptions?.HostName,
-                                rabbitMqOptions?.Port ?? 5672,
-                                "/",
-                                h =>
-                                {
-                                    h.Username(rabbitMqOptions?.UserName ?? "guest");
-                                    h.Password(rabbitMqOptions?.Password ?? "guest");
-                                });
-                        }
-
-                        configurator.ConfigureEndpoints(context);
-
-                        configurator.UseMessageRetry(AddRetryConfiguration);
-                    });
-
+                    bus.ConfigureEndpoints(context);
+                    bus.UseMessageRetry(AddRetryConfiguration);
+                });
                 break;
+
             case TransportType.InMemory:
-                configure.UsingInMemory(
-                    (context, configurator) =>
-                    {
-                        configurator.ConfigureEndpoints(context);
-                        configurator.UseMessageRetry(AddRetryConfiguration);
-                    });
+                configure.UsingInMemory((context, bus) =>
+                {
+                    // Optional: consumer-side idempotent publish
+                    bus.UseInMemoryOutbox();
 
+                    bus.ConfigureEndpoints(context);
+                    bus.UseMessageRetry(AddRetryConfiguration);
+                });
                 break;
+
             default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(transportType),
-                    transportType,
-                    message: null);
+                throw new ArgumentOutOfRangeException(nameof(transportType), transportType, null);
         }
     }
 
-    private static void AddRetryConfiguration(IRetryConfigurator retryConfigurator)
+    private static void AddRetryConfiguration(IRetryConfigurator r)
     {
-        retryConfigurator.Exponential(
+        r.Exponential(
                 3,
                 TimeSpan.FromMilliseconds(200),
                 TimeSpan.FromMinutes(120),
                 TimeSpan.FromMilliseconds(200))
-            .Ignore<
-                ValidationException>(); // don't retry if we have invalid data and message goes to _error queue masstransit
+         .Ignore<ValidationException>();
     }
 }

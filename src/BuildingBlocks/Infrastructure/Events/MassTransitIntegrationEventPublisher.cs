@@ -1,50 +1,52 @@
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using MassTransit;
-using Microsoft.Extensions.Logging;
+using BuildingBlocks.Application.Events.Enveloping;
 using BuildingBlocks.Application.Events.Publishing;
 using BuildingBlocks.Core.Abstractions.Events;
+using MassTransit;
 
-namespace BuildingBlocks.Infrastructure.Events;
+namespace BuildingBlocks.Infrastructure.Messaging.MassTransit;
 
-/// <summary>
-/// MassTransit-backed publisher for integration events.
-/// KISS: just iterate and publish. Reliability is handled by MassTransit's EF Outbox.
-/// </summary>
 public sealed class MassTransitIntegrationEventPublisher : IIntegrationEventPublisher
 {
-    private readonly IPublishEndpoint _publishEndpoint;
-    private readonly ILogger<MassTransitIntegrationEventPublisher> _logger;
+    private readonly IPublishEndpoint _publish;
+    private readonly IEnvelopeContextAccessor _ctx;
 
-    public MassTransitIntegrationEventPublisher(
-        IPublishEndpoint publishEndpoint,
-        ILogger<MassTransitIntegrationEventPublisher> logger)
+    public MassTransitIntegrationEventPublisher(IPublishEndpoint publish, IEnvelopeContextAccessor ctx)
     {
-        _publishEndpoint = publishEndpoint ?? throw new ArgumentNullException(nameof(publishEndpoint));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _publish = publish ?? throw new ArgumentNullException(nameof(publish));
+        _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
     }
 
     public async Task PublishAsync(IEnumerable<IIntegrationEvent> events, CancellationToken ct = default)
     {
         if (events is null) return;
 
-        var tasks = new List<Task>(8);
+        var meta = _ctx.Current;
+
         foreach (var e in events)
         {
-            if (e is null) continue;
+            await _publish.Publish(e, send =>
+            {
+                if (meta is null) return;
 
-            // Publish as the concrete runtime type so routing/topology works naturally.
-            tasks.Add(_publishEndpoint.Publish(e, e.GetType(), ct));
+                if (!string.IsNullOrWhiteSpace(meta.TraceId))
+                    send.Headers.Set("trace-id", meta.TraceId);
+
+                if (meta.RequestId.HasValue)
+                    send.Headers.Set("request-id", meta.RequestId.Value);
+
+                if (!string.IsNullOrWhiteSpace(meta.TenantId))
+                    send.Headers.Set("tenant-id", meta.TenantId);
+
+                if (meta.Metadata is not null)
+                    foreach (var (k, v) in meta.Metadata)
+                        if (v is not null) send.Headers.Set(k, v);
+
+                if (meta.OutboxEntryId != Guid.Empty)
+                    send.Headers.Set("outbox-entry-id", meta.OutboxEntryId);
+
+                if (meta.TransactionId != Guid.Empty)
+                    send.Headers.Set("transaction-id", meta.TransactionId);
+            }, ct);
         }
-
-        if (tasks.Count == 0)
-        {
-            _logger.LogDebug("No integration events to publish.");
-            return;
-        }
-
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-        _logger.LogDebug("Published {Count} integration event(s) via MassTransit.", tasks.Count);
     }
 }
