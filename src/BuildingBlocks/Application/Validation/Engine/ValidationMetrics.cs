@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using BuildingBlocks.Application.Abstractions.Validation;
+using BuildingBlocks.Application.Validation;
 
 namespace BuildingBlocks.Application.Validation;
 

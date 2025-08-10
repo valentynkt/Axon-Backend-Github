@@ -1,5 +1,5 @@
 using System.Data;
-using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Functional.Results;

@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using Microsoft.EntityFrameworkCore;
 

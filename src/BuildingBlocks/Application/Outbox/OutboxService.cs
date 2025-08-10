@@ -1,17 +1,20 @@
 using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Infrastructure.Outbox;
-using BuildingBlocks.Application.Events;
+using BuildingBlocks.Application.Events.Dispatching;
+using BuildingBlocks.Application.Events.Serialization;
+using BuildingBlocks.Application.Events.Enveloping;
+using BuildingBlocks.Application.Outbox.Retry;
+using BuildingBlocks.Application.Outbox.Monitoring;
 
 namespace BuildingBlocks.Application.Outbox;
 
 /// <summary>
 /// Service implementation for managing outbox entries and reliable event publishing.
 /// Provides atomic event storage and reliable processing with comprehensive error handling.
+/// Uses Application layer DTOs and ports only - no Infrastructure dependencies.
 /// </summary>
 public sealed class OutboxService : IOutboxService
 {
@@ -19,23 +22,29 @@ public sealed class OutboxService : IOutboxService
     private readonly IEventDispatcher _eventDispatcher;
     private readonly ILogger<OutboxService> _logger;
     private readonly OutboxOptions _options;
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false
-    };
+    private readonly IEventSerializer _serializer;
+    private readonly IEnvelopeContextAccessor _contextAccessor;
+    private readonly IOutboxBackoffPolicy _backoffPolicy;
+    private readonly IOutboxMetrics _metrics;
 
     public OutboxService(
         IOutboxRepository repository,
         IEventDispatcher eventDispatcher,
         ILogger<OutboxService> logger,
-        IOptions<OutboxOptions> options)
+        IOptions<OutboxOptions> options,
+        IEventSerializer serializer,
+        IEnvelopeContextAccessor contextAccessor,
+        IOutboxBackoffPolicy backoffPolicy,
+        IOutboxMetrics metrics)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        _contextAccessor = contextAccessor ?? throw new ArgumentNullException(nameof(contextAccessor));
+        _backoffPolicy = backoffPolicy ?? throw new ArgumentNullException(nameof(backoffPolicy));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
     }
 
     public async Task<Result<int>> StoreEventsAsync(
@@ -54,34 +63,19 @@ public sealed class OutboxService : IOutboxService
                 return Result<int>.Success(0);
             }
 
-            var serializedMetadata = metadata?.Any() == true 
-                ? JsonSerializer.Serialize(metadata, SerializerOptions) 
-                : null;
-
-            var outboxEntries = events.Select(domainEvent =>
-            {
-                var eventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), SerializerOptions);
-                var eventType = domainEvent.GetType().AssemblyQualifiedName 
-                    ?? throw new InvalidOperationException($"Could not get assembly qualified name for event type {domainEvent.GetType().FullName}");
-
-                return new OutboxEntry(
-                    OutboxEntryId.New(),
-                    transactionId,
-                    eventType,
-                    eventData,
-                    traceId,
-                    requestId,
-                    metadata?.GetValueOrDefault("TenantId")?.ToString(),
-                    serializedMetadata);
-            }).ToList();
-
-            await _repository.AddAsync(outboxEntries, cancellationToken);
+            var eventsStored = await _repository.AddEventsAsync(
+                events,
+                transactionId,
+                traceId,
+                requestId,
+                metadata,
+                cancellationToken);
 
             _logger.LogDebug(
                 "Stored {EventCount} events in outbox for transaction {TransactionId} (Trace: {TraceId})",
-                events.Count, transactionId, traceId);
+                eventsStored, transactionId, traceId);
 
-            return Result<int>.Success(events.Count);
+            return Result<int>.Success(eventsStored);
         }
         catch (Exception ex)
         {
@@ -173,6 +167,9 @@ public sealed class OutboxService : IOutboxService
                 _options.ProcessingTimeoutMinutes,
                 cancellationToken: cancellationToken);
 
+            // Record fetch metrics
+            _metrics.RecordFetched(entries.Count);
+
             if (!entries.Any())
             {
                 _logger.LogDebug("No pending outbox events found for processing");
@@ -190,6 +187,9 @@ public sealed class OutboxService : IOutboxService
             var stopwatch = Stopwatch.StartNew();
             var result = await ProcessEntries(entries, cancellationToken);
             stopwatch.Stop();
+
+            // Record processing metrics
+            _metrics.RecordProcessed(result.ProcessedCount, result.SuccessfulCount, result.FailedCount, result.MovedToDeadLetterCount, stopwatch.Elapsed);
 
             activity?.SetTag("entries.processed", result.ProcessedCount);
             activity?.SetTag("entries.successful", result.SuccessfulCount);
@@ -278,19 +278,19 @@ public sealed class OutboxService : IOutboxService
     }
 
     public async Task<Result<OutboxProcessingResult>> ReprocessDeadLetterEventsAsync(
-        IReadOnlyList<OutboxEntryId>? entryIds = null,
+        IReadOnlyList<Guid>? entryIds = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             using var activity = Activity.Current?.Source.StartActivity("ReprocessDeadLetterEvents");
 
-            IReadOnlyList<OutboxEntry> entries;
+            IReadOnlyList<OutboxEventEntry> entries;
 
             if (entryIds?.Any() == true)
             {
                 entries = await _repository.GetByIdsAsync(entryIds, cancellationToken);
-                entries = entries.Where(e => e.Status == OutboxEntryStatus.DeadLetter).ToList();
+                entries = entries.Where(e => e.Status == OutboxEventStatus.DeadLetter).ToList();
             }
             else
             {
@@ -310,14 +310,14 @@ public sealed class OutboxService : IOutboxService
             }
 
             // Reset dead letter entries to pending status
-            foreach (var entry in entries)
-            {
-                entry.ResetToPending();
-            }
-
-            await _repository.UpdateBatchAsync(entries, cancellationToken);
+            await _repository.ResetDeadLetterToPendingAsync(entryIds, cancellationToken);
 
             _logger.LogInformation("Reprocessing {EntryCount} dead letter outbox events", entries.Count);
+
+            // Re-fetch entries after reset to get updated status
+            entries = entryIds?.Any() == true
+                ? await _repository.GetByIdsAsync(entryIds, cancellationToken)
+                : await _repository.GetPendingAsync(_options.BatchSize, _options.ProcessingTimeoutMinutes, cancellationToken: cancellationToken);
 
             var stopwatch = Stopwatch.StartNew();
             var result = await ProcessEntries(entries, cancellationToken);
@@ -340,182 +340,149 @@ public sealed class OutboxService : IOutboxService
     }
 
     private async Task<OutboxProcessingResult> ProcessEntries(
-        IReadOnlyList<OutboxEntry> entries,
+        IReadOnlyList<OutboxEventEntry> entries,
         CancellationToken cancellationToken)
     {
-        var processedCount = 0;
-        var successfulCount = 0;
-        var failedCount = 0;
-        var movedToDeadLetterCount = 0;
-        var errors = new List<OutboxProcessingError>();
-
-        // Process entries with controlled concurrency
-        using var semaphore = new SemaphoreSlim(_options.MaxConcurrency, _options.MaxConcurrency);
-        
-        var processingTasks = entries.Select(async entry =>
+        if (!entries.Any())
         {
-            await semaphore.WaitAsync(cancellationToken);
+            return new OutboxProcessingResult(
+                ProcessedCount: 0,
+                SuccessfulCount: 0,
+                FailedCount: 0,
+                MovedToDeadLetterCount: 0,
+                ProcessingDuration: TimeSpan.Zero,
+                Errors: []);
+        }
+
+        // Mark all entries as processing
+        await _repository.MarkAsProcessingAsync(entries, cancellationToken);
+
+        var completed = new List<OutboxEventEntry>();
+        var failures = new List<OutboxFailureInfo>();
+
+        foreach (var entry in entries)
+        {
             try
             {
-                var result = await ProcessSingleEntry(entry, cancellationToken);
-                
-                Interlocked.Increment(ref processedCount);
-                
-                if (result.IsSuccess)
+                // Deserialize event using IEventSerializer
+                var eventType = Type.GetType(entry.EventType);
+                if (eventType == null)
                 {
-                    Interlocked.Increment(ref successfulCount);
+                    var errorMessage = $"Event type '{entry.EventType}' not found. Assembly may not be loaded.";
+                    failures.Add(new OutboxFailureInfo(entry.Id, errorMessage, DateTime.UtcNow));
+                    continue;
+                }
+
+                var domainEvent = _serializer.Deserialize(entry.EventData, eventType) as IDomainEvent;
+                if (domainEvent == null)
+                {
+                    var errorMessage = $"Failed to deserialize event of type '{entry.EventType}' or result is not IDomainEvent";
+                    failures.Add(new OutboxFailureInfo(entry.Id, errorMessage, DateTime.UtcNow));
+                    continue;
+                }
+
+                // Build context from outbox entry
+                var context = new IntegrationEnvelopeContext(
+                    TraceId: entry.TraceId,
+                    RequestId: entry.RequestId?.ToString(),
+                    TenantId: entry.TenantId,
+                    Metadata: DeserializeMetadata(entry.Metadata),
+                    OutboxEntryId: entry.Id,
+                    TransactionId: entry.TransactionId);
+
+                // Push context and dispatch event
+                using (_contextAccessor.Push(context))
+                {
+                    await _eventDispatcher.SendAsync([domainEvent], cancellationToken: cancellationToken);
+                }
+                
+                completed.Add(entry);
+
+                _logger.LogDebug(
+                    "Successfully processed outbox event {EntryId} of type {EventType}",
+                    entry.Id, entry.EventType);
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Exception processing outbox entry: {ex.Message}";
+                failures.Add(new OutboxFailureInfo(entry.Id, errorMessage, DateTime.UtcNow));
+
+                _logger.LogError(ex,
+                    "Exception occurred while processing outbox event {EntryId} of type {EventType}",
+                    entry.Id, entry.EventType);
+            }
+        }
+
+        // Bulk finalize status updates
+        if (completed.Count > 0)
+        {
+            await _repository.MarkAsCompletedAsync(completed, cancellationToken);
+        }
+
+        var movedToDeadLetterCount = 0;
+        if (failures.Count > 0)
+        {
+            // Compute backoff decisions for each failure using the policy
+            var computedFailures = new List<OutboxFailureInfo>();
+            foreach (var failure in failures)
+            {
+                var entry = entries.FirstOrDefault(e => e.Id == failure.EntryId);
+                if (entry != null)
+                {
+                    var decision = _backoffPolicy.Compute(entry.RetryCount, failure.FailedAt, _options);
+                    var computedFailure = failure with 
+                    { 
+                        NextRetryAtUtc = decision.NextRetryAtUtc,
+                        MoveToDeadLetter = decision.MoveToDeadLetter
+                    };
+                    computedFailures.Add(computedFailure);
+
+                    // Record metrics for backoff decisions
+                    if (decision.MoveToDeadLetter)
+                    {
+                        _metrics.RecordPermanentFailure();
+                        movedToDeadLetterCount++;
+                    }
+                    else if (decision.NextRetryAtUtc.HasValue)
+                    {
+                        var delay = decision.NextRetryAtUtc.Value - failure.FailedAt;
+                        _metrics.RecordRetryScheduled(delay);
+                    }
                 }
                 else
                 {
-                    Interlocked.Increment(ref failedCount);
-                    
-                    if (entry.Status == OutboxEventStatus.DeadLetter)
-                    {
-                        Interlocked.Increment(ref movedToDeadLetterCount);
-                    }
-
-                    lock (errors)
-                    {
-                        errors.Add(new OutboxProcessingError(
-                            entry.Id,
-                            entry.EventType,
-                            result.Error.Message,
-                            DateTime.UtcNow));
-                    }
+                    computedFailures.Add(failure);
                 }
             }
-            finally
-            {
-                semaphore.Release();
-            }
-        });
 
-        await Task.WhenAll(processingTasks);
+            await _repository.MarkAsFailedAsync(computedFailures, cancellationToken);
+        }
+
+        var errors = failures.Select(f => new OutboxProcessingError(
+            f.EntryId,
+            entries.FirstOrDefault(e => e.Id == f.EntryId)?.EventType ?? "Unknown",
+            f.ErrorMessage,
+            f.FailedAt)).ToList();
 
         return new OutboxProcessingResult(
-            ProcessedCount: processedCount,
-            SuccessfulCount: successfulCount,
-            FailedCount: failedCount,
+            ProcessedCount: entries.Count,
+            SuccessfulCount: completed.Count,
+            FailedCount: failures.Count,
             MovedToDeadLetterCount: movedToDeadLetterCount,
             ProcessingDuration: TimeSpan.Zero, // Will be set by caller
             Errors: errors);
     }
 
-    private async Task<Result> ProcessSingleEntry(OutboxEntry entry, CancellationToken cancellationToken)
+    private static IReadOnlyDictionary<string, object>? DeserializeMetadata(string? json)
     {
-        using var activity = Activity.Current?.Source.StartActivity("ProcessSingleOutboxEntry");
-        activity?.SetTag("entry.id", entry.Id.Value);
-        activity?.SetTag("entry.type", entry.EventType);
-        activity?.SetTag("entry.transaction_id", entry.TransactionId);
-        activity?.SetTag("entry.retry_count", entry.RetryCount);
-
+        if (string.IsNullOrWhiteSpace(json)) return null;
         try
         {
-            // Mark as processing
-            entry.MarkAsProcessing();
-            await _repository.UpdateAsync(entry, cancellationToken);
-
-            // Deserialize event
-            var eventType = Type.GetType(entry.EventType);
-            if (eventType == null)
-            {
-                var error = $"Event type '{entry.EventType}' not found. Assembly may not be loaded.";
-                entry.MoveToDeadLetter(error);
-                await _repository.UpdateAsync(entry, cancellationToken);
-
-                _logger.LogError(
-                    "Cannot deserialize outbox event {EntryId}: {Error}",
-                    entry.Id, error);
-
-                return Result.Failure(Error.Failure(error, "OUTBOX_EVENT_TYPE_NOT_FOUND"));
-            }
-
-            var domainEvent = (IDomainEvent?)JsonSerializer.Deserialize(entry.EventData, eventType, SerializerOptions);
-            if (domainEvent == null)
-            {
-                var error = "Failed to deserialize event data";
-                entry.MoveToDeadLetter(error);
-                await _repository.UpdateAsync(entry, cancellationToken);
-
-                _logger.LogError(
-                    "Cannot deserialize outbox event {EntryId} data for type {EventType}",
-                    entry.Id, entry.EventType);
-
-                return Result.Failure(Error.Failure(error, "OUTBOX_EVENT_DESERIALIZATION_FAILED"));
-            }
-
-            // Dispatch event
-            var dispatchResult = await _eventDispatcher.DispatchAsync([domainEvent], cancellationToken);
-
-            if (dispatchResult.IsSuccess)
-            {
-                entry.MarkAsCompleted();
-                await _repository.UpdateAsync(entry, cancellationToken);
-
-                _logger.LogDebug(
-                    "Successfully processed outbox event {EntryId} of type {EventType}",
-                    entry.Id, entry.EventType);
-
-                activity?.SetStatus(ActivityStatusCode.Ok);
-                return Result.Success();
-            }
-            else
-            {
-                // Mark as failed and potentially move to dead letter
-                var errorMessage = dispatchResult.Error.Message;
-                entry.MarkAsFailed(errorMessage, _options.BaseRetryDelayMinutes);
-
-                // Move to dead letter if max retries exceeded
-                if (entry.RetryCount >= _options.MaxRetries)
-                {
-                    entry.MoveToDeadLetter($"Max retries ({_options.MaxRetries}) exceeded. Last error: {errorMessage}");
-                    
-                    _logger.LogWarning(
-                        "Moved outbox event {EntryId} to dead letter after {RetryCount} retries. Type: {EventType}, Error: {Error}",
-                        entry.Id, entry.RetryCount, entry.EventType, errorMessage);
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "Failed to process outbox event {EntryId} (attempt {RetryCount}/{MaxRetries}). Type: {EventType}, Error: {Error}. Next retry at: {NextRetryAt}",
-                        entry.Id, entry.RetryCount, _options.MaxRetries, entry.EventType, errorMessage, entry.NextRetryAt);
-                }
-
-                await _repository.UpdateAsync(entry, cancellationToken);
-
-                activity?.SetStatus(ActivityStatusCode.Error, errorMessage);
-                return dispatchResult;
-            }
+            return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception occurred while processing outbox event {EntryId} of type {EventType}",
-                entry.Id, entry.EventType);
-
-            try
-            {
-                // Mark as failed
-                entry.MarkAsFailed(ex.Message, _options.BaseRetryDelayMinutes);
-
-                if (entry.RetryCount >= _options.MaxRetries)
-                {
-                    entry.MoveToDeadLetter($"Max retries exceeded due to exception: {ex.Message}");
-                }
-
-                await _repository.UpdateAsync(entry, cancellationToken);
-            }
-            catch (Exception updateEx)
-            {
-                _logger.LogError(updateEx,
-                    "Failed to update outbox entry {EntryId} status after processing exception",
-                    entry.Id);
-            }
-
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddException(ex);
-
-            return Result.Failure(Error.Failure($"Exception processing outbox entry: {ex.Message}", "OUTBOX_PROCESSING_EXCEPTION", ex));
+        catch 
+        { 
+            return null; 
         }
     }
 }

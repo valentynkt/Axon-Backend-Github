@@ -6,7 +6,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Application.Validation;
 
 using System.Diagnostics;
-using BuildingBlocks.Application.Abstractions.Validation;
+using BuildingBlocks.Application.Validation;
 
 namespace BuildingBlocks.Application.Behaviors;
 

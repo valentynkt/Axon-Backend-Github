@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 
 using BuildingBlocks.Core.Domain.Primitives;

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Application.Abstractions.Persistence;
+using BuildingBlocks.Application;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Common;
 

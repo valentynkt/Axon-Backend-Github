@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Abstractions.Events;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Application.Events;
+using BuildingBlocks.Application.Events.Dispatching;
 
 namespace BuildingBlocks.Infrastructure.Events;
 

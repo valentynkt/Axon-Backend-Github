@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Transactions;
-using BuildingBlocks.Application.Events;
+using BuildingBlocks.Application.Events.Dispatching;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
 using BuildingBlocks.Infrastructure.Resilience;
