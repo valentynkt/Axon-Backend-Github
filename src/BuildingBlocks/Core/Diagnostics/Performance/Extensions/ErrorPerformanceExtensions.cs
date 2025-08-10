@@ -167,8 +167,6 @@ public static class ErrorPerformanceExtensions
             
             options.ErrorFactoryOptions.MaxCacheSize = 100;
             options.ErrorFactoryOptions.EnableBuilderCaching = true;
-            
-            options.AggregatorOptions.AggregationIntervalMs = 500;
             options.AggregatorOptions.CleanupIntervalMinutes = 2;
             options.AggregatorOptions.MaxRecentErrors = 200;
             options.AggregatorOptions.EnableAutoGrouping = true;
@@ -201,8 +199,6 @@ public static class ErrorPerformanceExtensions
             options.ErrorFactoryOptions.MaxCacheSize = 2000;
             options.ErrorFactoryOptions.MaxInternedStrings = 5000;
             options.ErrorFactoryOptions.EnableServiceMetadata = true;
-            
-            options.AggregatorOptions.AggregationIntervalMs = 2000;
             options.AggregatorOptions.CleanupIntervalMinutes = 10;
             options.AggregatorOptions.MaxRecentErrors = 5000;
             options.AggregatorOptions.MaxPendingErrors = 20000;
@@ -237,8 +233,6 @@ public static class ErrorPerformanceExtensions
             options.ErrorFactoryOptions.MaxCacheSize = 5000;
             options.ErrorFactoryOptions.MaxInternedStrings = 10000;
             options.ErrorFactoryOptions.MaxInternLength = 500;
-            
-            options.AggregatorOptions.AggregationIntervalMs = 500;
             options.AggregatorOptions.MaxBatchSize = 500;
             options.AggregatorOptions.MaxPendingErrors = 50000;
             options.AggregatorOptions.MaxRecentErrors = 10000;
@@ -300,8 +294,7 @@ public static class ErrorPerformanceExtensions
     {
         if (source.AggregatorOptions == null) return;
         
-        target.AggregationIntervalMs = source.AggregatorOptions.AggregationIntervalMs;
-        target.CleanupIntervalMinutes = source.AggregatorOptions.CleanupIntervalMinutes;
+target.CleanupIntervalMinutes = source.AggregatorOptions.CleanupIntervalMinutes;
         target.MaxErrorSamples = source.AggregatorOptions.MaxErrorSamples;
         target.MaxRecentErrors = source.AggregatorOptions.MaxRecentErrors;
         target.MaxPendingErrors = source.AggregatorOptions.MaxPendingErrors;

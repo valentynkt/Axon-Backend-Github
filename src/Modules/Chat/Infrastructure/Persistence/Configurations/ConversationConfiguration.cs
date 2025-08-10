@@ -1,135 +1,92 @@
-using Axon.Modules.Chat.Domain.Conversation;
-using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Axon.Modules.Chat.Domain.Aggregates;
+using Axon.Modules.Chat.Domain.ValueObjects;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// EF Core configuration for Conversation aggregate following SPARC architecture patterns
-/// Implements backing fields mapping, PostgreSQL optimizations, and snake_case naming
+/// EF Core configuration for the Conversation aggregate.
+/// Configures unique constraints, indexes, and optimistic concurrency.
 /// </summary>
 public sealed class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 {
     public void Configure(EntityTypeBuilder<Conversation> builder)
     {
-        // Table configuration with snake_case naming
-        builder.ToTable("conversations");
-        
-        // Primary key with ConversationId conversion as specified in SPARC
+        builder.ToTable("Conversations", "chat");
+
+        // Primary key
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Id)
             .HasConversion(
-                v => v.Value,
-                v => ConversationId.From(v))
-            .ValueGeneratedNever()
-            .HasColumnName("id");
+                id => id.Value,
+                value => ConversationId.From(value))
+            .IsRequired();
 
-        // Title property configuration
-        builder.Property(c => c.Title)
-            .IsRequired()
-            .HasMaxLength(500)
-            .HasColumnName("title")
-            .HasColumnType("varchar(500)");
+        // Owner relationship
+        builder.Property(c => c.OwnerId)
+            .HasConversion(
+                id => id.Value,
+                value => UserId.From(value))
+            .IsRequired();
+        builder.HasIndex(c => c.OwnerId);
 
-        // UserId property configuration for conversation ownership
-        builder.Property(c => c.UserId)
-            .IsRequired()
-            .HasMaxLength(100)
-            .HasColumnName("user_id")
-            .HasColumnType("varchar(100)");
-
-        // Status property with enum to string conversion
+        // Status
         builder.Property(c => c.Status)
-            .IsRequired()
             .HasConversion<string>()
-            .HasMaxLength(50)
-            .HasColumnName("status")
-            .HasColumnType("varchar(50)");
+            .HasMaxLength(20)
+            .IsRequired();
 
-        // CompletedAt nullable timestamp as specified in SPARC
-        builder.Property(c => c.CompletedAt)
-            .HasColumnName("completed_at")
-            .HasColumnType("timestamptz");
-        
-        
-        // Performance indexes and check constraints as specified in SPARC
-        ConfigureIndexes(builder);
-        ConfigureCheckConstraints(builder);
+        // Title value object
+        builder.OwnsOne(c => c.Title, title =>
+        {
+            title.Property(t => t.Value)
+                .HasColumnName("Title")
+                .HasMaxLength(200)
+                .IsRequired();
+        });
 
-        // Configure domain events (ignore for persistence)
+        // Title metadata
+        builder.Property(c => c.IsDefaultTitle)
+            .IsRequired();
+
+        // Tracking fields
+        builder.Property(c => c.MessagesCount)
+            .IsRequired();
+
+        builder.Property(c => c.LastAuthor)
+            .HasConversion(
+                role => role != null ? role.Value : null,
+                value => value != null ? MessageRole.FromString(value).Value : null)
+            .HasMaxLength(20);
+
+        builder.Property(c => c.NextSequence)
+            .IsRequired();
+
+        // Temporal fields
+        builder.Property(c => c.CreatedAt)
+            .IsRequired();
+
+        builder.Property(c => c.UpdatedAt)
+            .IsRequired();
+
+        // Optimistic concurrency control using Version from AggregateRoot
+        builder.Property(c => c.Version)
+            .IsConcurrencyToken()
+            .IsRequired();
+
+        // Messages relationship
+        builder.HasMany(c => c.Messages)
+            .WithOne()
+            .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Indexes for performance
+        builder.HasIndex(c => c.Status);
+        builder.HasIndex(c => new { c.OwnerId, c.Status });
+        builder.HasIndex(c => c.CreatedAt);
+
+        // Ignore domain events (handled separately)
         builder.Ignore(c => c.DomainEvents);
-
-        // Explicitly ignore the private _messages collection to prevent EF Core auto-detection
-        builder.Ignore("_messages");
-        
-        // Ignore MessagesOrdered property to prevent navigation inference
-        builder.Ignore(c => c.MessagesOrdered);
-        
-        // Audit fields are configured automatically via backing fields pattern in ChatDbContext
-        // No need to configure them here as the global configuration handles IAuditable entities
-    }
-
-    /// <summary>
-    /// Configure performance indexes for conversation queries
-    /// Following SPARC PostgreSQL optimization patterns
-    /// </summary>
-    private static void ConfigureIndexes(EntityTypeBuilder<Conversation> builder)
-    {
-        // Primary index for status queries (most common)
-        builder.HasIndex(c => c.Status)
-            .HasDatabaseName("ix_conversations_status")
-            .HasFilter("status IN ('Active', 'Completed')");
-
-        // Index for user conversations with status filter
-        builder.HasIndex(c => new { c.UserId, c.Status })
-            .HasDatabaseName("ix_conversations_user_id_status")
-            .HasFilter("status = 'Active'");
-
-        // Composite index for completion queries with performance optimization
-        builder.HasIndex(c => new { c.Status, c.CompletedAt })
-            .HasDatabaseName("ix_conversations_status_completed_at")
-            .HasFilter("completed_at IS NOT NULL");
-
-        // Audit field indexes for temporal queries
-        builder.HasIndex("_createdAtUtc")
-            .HasDatabaseName("ix_conversations_created_at_utc");
-
-        builder.HasIndex("_updatedAtUtc")
-            .HasDatabaseName("ix_conversations_updated_at_utc");
-
-        // Composite index for user activity tracking
-        builder.HasIndex(nameof(Conversation.UserId), "_createdAtUtc")
-            .HasDatabaseName("ix_conversations_user_id_created_at");
-
-        // Index for title searches (supporting LIKE queries)
-        builder.HasIndex(c => c.Title)
-            .HasDatabaseName("ix_conversations_title")
-            .HasMethod("gin")
-            .HasOperators("gin_trgm_ops");
-
-        // Note: xmin system column doesn't need explicit indexing - it's automatically indexed by PostgreSQL
-    }
-
-    /// <summary>
-    /// Configure check constraints as specified in SPARC
-    /// </summary>
-    private static void ConfigureCheckConstraints(EntityTypeBuilder<Conversation> builder)
-    {
-        // Check constraint for valid status values
-        builder.HasCheckConstraint("ck_conversations_status_valid",
-            "status IN ('Active', 'Completed', 'Archived')");
-
-        // Check constraint for title length and content
-        builder.HasCheckConstraint("ck_conversations_title_valid",
-            "title IS NOT NULL AND LENGTH(TRIM(title)) > 0 AND LENGTH(title) <= 500");
-
-        // Check constraint for completed_at logic
-        builder.HasCheckConstraint("ck_conversations_completed_at_logic",
-            "(status = 'Active' AND completed_at IS NULL) OR (status IN ('Completed', 'Archived') AND completed_at IS NOT NULL)");
-
-        // Check constraint for audit fields
-        builder.HasCheckConstraint("ck_conversations_audit_valid",
-            "created_at_utc IS NOT NULL AND updated_at_utc IS NOT NULL AND updated_at_utc >= created_at_utc");
     }
 }

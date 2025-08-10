@@ -41,9 +41,9 @@ public sealed class DefaultEnvelopeHeaderPolicy : IEnvelopeHeaderPolicy
         {
             headers[IntegrationEventHeaders.CorrelationId] = context!.TraceId!;
         }
-        else if (context?.RequestId is string requestId && !string.IsNullOrWhiteSpace(requestId))
+        else if (context?.RequestId is { } requestId && requestId != Guid.Empty)
         {
-            headers[IntegrationEventHeaders.CorrelationId] = requestId;
+            headers[IntegrationEventHeaders.CorrelationId] = requestId.ToString("D");
         }
 
         // Apply causation tracking (domain event that caused this integration event)
@@ -105,13 +105,11 @@ public sealed class DefaultEnvelopeHeaderPolicy : IEnvelopeHeaderPolicy
         {
             // Get payload hash (SHA256 of serialized JSON)
             var payloadHash = payloadHashProvider();
-            
+
             // Create deterministic key from type + payload
             var keyInput = $"{eventTypeName}|{payloadHash}";
-            
-            using var sha256 = SHA256.Create();
-            var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(keyInput));
-            
+            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyInput));
+
             // Use first 16 bytes (128-bit) as hex string for reasonable length
             return Convert.ToHexString(hashBytes[..16]);
         }

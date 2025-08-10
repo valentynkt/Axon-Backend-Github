@@ -16,12 +16,12 @@ public sealed class FluentValidationAdapter<T> : IAppValidator<T>
     }
 
     public ValidationResult Validate(T instance, IValidationContext? context = null)
-        => RunAsync(instance, context, CancellationToken.None, synchronous: true).GetAwaiter().GetResult();
+        => RunAsync(instance, synchronous: true, CancellationToken.None).GetAwaiter().GetResult();
 
     public Task<ValidationResult> ValidateAsync(T instance, IValidationContext? context = null, CancellationToken ct = default)
-        => RunAsync(instance, context, ct, synchronous: false);
+        => RunAsync(instance, synchronous: false, ct);
 
-    private async Task<ValidationResult> RunAsync(T instance, IValidationContext? ctx, CancellationToken ct, bool synchronous)
+    private async Task<ValidationResult> RunAsync(T instance, bool synchronous,  CancellationToken ct)
     {
         if (_validators.Count == 0) return ValidationResult.Success;
 

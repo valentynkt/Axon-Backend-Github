@@ -112,7 +112,6 @@ public sealed class DefaultInboundErrorClassifier : IInboundErrorClassifier
             // Database connection and timeout errors
             DbException dbEx => IsTransientDatabaseException(dbEx),
             
-s
             System.Net.NetworkInformation.PingException => true,
             
             // Out of memory (could be temporary)

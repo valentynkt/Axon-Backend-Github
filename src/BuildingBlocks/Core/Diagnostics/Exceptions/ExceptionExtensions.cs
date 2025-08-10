@@ -92,7 +92,7 @@ public static class ExceptionExtensions
                                               or HttpStatusCode.BadGateway
                                               or HttpStatusCode.ServiceUnavailable
                                               or null => true,
-            SocketException => true,
+            System.Net.Sockets.SocketException => true,
             System.Net.NetworkInformation.NetworkInformationException => true,
             _ => false
         };

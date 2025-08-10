@@ -6,32 +6,32 @@ namespace Axon.Modules.Chat.Domain.Tests.ValueObjects;
 [TestFixture]
 [Category("Unit")]
 [Category("Domain")]
-public sealed class ConversationIdTests
+public sealed class UserIdTests
 {
     #region New() Factory Method Tests
 
     [Test]
-    public void New_ShouldCreateUniqueConversationIds()
+    public void New_ShouldCreateUniqueUserIds()
     {
         // Arrange & Act
-        var conversationId1 = ConversationId.New();
-        var conversationId2 = ConversationId.New();
+        var userId1 = UserId.New();
+        var userId2 = UserId.New();
 
         // Assert
-        conversationId1.ShouldNotBe(conversationId2);
-        conversationId1.Value.ShouldNotBe(conversationId2.Value);
-        conversationId1.Value.ShouldNotBe(Guid.Empty);
-        conversationId2.Value.ShouldNotBe(Guid.Empty);
+        userId1.ShouldNotBe(userId2);
+        userId1.Value.ShouldNotBe(userId2.Value);
+        userId1.Value.ShouldNotBe(Guid.Empty);
+        userId2.Value.ShouldNotBe(Guid.Empty);
     }
 
     [Test]
     public void New_ShouldCreateNonEmptyGuids()
     {
         // Arrange & Act
-        var conversationId = ConversationId.New();
+        var userId = UserId.New();
 
         // Assert
-        conversationId.Value.ShouldNotBe(Guid.Empty);
+        userId.Value.ShouldNotBe(Guid.Empty);
     }
 
     #endregion
@@ -39,16 +39,16 @@ public sealed class ConversationIdTests
     #region From(Guid) Factory Method Tests
 
     [Test]
-    public void From_GivenValidGuid_ShouldReturnConversationIdWithCorrectValue()
+    public void From_GivenValidGuid_ShouldReturnUserIdWithCorrectValue()
     {
         // Arrange
         var validGuid = Guid.NewGuid();
 
         // Act
-        var conversationId = ConversationId.From(validGuid);
+        var userId = UserId.From(validGuid);
 
         // Assert
-        conversationId.Value.ShouldBe(validGuid);
+        userId.Value.ShouldBe(validGuid);
     }
 
     [Test]
@@ -58,8 +58,8 @@ public sealed class ConversationIdTests
         var emptyGuid = Guid.Empty;
 
         // Act & Assert
-        Should.Throw<ArgumentException>(() => ConversationId.From(emptyGuid))
-            .Message.ShouldContain("ConversationId cannot be empty GUID");
+        Should.Throw<ArgumentException>(() => UserId.From(emptyGuid))
+            .Message.ShouldContain("UserId cannot be empty GUID");
     }
 
     #endregion
@@ -74,7 +74,7 @@ public sealed class ConversationIdTests
         var guidString = guid.ToString();
 
         // Act
-        var result = ConversationId.FromString(guidString);
+        var result = UserId.FromString(guidString);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -89,7 +89,7 @@ public sealed class ConversationIdTests
         var guidString = guid.ToString("D"); // With dashes
 
         // Act
-        var result = ConversationId.FromString(guidString);
+        var result = UserId.FromString(guidString);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -104,7 +104,7 @@ public sealed class ConversationIdTests
         var guidString = guid.ToString("N"); // Without dashes
 
         // Act
-        var result = ConversationId.FromString(guidString);
+        var result = UserId.FromString(guidString);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -118,12 +118,12 @@ public sealed class ConversationIdTests
         var emptyString = string.Empty;
 
         // Act
-        var result = ConversationId.FromString(emptyString);
+        var result = UserId.FromString(emptyString);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("CHAT.ID.EMPTY");
-        result.Error.Message.ShouldBe("ConversationId cannot be empty.");
+        result.Error.Message.ShouldBe("UserId cannot be empty.");
         result.Error.Type.ShouldBe(ErrorType.Validation);
     }
 
@@ -134,12 +134,12 @@ public sealed class ConversationIdTests
         string nullString = null!;
 
         // Act
-        var result = ConversationId.FromString(nullString);
+        var result = UserId.FromString(nullString);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("CHAT.ID.EMPTY");
-        result.Error.Message.ShouldBe("ConversationId cannot be empty.");
+        result.Error.Message.ShouldBe("UserId cannot be empty.");
         result.Error.Type.ShouldBe(ErrorType.Validation);
     }
 
@@ -150,12 +150,12 @@ public sealed class ConversationIdTests
         var whitespaceString = "   ";
 
         // Act
-        var result = ConversationId.FromString(whitespaceString);
+        var result = UserId.FromString(whitespaceString);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("CHAT.ID.EMPTY");
-        result.Error.Message.ShouldBe("ConversationId cannot be empty.");
+        result.Error.Message.ShouldBe("UserId cannot be empty.");
         result.Error.Type.ShouldBe(ErrorType.Validation);
     }
 
@@ -166,12 +166,12 @@ public sealed class ConversationIdTests
         var invalidString = "not-a-guid";
 
         // Act
-        var result = ConversationId.FromString(invalidString);
+        var result = UserId.FromString(invalidString);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("CHAT.ID.INVALID_FORMAT");
-        result.Error.Message.ShouldBe("ConversationId has invalid format.");
+        result.Error.Message.ShouldBe("UserId has invalid format.");
         result.Error.Type.ShouldBe(ErrorType.Validation);
     }
 
@@ -182,12 +182,12 @@ public sealed class ConversationIdTests
         var emptyGuidString = Guid.Empty.ToString();
 
         // Act
-        var result = ConversationId.FromString(emptyGuidString);
+        var result = UserId.FromString(emptyGuidString);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("CHAT.ID.EMPTY");
-        result.Error.Message.ShouldBe("ConversationId cannot be empty GUID.");
+        result.Error.Message.ShouldBe("UserId cannot be empty GUID.");
         result.Error.Type.ShouldBe(ErrorType.Validation);
     }
 
@@ -198,12 +198,12 @@ public sealed class ConversationIdTests
         var partialGuid = "550e8400-e29b-41d4-a716-44665544000"; // Missing one character
 
         // Act
-        var result = ConversationId.FromString(partialGuid);
+        var result = UserId.FromString(partialGuid);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("CHAT.ID.INVALID_FORMAT");
-        result.Error.Message.ShouldBe("ConversationId has invalid format.");
+        result.Error.Message.ShouldBe("UserId has invalid format.");
         result.Error.Type.ShouldBe(ErrorType.Validation);
     }
 
@@ -216,26 +216,26 @@ public sealed class ConversationIdTests
     {
         // Arrange
         var guid = Guid.NewGuid();
-        var conversationId1 = ConversationId.From(guid);
-        var conversationId2 = ConversationId.From(guid);
+        var userId1 = UserId.From(guid);
+        var userId2 = UserId.From(guid);
 
         // Act & Assert
-        conversationId1.Equals(conversationId2).ShouldBeTrue();
-        (conversationId1 == conversationId2).ShouldBeTrue();
-        (conversationId1 != conversationId2).ShouldBeFalse();
+        userId1.Equals(userId2).ShouldBeTrue();
+        (userId1 == userId2).ShouldBeTrue();
+        (userId1 != userId2).ShouldBeFalse();
     }
 
     [Test]
     public void Equals_WithDifferentValues_ShouldReturnFalse()
     {
         // Arrange
-        var conversationId1 = ConversationId.New();
-        var conversationId2 = ConversationId.New();
+        var userId1 = UserId.New();
+        var userId2 = UserId.New();
 
         // Act & Assert
-        conversationId1.Equals(conversationId2).ShouldBeFalse();
-        (conversationId1 == conversationId2).ShouldBeFalse();
-        (conversationId1 != conversationId2).ShouldBeTrue();
+        userId1.Equals(userId2).ShouldBeFalse();
+        (userId1 == userId2).ShouldBeFalse();
+        (userId1 != userId2).ShouldBeTrue();
     }
 
     [Test]
@@ -243,11 +243,11 @@ public sealed class ConversationIdTests
     {
         // Arrange
         var guid = Guid.NewGuid();
-        var conversationId1 = ConversationId.From(guid);
-        var conversationId2 = ConversationId.From(guid);
+        var userId1 = UserId.From(guid);
+        var userId2 = UserId.From(guid);
 
         // Act & Assert
-        conversationId1.GetHashCode().ShouldBe(conversationId2.GetHashCode());
+        userId1.GetHashCode().ShouldBe(userId2.GetHashCode());
     }
 
     #endregion
@@ -259,10 +259,10 @@ public sealed class ConversationIdTests
     {
         // Arrange
         var guid = Guid.NewGuid();
-        var conversationId = ConversationId.From(guid);
+        var userId = UserId.From(guid);
 
         // Act
-        var result = conversationId.ToString();
+        var result = userId.ToString();
 
         // Assert
         result.ShouldBe(guid.ToString());
@@ -272,11 +272,11 @@ public sealed class ConversationIdTests
     public void ToString_RoundTrip_ShouldBeSuccessful()
     {
         // Arrange
-        var originalId = ConversationId.New();
+        var originalId = UserId.New();
         var stringRepresentation = originalId.ToString();
 
         // Act
-        var roundTripResult = ConversationId.FromString(stringRepresentation);
+        var roundTripResult = UserId.FromString(stringRepresentation);
 
         // Assert
         roundTripResult.IsSuccess.ShouldBeTrue();
@@ -288,10 +288,10 @@ public sealed class ConversationIdTests
     #region Domain Purity Tests
 
     [Test]
-    public void ConversationId_ShouldNotHaveJsonAttributes()
+    public void UserId_ShouldNotHaveJsonAttributes()
     {
         // Arrange & Act
-        var type = typeof(ConversationId);
+        var type = typeof(UserId);
         var attributes = type.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonConverterAttribute), false);
 
         // Assert
@@ -299,10 +299,10 @@ public sealed class ConversationIdTests
     }
 
     [Test]
-    public void ConversationId_ShouldNotHaveSystemTextJsonDependencies()
+    public void UserId_ShouldNotHaveSystemTextJsonDependencies()
     {
         // Arrange & Act
-        var type = typeof(ConversationId);
+        var type = typeof(UserId);
         var assembly = type.Assembly;
         var referencedAssemblies = assembly.GetReferencedAssemblies();
 
@@ -320,10 +320,10 @@ public sealed class ConversationIdTests
     {
         // Arrange
         var guid = Guid.NewGuid();
-        var conversationId = ConversationId.From(guid);
+        var userId = UserId.From(guid);
 
         // Act
-        Guid convertedGuid = conversationId;
+        Guid convertedGuid = userId;
 
         // Assert
         convertedGuid.ShouldBe(guid);

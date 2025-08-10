@@ -12,6 +12,7 @@ The **BuildingBlocks Application Layer** is a comprehensive set of cross-cutting
   - [Caching System](#caching-system)
   - [Event Handling](#event-handling)
   - [Outbox Pattern](#outbox-pattern)
+  - [Inbox Pattern](#inbox-pattern)
   - [Validation Framework](#validation-framework)
 - [Component Details](#component-details)
 - [Configuration](#configuration)
@@ -262,6 +263,111 @@ public class GetUserQuery : IQuery<Result<UserDto>> { }
 - `MaxConcurrency`: Parallel processing tasks
 - `ProcessingInterval`: Background check interval
 - `CompletedRetentionPeriod`: Cleanup after period
+
+### Inbox Pattern
+
+The Inbox pattern provides reliable inbound integration event processing with policy-driven retry and dead-letter handling. It ensures idempotent processing of external events while providing sophisticated error handling and observability.
+
+#### IInboundIntegrationEventDispatcher & InboundIntegrationEventDispatcher
+
+**Purpose**: Transport-neutral dispatcher for processing inbound integration events with retry and dead-letter capabilities.
+
+**Key Features**:
+- Type resolution and deserialization of integration events
+- Idempotency checking via `IInboxStore`
+- Policy-driven error classification and retry logic
+- Dead-letter handling for poison messages
+- Comprehensive metrics and observability
+- Transport-neutral design (no Kafka/MassTransit dependencies)
+
+**Processing Flow**:
+1. Extract idempotency key and check for duplicates
+2. Resolve event type and deserialize payload
+3. Execute registered handlers sequentially
+4. On failure: classify error → apply retry policy → dead-letter if needed
+
+#### IInboundErrorClassifier & DefaultInboundErrorClassifier
+
+**Purpose**: Classifies handler failures to determine appropriate error handling strategy.
+
+**Error Classifications**:
+- **Transient**: Network timeouts, database connection issues, HTTP 5xx errors
+- **Permanent**: Validation errors, argument exceptions, business rule violations
+- **Unclassified**: Unknown errors (configurable as permanent or transient)
+
+**Classification Examples**:
+```csharp
+// Permanent errors (immediate dead-letter)
+ArgumentException, InvalidOperationException, ValidationException
+
+// Transient errors (retry with backoff)
+TimeoutException, HttpRequestException, TaskCanceledException, DbException
+```
+
+#### IInboxRetryPolicy & DefaultInboxRetryPolicy
+
+**Purpose**: Computes retry delays and determines when to move messages to dead-letter.
+
+**Key Features**:
+- Exponential backoff with jitter (mirrors outbox semantics)
+- Configurable maximum attempts and delay caps
+- Message age validation (prevent processing stale messages)
+- Deterministic delay computation for consistent behavior
+
+**Retry Formula**:
+```
+delay = min(baseDelay * 2^attempt, maxDelay) ± jitter
+```
+
+#### IInboxDeadLetterStore & InboxDeadLetterEntry
+
+**Purpose**: Persistent storage for permanently failed messages with comprehensive forensic data.
+
+**Dead Letter Entry Contents**:
+- Original integration event envelope
+- Error message and stack trace
+- Processing attempt count and timing
+- Idempotency key for correlation
+
+**Storage Implementations**:
+- `NoOpInboxDeadLetterStore`: Logs entries but doesn't persist (default)
+- Infrastructure layer provides persistent implementations
+
+#### InboxOptions
+
+**Configuration**: Controls retry behavior, delays, and dead-letter handling.
+
+**Key Settings**:
+- `MaxAttempts`: Retry limit before dead-letter (default: 5)
+- `BaseDelay`: Initial retry delay (default: 5 seconds)
+- `MaxRetryDelay`: Maximum delay cap (default: 30 minutes)
+- `UseJitter`: Enable jitter to prevent thundering herd (default: true)
+- `JitterRatio`: Jitter percentage ±20% (default: 0.2)
+- `UnclassifiedIsPermanent`: Treat unknown errors as permanent (default: false)
+- `MaxMessageAge`: Stale message threshold (default: 7 days)
+
+**Configuration Example**:
+```csharp
+services.AddInboundIntegrationEventPipeline(options =>
+{
+    options.MaxAttempts = 3;
+    options.BaseDelay = TimeSpan.FromSeconds(10);
+    options.MaxRetryDelay = TimeSpan.FromMinutes(15);
+    options.UnclassifiedIsPermanent = true;
+});
+```
+
+#### Metrics Integration
+
+**Inbound Metrics** (extends `IOutboxMetrics`):
+- `RecordInboundRetryScheduled(TimeSpan delay)`: Retry scheduled with delay
+- `RecordInboundMovedToDeadLetter()`: Message moved to dead-letter
+- `RecordInboundPermanentFailure()`: Permanent failure occurred
+
+**Transport Integration**:
+- Uses `X-Delivery-Attempt` header for attempt tracking
+- Returns `HandlerFailed` result for retry/dead-letter decisions
+- Infrastructure layer maps results to transport-specific actions (NACK/ACK)
 
 ### Validation Framework
 

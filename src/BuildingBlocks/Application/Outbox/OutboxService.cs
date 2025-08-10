@@ -83,7 +83,7 @@ public sealed class OutboxService : IOutboxService
                 "Failed to store {EventCount} events in outbox for transaction {TransactionId}",
                 events.Count, transactionId);
 
-            return Result<int>.Failure(Error.Failure(
+            return Result<int>.Failure(Error.Persistence(
                 "Failed to store events in outbox",
                 "OUTBOX_STORE_FAILED",
                 ex));
@@ -134,7 +134,7 @@ public sealed class OutboxService : IOutboxService
                 "Failed to process pending events for transaction {TransactionId}",
                 transactionId);
 
-            return Result<OutboxProcessingResult>.Failure(Error.Failure(
+            return Result<OutboxProcessingResult>.Failure(Error.Internal(
                 "Failed to process transaction outbox events",
                 "OUTBOX_TRANSACTION_PROCESSING_FAILED",
                 ex));
@@ -206,7 +206,7 @@ public sealed class OutboxService : IOutboxService
         {
             _logger.LogError(ex, "Failed to process all pending outbox events");
 
-            return Result<OutboxProcessingResult>.Failure(Error.Failure(
+            return Result<OutboxProcessingResult>.Failure(Error.Internal(
                 "Failed to process pending outbox events",
                 "OUTBOX_PROCESSING_FAILED",
                 ex));
@@ -224,7 +224,7 @@ public sealed class OutboxService : IOutboxService
         {
             _logger.LogError(ex, "Failed to get outbox statistics");
 
-            return Result<OutboxStatistics>.Failure(Error.Failure(
+            return Result<OutboxStatistics>.Failure(Error.Internal(
                 "Failed to get outbox statistics",
                 "OUTBOX_STATISTICS_FAILED",
                 ex));
@@ -270,7 +270,7 @@ public sealed class OutboxService : IOutboxService
         {
             _logger.LogError(ex, "Failed to retry failed outbox events");
 
-            return Result<OutboxProcessingResult>.Failure(Error.Failure(
+            return Result<OutboxProcessingResult>.Failure(Error.Internal(
                 "Failed to retry failed outbox events",
                 "OUTBOX_RETRY_FAILED",
                 ex));
@@ -332,7 +332,7 @@ public sealed class OutboxService : IOutboxService
         {
             _logger.LogError(ex, "Failed to reprocess dead letter outbox events");
 
-            return Result<OutboxProcessingResult>.Failure(Error.Failure(
+            return Result<OutboxProcessingResult>.Failure(Error.Internal(
                 "Failed to reprocess dead letter events",
                 "OUTBOX_REPROCESS_FAILED",
                 ex));
