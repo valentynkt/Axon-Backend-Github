@@ -17,8 +17,8 @@ public sealed record PaginationMeta(
     public static PaginationMeta CreateWithTotals(
         long totalCount, int page, int pageSize, int currentPageSize, IReadOnlyDictionary<string, object>? metadata = null)
     {
-        if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
-        if (pageSize < 1) throw new ArgumentOutOfRangeException(nameof(pageSize));
+        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
 
         var totalPages = totalCount == 0 ? 0 : (totalCount + pageSize - 1) / pageSize;
         var hasPrev = page > 1;
@@ -36,8 +36,8 @@ public sealed record PaginationMeta(
     public static PaginationMeta CreateWithoutTotals(
         int page, int pageSize, int currentPageSize, bool hasNext, IReadOnlyDictionary<string, object>? metadata = null)
     {
-        if (page < 1) throw new ArgumentOutOfRangeException(nameof(page));
-        if (pageSize < 1) throw new ArgumentOutOfRangeException(nameof(pageSize));
+        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
 
         var hasPrev = page > 1;
         var (start, end) = currentPageSize == 0

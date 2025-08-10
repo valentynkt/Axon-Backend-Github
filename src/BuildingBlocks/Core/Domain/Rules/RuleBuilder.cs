@@ -83,7 +83,7 @@ public sealed class RuleBuilder
 
     /// <summary>Build a Validation result (Valid when no errors, otherwise Invalid with all errors).</summary>
     public Validation<Unit> Build()
-        => _errors.Count == 0 ? Validation<Unit>.Valid(Unit.Value) : Validation<Unit>.Invalid(_errors);
+        => _errors.Count == 0 ? Validation<Unit>.CreateValid(Unit.Value) : Validation<Unit>.CreateInvalid(_errors);
 
     /// <summary>Build a Result (returns first error or success).</summary>
     public Result<Unit> BuildResult()

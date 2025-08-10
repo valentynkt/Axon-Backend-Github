@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace BuildingBlocks.Application.Caching;
 
 /// <summary>
@@ -6,8 +9,8 @@ namespace BuildingBlocks.Application.Caching;
 /// </summary>
 public sealed class DefaultCacheKeyBuilder : ICacheKeyBuilder
 {
-    private const string QueryKeyFormat = "axon:query:{0}:{1}:{2}";
-    private const string FallbackKeyFormat = "axon:cache:{0}:v1:{1}";
+    private static readonly CompositeFormat QueryKeyComposite = CompositeFormat.Parse("axon:query:{0}:{1}:{2}");
+    private static readonly CompositeFormat FallbackKeyComposite = CompositeFormat.Parse("axon:cache:{0}:v1:{1}");
 
     public string BuildQueryKey(string prefix, string contentHash, string contextPart)
     {
@@ -15,7 +18,7 @@ public sealed class DefaultCacheKeyBuilder : ICacheKeyBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(contentHash);
         ArgumentException.ThrowIfNullOrWhiteSpace(contextPart);
 
-        return string.Format(QueryKeyFormat, prefix, contentHash, contextPart);
+        return string.Format(CultureInfo.InvariantCulture, QueryKeyComposite, prefix, contentHash, contextPart);
     }
 
     public string BuildFallbackKey(string typeName, string contentHash)
@@ -23,6 +26,6 @@ public sealed class DefaultCacheKeyBuilder : ICacheKeyBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(typeName);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentHash);
 
-        return string.Format(FallbackKeyFormat, typeName, contentHash);
+        return string.Format(CultureInfo.InvariantCulture, FallbackKeyComposite, typeName, contentHash);
     }
 }

@@ -208,8 +208,8 @@ public sealed partial record Email : SingleValueObject<string>
         }
         
         return errors.Count == 0 
-            ? Validation<Unit>.Valid(Unit.Value) 
-            : Validation<Unit>.Invalid(errors);
+            ? Validation.Valid(Unit.Value) 
+            : Validation.Invalid<Unit>(errors);
     }
     
     #endregion

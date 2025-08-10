@@ -47,10 +47,12 @@ public sealed class InvariantViolationException : DomainException
         InvariantName = info.GetString(nameof(InvariantName));
     }
     
+    #pragma warning disable SYSLIB0051
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
         base.GetObjectData(info, context);
         info.AddValue(nameof(AggregateType), AggregateType);
         info.AddValue(nameof(InvariantName), InvariantName);
     }
+    #pragma warning restore SYSLIB0051
 }

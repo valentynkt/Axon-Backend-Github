@@ -102,7 +102,10 @@ public sealed class ValidationContext : IValidationContext
 
             // Primitive/decimal
             if (typeof(T).IsPrimitive || typeof(T) == typeof(decimal))
-                return (T)Convert.ChangeType(value, typeof(T));
+            {
+                var converted = Convert.ChangeType(value, typeof(T));
+                return converted is not null ? (T)converted : default;
+            }
 
             // Fallback
             return default;

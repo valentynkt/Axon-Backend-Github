@@ -23,7 +23,7 @@ public abstract record SingleValueObject<T> : ValueObject
     /// Base implementation returns Valid; derived types should override if they
     /// want runtime re-validation (most enforce invariants in factories).
     /// </summary>
-    public override Validation<Unit> Validate() => Validation<Unit>.Valid(Unit.Value);
+    public override Validation<Unit> Validate() => Validation<Unit>.CreateValid(Unit.Value);
 
     public override string ToString() => Value?.ToString() ?? string.Empty;
 

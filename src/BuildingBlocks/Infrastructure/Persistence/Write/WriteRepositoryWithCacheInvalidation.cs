@@ -36,7 +36,6 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
         
         var result = await _inner.AddAsync(entity, cancellationToken);
         
-        // Invalidate cache after successful addition
         if (entity.Id != null)
         {
             InvalidateRelatedCache(entity.Id);
@@ -53,7 +52,6 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
         
         var result = await _inner.AddRangeAsync(entities, cancellationToken);
         
-        // Invalidate cache for all affected entities
         var entityIds = entities.Where(e => e.Id != null).Select(e => e.Id!).ToList();
         if (entityIds.Count > 0)
         {
@@ -69,7 +67,6 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
         
         var result = await _inner.UpdateAsync(entity, cancellationToken);
         
-        // Invalidate cache after successful update
         if (entity.Id != null)
         {
             InvalidateRelatedCache(entity.Id);
@@ -86,7 +83,6 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
         
         var result = await _inner.UpdateRangeAsync(entities, cancellationToken);
         
-        // Invalidate cache for all affected entities
         var entityIds = entities.Where(e => e.Id != null).Select(e => e.Id!).ToList();
         if (entityIds.Count > 0)
         {
@@ -98,46 +94,31 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
 
     public async Task<TEntity?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
     {
-        // This is a read operation in a write repository
-        // We don't cache here as it's meant for write scenarios (like update operations)
         return await _inner.GetByIdAsync(id, cancellationToken);
     }
-
-
 
     public async Task DeleteAsync(TId id, CancellationToken cancellationToken = default)
     {
         await _inner.DeleteAsync(id, cancellationToken);
-        
-        // Invalidate cache after successful deletion
         InvalidateRelatedCache(id);
     }
 
     public async Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        
         await _inner.DeleteAsync(entity, cancellationToken);
-        
-        // Invalidate cache after successful deletion
         if (entity.Id != null)
         {
             InvalidateRelatedCache(entity.Id);
         }
     }
 
-    // Note: IWriteRepository uses DeleteAsync(TId id, ...) not DeleteByIdAsync
-    // This method is removed as it doesn't exist in the interface
-
     public async Task DeleteRangeAsync(
         IReadOnlyList<TEntity> entities,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entities);
-        
         await _inner.DeleteRangeAsync(entities, cancellationToken);
-        
-        // Invalidate cache for all affected entities
         var entityIds = entities.Where(e => e.Id != null).Select(e => e.Id!).ToList();
         if (entityIds.Count > 0)
         {
@@ -147,8 +128,6 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
 
     public async Task<bool> ExistsAsync(TId id, CancellationToken cancellationToken = default)
     {
-        // This is a read operation in a write repository
-        // We don't cache here as it's typically used in write scenarios
         return await _inner.ExistsAsync(id, cancellationToken);
     }
 
@@ -156,15 +135,11 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
         Expression<Func<TEntity, bool>> predicate, 
         CancellationToken cancellationToken = default)
     {
-        // This is a read operation in a write repository
-        // We don't cache here as it's typically used in write scenarios
         return await _inner.AnyAsync(predicate, cancellationToken);
     }
 
     public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
     {
-        // This is a read operation in a write repository
-        // We don't cache here as it's typically used in write scenarios
         return await _inner.AnyAsync(cancellationToken);
     }
 
@@ -178,9 +153,6 @@ public class WriteRepositoryWithCacheInvalidation<TEntity, TId> : StrongIdCacheM
     }
 }
 
-/// <summary>
-/// Write repository with cache invalidation for entities with StrongId&lt;Guid&gt;
-/// </summary>
 public class WriteRepositoryWithCacheInvalidation<TEntity> : WriteRepositoryWithCacheInvalidation<TEntity, StrongId<Guid>>
     where TEntity : class, IAggregateRoot<StrongId<Guid>>
 {

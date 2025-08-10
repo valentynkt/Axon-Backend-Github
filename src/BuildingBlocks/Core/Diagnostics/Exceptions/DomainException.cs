@@ -63,6 +63,7 @@ public class DomainException : Exception
         return $"Multiple errors occurred: {string.Join("; ", list.Select(e => e.Message))}";
     }
 
+    #pragma warning disable SYSLIB0051
     protected DomainException(SerializationInfo info, StreamingContext context)
         : base(info, context)
     {
@@ -76,6 +77,7 @@ public class DomainException : Exception
         info.AddValue(nameof(Error), Error);
         info.AddValue(nameof(Errors), Errors);
     }
+    #pragma warning restore SYSLIB0051
 
     private void MirrorErrorIntoExceptionData(Error error)
     {

@@ -14,8 +14,8 @@ public static class ResultValidationBridgeExtensions
     /// </summary>
     public static Validation<T> ToValidation<T>(this Result<T> result)
         => result.IsSuccess
-            ? Validation<T>.Valid(result.Value)
-            : Validation<T>.Invalid(result.Error);
+            ? Validation<T>.CreateValid(result.Value)
+            : Validation<T>.CreateInvalid(new[] { result.Error });
 
     /// <summary>
     /// Convert Option to Validation using the provided error when None.
@@ -24,7 +24,7 @@ public static class ResultValidationBridgeExtensions
     {
         ArgumentNullException.ThrowIfNull(error);
         return option.IsSome
-            ? Validation<T>.Valid(option.Value)
-            : Validation<T>.Invalid(error);
+            ? Validation<T>.CreateValid(option.Value)
+            : Validation<T>.CreateInvalid(new[] { error });
     }
 }

@@ -118,7 +118,7 @@ public static class PaginationExtensions
         if (pageSize > MaxPageSize)
             throw new ArgumentOutOfRangeException(nameof(pageSize), PaginationErrors.PageSizeExceedsMaximum(MaxPageSize).Message);
 
-        var list = source as IReadOnlyList<T> ?? source.ToList().AsReadOnly();
+        var list = source as IReadOnlyList<T> ?? (IReadOnlyList<T>)source.ToList().AsReadOnly();
 
         if (list.Count == 0)
         {

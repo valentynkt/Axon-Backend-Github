@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Linq.Expressions;
+using System.Reflection;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,11 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     where TReadModel : class
     where TId : notnull
 {
-    protected readonly DbContext _context;
-    protected readonly DbSet<TReadModel> _dbSet;
+    private readonly DbContext _context;
+    private readonly DbSet<TReadModel> _dbSet;
+
+    protected DbContext Context => _context;
+    protected DbSet<TReadModel> DbSet => _dbSet;
 
     public EfReadRepository(DbContext context)
     {
@@ -54,30 +58,29 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
         if (ids == null || ids.Count == 0)
             return Array.Empty<TReadModel>();
 
-        // Build predicate for ID matching
+        var idList = ids.Distinct().ToList();
+
+        // Build predicate: idList.Contains(x.Id)
         var parameter = Expression.Parameter(typeof(TReadModel), "x");
         var idProperty = GetIdProperty();
         var idPropertyAccess = Expression.Property(parameter, idProperty);
-        
-        Expression? combinedExpression = null;
-        foreach (var id in ids)
-        {
-            var idConstant = Expression.Constant(id, typeof(TId));
-            var equality = Expression.Equal(idPropertyAccess, idConstant);
-            
-            combinedExpression = combinedExpression == null 
-                ? equality 
-                : Expression.OrElse(combinedExpression, equality);
-        }
 
-        if (combinedExpression == null)
-            return Array.Empty<TReadModel>();
+        var containsMethod = typeof(Enumerable)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .First(m => m.Name == nameof(Enumerable.Contains) && m.GetParameters().Length == 2)
+            .MakeGenericMethod(typeof(TId));
 
-        var predicate = Expression.Lambda<Func<TReadModel, bool>>(combinedExpression, parameter);
-        
+        var contains = Expression.Call(
+            containsMethod,
+            Expression.Constant(idList),
+            idPropertyAccess);
+
+        var predicate = Expression.Lambda<Func<TReadModel, bool>>(contains, parameter);
+
         var result = await _dbSet.AsNoTracking()
             .Where(predicate)
             .ToListAsync(ct);
+
         return result.AsReadOnly();
     }
 
@@ -89,18 +92,10 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     {
         var query = _dbSet.AsNoTracking();
         
-        // Apply filtering if request implements IPageQuery
-        if (request is IPageQuery<TReadModel> pageQuery && pageQuery.Filter != null)
-        {
-            query = query.Where(pageQuery.Filter);
-        }
-
         // Apply sorting if request implements ISortablePageQuery
-        if (request is ISortablePageQuery<TReadModel> sortableQuery && sortableQuery.SortBy != null)
+        if (request is ISortablePageQuery<TReadModel> sortableQuery && sortableQuery.EffectiveSortBy != null)
         {
-            query = sortableQuery.SortDirection == SortDirection.Ascending
-                ? query.OrderBy(sortableQuery.SortBy)
-                : query.OrderByDescending(sortableQuery.SortBy);
+            query = ApplySorting(query, sortableQuery.EffectiveSortBy);
         }
 
         var totalItems = await query.CountAsync(ct);
@@ -110,11 +105,18 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
             .Take(request.PageSize)
             .ToListAsync(ct);
 
+        var meta = PaginationMeta.CreateWithTotals(
+            totalItems,
+            request.PageNumber,
+            request.PageSize,
+            items.Count);
+
         return new PageList<TReadModel>(
             items,
             request.PageNumber,
             request.PageSize,
-            totalItems);
+            totalItems,
+            meta);
     }
 
     public virtual async Task<IPageList<TReadModel>> GetPagedAsync(
@@ -137,11 +139,18 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
             .Take(pageSize)
             .ToListAsync(ct);
 
+        var meta = PaginationMeta.CreateWithTotals(
+            totalItems,
+            pageNumber,
+            pageSize,
+            items.Count);
+
         return new PageList<TReadModel>(
             items,
             pageNumber,
             pageSize,
-            totalItems);
+            totalItems,
+            meta);
     }
 
     // ——— Aggregate functions ———
@@ -184,19 +193,53 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     }
 
     // ——— H e l p e r  M e t h o d s ———
-    /// <summary>
-    /// Gets the ID property of the read model
-    /// </summary>
-    protected virtual System.Reflection.PropertyInfo GetIdProperty()
+    private IQueryable<TReadModel> ApplySorting(IQueryable<TReadModel> query, IReadOnlyList<SortCriteria> sortCriteria)
     {
-        // First try to find "Id" property
+        if (sortCriteria.Count == 0) return query;
+
+        IOrderedQueryable<TReadModel>? ordered = null;
+
+        foreach (var criteria in sortCriteria)
+        {
+            var parameter = Expression.Parameter(typeof(TReadModel), "x");
+
+            // Allow nested property paths ("Foo.Bar.Baz")
+            Expression property = parameter;
+            foreach (var part in criteria.PropertyName.Split('.'))
+            {
+                var prop = property.Type.GetProperty(
+                    part,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                           ?? throw new ArgumentException($"Property '{part}' not found on '{property.Type.Name}'");
+
+                property = Expression.Property(property, prop);
+            }
+
+            var lambda = Expression.Lambda(property, parameter);
+
+            var methodName =
+                ordered == null
+                    ? (criteria.Direction == SortDirection.Asc ? "OrderBy" : "OrderByDescending")
+                    : (criteria.Direction == SortDirection.Asc ? "ThenBy" : "ThenByDescending");
+
+            var method = typeof(Queryable).GetMethods()
+                .First(m => m.Name == methodName && m.GetParameters().Length == 2)
+                .MakeGenericMethod(typeof(TReadModel), property.Type);
+
+            ordered = (IOrderedQueryable<TReadModel>)method.Invoke(null, new object[] { ordered ?? query, lambda })!;
+        }
+
+        return ordered ?? query;
+    }
+
+    protected virtual PropertyInfo GetIdProperty()
+    {
         var idProperty = typeof(TReadModel).GetProperty("Id");
         if (idProperty != null && idProperty.PropertyType == typeof(TId))
         {
             return idProperty;
         }
         
-        // If not found, look for properties ending with "Id"
         var properties = typeof(TReadModel).GetProperties()
             .Where(p => p.Name.EndsWith("Id") && p.PropertyType == typeof(TId))
             .ToList();
@@ -223,20 +266,12 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     }
 }
 
-/// <summary>
-/// Convenience implementation for Guid-based read models
-/// </summary>
 public class EfReadRepository<TReadModel> : EfReadRepository<TReadModel, Guid>, IReadRepository<TReadModel>
     where TReadModel : class
 {
-    public EfReadRepository(DbContext context) : base(context)
-    {
-    }
+    public EfReadRepository(DbContext context) : base(context) { }
 }
 
-/// <summary>
-/// Internal PageList implementation for pagination
-/// </summary>
 internal class PageList<T> : IPageList<T>, IEnumerable
 {
     private readonly List<T> _items;
@@ -259,12 +294,10 @@ internal class PageList<T> : IPageList<T>, IEnumerable
     public int TotalPages { get; }
     public bool HasPreviousPage => PageNumber > 1;
     public bool HasNextPage => PageNumber < TotalPages;
-    
-    // IReadOnlyList<T> implementation
+
     public T this[int index] => _items[index];
     public int Count => _items.Count;
-    
-    // IEnumerable<T> implementation
+
     public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
-   IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

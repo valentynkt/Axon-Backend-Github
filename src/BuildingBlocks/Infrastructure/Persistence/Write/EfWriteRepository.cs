@@ -14,8 +14,11 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     where TAggregate : class, IAggregateRoot<TId>
     where TId : IStrongId
 {
-    protected readonly DbContext _context;
-    protected readonly DbSet<TAggregate> _dbSet;
+    private readonly DbContext _context;
+    private readonly DbSet<TAggregate> _dbSet;
+
+    protected DbContext Context => _context;
+    protected DbSet<TAggregate> DbSet => _dbSet;
 
     public EfWriteRepository(DbContext context)
     {
@@ -111,9 +114,6 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 
     // ——— H e l p e r  M e t h o d s ———
-    /// <summary>
-    /// Creates a predicate expression for finding aggregate by ID
-    /// </summary>
     protected virtual Expression<Func<TAggregate, bool>> CreateIdPredicate(TId id)
     {
         var parameter = Expression.Parameter(typeof(TAggregate), "x");
@@ -125,19 +125,14 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
         return Expression.Lambda<Func<TAggregate, bool>>(equality, parameter);
     }
 
-    /// <summary>
-    /// Gets the ID property of the aggregate
-    /// </summary>
     protected virtual System.Reflection.PropertyInfo GetIdProperty()
     {
-        // First try to find "Id" property
         var idProperty = typeof(TAggregate).GetProperty("Id");
         if (idProperty != null && idProperty.PropertyType == typeof(TId))
         {
             return idProperty;
         }
         
-        // If not found, look for properties ending with "Id"
         var properties = typeof(TAggregate).GetProperties()
             .Where(p => p.Name.EndsWith("Id") && p.PropertyType == typeof(TId))
             .ToList();
@@ -164,13 +159,8 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 }
 
-/// <summary>
-/// Convenience implementation for StrongId&lt;Guid&gt;-based aggregates
-/// </summary>
 public class EfWriteRepository<TAggregate> : EfWriteRepository<TAggregate, StrongId<Guid>>, IWriteRepository<TAggregate>
     where TAggregate : class, IAggregateRoot<StrongId<Guid>>
 {
-    public EfWriteRepository(DbContext context) : base(context)
-    {
-    }
+    public EfWriteRepository(DbContext context) : base(context) { }
 }

@@ -444,8 +444,8 @@ public sealed record Money : ValueObject
         // Business rules should enforce positivity where needed
         
         return errors.Count == 0 
-            ? Validation<Unit>.Valid(Unit.Value) 
-            : Validation<Unit>.Invalid(errors);
+            ? Validation.Valid(Unit.Value) 
+            : Validation.Invalid<Unit>(errors);
     }
     
     #endregion

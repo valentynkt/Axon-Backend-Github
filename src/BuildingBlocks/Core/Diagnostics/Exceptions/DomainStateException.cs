@@ -60,6 +60,7 @@ public sealed class DomainStateException : DomainException
         AttemptedState = info.GetString(nameof(AttemptedState));
     }
     
+    #pragma warning disable SYSLIB0051
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
         base.GetObjectData(info, context);
@@ -67,4 +68,5 @@ public sealed class DomainStateException : DomainException
         info.AddValue(nameof(CurrentState), CurrentState);
         info.AddValue(nameof(AttemptedState), AttemptedState);
     }
+    #pragma warning restore SYSLIB0051
 }

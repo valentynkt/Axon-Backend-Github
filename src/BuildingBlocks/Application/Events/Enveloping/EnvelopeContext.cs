@@ -37,7 +37,7 @@ public sealed class AsyncLocalEnvelopeContextAccessor : IEnvelopeContextAccessor
 
     public IDisposable Push(IntegrationEnvelopeContext context)
     {
-        if (context is null) throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
         var prior = _current.Value;
         _current.Value = context;
         return new Scope(this, prior);

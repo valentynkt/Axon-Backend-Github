@@ -25,7 +25,7 @@ public static class ResultExtensions
         ArgumentNullException.ThrowIfNull(map);
         var r = await task.ConfigureAwait(false);
         return r.IsFailure
-            ? Result<TOut>.Failure(r.Error)
+            ? Results.Failure<TOut>(r.Error)
             : await r.MapAsync(map).ConfigureAwait(false);
     }
 
@@ -42,7 +42,7 @@ public static class ResultExtensions
         ArgumentNullException.ThrowIfNull(task);
         ArgumentNullException.ThrowIfNull(bind);
         var r = await task.ConfigureAwait(false);
-        return r.IsFailure ? Result<TOut>.Failure(r.Error) : await bind(r.Value).ConfigureAwait(false);
+        return r.IsFailure ? Results.Failure<TOut>(r.Error) : await bind(r.Value).ConfigureAwait(false);
     }
 
     public static async Task<Result<T>> OnSuccessAsync<T>(this Task<Result<T>> task, Func<T, Task> action)
@@ -110,10 +110,10 @@ public static class ResultExtensions
     #region Result<T> ↔ async helpers
 
     public static async Task<Result<TOut>> MapAsync<T, TOut>(this Result<T> r, Func<T, Task<TOut>> map)
-        => r.IsFailure ? Result<TOut>.Failure(r.Error) : Result<TOut>.Success(await map(r.Value).ConfigureAwait(false));
+        => r.IsFailure ? Results.Failure<TOut>(r.Error) : Results.Success(await map(r.Value).ConfigureAwait(false));
 
     public static async Task<Result<TOut>> BindAsync<T, TOut>(this Result<T> r, Func<T, Task<Result<TOut>>> bind)
-        => r.IsFailure ? Result<TOut>.Failure(r.Error) : await bind(r.Value).ConfigureAwait(false);
+        => r.IsFailure ? Results.Failure<TOut>(r.Error) : await bind(r.Value).ConfigureAwait(false);
 
     public static async Task<Result<T>> OnSuccessAsync<T>(this Result<T> r, Func<T, Task> action)
     {
@@ -134,21 +134,21 @@ public static class ResultExtensions
     public static async Task<Result<T>> MapAsync<T>(this Task<Result> task, Func<T> valueFactory)
     {
         var r = await task.ConfigureAwait(false);
-        return r.IsFailure ? Result<T>.Failure(r.Error) : Result<T>.Success(valueFactory());
+        return r.IsFailure ? Results.Failure<T>(r.Error) : Results.Success(valueFactory());
     }
 
     public static async Task<Result<T>> MapAsync<T>(this Task<Result> task, Func<Task<T>> valueFactory)
     {
         var r = await task.ConfigureAwait(false);
-        if (r.IsFailure) return Result<T>.Failure(r.Error);
+        if (r.IsFailure) return Results.Failure<T>(r.Error);
         var v = await valueFactory().ConfigureAwait(false);
-        return Result<T>.Success(v);
+        return Results.Success(v);
     }
 
     public static async Task<Result<T>> BindAsync<T>(this Task<Result> task, Func<Task<Result<T>>> transform)
     {
         var r = await task.ConfigureAwait(false);
-        return r.IsFailure ? Result<T>.Failure(r.Error) : await transform().ConfigureAwait(false);
+        return r.IsFailure ? Results.Failure<T>(r.Error) : await transform().ConfigureAwait(false);
     }
 
     public static async Task<Result> OnSuccessAsync(this Task<Result> task, Func<Task> action)
@@ -171,8 +171,8 @@ public static class ResultExtensions
 
     public static async Task<Result<T>> ToResultAsync<T>(this Task<T> task, Func<Exception, Error>? map = null)
     {
-        try { return Result<T>.Success(await task.ConfigureAwait(false)); }
-        catch (Exception ex) { return Result<T>.Failure(map?.Invoke(ex) ?? Error.Internal(ex.Message, exception: ex)); }
+        try { return Results.Success(await task.ConfigureAwait(false)); }
+        catch (Exception ex) { return Results.Failure<T>(map?.Invoke(ex) ?? Error.Internal(ex.Message, exception: ex)); }
     }
 
     public static async Task<Result> ToResultAsync(this Task task, Func<Exception, Error>? map = null)
@@ -262,7 +262,7 @@ public static class ResultExtensions
     {
         ArgumentNullException.ThrowIfNull(source);
         await foreach (var item in source.WithCancellation(ct).ConfigureAwait(false))
-            yield return Result<T>.Success(item);
+            yield return Results.Success(item);
     }
 
     public static async IAsyncEnumerable<TOut> SelectManyResultsAsync<TIn, TOut>(
@@ -323,16 +323,16 @@ public static class ResultExtensions
                 if (r.IsSuccess) values.Add(r.Value); else errors.Add(r.Error);
             }
             return errors.Count > 0
-                ? Result<IReadOnlyList<T>>.Failure(errors.Count == 1 ? errors[0] : Error.Aggregate(errors.ToArray()))
-                : Result<IReadOnlyList<T>>.Success(values.AsReadOnly());
+                ? Results.Failure<IReadOnlyList<T>>(errors.Count == 1 ? errors[0] : Error.Aggregate(errors.ToArray()))
+                : Results.Success<IReadOnlyList<T>>(values.AsReadOnly());
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return Result<IReadOnlyList<T>>.Failure(Error.Cancelled("Operation was cancelled"));
+            return Results.Failure<IReadOnlyList<T>>(Error.Cancelled("Operation was cancelled"));
         }
         catch (Exception ex)
         {
-            return Result<IReadOnlyList<T>>.Failure(Error.FromException(ex));
+            return Results.Failure<IReadOnlyList<T>>(Error.FromException(ex));
         }
     }
 

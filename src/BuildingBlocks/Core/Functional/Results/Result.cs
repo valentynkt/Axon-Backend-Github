@@ -1,11 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
 using BuildingBlocks.Core.Functional.Options;
 using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace BuildingBlocks.Core.Functional.Results;
 
 /// <summary>
-/// Result<T>: immutable, allocation-light success/failure container.
+/// Result&lt;T&gt;: immutable, allocation-light success/failure container.
+/// Public static factories were moved to <see cref="Results"/> to satisfy CA1000.
 /// </summary>
 public readonly record struct Result<T> : IResult<T>
 {
@@ -46,24 +48,8 @@ public readonly record struct Result<T> : IResult<T>
         return IsSuccess ? success() : failure(_error!);
     }
 
-    #region Factories
-    public static Result<T> Success(T value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-        return new Result<T>(value);
-    }
+    #region Instance Match / Map / Where
 
-    public static Result<T> Failure(Error error)
-    {
-        ArgumentNullException.ThrowIfNull(error);
-        return new Result<T>(error);
-    }
-
-    public static Result<T> From(T? value, Error error)
-        => value is not null ? Success(value) : Failure(error);
-    #endregion
-
-    #region Match
     public TResult Match<TResult>(Func<T, TResult> success, Func<Error, TResult> failure) => _state switch
     {
         ResultState.Success => success(_value!),
@@ -84,32 +70,30 @@ public readonly record struct Result<T> : IResult<T>
             _ => throw new InvalidOperationException($"Invalid state: {_state}")
         };
     }
-    #endregion
 
-    #region Map / Where
     public Result<TNew> Map<TNew>(Func<T, TNew> mapper)
     {
         ArgumentNullException.ThrowIfNull(mapper);
-        return IsSuccess ? Result<TNew>.Success(mapper(_value!)) : Result<TNew>.Failure(_error!);
+        return IsSuccess ? Result<TNew>.CreateSuccess(mapper(_value!)) : Result<TNew>.CreateFailure(_error!);
     }
 
     public async Task<Result<TNew>> MapAsync<TNew>(Func<T, Task<TNew>> mapper, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(mapper);
-        if (!IsSuccess) return Result<TNew>.Failure(_error!);
+        if (!IsSuccess) return Result<TNew>.CreateFailure(_error!);
 
         try
         {
             var v = await mapper(_value!).ConfigureAwait(false);
-            return Result<TNew>.Success(v);
+            return Result<TNew>.CreateSuccess(v);
         }
         catch (OperationCanceledException)
         {
-            return Result<TNew>.Failure(Error.Cancelled());
+            return Result<TNew>.CreateFailure(Error.Cancelled());
         }
         catch (Exception ex)
         {
-            return Result<TNew>.Failure(Error.FromException(ex));
+            return Result<TNew>.CreateFailure(Error.FromException(ex));
         }
     }
 
@@ -117,33 +101,37 @@ public readonly record struct Result<T> : IResult<T>
     {
         ArgumentNullException.ThrowIfNull(predicate);
         if (IsFailure) return this;
-        return predicate(_value!) ? this : Result<T>.Failure(customError ?? Error.Validation("Predicate condition not met"));
+        return predicate(_value!) ? this : Result<T>.CreateFailure(customError ?? Error.Validation("Predicate condition not met"));
     }
+
     #endregion
 
     #region Bind
+
     public Result<TNew> Bind<TNew>(Func<T, Result<TNew>> binder)
     {
         ArgumentNullException.ThrowIfNull(binder);
-        return IsSuccess ? binder(_value!) : Result<TNew>.Failure(_error!);
+        return IsSuccess ? binder(_value!) : Result<TNew>.CreateFailure(_error!);
     }
 
     public async Task<Result<TNew>> BindAsync<TNew>(Func<T, Task<Result<TNew>>> binder, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(binder);
-        if (!IsSuccess) return Result<TNew>.Failure(_error!);
+        if (!IsSuccess) return Result<TNew>.CreateFailure(_error!);
 
         try { return await binder(_value!).ConfigureAwait(false); }
-        catch (OperationCanceledException) { return Result<TNew>.Failure(Error.Cancelled()); }
-        catch (Exception ex) { return Result<TNew>.Failure(Error.FromException(ex)); }
+        catch (OperationCanceledException) { return Result<TNew>.CreateFailure(Error.Cancelled()); }
+        catch (Exception ex) { return Result<TNew>.CreateFailure(Error.FromException(ex)); }
     }
+
     #endregion
 
     #region Recovery / Defaults
+
     public Result<T> Recover(Func<Error, T> recovery)
     {
         ArgumentNullException.ThrowIfNull(recovery);
-        return IsFailure ? Result<T>.Success(recovery(_error!)) : this;
+        return IsFailure ? Result<T>.CreateSuccess(recovery(_error!)) : this;
     }
 
     public Result<T> RecoverWith(Func<Error, Result<T>> recovery)
@@ -159,25 +147,11 @@ public readonly record struct Result<T> : IResult<T>
         ArgumentNullException.ThrowIfNull(defaultFactory);
         return IsSuccess ? _value! : defaultFactory(_error!);
     }
-    #endregion
 
-    #region Side effects
-    public Result<T> Tap(Action<T> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        if (IsSuccess) action(_value!);
-        return this;
-    }
-
-    public Result<T> TapError(Action<Error> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        if (IsFailure) action(_error!);
-        return this;
-    }
     #endregion
 
     #region Conversions / LINQ
+
     public Option<T> ToOption() => IsSuccess ? Option<T>.Some(_value!) : Option<T>.None();
 
     public Option<T> ToOption(Action<Error> onError)
@@ -191,7 +165,6 @@ public readonly record struct Result<T> : IResult<T>
 
     public Result<TNew> Select<TNew>(Func<T, TNew> selector) => Map(selector);
 
-    // LINQ SelectMany (monadic bind) with projector
     public Result<TResult> SelectMany<TMid, TResult>(
         Func<T, Result<TMid>> binder,
         Func<T, TMid, TResult> projector)
@@ -199,16 +172,45 @@ public readonly record struct Result<T> : IResult<T>
         ArgumentNullException.ThrowIfNull(binder);
         ArgumentNullException.ThrowIfNull(projector);
 
-        if (IsFailure) return _error!;
+        if (IsFailure) return Result<TResult>.CreateFailure(_error!);
         var mid = binder(_value!);
-        return mid.IsFailure ? mid.Error : Result<TResult>.Success(projector(_value!, mid.Value));
+        return mid.IsFailure ? Result<TResult>.CreateFailure(mid.Error) : CreateSuccess(projector(_value!, mid.Value));
     }
 
-    // LINQ SelectMany shorthand
     public Result<TNew> SelectMany<TNew>(Func<T, Result<TNew>> binder) => Bind(binder);
+
+    #endregion
+
+    #region Side effects
+
+    public Result<T> Tap(Action<T> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (IsSuccess)
+        {
+#pragma warning disable CA1031 // Do not catch general exception types
+            try { action(_value!); } catch { /* ignore side-effect failures */ }
+#pragma warning restore CA1031
+        }
+        return this;
+    }
+
+    public Result<T> TapError(Action<Error> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (IsFailure)
+        {
+#pragma warning disable CA1031 // Do not catch general exception types
+            try { action(_error!); } catch { /* ignore side-effect failures */ }
+#pragma warning restore CA1031
+        }
+        return this;
+    }
+
     #endregion
 
     #region Flow helpers
+
     public bool TryGetValue([NotNullWhen(true)] out T? value, out Error? error)
     {
         if (IsSuccess)
@@ -224,13 +226,40 @@ public readonly record struct Result<T> : IResult<T>
 
     public void Deconstruct(out bool isSuccess, out T? value, out Error? error)
         => (isSuccess, value, error) = (IsSuccess, IsSuccess ? _value : default, _error);
+
     #endregion
 
-    #region Operators
-    public static implicit operator Result<T>(T value) => Success(value);
-    public static implicit operator Result<T>(Error error) => Failure(error);
+    #region Internal factories (used by façade)
+
+    internal static Result<T> CreateSuccess(T value) => new(value);
+    internal static Result<T> CreateFailure(Error error) => new(error);
+
+    #endregion
+
+    #region Legacy static factories (forwarders) + operators (kept; CA1000 suppressed)
+
+#pragma warning disable CA1000
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [Obsolete("Use Results.Success(value) instead.")]
+    public static Result<T> Success(T value) => Results.Success(value);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [Obsolete("Use Results.Failure<T>(error) instead.")]
+    public static Result<T> Failure(Error error) => Results.Failure<T>(error);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [Obsolete("Use Results.From(value, error) instead.")]
+    public static Result<T> From(T? value, Error error) => Results.From(value, error);
+
+    // Implicit & boolean operators: retained for ergonomics.
+    public static implicit operator Result<T>(T value) => CreateSuccess(value);
+    public static implicit operator Result<T>(Error error) => CreateFailure(error);
     public static bool operator true(Result<T> r) => r.IsSuccess;
     public static bool operator false(Result<T> r) => r.IsFailure;
+
+#pragma warning restore CA1000
+
     #endregion
 }
 
@@ -282,13 +311,13 @@ public readonly record struct Result : IResult
     public Result<T> Map<T>(Func<T> mapper)
     {
         ArgumentNullException.ThrowIfNull(mapper);
-        return IsSuccess ? Result<T>.Success(mapper()) : Result<T>.Failure(_error!);
+        return Result<T>.CreateSuccess(mapper());
     }
 
     public Result<T> Bind<T>(Func<Result<T>> binder)
     {
         ArgumentNullException.ThrowIfNull(binder);
-        return IsSuccess ? binder() : Result<T>.Failure(_error!);
+        return IsSuccess ? binder() : Result<T>.CreateFailure(_error!);
     }
 
     public Result Tap(Action action)
@@ -306,6 +335,7 @@ public readonly record struct Result : IResult
     }
 
     public Result Recover() => IsFailure ? Success() : this;
+
     public Result RecoverWith(Func<Error, Result> recovery)
     {
         ArgumentNullException.ThrowIfNull(recovery);

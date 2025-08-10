@@ -9,5 +9,5 @@ public class RabbitMqOptions
     public string UserName => Username; // Alias for backwards compatibility
     public string Password { get; set; } = "guest";
     public int Port { get; set; } = 5672;
-    public bool UseSsl { get; set; } = false;
+    public bool UseSsl { get; set; }
 }

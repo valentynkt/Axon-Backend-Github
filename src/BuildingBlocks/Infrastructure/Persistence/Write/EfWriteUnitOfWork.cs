@@ -57,7 +57,7 @@ public class EfWriteUnitOfWork : IWriteUnitOfWork, IDisposable
         }
         catch (Exception ex)
         {
-            return Result<ITransaction>.Failure(new Error("TRANSACTION_START_FAILED", $"Failed to start transaction: {ex.Message}"));
+            return Result<ITransaction>.Failure(Error.Persistence($"Failed to start transaction: {ex.Message}", "TRANSACTION_START_FAILED", ex));
         }
     }
 
@@ -73,7 +73,7 @@ public class EfWriteUnitOfWork : IWriteUnitOfWork, IDisposable
         }
         catch (Exception ex)
         {
-            return Result<ITransaction>.Failure(new Error("TRANSACTION_START_FAILED", $"Failed to start transaction: {ex.Message}"));
+            return Result<ITransaction>.Failure(Error.Persistence($"Failed to start transaction: {ex.Message}", "TRANSACTION_START_FAILED", ex));
         }
     }
 

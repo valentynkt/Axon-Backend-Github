@@ -65,6 +65,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection ReplaceServiceWithSingletonMock<TService>(this IServiceCollection services)
         where TService : class
     {
+        ArgumentNullException.ThrowIfNull(services);
+        
         var service = services.FirstOrDefault(d => d.ServiceType == typeof(TService));
         if (service is not null)
         {

@@ -289,23 +289,17 @@ public sealed class EfOutboxRepository : IOutboxRepository
             {
                 var failure = failureInfos.First(f => f.EntryId == entity.Id.Value);
 
-                // record error
-                entity.LastError = failure.ErrorMessage.Length > 2000
-                    ? failure.ErrorMessage[..2000]
-                    : failure.ErrorMessage;
-
                 if (failure.MoveToDeadLetter)
                 {
-                    entity.MoveToDeadLetter(entity.LastError);
+                    var errorMessage = failure.ErrorMessage.Length > 2000
+                        ? failure.ErrorMessage[..2000]
+                        : failure.ErrorMessage;
+                    entity.MoveToDeadLetter(errorMessage);
                 }
                 else
                 {
-                    // treat as failed with computed next retry; increment retry count here
-                    entity.Status = OutboxEntryStatus.Failed;
-                    entity.RetryCount = entity.RetryCount + 1;
-                    entity.ProcessingStartedAt = null;
-                    entity.NextRetryAt = failure.NextRetryAtUtc;
-                    entity.Version++;
+                    // Use the new method that accepts a custom retry time
+                    entity.MarkAsFailedWithCustomRetryTime(failure.ErrorMessage, failure.NextRetryAtUtc);
                 }
             }
 

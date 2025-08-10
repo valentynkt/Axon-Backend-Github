@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using BuildingBlocks.Infrastructure.Persistence.StrongIds;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -48,6 +49,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
         // Apply configurations
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
+        modelBuilder.ApplyStrongIdConventions(); // StrongId converters/comparers
 
         // Conventions
         ApplySoftDeleteQueryFilter(modelBuilder);
@@ -154,7 +156,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
         catch (DbUpdateConcurrencyException ex)
         {
-            // Standard reconciliation: refresh and re-throw for upper layer handling if needed.
             foreach (var entry in ex.Entries)
             {
                 var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
@@ -165,11 +166,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
     }
 
-    /// <summary>
-    /// Collect domain events from tracked aggregates.
-    /// Duck-types entities exposing a readable property named 'DomainEvents'
-    /// of IEnumerable&lt;IDomainEvent&gt; (or compatible), returning a flat list.
-    /// </summary>
     public IReadOnlyList<IDomainEvent> GetDomainEvents()
     {
         var events = new List<IDomainEvent>(capacity: 32);
@@ -188,9 +184,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         return events;
     }
 
-    /// <summary>
-    /// Clears domain events on tracked aggregates that expose a 'ClearDomainEvents()' method.
-    /// </summary>
     public void ClearDomainEvents()
     {
         foreach (var entry in ChangeTracker.Entries())
@@ -208,24 +201,18 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
     // --------- Hooks & Conventions ---------
 
-    /// <summary>
-    /// Override to apply auditing (CreatedAt/By, UpdatedAt/By, etc.) using your own interfaces/conventions.
-    /// Default: no-op to keep base decoupled from specific domain contracts.
-    /// </summary>
     protected virtual void ApplyAuditInformation() { }
 
     private void ApplySoftDeleteQueryFilter(ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            // Only for real entity types.
             if (entityType.IsOwned() || entityType.ClrType.IsAbstract) continue;
 
             var isDeletedProp = entityType.FindProperty("IsDeleted");
             if (isDeletedProp?.ClrType == typeof(bool))
             {
                 var parameter = Expression.Parameter(entityType.ClrType, "e");
-                // EF.Property<bool>(e, "IsDeleted") == false
                 var body = Expression.Equal(
                     Expression.Call(
                         typeof(EF).GetMethod(nameof(EF.Property))!.MakeGenericMethod(typeof(bool)),
@@ -249,7 +236,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
             if (versionProp is null) continue;
 
-            // Accept uint/int/long (common patterns)
             var t = versionProp.ClrType;
             if (t == typeof(uint) || t == typeof(int) || t == typeof(long) || t == typeof(byte[]))
             {
@@ -292,7 +278,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
             var prop = type.GetProperty("DomainEvents", flags);
             if (prop is null) return null;
 
-            // Must be IEnumerable<IDomainEvent> compatible
             if (!typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
                 return null;
 

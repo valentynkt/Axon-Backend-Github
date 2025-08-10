@@ -178,6 +178,24 @@ public sealed class OutboxEntry : Entity<OutboxEntryId>
     }
 
     /// <summary>
+    /// Mark entry as failed with a custom retry time and increment retry count
+    /// </summary>
+    /// <param name="errorMessage">Error message describing the failure</param>
+    /// <param name="nextRetryAt">When the next retry should occur</param>
+    public void MarkAsFailedWithCustomRetryTime(string errorMessage, DateTime? nextRetryAt)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+            throw new ArgumentException("Error message cannot be null or empty", nameof(errorMessage));
+
+        Status = OutboxEntryStatus.Failed;
+        RetryCount++;
+        LastError = errorMessage.Length > 2000 ? errorMessage[..2000] : errorMessage;
+        ProcessingStartedAt = null; // Reset processing timestamp
+        NextRetryAt = nextRetryAt;
+        Version++;
+    }
+
+    /// <summary>
     /// Move entry to dead letter queue when max retries exceeded
     /// </summary>
     /// <param name="finalErrorMessage">Final error message</param>

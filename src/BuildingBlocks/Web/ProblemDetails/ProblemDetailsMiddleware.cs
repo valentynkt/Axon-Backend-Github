@@ -30,6 +30,8 @@ public class ProblemDetailsMiddleware
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        
         try
         {
             await _next(context);
@@ -80,7 +82,7 @@ public class ProblemDetailsMiddleware
     {
         _logger.LogWarning(exception,
             "Validation exception occurred with {ErrorCount} errors",
-            exception.Errors.Count());
+            exception.Errors.Count);
             
         var validationDetails = exception.Errors.ToValidationProblemDetails(
             instance: context.Request.Path,
