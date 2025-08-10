@@ -1,348 +1,574 @@
-using Axon.Modules.Chat.Domain.Aggregates;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Domain.Events;
+using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Base;
+using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Builders;
+using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Mothers;
+using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Extensions;
+using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
 
 namespace Axon.Modules.Chat.Domain.Tests.Aggregates;
 
+/// <summary>
+/// World-class tests for Conversation aggregate following DDD best practices.
+/// Uses Given-When-Then pattern with fluent builders and comprehensive assertions.
+/// </summary>
 [TestFixture]
 [Category("Unit")]
 [Category("Domain")]
 [Category("Aggregate")]
-public sealed class ConversationTests
+[Category("Critical")]
+public sealed class ConversationTests : AggregateTestBase<Conversation>
 {
-    #region Start Tests
+    #region Test Setup
+
+    private ConversationBuilder _builder = null!;
+    private UserId _defaultOwner = null!;
+    private ConversationTitle _validTitle = null!;
+
+    [SetUp]
+    public override void SetUp()
+    {
+        base.SetUp();
+        _builder = ConversationBuilder.Create();
+        _defaultOwner = UserMother.DefaultUser();
+        _validTitle = ConversationTitle.Create("Test Conversation").Value;
+    }
+
+    #endregion
+
+    #region Start Conversation Tests - Given-When-Then Pattern
 
     [Test]
-    public void Start_WithValidOwner_ShouldCreateActiveConversation()
+    public void Given_ValidOwnerAndNullTitle_When_StartingConversation_Then_ShouldCreateWithDefaultTitle()
     {
-        // Arrange
-        var conversationId = ConversationId.New();
-        var ownerId = UserId.New();
+        // Given
+        var owner = _defaultOwner;
+        string? title = null;
 
-        // Act
-        var result = Conversation.Start(conversationId, ownerId);
+        // When
+        var result = Conversation.Start(owner, title, Clock);
 
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
+        // Then
+        result.ShouldBeSuccess();
         var conversation = result.Value;
-        conversation.Id.ShouldBe(conversationId);
-        conversation.OwnerId.ShouldBe(ownerId);
-        conversation.Status.ShouldBe(ConversationStatus.Active);
-        conversation.IsDefaultTitle.ShouldBeTrue();
-        conversation.MessagesCount.ShouldBe(0);
-        conversation.NextSequence.ShouldBe(1);
-        conversation.LastAuthor.ShouldBeNull();
+        conversation.ShouldSatisfyAllConditions(
+            () => conversation.OwnerId.ShouldBe(owner),
+            () => conversation.ShouldBeActive(),
+            () => conversation.ShouldHaveDefaultTitle(),
+            () => conversation.Title.ShouldBe(string.Empty),
+            () => conversation.ShouldHaveMessageCount(0),
+            () => conversation.CreatedAtUtc.ShouldBe(TestTime),
+            () => conversation.UpdatedAtUtc.ShouldBe(TestTime)
+        );
     }
 
     [Test]
-    public void Start_WithNullOwner_ShouldReturnFailure()
+    public void Given_ValidOwnerAndUserTitle_When_StartingConversation_Then_ShouldPreserveTitleExactly()
     {
-        // Arrange
-        var conversationId = ConversationId.New();
+        // Given
+        var owner = _defaultOwner;
+        var title = "  My Important Chat  ";
 
-        // Act
-        var result = Conversation.Start(conversationId, null!);
+        // When
+        var result = Conversation.Start(owner, title, Clock);
 
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("CHAT.CONVERSATION.OWNER_REQUIRED");
+        // Then
+        result.ShouldBeSuccessWith(conversation =>
+        {
+            conversation.ShouldHaveUserTitle("My Important Chat");
+            conversation.IsDefaultTitle.ShouldBeFalse();
+        });
     }
 
     [Test]
-    public void Start_ShouldRaiseConversationStartedEvent()
+    public void Given_NullOwner_When_StartingConversation_Then_ShouldReturnValidationError()
     {
-        // Arrange
-        var conversationId = ConversationId.New();
-        var ownerId = UserId.New();
-        var title = ConversationTitle.Create("Test Chat").Value;
+        // Given
+        UserId? nullOwner = null;
 
-        // Act
-        var result = Conversation.Start(conversationId, ownerId, title);
+        // When
+        var result = Conversation.Start(nullOwner!, "Title", Clock);
 
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        var events = result.Value.DomainEvents;
-        events.ShouldContain(e => e is ConversationStartedEvent);
-        
-        var startedEvent = events.OfType<ConversationStartedEvent>().First();
-        startedEvent.ConversationId.ShouldBe(conversationId);
-        startedEvent.OwnerId.ShouldBe(ownerId);
-        startedEvent.Title.ShouldBe(title);
-        startedEvent.IsDefaultTitle.ShouldBeFalse();
-    }
-
-    #endregion
-
-    #region AddUserMessage Tests
-
-    [Test]
-    public void AddUserMessage_ToActiveConversation_ShouldSucceed()
-    {
-        // Arrange
-        var conversation = CreateConversation();
-        var content = MessageContent.Create("Hello").Value;
-
-        // Act
-        var result = conversation.AddUserMessage(content);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        conversation.MessagesCount.ShouldBe(1);
-        conversation.NextSequence.ShouldBe(2);
-        conversation.LastAuthor.ShouldBe(MessageRole.User);
+        // Then
+        result.ShouldBeValidationFailure();
+        result.ShouldBeFailureWithCode("CHAT.CONVERSATION.OWNER_REQUIRED");
     }
 
     [Test]
-    public void AddUserMessage_ToCompletedConversation_ShouldFail()
+    public void Given_ValidParameters_When_StartingConversation_Then_ShouldRaiseConversationStartedEvent()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        conversation.Complete();
-        var content = MessageContent.Create("Hello").Value;
+        // Given
+        var owner = _defaultOwner;
+        var title = "Event Test Chat";
 
-        // Act
-        var result = conversation.AddUserMessage(content);
+        // When
+        var result = Conversation.Start(owner, title, Clock);
 
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("CHAT.CONVERSATION.NOT_ACTIVE");
+        // Then
+        var conversation = result.ShouldBeSuccessWithValue();
+        conversation.ShouldHaveRaisedEvent<ConversationStartedEvent>(evt =>
+        {
+            evt.ShouldBeValidStartedEvent(conversation.Id, owner);
+            evt.Title.ShouldBe(title);
+            evt.IsDefaultTitle.ShouldBeFalse();
+            evt.StartedAt.ShouldBe(TestTime);
+        });
     }
 
     #endregion
 
-    #region AddAssistantMessage Tests
+    #region Append User Message Tests
 
     [Test]
-    public void AddAssistantMessage_AsFirstMessage_ShouldSucceed()
+    public void Given_ActiveConversation_When_AppendingValidUserMessage_Then_ShouldSucceed()
     {
-        // Arrange - Assistant CAN be first per spec
-        var conversation = CreateConversation();
-        var content = MessageContent.Create("Hello, how can I help?").Value;
+        // Given
+        var conversation = _builder
+            .WithDefaultOwner()
+            .Active()
+            .Build();
+        var content = MessageMother.ValidUserMessage();
 
-        // Act
-        var result = conversation.AddAssistantMessage(content);
+        // When
+        var result = conversation.AppendUserMessage(content, Clock);
 
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        conversation.MessagesCount.ShouldBe(1);
-        conversation.LastAuthor.ShouldBe(MessageRole.Assistant);
+        // Then
+        result.ShouldBeSuccessWith(message =>
+        {
+            message.Role.ShouldBe(MessageRole.User);
+            message.Content.ShouldBe(content);
+            message.Sequence.ShouldBe(1);
+            message.CreatedAtUtc.ShouldBe(TestTime);
+        });
+        conversation.ShouldHaveMessageCount(1);
+        conversation.UpdatedAtUtc.ShouldBe(TestTime);
     }
 
     [Test]
-    public void AddAssistantMessage_AfterUser_ShouldSucceed()
+    public void Given_CompletedConversation_When_AppendingUserMessage_Then_ShouldFailWithNotActiveError()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        conversation.AddUserMessage(MessageContent.Create("Hello").Value);
-        var content = MessageContent.Create("Hi there!").Value;
+        // Given
+        var conversation = ConversationMother.Completed();
+        var content = MessageMother.ValidUserMessage();
 
-        // Act
-        var result = conversation.AddAssistantMessage(content);
+        // When
+        var result = conversation.AppendUserMessage(content, Clock);
 
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        conversation.MessagesCount.ShouldBe(2);
+        // Then
+        result.ShouldBeFailureWithCode("CHAT.CONVERSATION.NOT_ACTIVE");
     }
 
     [Test]
-    public void AddAssistantMessage_AfterAssistant_ShouldFail()
+    public void Given_ConversationAtMessageLimit_When_AppendingMessage_Then_ShouldFailWithLimitExceeded()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        conversation.AddAssistantMessage(MessageContent.Create("Hello").Value);
-        var content = MessageContent.Create("Hello again").Value;
+        // Given
+        var conversation = ConversationMother.AtMessageLimit();
+        var content = MessageMother.ValidUserMessage();
 
-        // Act
-        var result = conversation.AddAssistantMessage(content);
+        // When
+        var result = conversation.AppendUserMessage(content, Clock);
 
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("CHAT.MESSAGE.TURN_TAKING_VIOLATION");
+        // Then
+        result.ShouldBeFailureWithCode("CHAT.CONVERSATION.MESSAGE_LIMIT_EXCEEDED");
+    }
+
+    [Test]
+    public void Given_ActiveConversation_When_AppendingUserMessage_Then_ShouldRaiseUserMessageAppendedEvent()
+    {
+        Scenario(
+            "User message appending raises correct event",
+            given: () => _builder.WithDefaultOwner().Build(),
+            when: conversation => conversation.AppendUserMessage(
+                MessageMother.ValidUserMessage(), Clock),
+            then: conversation =>
+            {
+                conversation.ShouldHaveRaisedEvent<UserMessageAppendedEvent>(evt =>
+                {
+                    evt.ShouldBeValidUserMessageEvent(conversation.Id, 1);
+                    evt.CreatedAt.ShouldBe(TestTime);
+                });
+            }
+        );
+    }
+
+    [Test]
+    public void Given_EmptyConversation_When_AppendingMultipleUserMessages_Then_ShouldAllowConsecutiveUserMessages()
+    {
+        // Given
+        var conversation = ConversationMother.Empty();
+
+        // When
+        var results = new[]
+        {
+            conversation.AppendUserMessage(MessageMother.Question(), Clock),
+            conversation.AppendUserMessage(MessageMother.ValidUserMessage(), Clock),
+            conversation.AppendUserMessage(MessageMother.Greeting(), Clock)
+        };
+
+        // Then
+        results.ShouldAllBeSuccess();
+        conversation.ShouldHaveMessageCount(3);
+        conversation.MessagesOrdered.ShouldBeInSequentialOrder();
     }
 
     #endregion
 
-    #region Message Limit Tests
+    #region Append Assistant Message Tests
 
     [Test]
-    public void AddMessage_WhenAtLimit_ShouldFail()
+    public void Given_EmptyConversation_When_AppendingAssistantMessage_Then_ShouldSucceedAsFirstMessage()
     {
-        // Arrange
-        var conversation = CreateConversationWithMessages(9_999);
-        var content = MessageContent.Create("One more").Value;
+        // Given
+        var conversation = ConversationMother.Empty();
+        var content = MessageMother.ValidAssistantMessage();
 
-        // Act - Try to add 10,000th message
-        var result = conversation.AddUserMessage(content);
+        // When
+        var result = conversation.AppendAssistantMessage(content, Clock);
 
-        // Assert
-        result.IsSuccess.ShouldBeTrue(); // 10,000th is ok
-        conversation.MessagesCount.ShouldBe(10_000);
+        // Then
+        result.ShouldBeSuccessWith(message =>
+        {
+            message.Role.ShouldBe(MessageRole.Assistant);
+            message.Sequence.ShouldBe(1);
+        });
+        conversation.ShouldHaveMessageCount(1);
+    }
 
-        // Try 10,001st
-        var result2 = conversation.AddUserMessage(content);
-        result2.IsFailure.ShouldBeTrue();
-        result2.Error.Code.ShouldBe("CHAT.CONVERSATION.MESSAGE_LIMIT_EXCEEDED");
+    [Test]
+    public void Given_ConversationWithAssistantMessage_When_AppendingAnotherAssistant_Then_ShouldFailWithTurnTakingViolation()
+    {
+        // Given
+        var conversation = ConversationMother.AssistantInitiated();
+        var content = MessageMother.ValidAssistantMessage();
+
+        // When
+        var result = conversation.AppendAssistantMessage(content, Clock);
+
+        // Then
+        result.ShouldBeFailureWithCode("CHAT.MESSAGE.TURN_TAKING_VIOLATION");
+        result.Error.Message.ShouldContain("Assistant cannot reply twice in a row");
+    }
+
+    [Test]
+    public void Given_ConversationWithUserMessage_When_AppendingAssistant_Then_ShouldSucceed()
+    {
+        // Given
+        var conversation = ConversationMother.WithSingleUserMessage();
+        var content = MessageMother.ValidAssistantMessage();
+
+        // When
+        var result = conversation.AppendAssistantMessage(content, Clock);
+
+        // Then
+        result.ShouldBeSuccess();
+        conversation.ShouldHaveMessageCount(2);
+        conversation.MessagesOrdered[1].Role.ShouldBe(MessageRole.Assistant);
     }
 
     #endregion
 
-    #region SetTitle Tests
+    #region Update Title Tests
 
     [Test]
-    public void SetTitle_WithValidTitle_ShouldSucceed()
+    public void Given_ActiveConversationWithDefaultTitle_When_UpdatingTitle_Then_ShouldSucceed()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        var title = ConversationTitle.Create("New Title").Value;
+        // Given
+        var conversation = ConversationMother.Empty();
+        var newTitle = ConversationTitle.Create("Updated Title").Value;
 
-        // Act
-        var result = conversation.SetTitle(title);
+        // When
+        var result = conversation.UpdateTitle(newTitle, Clock);
 
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        conversation.Title.ShouldBe(title);
+        // Then
+        result.ShouldBeSuccess();
+        conversation.Title.ShouldBe("Updated Title");
         conversation.IsDefaultTitle.ShouldBeFalse();
+        conversation.UpdatedAtUtc.ShouldBe(TestTime);
     }
 
     [Test]
-    public void SetTitle_OnCompletedConversation_ShouldFail()
+    public void Given_CompletedConversation_When_UpdatingTitle_Then_ShouldFailWithNotActiveError()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        conversation.Complete();
-        var title = ConversationTitle.Create("New Title").Value;
+        // Given
+        var conversation = ConversationMother.Completed();
+        var newTitle = ConversationTitle.Create("New Title").Value;
 
-        // Act
-        var result = conversation.SetTitle(title);
+        // When
+        var result = conversation.UpdateTitle(newTitle, Clock);
 
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("CHAT.CONVERSATION.NOT_ACTIVE");
-    }
-
-    #endregion
-
-    #region Complete/Reopen Tests
-
-    [Test]
-    public void Complete_ActiveConversation_ShouldSucceed()
-    {
-        // Arrange
-        var conversation = CreateConversation();
-
-        // Act
-        var result = conversation.Complete();
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        conversation.Status.ShouldBe(ConversationStatus.Completed);
+        // Then
+        result.ShouldBeFailureWithCode("CHAT.CONVERSATION.NOT_ACTIVE");
     }
 
     [Test]
-    public void Reopen_CompletedConversation_ShouldSucceed()
+    public void Given_ActiveConversation_When_UpdatingTitle_Then_ShouldRaiseTitleUpdatedEvent()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        conversation.Complete();
-
-        // Act
-        var result = conversation.Reopen();
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        conversation.Status.ShouldBe(ConversationStatus.Active);
-    }
-
-    [Test]
-    public void Reopen_ActiveConversation_ShouldFail()
-    {
-        // Arrange
-        var conversation = CreateConversation();
-
-        // Act
-        var result = conversation.Reopen();
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("CHAT.CONVERSATION.ALREADY_ACTIVE");
+        ExecuteCommandAndAssertEvents<ConversationTitleUpdatedEvent>(
+            ConversationMother.Empty(),
+            conversation => conversation.UpdateTitle(
+                ConversationTitle.Create("New Title").Value, Clock),
+            evt =>
+            {
+                evt.Title.ShouldBe("New Title");
+                evt.IsDefaultTitle.ShouldBeFalse();
+                evt.UpdatedAt.ShouldBe(TestTime);
+            }
+        );
     }
 
     #endregion
 
-    #region Sequence Tests
+    #region Complete Conversation Tests
 
     [Test]
-    public void Messages_ShouldHaveSequentialSequenceNumbers()
+    public void Given_ConversationWithMessages_When_Completing_Then_ShouldSucceed()
     {
-        // Arrange
-        var conversation = CreateConversation();
+        // Given
+        var conversation = ConversationMother.SimpleQA();
 
-        // Act
-        for (int i = 1; i <= 5; i++)
+        // When
+        var result = conversation.Complete(Clock);
+
+        // Then
+        result.ShouldBeSuccess();
+        conversation.ShouldBeCompleted();
+        conversation.UpdatedAtUtc.ShouldBe(TestTime);
+    }
+
+    [Test]
+    public void Given_EmptyConversation_When_Completing_Then_ShouldFailWithRequiresMessagesError()
+    {
+        // Given
+        var conversation = ConversationMother.Empty();
+
+        // When
+        var result = conversation.Complete(Clock);
+
+        // Then
+        result.ShouldBeFailureWithCode("CHAT.CONVERSATION.COMPLETE_REQUIRES_MESSAGES");
+    }
+
+    [Test]
+    public void Given_AlreadyCompletedConversation_When_CompletingAgain_Then_ShouldFailWithNotActiveError()
+    {
+        // Given
+        var conversation = ConversationMother.Completed();
+
+        // When
+        var result = conversation.Complete(Clock);
+
+        // Then
+        result.ShouldBeFailureWithCode("CHAT.CONVERSATION.NOT_ACTIVE");
+    }
+
+    [Test]
+    public void Given_ConversationWithMessages_When_Completing_Then_ShouldRaiseCompletedEvent()
+    {
+        // Given
+        var conversation = ConversationMother.LongConversation();
+        var messageCount = conversation.MessageCount;
+
+        // When
+        conversation.Complete(Clock);
+
+        // Then
+        conversation.ShouldHaveRaisedEvent<ConversationCompletedEvent>(evt =>
         {
-            conversation.AddUserMessage(MessageContent.Create($"Message {i}").Value);
-        }
+            evt.ShouldBeValidCompletedEvent(conversation.Id, messageCount);
+            evt.CompletedAt.ShouldBe(TestTime);
+        });
+    }
 
-        // Assert
-        conversation.Messages.Count.ShouldBe(5);
-        for (int i = 0; i < 5; i++)
+    #endregion
+
+    #region Message Sequencing Tests
+
+    [Test]
+    public void Given_ConversationWithMultipleMessages_Then_MessagesShouldHaveSequentialNumbers()
+    {
+        // Given & When
+        var conversation = _builder
+            .WithConversationFlow(
+                "Message 1",
+                "Response 1",
+                "Message 2",
+                "Response 2",
+                "Message 3")
+            .Build();
+
+        // Then
+        var messages = conversation.MessagesOrdered;
+        messages.ShouldBeInSequentialOrder();
+        messages.ShouldBeInChronologicalOrder();
+    }
+
+    #endregion
+
+    #region Business Rule Tests
+
+    [Test]
+    public void Given_Conversation_Then_ShouldMaintainInvariants()
+    {
+        AssertInvariantsHold(
+            ConversationMother.Empty(),
+            c => c.AppendUserMessage(MessageMother.ValidUserMessage(), Clock),
+            c => c.AppendAssistantMessage(MessageMother.ValidAssistantMessage(), Clock),
+            c => c.UpdateTitle(ConversationTitle.Create("New").Value, Clock)
+        );
+    }
+
+    protected override void AssertInvariants(Conversation aggregate)
+    {
+        base.AssertInvariants(aggregate);
+        
+        // Conversation-specific invariants
+        aggregate.MessageCount.ShouldBeGreaterThanOrEqualTo(0);
+        aggregate.MessageCount.ShouldBeLessThanOrEqualTo(10000);
+        aggregate.CreatedAtUtc.ShouldBeLessThanOrEqualTo(aggregate.UpdatedAtUtc);
+        
+        if (aggregate.Status == ConversationStatus.Completed)
         {
-            conversation.Messages[i].Sequence.ShouldBe(i + 1);
+            aggregate.MessageCount.ShouldBeGreaterThan(0);
+        }
+        
+        if (aggregate.MessagesOrdered.Any())
+        {
+            aggregate.MessagesOrdered.ShouldBeInSequentialOrder();
         }
     }
 
     #endregion
 
-    #region Domain Events Tests
+    #region Helper Method Tests
 
     [Test]
-    public void AddMessage_ShouldRaiseMessageAddedEvent()
+    public void Given_Conversation_When_CheckingOwnership_Then_ShouldReturnCorrectResult()
     {
-        // Arrange
-        var conversation = CreateConversation();
-        var content = MessageContent.Create("Test message").Value;
+        // Given
+        var owner = UserMother.Named.Alice();
+        var otherUser = UserMother.Named.Bob();
+        var conversation = _builder.WithOwner(owner).Build();
 
-        // Act
-        conversation.AddUserMessage(content);
+        // Then
+        conversation.BelongsTo(owner).ShouldBeTrue();
+        conversation.BelongsTo(otherUser).ShouldBeFalse();
+    }
 
-        // Assert
+    [Test]
+    public void Given_ActiveConversation_When_CheckingIsActive_Then_ShouldReturnTrue()
+    {
+        // Given
+        var conversation = ConversationMother.Empty();
+
+        // Then
+        conversation.IsActive.ShouldBeTrue();
+    }
+
+    [Test]
+    public void Given_CompletedConversation_When_CheckingIsActive_Then_ShouldReturnFalse()
+    {
+        // Given
+        var conversation = ConversationMother.Completed();
+
+        // Then
+        conversation.IsActive.ShouldBeFalse();
+    }
+
+    #endregion
+
+    #region Time Discipline Tests
+
+    [Test]
+    public void Given_DifferentClocks_When_PerformingOperations_Then_ShouldUseProvidedTime()
+    {
+        // Given
+        var conversation = ConversationMother.Empty();
+        var time1 = new DateTimeOffset(2024, 1, 1, 10, 0, 0, TimeSpan.Zero);
+        var time2 = new DateTimeOffset(2024, 1, 1, 11, 0, 0, TimeSpan.Zero);
+        var time3 = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        // When
+        conversation.AppendUserMessage(
+            MessageMother.ValidUserMessage(),
+            new FixedClock(time1));
+        
+        conversation.UpdateTitle(
+            ConversationTitle.Create("Title").Value,
+            new FixedClock(time2));
+        
+        conversation.Complete(new FixedClock(time3));
+
+        // Then
+        conversation.MessagesOrdered[0].CreatedAtUtc.ShouldBe(time1);
+        conversation.UpdatedAtUtc.ShouldBe(time3);
+        
         var events = conversation.DomainEvents;
-        events.ShouldContain(e => e is MessageAddedEvent);
-
-        var messageEvent = events.OfType<MessageAddedEvent>().Last();
-        messageEvent.ConversationId.ShouldBe(conversation.Id);
-        messageEvent.Sequence.ShouldBe(1);
-        messageEvent.Role.ShouldBe(MessageRole.User);
-        messageEvent.ContentLength.ShouldBe(content.Length);
+        events.OfType<UserMessageAppendedEvent>().First().CreatedAt.ShouldBe(time1);
+        events.OfType<ConversationTitleUpdatedEvent>().First().UpdatedAt.ShouldBe(time2);
+        events.OfType<ConversationCompletedEvent>().First().CompletedAt.ShouldBe(time3);
     }
 
     #endregion
 
-    #region Helper Methods
+    #region Edge Cases and Boundary Tests
 
-    private static Conversation CreateConversation()
+    [Test]
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void Given_InvalidMessageContent_When_Creating_Then_ShouldFailValidation(string? invalidContent)
     {
-        var result = Conversation.Start(
-            ConversationId.New(),
-            UserId.New());
-        
-        return result.Value;
+        // Given
+        var contentResult = MessageContent.Create(invalidContent!);
+
+        // Then
+        contentResult.ShouldBeFailure();
     }
 
-    private static Conversation CreateConversationWithMessages(int count)
+    [Test]
+    public void Given_MaxLengthTitle_When_Creating_Then_ShouldSucceed()
     {
-        var conversation = CreateConversation();
+        // Given
+        var maxTitle = new string('a', 200); // Max length
         
-        for (int i = 0; i < count; i++)
-        {
-            // Alternate between user and assistant to avoid turn-taking violations
-            if (i % 2 == 0)
-                conversation.AddUserMessage(MessageContent.Create($"User message {i}").Value);
-            else
-                conversation.AddAssistantMessage(MessageContent.Create($"Assistant message {i}").Value);
-        }
+        // When
+        var result = ConversationTitle.Create(maxTitle);
+
+        // Then
+        result.ShouldBeSuccess();
+        result.Value.Value.Length.ShouldBe(200);
+    }
+
+    [Test]
+    public void Given_TooLongTitle_When_Creating_Then_ShouldFail()
+    {
+        // Given
+        var tooLongTitle = new string('a', 201); // Over max length
         
-        return conversation;
+        // When
+        var result = ConversationTitle.Create(tooLongTitle);
+
+        // Then
+        result.ShouldBeFailure();
+    }
+
+    #endregion
+
+    #region Performance Tests
+
+    [Test]
+    [Timeout(1000)] // Should complete within 1 second
+    public void Given_LargeNumberOfMessages_When_Accessing_Then_ShouldBePerformant()
+    {
+        // Given
+        var conversation = _builder
+            .WithManyMessages(1000)
+            .Build();
+
+        // When & Then
+        conversation.MessageCount.ShouldBe(1000);
+        conversation.MessagesOrdered.Count.ShouldBe(1000);
     }
 
     #endregion

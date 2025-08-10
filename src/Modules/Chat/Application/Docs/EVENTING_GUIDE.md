@@ -84,7 +84,7 @@ Canonical keys (kebab-case). Policy merges, dedupes, and removes nulls.
 ### Typical Aggregate
 ```csharp
 // Domain model
-order.AddDomainEvent(new OrderCreatedDomainEvent(order.Id, order.Total));
+order.RaiseDomainEvent(new OrderCreatedDomainEvent(order.Id, order.Total));
 
 // Optional shortcut (domain exposes integration event directly)
 public sealed record PaymentSucceeded(...) : IDomainEvent, IHaveIntegrationEvent

@@ -1,6 +1,7 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.Repositories;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Shared.Common;
 using BuildingBlocks.Core.Functional.Results;

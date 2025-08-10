@@ -1,6 +1,8 @@
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Specifications;
+using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Diagnostics;
 using BuildingBlocks.Core.Domain.CQRS;
@@ -159,7 +161,7 @@ public sealed class GetConversationHistoryQueryEpic2Handler : IRequestHandler<Ge
     private static Specification<Conversation> BuildSpecification(GetConversationHistoryQueryEpic2 request)
     {
         // Start with user filter (always required)
-        var spec = new ConversationsByOwnerSpec(request.UserId);
+        Specification<Conversation> spec = new ConversationsByOwnerSpec(request.UserId);
 
         // Add optional filters using specification composition
         if (request.Status.HasValue)

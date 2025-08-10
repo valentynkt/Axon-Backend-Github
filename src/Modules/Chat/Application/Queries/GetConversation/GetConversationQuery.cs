@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
+using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Shared.Common;
 using Axon.Shared.Common.Abstractions;
 using BuildingBlocks.Core.Functional.Results;

@@ -1,4 +1,5 @@
-using FluentAssertions;
+using Shouldly;
+using Xunit;
 
 namespace Axon.Modules.Chat.Domain.Tests.Smoke;
 
@@ -66,7 +67,7 @@ public class TimeGuardTests
         }
 
         // Assert
-        violations.Should().BeEmpty(
+        violations.ShouldBeEmpty(
             "Domain code should not use direct system time APIs. " +
             "Use IClock instead for testable and deterministic time access. " +
             "Violations found:\n" + string.Join("\n", violations));
@@ -87,7 +88,7 @@ public class TimeGuardTests
         var content = File.ReadAllText(systemClockPath);
 
         // Assert
-        content.Should().Contain("DateTimeOffset.UtcNow", 
+        content.ShouldContain("DateTimeOffset.UtcNow", 
             "SystemClock must use DateTimeOffset.UtcNow to implement IClock");
     }
 
@@ -142,11 +143,11 @@ public class TimeGuardTests
         }
 
         // Assert
-        violations.Should().HaveCountGreaterThan(0, 
+        violations.Count.ShouldBeGreaterThan(0, 
             "Guard logic should detect forbidden time API usage");
         
-        violations.Should().Contain(v => v.Contains("DateTime.Now"));
-        violations.Should().Contain(v => v.Contains("DateTime.UtcNow"));
-        violations.Should().Contain(v => v.Contains("DateTimeOffset.Now"));
+        violations.ShouldContain(v => v.Contains("DateTime.Now"));
+        violations.ShouldContain(v => v.Contains("DateTime.UtcNow"));
+        violations.ShouldContain(v => v.Contains("DateTimeOffset.Now"));
     }
 }

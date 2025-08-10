@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
-using FluentAssertions;
+using Shouldly;
+using Xunit;
 
 namespace Axon.Modules.Chat.Domain.Tests.Smoke;
 
@@ -15,8 +16,8 @@ public class ProjectShapeTests
         var assembly = typeof(AssemblyMarker).Assembly;
 
         // Assert
-        assembly.Should().NotBeNull();
-        assembly.GetName().Name.Should().Be("Axon.Modules.Chat.Domain");
+        assembly.ShouldNotBeNull();
+        assembly.GetName().Name.ShouldBe("Axon.Modules.Chat.Domain");
     }
 
     [Fact]
@@ -44,7 +45,7 @@ public class ProjectShapeTests
         // Assert
         foreach (var pattern in forbiddenPatterns)
         {
-            referencedAssemblies.Should().NotContain(
+            referencedAssemblies.ShouldNotContain(
                 name => name!.StartsWith(pattern, StringComparison.OrdinalIgnoreCase),
                 $"Domain should not reference {pattern}");
         }
@@ -98,7 +99,7 @@ public class ProjectShapeTests
         }
 
         // Assert
-        violations.Should().BeEmpty("Domain should not contain JSON serialization attributes");
+        violations.ShouldBeEmpty("Domain should not contain JSON serialization attributes");
     }
 
     [Fact]
@@ -125,11 +126,11 @@ public class ProjectShapeTests
         var assemblyName = _domainAssembly.GetName().Name;
 
         // Assert
-        assemblyName.Should().Be("Axon.Modules.Chat.Domain");
+        assemblyName.ShouldBe("Axon.Modules.Chat.Domain");
         
         // Verify the assembly is correctly structured for future additions
-        _domainAssembly.Should().NotBeNull();
-        _domainAssembly.DefinedTypes.Should().ContainSingle(t => t.Name == "AssemblyMarker",
+        _domainAssembly.ShouldNotBeNull();
+        _domainAssembly.DefinedTypes.Where(t => t.Name == "AssemblyMarker").ShouldHaveSingleItem(
             "Should contain the AssemblyMarker for now");
     }
 
@@ -144,7 +145,7 @@ public class ProjectShapeTests
 
         // Assert
         // Verify nullable context is enabled (this is enforced at compile time)
-        assembly.Should().NotBeNull();
+        assembly.ShouldNotBeNull();
         
         // Additional checks can be added here as needed
     }
@@ -184,12 +185,12 @@ public class ProjectShapeTests
                     "Microsoft.Extensions.Hosting"
                 };
 
-                forbiddenMicrosoft.Should().NotContain(forbidden =>
+                forbiddenMicrosoft.ShouldNotContain(forbidden =>
                     reference.Name!.StartsWith(forbidden, StringComparison.OrdinalIgnoreCase),
                     $"Domain should not reference {reference.Name}");
             }
 
-            isAllowed.Should().BeTrue($"Unexpected reference: {reference.Name}");
+            isAllowed.ShouldBeTrue($"Unexpected reference: {reference.Name}");
         }
     }
 }

@@ -1,8 +1,10 @@
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.Repositories;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
+using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Shared.Common;
 using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;

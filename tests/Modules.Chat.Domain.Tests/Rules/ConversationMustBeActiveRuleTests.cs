@@ -1,5 +1,5 @@
 using Axon.Modules.Chat.Domain.Rules;
-using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Tests.Rules;
 

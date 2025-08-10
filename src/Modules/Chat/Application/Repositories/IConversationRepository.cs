@@ -1,10 +1,12 @@
 using Axon.BuildingBlocks.Core.Pagination;
 using Axon.BuildingBlocks.Persistence.Interfaces;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.Conversations;
 using Axon.Modules.Chat.Domain.Conversations.Enums;
 using Axon.Modules.Chat.Domain.Conversations.ValueObjects;
+using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Pagination;
 using BuildingBlocks.Core.Functional.Results;

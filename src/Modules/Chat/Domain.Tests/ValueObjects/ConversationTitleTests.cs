@@ -1,5 +1,5 @@
 using Axon.Modules.Chat.Domain.ValueObjects;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace Axon.Modules.Chat.Domain.Tests.ValueObjects;
@@ -15,9 +15,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(null);
 
             // Assert
-            result.IsFailure.Should().BeTrue();
-            result.Error.Code.Should().Be("CHAT.TITLE.INVALID");
-            result.Error.Message.Should().Be("Title is invalid");
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Code.ShouldBe("CHAT.TITLE.INVALID");
+            result.Error.Message.ShouldBe("Title is invalid");
         }
 
         [Fact]
@@ -27,10 +27,10 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create("");
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be("");
-            result.Value.IsEmpty.Should().BeTrue();
-            result.Value.Length.Should().Be(0);
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe("");
+            result.Value.IsEmpty.ShouldBeTrue();
+            result.Value.Length.ShouldBe(0);
         }
 
         [Fact]
@@ -40,10 +40,10 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create("   ");
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be("");
-            result.Value.IsEmpty.Should().BeTrue();
-            result.Value.Length.Should().Be(0);
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe("");
+            result.Value.IsEmpty.ShouldBeTrue();
+            result.Value.Length.ShouldBe(0);
         }
 
         [Fact]
@@ -56,9 +56,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(input);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be("Hello World");
-            result.Value.Length.Should().Be(11);
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe("Hello World");
+            result.Value.Length.ShouldBe(11);
         }
 
         [Fact]
@@ -71,9 +71,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(input);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be("Hello   World Test");
-            result.Value.Length.Should().Be(18);
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe("Hello   World Test");
+            result.Value.Length.ShouldBe(18);
         }
 
         [Fact]
@@ -86,9 +86,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(input);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be(input);
-            result.Value.Length.Should().Be(200);
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe(input);
+            result.Value.Length.ShouldBe(200);
         }
 
         [Fact]
@@ -101,9 +101,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(input);
 
             // Assert
-            result.IsFailure.Should().BeTrue();
-            result.Error.Code.Should().Be("CHAT.TITLE.TOO_LONG");
-            result.Error.Message.Should().Be("Title cannot exceed 200 characters");
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Code.ShouldBe("CHAT.TITLE.TOO_LONG");
+            result.Error.Message.ShouldBe("Title cannot exceed 200 characters");
         }
 
         [Fact]
@@ -116,9 +116,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(input);
 
             // Assert
-            result.IsFailure.Should().BeTrue();
-            result.Error.Code.Should().Be("CHAT.TITLE.TOO_LONG");
-            result.Error.Message.Should().Be("Title cannot exceed 200 characters");
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Code.ShouldBe("CHAT.TITLE.TOO_LONG");
+            result.Error.Message.ShouldBe("Title cannot exceed 200 characters");
         }
 
         [Fact]
@@ -131,9 +131,9 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(input);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be(new string('a', 200));
-            result.Value.Length.Should().Be(200);
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe(new string('a', 200));
+            result.Value.Length.ShouldBe(200);
         }
 
         [Theory]
@@ -151,8 +151,8 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create(title);
 
             // Assert
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Value.Should().Be(title.Trim());
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Value.ShouldBe(title.Trim());
         }
     }
 
@@ -165,7 +165,7 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create("");
             
             // Act & Assert
-            result.Value.IsEmpty.Should().BeTrue();
+            result.Value.IsEmpty.ShouldBeTrue();
         }
 
         [Fact]
@@ -175,7 +175,7 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create("Test Title");
             
             // Act & Assert
-            result.Value.IsEmpty.Should().BeFalse();
+            result.Value.IsEmpty.ShouldBeFalse();
         }
 
         [Fact]
@@ -185,7 +185,7 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create("Test Title");
             
             // Act & Assert
-            result.Value.Length.Should().Be(10);
+            result.Value.Length.ShouldBe(10);
         }
 
         [Fact]
@@ -195,7 +195,7 @@ public sealed class ConversationTitleTests
             var result = ConversationTitle.Create("Test Title");
             
             // Act & Assert
-            result.Value.ToString().Should().Be("Test Title");
+            result.Value.ToString().ShouldBe("Test Title");
         }
     }
 
@@ -211,7 +211,7 @@ public sealed class ConversationTitleTests
             var validation = title.Validate();
 
             // Assert
-            validation.IsValid.Should().BeTrue();
+            validation.IsValid.ShouldBeTrue();
         }
 
         [Fact]
@@ -224,7 +224,7 @@ public sealed class ConversationTitleTests
             var validation = title.Validate();
 
             // Assert
-            validation.IsValid.Should().BeTrue();
+            validation.IsValid.ShouldBeTrue();
         }
     }
 
@@ -238,8 +238,8 @@ public sealed class ConversationTitleTests
             var title2 = ConversationTitle.Create("Test Title").Value;
 
             // Act & Assert
-            title1.Should().Be(title2);
-            title1.GetHashCode().Should().Be(title2.GetHashCode());
+            title1.ShouldBe(title2);
+            title1.GetHashCode().ShouldBe(title2.GetHashCode());
         }
 
         [Fact]
@@ -250,7 +250,7 @@ public sealed class ConversationTitleTests
             var title2 = ConversationTitle.Create("Test Title 2").Value;
 
             // Act & Assert
-            title1.Should().NotBe(title2);
+            title1.ShouldNotBe(title2);
         }
 
         [Fact]
@@ -261,8 +261,8 @@ public sealed class ConversationTitleTests
             var title2 = ConversationTitle.Create("   ").Value; // Trimmed to empty
 
             // Act & Assert
-            title1.Should().Be(title2);
-            title1.GetHashCode().Should().Be(title2.GetHashCode());
+            title1.ShouldBe(title2);
+            title1.GetHashCode().ShouldBe(title2.GetHashCode());
         }
     }
 }

@@ -1,6 +1,7 @@
 using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
 using Axon.Modules.Chat.Domain.Time;
-using FluentAssertions;
+using Shouldly;
+using Xunit;
 
 namespace Axon.Modules.Chat.Domain.Tests.Time;
 
@@ -18,9 +19,9 @@ public class ClockTests
         var after = DateTimeOffset.UtcNow;
 
         // Assert
-        clockTime.Should().BeOnOrAfter(before);
-        clockTime.Should().BeOnOrBefore(after);
-        clockTime.Offset.Should().Be(TimeSpan.Zero, "SystemClock should return UTC time");
+        clockTime.ShouldBeGreaterThanOrEqualTo(before);
+        clockTime.ShouldBeLessThanOrEqualTo(after);
+        clockTime.Offset.ShouldBe(TimeSpan.Zero, "SystemClock should return UTC time");
     }
 
     [Fact]
@@ -33,7 +34,7 @@ public class ClockTests
         // Act & Assert
         for (int i = 0; i < 10; i++)
         {
-            fixedClock.UtcNow.Should().Be(fixedInstant);
+            fixedClock.UtcNow.ShouldBe(fixedInstant);
         }
     }
 
@@ -47,7 +48,7 @@ public class ClockTests
         var clock = FixedClock.At(specificTime);
 
         // Assert
-        clock.UtcNow.Should().Be(specificTime);
+        clock.UtcNow.ShouldBe(specificTime);
     }
 
     [Fact]
@@ -63,9 +64,9 @@ public class ClockTests
         var second = advancingClock.UtcNow;
         var third = advancingClock.UtcNow;
 
-        first.Should().Be(seed);
-        second.Should().Be(seed.Add(step));
-        third.Should().Be(seed.Add(step).Add(step));
+        first.ShouldBe(seed);
+        second.ShouldBe(seed.Add(step));
+        third.ShouldBe(seed.Add(step).Add(step));
     }
 
     [Fact]
@@ -80,7 +81,7 @@ public class ClockTests
         var second = clock.UtcNow;
 
         // Assert
-        first.Should().Be(seed);
-        second.Should().Be(seed.AddMinutes(1), "Default step should be 1 minute");
+        first.ShouldBe(seed);
+        second.ShouldBe(seed.AddMinutes(1), "Default step should be 1 minute");
     }
 }
