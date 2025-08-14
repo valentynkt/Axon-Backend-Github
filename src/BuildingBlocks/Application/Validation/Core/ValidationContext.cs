@@ -1,7 +1,7 @@
-using BuildingBlocks.Core.Abstractions.CQRS;
 using System.Diagnostics;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
-namespace BuildingBlocks.Application.Validation;
+namespace BuildingBlocks.Application.Validation.Core;
 
 /// <summary>
 /// Immutable implementation of <see cref="IValidationContext"/> providing

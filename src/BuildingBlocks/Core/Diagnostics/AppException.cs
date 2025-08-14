@@ -7,7 +7,7 @@ namespace BuildingBlocks.Core.Diagnostics;
 /// Base application exception with Result pattern integration.
 /// Provides seamless conversion between exceptions and Result pattern errors.
 /// </summary>
-public class AppException : System.Exception
+public class AppException : Exception
 {
     /// <summary>
     /// The Error associated with this exception for Result pattern integration.
@@ -16,7 +16,7 @@ public class AppException : System.Exception
 
     public AppException(string message) : base(message) { }
     
-    public AppException(string message, System.Exception innerException) : base(message, innerException) { }
+    public AppException(string message, Exception innerException) : base(message, innerException) { }
     
     /// <summary>
     /// Creates an AppException from a Result Error.
@@ -58,7 +58,7 @@ public class BadRequestException : AppException
 {
     public BadRequestException(string message) : base(message) { }
     
-    public BadRequestException(string message, System.Exception innerException) : base(message, innerException) { }
+    public BadRequestException(string message, Exception innerException) : base(message, innerException) { }
     
     public BadRequestException(Error error) : base(error) { }
 
@@ -78,7 +78,7 @@ public class NotFoundException : AppException
 {
     public NotFoundException(string message) : base(message) { }
     
-    public NotFoundException(string message, System.Exception innerException) : base(message, innerException) { }
+    public NotFoundException(string message, Exception innerException) : base(message, innerException) { }
     
     public NotFoundException(Error error) : base(error) { }
 
@@ -98,7 +98,7 @@ public class ConflictException : AppException
 {
     public ConflictException(string message) : base(message) { }
     
-    public ConflictException(string message, System.Exception innerException) : base(message, innerException) { }
+    public ConflictException(string message, Exception innerException) : base(message, innerException) { }
     
     public ConflictException(Error error) : base(error) { }
 
@@ -123,7 +123,7 @@ public class ValidationException : AppException
         StatusCode = statusCode;
     }
     
-    public ValidationException(string message, System.Exception innerException, HttpStatusCode statusCode = HttpStatusCode.BadRequest) : base(message, innerException) 
+    public ValidationException(string message, Exception innerException, HttpStatusCode statusCode = HttpStatusCode.BadRequest) : base(message, innerException) 
     { 
         StatusCode = statusCode;
     }
@@ -152,7 +152,7 @@ public static class ExceptionExtensions
     /// </summary>
     /// <param name="exception">The exception to convert</param>
     /// <returns>An Error representing the exception</returns>
-    public static Error ToError(this System.Exception exception)
+    public static Error ToError(this Exception exception)
     {
         return exception switch
         {
@@ -166,7 +166,7 @@ public static class ExceptionExtensions
     /// </summary>
     /// <param name="exception">The exception to check</param>
     /// <returns>True if the exception contains Result pattern error data</returns>
-    public static bool HasResultError(this System.Exception exception)
+    public static bool HasResultError(this Exception exception)
     {
         return exception is AppException { Error: not null } ||
                exception.Data.Contains("AxonError");
@@ -177,7 +177,7 @@ public static class ExceptionExtensions
     /// </summary>
     /// <param name="exception">The exception to extract from</param>
     /// <returns>The Error if present, null otherwise</returns>
-    public static Error? GetResultError(this System.Exception exception)
+    public static Error? GetResultError(this Exception exception)
     {
         if (exception is AppException { Error: not null } appException)
             return appException.Error;

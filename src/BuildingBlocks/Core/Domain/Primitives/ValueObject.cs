@@ -15,7 +15,7 @@ public abstract record ValueObject
     protected abstract IEnumerable<object?> GetEqualityComponents();
 
     /// <summary>Validates the VO invariants. Must be cheap and side-effect free.</summary>
-    public abstract Validation<Unit> Validate();
+    public abstract ValidationResult<Unit> Validate();
 
     public bool IsValid => Validate().IsValid;
     public IReadOnlyList<Error> ValidationErrors => Validate().Errors;

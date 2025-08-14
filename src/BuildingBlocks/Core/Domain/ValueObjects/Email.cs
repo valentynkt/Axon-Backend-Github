@@ -172,7 +172,7 @@ public sealed partial record Email : SingleValueObject<string>
     public static Option<Email> TryCreate(string? value)
     {
         var result = Create(value);
-        return result.IsSuccess ? Option<Email>.Some(result.Value) : Option<Email>.None();
+        return result.IsSuccess ? Option<Email>.CreateSome(result.Value) : Option<Email>.CreateNone();
     }
     
     /// <summary>
@@ -184,7 +184,7 @@ public sealed partial record Email : SingleValueObject<string>
     
     #region Validation
     
-    public override Validation<Unit> Validate()
+    public override ValidationResult<Unit> Validate()
     {
         var errors = new List<Error>();
         

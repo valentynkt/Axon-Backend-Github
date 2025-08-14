@@ -5,7 +5,7 @@ using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Shared.Common;
+ 
 using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;
 using AiRequest = Axon.Modules.Chat.Application.DTOs.AiRequest;

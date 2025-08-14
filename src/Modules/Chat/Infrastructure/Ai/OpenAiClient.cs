@@ -4,7 +4,7 @@ using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Types;
 using Axon.Modules.Chat.Infrastructure.Ai.Abstractions;
 using Axon.Modules.Chat.Infrastructure.Ai.Models;
-using Axon.Shared.Common;
+ 
 using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

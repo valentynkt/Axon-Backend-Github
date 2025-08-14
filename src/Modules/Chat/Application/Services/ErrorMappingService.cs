@@ -2,7 +2,7 @@ using System.Net.Http;
 using System.Text.Json;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Domain.Errors;
-using Axon.Shared.Common;
+ 
 
 namespace Axon.Modules.Chat.Application.Services;
 

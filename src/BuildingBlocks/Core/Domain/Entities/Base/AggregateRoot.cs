@@ -10,7 +10,7 @@ namespace BuildingBlocks.Core.Domain.Entities.Base;
 /// optimistic concurrency token.
 /// </summary>
 /// <typeparam name="TId">Strongly typed ID type</typeparam>
-public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot<TId>
+public abstract class AggregateRoot<TId> : AuditableDeletableEntity<TId>, IAggregateRoot<TId>
     where TId : notnull, IStrongId
 {
     private readonly List<IDomainEvent> _domainEvents = new();

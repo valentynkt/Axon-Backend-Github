@@ -24,14 +24,14 @@ public static class ResultMinimalApiExtensions
     {
         if (result.IsSuccess)
         {
-            return HttpResults.Ok(result.Value);
+            return HttpResultFactory.Ok(result.Value);
         }
         
         var problemDetails = result.Error.ToProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
             
-        return HttpResults.Problem(problemDetails);
+        return HttpResultFactory.Problem(problemDetails);
     }
     
     /// <summary>
@@ -55,7 +55,7 @@ public static class ResultMinimalApiExtensions
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
             
-        return HttpResults.Problem(problemDetails);
+        return HttpResultFactory.Problem(problemDetails);
     }
     
     /// <summary>
@@ -73,14 +73,14 @@ public static class ResultMinimalApiExtensions
     {
         if (result.IsSuccess)
         {
-            return HttpResults.Created(uri, result.Value);
+            return HttpResultFactory.Created(uri, result.Value);
         }
         
         var problemDetails = result.Error.ToProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
             
-        return HttpResults.Problem(problemDetails);
+        return HttpResultFactory.Problem(problemDetails);
     }
     
     /// <summary>
@@ -99,15 +99,15 @@ public static class ResultMinimalApiExtensions
         if (result.IsSuccess)
         {
             return uri != null 
-                ? HttpResults.Accepted(uri, result.Value)
-                : HttpResults.Accepted(value: result.Value);
+                ? HttpResultFactory.Accepted(uri, result.Value)
+                : HttpResultFactory.Accepted(value: result.Value);
         }
         
         var problemDetails = result.Error.ToProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
             
-        return HttpResults.Problem(problemDetails);
+        return HttpResultFactory.Problem(problemDetails);
     }
     
     /// <summary>
@@ -122,13 +122,13 @@ public static class ResultMinimalApiExtensions
     {
         if (result.IsSuccess)
         {
-            return HttpResults.NoContent();
+            return HttpResultFactory.NoContent();
         }
         
         var problemDetails = result.Error.ToProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
             
-        return HttpResults.Problem(problemDetails);
+        return HttpResultFactory.Problem(problemDetails);
     }
 }

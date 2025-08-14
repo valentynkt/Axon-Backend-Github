@@ -8,13 +8,12 @@ namespace Axon.Modules.Chat.Domain.Entities;
 /// Represents an immutable message entity within a conversation.
 /// Created only by the Conversation aggregate to ensure sequence integrity.
 /// </summary>
-public sealed class Message : Entity<MessageId>
+public sealed class Message : AuditableDeletableEntity<MessageId>
 {
     public ConversationId ConversationId { get; }
     public MessageRole Role { get; }
     public MessageContent Content { get; }
     public int Sequence { get; }
-    public DateTimeOffset CreatedAtUtc { get; }
 
     private Message() : base(MessageId.New()) 
     {
@@ -29,15 +28,13 @@ public sealed class Message : Entity<MessageId>
         ConversationId conversationId,
         MessageRole role,
         MessageContent content,
-        int sequence,
-        DateTimeOffset createdAtUtc)
+        int sequence)
         : base(id)
     {
         ConversationId = conversationId ?? throw new ArgumentNullException(nameof(conversationId));
         Role = role ?? throw new ArgumentNullException(nameof(role));
         Content = content ?? throw new ArgumentNullException(nameof(content));
         Sequence = sequence;
-        CreatedAtUtc = createdAtUtc;
     }
 
     /// <summary>
@@ -48,8 +45,7 @@ public sealed class Message : Entity<MessageId>
         ConversationId conversationId,
         MessageRole role,
         MessageContent content,
-        int sequence,
-        DateTimeOffset createdAtUtc)
+        int sequence)
     {
         if (sequence <= 0)
             throw new ArgumentException("Sequence must be positive.", nameof(sequence));
@@ -59,7 +55,6 @@ public sealed class Message : Entity<MessageId>
             conversationId,
             role,
             content,
-            sequence,
-            createdAtUtc);
+            sequence);
     }
 }

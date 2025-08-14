@@ -433,7 +433,7 @@ public sealed record Money : ValueObject
         yield return Math.Round(Amount, MaxPrecision); // Round for equality to avoid floating point issues
     }
     
-    public override Validation<Unit> Validate()
+    public override ValidationResult<Unit> Validate()
     {
         var errors = new List<Error>();
         

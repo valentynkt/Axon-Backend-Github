@@ -1,7 +1,7 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.Repositories;
-using Axon.Shared.Common;
+ 
 using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 

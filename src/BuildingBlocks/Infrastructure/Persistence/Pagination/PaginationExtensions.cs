@@ -53,7 +53,7 @@ public static class PaginationExtensions
             var total = await source.CountAsync(ct);
 
             var items = total == 0
-                ? Array.Empty<T>()
+                ? new List<T>()
                 : await source
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
@@ -142,11 +142,11 @@ public static class PaginationExtensions
         var size = request.PageSize;
 
         if (page < 1)
-            throw new ArgumentOutOfRangeException(nameof(request.PageNumber), PaginationErrors.InvalidPageNumber.Message);
+            throw new ArgumentOutOfRangeException(nameof(request), PaginationErrors.InvalidPageNumber.Message);
         if (size < 1)
-            throw new ArgumentOutOfRangeException(nameof(request.PageSize), PaginationErrors.InvalidPageSize.Message);
+            throw new ArgumentOutOfRangeException(nameof(request), PaginationErrors.InvalidPageSize.Message);
         if (size > MaxPageSize)
-            throw new ArgumentOutOfRangeException(nameof(request.PageSize), PaginationErrors.PageSizeExceedsMaximum(MaxPageSize).Message);
+            throw new ArgumentOutOfRangeException(nameof(request), PaginationErrors.PageSizeExceedsMaximum(MaxPageSize).Message);
 
         return (page, size);
     }

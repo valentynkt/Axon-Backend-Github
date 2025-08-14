@@ -24,5 +24,5 @@ internal sealed class ConversationsCreatedBetweenSpec : Specification<Conversati
     }
 
     public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.CreatedAtUtc >= _fromUtc && c.CreatedAtUtc <= _toUtc;
+        => c => c.CreatedAt >= _fromUtc && c.CreatedAt <= _toUtc;
 }

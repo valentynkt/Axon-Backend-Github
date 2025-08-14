@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using BuildingBlocks.Application.Validation;
 
-namespace BuildingBlocks.Application.Validation;
+namespace BuildingBlocks.Application.Validation.Engine;
 
 /// <summary>
 /// Lightweight OpenTelemetry metrics for validation. Optional at DI time.

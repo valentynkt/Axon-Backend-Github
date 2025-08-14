@@ -2,11 +2,9 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
-using BuildingBlocks.Core.Diagnostics.Errors;
 // Optional (uncomment if you want Result<T> conversion here):
-using BuildingBlocks.Core.Functional.Results;
 
-namespace BuildingBlocks.Core.Diagnostics.Extensions;
+namespace BuildingBlocks.Core.Diagnostics.Exceptions;
 
 /// <summary>
 /// State-of-the-art exception helpers: mapping, flattening, retryability,
@@ -64,7 +62,7 @@ public static class ExceptionExtensions
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        if (exception is BuildingBlocks.Core.Diagnostics.Exceptions.DomainException de)
+        if (exception is Exceptions.DomainException de)
             return de.Error.ToHttpStatusCode();
 
         return Error.FromException(exception).ToHttpStatusCode();
@@ -78,7 +76,7 @@ public static class ExceptionExtensions
         ArgumentNullException.ThrowIfNull(exception);
 
         // DomainException uses Error hints
-        if (exception is BuildingBlocks.Core.Diagnostics.Exceptions.DomainException de)
+        if (exception is Exceptions.DomainException de)
             return de.Error.IsTransient;
 
         // Broad heuristics
@@ -92,7 +90,7 @@ public static class ExceptionExtensions
                                               or HttpStatusCode.BadGateway
                                               or HttpStatusCode.ServiceUnavailable
                                               or null => true,
-            System.Net.Sockets.SocketException => true,
+            SocketException => true,
             System.Net.NetworkInformation.NetworkInformationException => true,
             _ => false
         };
@@ -105,7 +103,7 @@ public static class ExceptionExtensions
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        if (exception is BuildingBlocks.Core.Diagnostics.Exceptions.DomainException de)
+        if (exception is Exceptions.DomainException de)
             return de.Error.IsRetryable;
 
         if (exception.IsTransient()) return true;
@@ -205,7 +203,7 @@ public static class ExceptionExtensions
         ArgumentNullException.ThrowIfNull(exception);
 
         var domain = exception.Flatten()
-                              .OfType<BuildingBlocks.Core.Diagnostics.Exceptions.DomainException>()
+                              .OfType<Exceptions.DomainException>()
                               .FirstOrDefault();
         return (domain?.Error ?? Error.FromException(exception))
                .WithCorrelationFromActivity();

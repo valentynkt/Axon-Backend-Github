@@ -1,6 +1,6 @@
-using BuildingBlocks.Application.Validation;
+using BuildingBlocks.Application.Validation.Core;
 
-namespace BuildingBlocks.Application.Validation;
+namespace BuildingBlocks.Application.Validation.Engine;
 
 /// <summary>
 /// Internal helper that composes multiple validators into one, supporting sequential or parallel execution.

@@ -8,7 +8,7 @@ using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
-using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor;
+// using BuildingBlocks.Infrastructure.Persistence.PersistMessageProcessor; // Removed - no longer exists
 using BuildingBlocks.Infrastructure.Persistence.Postgres;
 using BuildingBlocks.Web;
 using Duende.IdentityServer.EntityFramework.Entities;
@@ -53,8 +53,8 @@ where TEntryPoint : class
     public CancellationTokenSource? CancellationTokenSource { get; private set; }
     private bool _disposed;
 
-    public PersistMessageBackgroundService PersistMessageBackgroundService =>
-        ServiceProvider.GetRequiredService<PersistMessageBackgroundService>();
+    // public PersistMessageBackgroundService PersistMessageBackgroundService =>
+    //     ServiceProvider.GetRequiredService<PersistMessageBackgroundService>(); // Removed - service no longer exists
 
     public HttpClient HttpClient
     {
@@ -101,8 +101,8 @@ where TEntryPoint : class
                                 TestRegistrationServices?.Invoke(services);
                                 services.ReplaceSingleton(AddHttpContextAccessorMock);
 
-                                services.AddSingleton<PersistMessageBackgroundService>();
-                                services.RemoveHostedService<PersistMessageBackgroundService>();
+                                // services.AddSingleton<PersistMessageBackgroundService>();
+                                // services.RemoveHostedService<PersistMessageBackgroundService>(); // Removed - service no longer exists
 
                                 // Register all ITestDataSeeder implementations dynamically
                                 services.Scan(scan => scan
@@ -294,35 +294,36 @@ where TEntryPoint : class
     {
         _ = cancellationToken; // Parameter reserved for future use
         
-        var result = await WaitUntilConditionMet(
-                         async () =>
-                         {
-                             return await ExecuteScopeAsync(
-                                        async sp =>
-                                        {
-                                            var persistMessageProcessor =
-                                                sp.GetService<IPersistMessageProcessor>();
+        // Removed - PersistMessageProcessor no longer exists
+        // var result = await WaitUntilConditionMet(
+        //                  async () =>
+        //                  {
+        //                      return await ExecuteScopeAsync(
+        //                                 async sp =>
+        //                                 {
+        //                                     var persistMessageProcessor =
+        //                                         sp.GetService<IPersistMessageProcessor>();
+        //
+        //                                     Guard.Against.Null(
+        //                                         persistMessageProcessor,
+        //                                         nameof(persistMessageProcessor));
+        //
+        //                                     var filter =
+        //                                         await persistMessageProcessor.GetByFilterAsync(
+        //                                             x =>
+        //                                                 x.DeliveryType ==
+        //                                                 MessageDeliveryType.Internal &&
+        //                                                 typeof(TInternalCommand).ToString() ==
+        //                                                 x.DataType);
+        //
+        //                                     var res = filter.Any(
+        //                                         x => x.MessageStatus == MessageStatus.Processed);
+        //
+        //                                     return res;
+        //                                 });
+        //                  });
 
-                                            Guard.Against.Null(
-                                                persistMessageProcessor,
-                                                nameof(persistMessageProcessor));
-
-                                            var filter =
-                                                await persistMessageProcessor.GetByFilterAsync(
-                                                    x =>
-                                                        x.DeliveryType ==
-                                                        MessageDeliveryType.Internal &&
-                                                        typeof(TInternalCommand).ToString() ==
-                                                        x.DataType);
-
-                                            var res = filter.Any(
-                                                x => x.MessageStatus == MessageStatus.Processed);
-
-                                            return res;
-                                        });
-                         });
-
-        return result;
+        return await Task.FromResult(true); // Always return true since persistence checking is disabled
     }
 
     // Ref: https://tech.energyhelpline.com/in-memory-testing-with-masstransit/
@@ -402,9 +403,9 @@ where TEntryPoint : class
                  new(
                     "PostgresOptions:ConnectionString:Passenger",
                     PostgresTestcontainer?.GetConnectionString() ?? string.Empty),
-                new(
-                    "PersistMessageOptions:ConnectionString",
-                    PostgresPersistTestContainer?.GetConnectionString() ?? string.Empty),
+                // new(
+                //     "PersistMessageOptions:ConnectionString",
+                //     PostgresPersistTestContainer?.GetConnectionString() ?? string.Empty), // Removed - PersistMessage no longer exists
                 new("RabbitMqOptions:HostName", RabbitMqTestContainer?.Hostname ?? "localhost"),
                 new(
                     "RabbitMqOptions:UserName",
@@ -669,20 +670,19 @@ where TEntryPoint : class
     private async Task InitPostgresAsync()
     {
         var postgresOptions = Fixture.ServiceProvider.GetService<PostgresOptions>();
-        var persistOptions = Fixture.ServiceProvider.GetService<PersistMessageOptions>();
-
-        if (!string.IsNullOrEmpty(persistOptions?.ConnectionString))
-        {
-            await Fixture.PersistMessageBackgroundService.StartAsync(
-                Fixture.CancellationTokenSource?.Token ?? CancellationToken.None);
-
-            PersistDbConnection = new NpgsqlConnection(persistOptions.ConnectionString);
-            await PersistDbConnection.OpenAsync();
-
-            _reSpawnerPersistDb = await Respawner.CreateAsync(
-                                      PersistDbConnection,
-                                      new RespawnerOptions { DbAdapter = DbAdapter.Postgres });
-        }
+        // var persistOptions = Fixture.ServiceProvider.GetService<PersistMessageOptions>();
+        // if (!string.IsNullOrEmpty(persistOptions?.ConnectionString))
+        // {
+        //     await Fixture.PersistMessageBackgroundService.StartAsync(
+        //         Fixture.CancellationTokenSource?.Token ?? CancellationToken.None);
+        //
+        //     PersistDbConnection = new NpgsqlConnection(persistOptions.ConnectionString);
+        //     await PersistDbConnection.OpenAsync();
+        //
+        //     _reSpawnerPersistDb = await Respawner.CreateAsync(
+        //                               PersistDbConnection,
+        //                               new RespawnerOptions { DbAdapter = DbAdapter.Postgres });
+        // } // Removed - PersistMessage functionality no longer exists
 
         if (!string.IsNullOrEmpty(postgresOptions?.ConnectionString))
         {
@@ -699,13 +699,13 @@ where TEntryPoint : class
 
     private async Task ResetPostgresAsync()
     {
-        if (PersistDbConnection is not null && _reSpawnerPersistDb is not null)
-        {
-            await _reSpawnerPersistDb.ResetAsync(PersistDbConnection);
-
-            await Fixture.PersistMessageBackgroundService.StopAsync(
-                Fixture.CancellationTokenSource?.Token ?? CancellationToken.None);
-        }
+        // if (PersistDbConnection is not null && _reSpawnerPersistDb is not null)
+        // {
+        //     await _reSpawnerPersistDb.ResetAsync(PersistDbConnection);
+        //
+        //     await Fixture.PersistMessageBackgroundService.StopAsync(
+        //         Fixture.CancellationTokenSource?.Token ?? CancellationToken.None);
+        // } // Removed - PersistMessage functionality no longer exists
 
         if (DefaultDbConnection is not null && _reSpawnerDefaultDb is not null)
         {

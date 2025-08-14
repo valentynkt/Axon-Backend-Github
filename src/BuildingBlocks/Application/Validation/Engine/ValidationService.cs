@@ -1,8 +1,8 @@
-using BuildingBlocks.Application.Validation;
-using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
+using BuildingBlocks.Application.Validation.Core;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace BuildingBlocks.Application.Validation;
+namespace BuildingBlocks.Application.Validation.Engine;
 
 /// <summary>
 /// The single entry point for executing validation over a request/command.

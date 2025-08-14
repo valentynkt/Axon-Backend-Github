@@ -63,7 +63,7 @@ public sealed record ConversationTitle : ValueObject
         yield return Value;
     }
 
-    public override Validation<Unit> Validate()
+    public override ValidationResult<Unit> Validate()
     {
         var errors = new List<Error>();
 
@@ -73,8 +73,8 @@ public sealed record ConversationTitle : ValueObject
         }
 
         return errors.Count == 0 
-            ? Validation<Unit>.Valid(Unit.Value)
-            : Validation<Unit>.Invalid(errors);
+            ? Validation.Valid(Unit.Value)
+            : Validation.Invalid<Unit>(errors);
     }
 
     public override string ToString() => Value;

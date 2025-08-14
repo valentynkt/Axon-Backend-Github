@@ -3,7 +3,7 @@ using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.Repositories;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Shared.Common;
+ 
 using BuildingBlocks.Core.Functional.Results;
 using MediatR;
 

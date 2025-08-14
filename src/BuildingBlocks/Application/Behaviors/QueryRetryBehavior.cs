@@ -7,7 +7,7 @@ using Polly.Retry;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Infrastructure.Resilience;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -24,16 +24,13 @@ public sealed class QueryRetryBehavior<TRequest, TResponse> : IPipelineBehavior<
     where TResponse : IResult
 {
     private readonly ILogger<QueryRetryBehavior<TRequest, TResponse>> _logger;
-    private readonly ITransientFaultDetector _faultDetector;
     private readonly RetryOptions _defaults;
 
     public QueryRetryBehavior(
         ILogger<QueryRetryBehavior<TRequest, TResponse>> logger,
-        ITransientFaultDetector faultDetector,
         IOptions<RetryOptions> options)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _faultDetector = faultDetector ?? throw new ArgumentNullException(nameof(faultDetector));
         _defaults = options?.Value ?? new RetryOptions();
     }
 
@@ -59,7 +56,7 @@ public sealed class QueryRetryBehavior<TRequest, TResponse> : IPipelineBehavior<
             UseJitter = true,
             ShouldHandle = new PredicateBuilder<TResponse>()
                 .HandleResult(ShouldRetryResult)
-                .Handle<Exception>(ex => _faultDetector.IsTransient(ex)),
+                .Handle<Exception>(),
             OnRetry = args =>
             {
                 // Add a lightweight span event; ObservabilityBehavior handles the rest

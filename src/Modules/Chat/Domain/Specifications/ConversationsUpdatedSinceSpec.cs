@@ -14,5 +14,5 @@ internal sealed class ConversationsUpdatedSinceSpec : Specification<Conversation
     }
 
     public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.UpdatedAtUtc >= _sinceUtc;
+        => c => c.UpdatedAt >= _sinceUtc;
 }

@@ -32,6 +32,8 @@ public abstract class AuditableDeletableEntity<TId> : Entity<TId>, IAuditable, I
 
     /// <summary>Mark entity as updated (infra can also overwrite on save).</summary>
     protected void MarkUpdated() => UpdatedAt = DateTimeOffset.UtcNow;
+    
+    protected void MarkCreated() => CreatedAt = DateTimeOffset.UtcNow;
 
     /// <summary>Soft delete the entity.</summary>
     public virtual void SoftDelete()

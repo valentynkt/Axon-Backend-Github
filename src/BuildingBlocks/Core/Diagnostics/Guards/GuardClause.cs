@@ -27,7 +27,7 @@ public sealed class GuardClause<T>
     {
         if (_value is not null)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be null.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be null.", _parameterName));
         }
         return this;
     }
@@ -39,7 +39,7 @@ public sealed class GuardClause<T>
     {
         if (_value is null)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be null.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' cannot be null.", _parameterName));
         }
         return this;
     }
@@ -52,10 +52,10 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case string { Length: > 0 }:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be empty.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be empty.", _parameterName));
                 break;
             case IEnumerable<object> enumerable when enumerable.Any():
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be empty.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be empty.", _parameterName));
                 break;
         }
         return this;
@@ -69,10 +69,10 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case string { Length: 0 }:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be empty.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be empty.", _parameterName));
                 break;
             case IEnumerable<object> enumerable when !enumerable.Any():
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be empty.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be empty.", _parameterName));
                 break;
         }
         return this;
@@ -85,7 +85,7 @@ public sealed class GuardClause<T>
     {
         if (_value is string str && string.IsNullOrWhiteSpace(str))
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be whitespace.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' cannot be whitespace.", _parameterName));
         }
         return this;
     }
@@ -97,7 +97,7 @@ public sealed class GuardClause<T>
     {
         if (_value is string str && !string.IsNullOrWhiteSpace(str))
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be whitespace.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be whitespace.", _parameterName));
         }
         return this;
     }
@@ -109,7 +109,7 @@ public sealed class GuardClause<T>
     {
         if (_value is string str && str.Length < minLength)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must have at least {minLength} characters but has {str.Length}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must have at least {minLength} characters but has {str.Length}.", _parameterName));
         }
         return this;
     }
@@ -121,7 +121,7 @@ public sealed class GuardClause<T>
     {
         if (_value is string str && str.Length > maxLength)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must have at most {maxLength} characters but has {str.Length}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must have at most {maxLength} characters but has {str.Length}.", _parameterName));
         }
         return this;
     }
@@ -133,7 +133,7 @@ public sealed class GuardClause<T>
     {
         if (_value is string str && !System.Text.RegularExpressions.Regex.IsMatch(str, pattern))
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' does not match the required pattern.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' does not match the required pattern.", _parameterName));
         }
         return this;
     }    
@@ -145,19 +145,19 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case int i when i < 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
                 break;
             case long l when l < 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
                 break;
             case decimal d when d < 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
                 break;
             case double d when d < 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
                 break;
             case float f when f < 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be negative.", _parameterName));
                 break;
         }
         return this;
@@ -171,19 +171,19 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case int i when i >= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
                 break;
             case long l when l >= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
                 break;
             case decimal d when d >= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
                 break;
             case double d when d >= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
                 break;
             case float f when f >= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be negative.", _parameterName));
                 break;
         }
         return this;
@@ -197,19 +197,19 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case int i when i == 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
                 break;
             case long l when l == 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
                 break;
             case decimal d when d == 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
                 break;
             case double d when Math.Abs(d) < double.Epsilon:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
                 break;
             case float f when Math.Abs(f) < float.Epsilon:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be zero.", _parameterName));
                 break;
         }
         return this;
@@ -222,19 +222,19 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case int i when i != 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
                 break;
             case long l when l != 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
                 break;
             case decimal d when d != 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
                 break;
             case double d when Math.Abs(d) >= double.Epsilon:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
                 break;
             case float f when Math.Abs(f) >= float.Epsilon:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be zero.", _parameterName));
                 break;
         }
         return this;
@@ -248,19 +248,19 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case int i when i <= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
                 break;
             case long l when l <= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
                 break;
             case decimal d when d <= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
                 break;
             case double d when d <= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
                 break;
             case float f when f <= 0:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must be positive.", _parameterName));
                 break;
         }
         return this;
@@ -272,7 +272,7 @@ public sealed class GuardClause<T>
     {
         if (_value is TComparable comparable && comparable.CompareTo(minimum) <= 0)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be greater than {minimum}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be greater than {minimum}.", _parameterName));
         }
         return this;
     }
@@ -284,7 +284,7 @@ public sealed class GuardClause<T>
     {
         if (_value is TComparable comparable && comparable.CompareTo(minimum) < 0)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be greater than or equal to {minimum}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be greater than or equal to {minimum}.", _parameterName));
         }
         return this;
     }
@@ -296,7 +296,7 @@ public sealed class GuardClause<T>
     {
         if (_value is TComparable comparable && comparable.CompareTo(maximum) >= 0)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be less than {maximum}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be less than {maximum}.", _parameterName));
         }
         return this;
     }
@@ -308,7 +308,7 @@ public sealed class GuardClause<T>
     {
         if (_value is TComparable comparable && comparable.CompareTo(maximum) > 0)
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be less than or equal to {maximum}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be less than or equal to {maximum}.", _parameterName));
         }
         return this;
     }    
@@ -319,7 +319,7 @@ public sealed class GuardClause<T>
     {
         if (_value is TComparable comparable && (comparable.CompareTo(minimum) < 0 || comparable.CompareTo(maximum) > 0))
         {
-            GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must be between {minimum} and {maximum}.", _parameterName));
+            ThrowException(Error.Validation($"'{_parameterName}' must be between {minimum} and {maximum}.", _parameterName));
         }
         return this;
     }
@@ -334,7 +334,7 @@ public sealed class GuardClause<T>
             var count = enumerable.Cast<object>().Count();
             if (count < minCount)
             {
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must have at least {minCount} items but has {count}.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must have at least {minCount} items but has {count}.", _parameterName));
             }
         }
         return this;
@@ -350,7 +350,7 @@ public sealed class GuardClause<T>
             var count = enumerable.Cast<object>().Count();
             if (count > maxCount)
             {
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' must have at most {maxCount} items but has {count}.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' must have at most {maxCount} items but has {count}.", _parameterName));
             }
         }
         return this;
@@ -363,13 +363,13 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case DateTime dateTime when dateTime > DateTime.UtcNow:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be in the future.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be in the future.", _parameterName));
                 break;
             case DateTimeOffset dateTimeOffset when dateTimeOffset > DateTimeOffset.UtcNow:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be in the future.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be in the future.", _parameterName));
                 break;
             case DateOnly dateOnly when dateOnly > DateOnly.FromDateTime(DateTime.UtcNow):
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be in the future.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be in the future.", _parameterName));
                 break;
         }
         return this;
@@ -383,13 +383,13 @@ public sealed class GuardClause<T>
         switch (_value)
         {
             case DateTime dateTime when dateTime < DateTime.UtcNow:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be in the past.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be in the past.", _parameterName));
                 break;
             case DateTimeOffset dateTimeOffset when dateTimeOffset < DateTimeOffset.UtcNow:
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be in the past.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be in the past.", _parameterName));
                 break;
             case DateOnly dateOnly when dateOnly < DateOnly.FromDateTime(DateTime.UtcNow):
-                GuardClause<T>.ThrowException(Error.Validation($"'{_parameterName}' cannot be in the past.", _parameterName));
+                ThrowException(Error.Validation($"'{_parameterName}' cannot be in the past.", _parameterName));
                 break;
         }
         return this;
@@ -402,7 +402,7 @@ public sealed class GuardClause<T>
         if (!predicate(_value))
         {
             var message = customMessage ?? $"'{_parameterName}' does not satisfy the required condition.";
-            GuardClause<T>.ThrowException(Error.Validation(message, _parameterName));
+            ThrowException(Error.Validation(message, _parameterName));
         }
         return this;
     }
@@ -415,7 +415,7 @@ public sealed class GuardClause<T>
         var error = validator(_value);
         if (error is not null)
         {
-            GuardClause<T>.ThrowException(error);
+            ThrowException(error);
         }
         return this;
     }

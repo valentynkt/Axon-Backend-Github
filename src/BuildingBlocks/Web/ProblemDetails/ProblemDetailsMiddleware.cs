@@ -128,7 +128,7 @@ public class ProblemDetailsMiddleware
             exception.Message);
             
         // Create a generic internal server error
-        var error = BuildingBlocks.Core.Diagnostics.Errors.Error.Internal(
+        var error = Error.Internal(
             "An unexpected error occurred.",
             "INTERNAL_SERVER_ERROR")
             .WithSource(exception.GetType().Name)

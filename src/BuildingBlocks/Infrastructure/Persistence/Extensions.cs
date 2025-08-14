@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
+using BuildingBlocks.Infrastructure.Persistence.Common;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Read;
@@ -10,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -18,69 +20,105 @@ namespace BuildingBlocks.Infrastructure.Persistence;
 public static class Extensions
 {
     // ---------- AddDbContext (builder overload) ----------
+    // Provider-agnostic. Provider must be supplied by the caller (e.g., PostgresExtensions).
     public static IServiceCollection AddDbContext<TContext>(
         this WebApplicationBuilder builder,
-        Action<DatabaseOptions>? configurator = null)
+        Action<DatabaseOptions>? configureOptions = null,
+        Action<DbContextOptionsBuilder, DatabaseOptions, Type>? configureProvider = null)
         where TContext : DbContext, IDbContext
-        => builder.Services.AddDbContext<TContext>(builder.Configuration, configurator);
+        => builder.Services.AddDbContext<TContext>(builder.Configuration, configureOptions, configureProvider);
 
     // ---------- AddDbContext (services overload) ----------
+    // Provider-agnostic. Provider must be supplied by the caller (e.g., PostgresExtensions).
     public static IServiceCollection AddDbContext<TContext>(
         this IServiceCollection services,
         IConfiguration configuration,
-        Action<DatabaseOptions>? configurator = null)
+        Action<DatabaseOptions>? configureOptions = null,
+        Action<DbContextOptionsBuilder, DatabaseOptions, Type>? configureProvider = null)
         where TContext : DbContext, IDbContext
     {
         services.AddOptions<DatabaseOptions>()
             .Bind(configuration.GetSection(nameof(DatabaseOptions)));
 
-        if (configurator is not null) services.Configure(configurator);
+        if (configureOptions is not null) services.Configure(configureOptions);
         else services.AddValidateOptions<DatabaseOptions>();
 
         services.AddDbContext<TContext>((sp, options) =>
         {
             var db = sp.GetRequiredService<IOptions<DatabaseOptions>>().Value;
-            ConfigureDbContext(options, db, typeof(TContext));
+
+            // In-memory path (for tests/dev)
+            if (db.UseInMemory)
+            {
+                options.UseInMemoryDatabase(typeof(TContext).Name);
+            }
+            else
+            {
+                // Provider must be configured by the caller (e.g., UseNpgsql)
+                if (configureProvider is null)
+                    throw new InvalidOperationException(
+                        $"No provider configured for {typeof(TContext).Name}. " +
+                        "Call the Postgres (or other provider) extension that supplies UseXxx().");
+
+                configureProvider(options, db, typeof(TContext));
+            }
+
             options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+
+            if (db.EnableSensitiveDataLogging) options.EnableSensitiveDataLogging();
+            if (db.EnableDetailedErrors) options.EnableDetailedErrors();
+            if (db.EnableServiceProviderCaching) options.EnableServiceProviderCaching();
         });
 
+        // Common registrations
         services.AddScoped<IDbContext>(sp => sp.GetRequiredService<TContext>());
+// after: services.AddScoped<IDbContext>(sp => sp.GetRequiredService<TContext>());
 
-        // Minimal repo + UoW registrations (Application abstractions)
+        var writeIface = typeof(TContext).GetInterfaces()
+            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IWriteDbContext<>));
+
+        if (writeIface is not null)
+        {
+            var moduleType = writeIface.GetGenericArguments()[0];
+            var uowIface   = typeof(IWriteUnitOfWork<>).MakeGenericType(moduleType);
+            var uowImpl    = typeof(EfUnitOfWork<,>)
+                .MakeGenericType(typeof(TContext), moduleType);
+
+            services.AddScoped(uowIface, sp =>
+                Activator.CreateInstance(uowImpl, sp.GetRequiredService<TContext>())!);
+
+            // Optional: expose a single non-generic UoW for apps with only one write context
+            services.TryAddScoped<IWriteUnitOfWork>(
+                sp => (IWriteUnitOfWork)sp.GetRequiredService(uowIface));
+        }
+
         services.AddScoped(typeof(IReadRepository<,>), typeof(EfReadRepository<,>));
         services.AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>));
         services.AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>));
         services.AddScoped(typeof(IWriteRepository<>), typeof(EfWriteRepository<>));
-        services.AddScoped<IWriteUnitOfWork, EfWriteUnitOfWork>();
+        services.AddScoped<ISeedManager, SeedManager>();
 
-        services.AddScoped<ISeedManager, Infrastructure.SeedManager>();
         return services;
     }
 
-    // ---------- AddCustomDbContext (simple in-memory for dev/tests) ----------
-    public static IServiceCollection AddCustomDbContext<TContext>(
+    // ---------- Optional: explicit in-memory helper ----------
+    public static IServiceCollection AddInMemoryDbContext<TContext>(
         this WebApplicationBuilder builder,
-        string? connectionName = "")
+        string? nameSuffix = null)
         where TContext : DbContext, IDbContext
     {
-        builder.Services.AddValidateOptions<DatabaseOptions>();
-
-        builder.Services.AddDbContext<TContext>((_, options) =>
+        return builder.Services.AddDbContext<TContext>((_, options) =>
         {
-            options.UseInMemoryDatabase($"{typeof(TContext).Name}_{connectionName.Kebaberize()}");
+            var dbName = $"{typeof(TContext).Name}{(string.IsNullOrWhiteSpace(nameSuffix) ? "" : "_" + nameSuffix.Kebaberize())}";
+            options.UseInMemoryDatabase(dbName);
             options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
-        });
-
-        // same minimal registrations
-        builder.Services.AddScoped<IDbContext>(sp => sp.GetRequiredService<TContext>());
-        builder.Services.AddScoped(typeof(IReadRepository<,>), typeof(EfReadRepository<,>));
-        builder.Services.AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>));
-        builder.Services.AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>));
-        builder.Services.AddScoped(typeof(IWriteRepository<>), typeof(EfWriteRepository<>));
-        builder.Services.AddScoped<IWriteUnitOfWork, EfWriteUnitOfWork>();
-        builder.Services.AddScoped<ISeedManager, SeedManager>();
-
-        return builder.Services;
+        })
+        .AddScoped<IDbContext>(sp => sp.GetRequiredService<TContext>())
+        .AddScoped(typeof(IReadRepository<,>), typeof(EfReadRepository<,>))
+        .AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>))
+        .AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>))
+        .AddScoped(typeof(IWriteRepository<>), typeof(EfWriteRepository<>))
+        .AddScoped<ISeedManager, SeedManager>();
     }
 
     // ---------- Migrate + Seed at startup ----------
@@ -122,10 +160,10 @@ public static class Extensions
         ArgumentNullException.ThrowIfNull(modelBuilder);
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (typeof(BuildingBlocks.Core.Domain.Entities.Abstractions.ISoftDeletable).IsAssignableFrom(entityType.ClrType))
+            if (typeof(Core.Domain.Entities.Abstractions.ISoftDeletable).IsAssignableFrom(entityType.ClrType))
             {
                 var p = Expression.Parameter(entityType.ClrType, "e");
-                var prop = Expression.Property(p, nameof(BuildingBlocks.Core.Domain.Entities.Abstractions.ISoftDeletable.IsDeleted));
+                var prop = Expression.Property(p, nameof(Core.Domain.Entities.Abstractions.ISoftDeletable.IsDeleted));
                 var filter = Expression.Lambda(Expression.Not(prop), p);
                 entityType.SetQueryFilter(filter);
             }
@@ -154,33 +192,13 @@ public static class Extensions
         }
     }
 
-    private static void ConfigureDbContext(
-        DbContextOptionsBuilder options,
-        DatabaseOptions db,
-        Type ctxType)
+    private static IServiceCollection AddDbContext<TContext>(
+        this IServiceCollection services,
+        Action<IServiceProvider, DbContextOptionsBuilder> builder)
+        where TContext : DbContext, IDbContext
     {
-        if (db.UseInMemory)
-        {
-            options.UseInMemoryDatabase(ctxType.Name);
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(db.ConnectionString))
-                throw new InvalidOperationException($"[{ctxType.Name}] ConnectionString is required when UseInMemory = false.");
-
-            options.UseNpgsql(
-                db.ConnectionString,
-                npgsql =>
-                {
-                    npgsql.MigrationsAssembly(db.MigrationsAssembly ?? ctxType.Assembly.GetName().Name);
-                    npgsql.CommandTimeout(db.CommandTimeout);
-                    npgsql.EnableRetryOnFailure(db.MaxRetryCount, TimeSpan.FromSeconds(db.MaxRetryDelaySeconds), null);
-                });
-        }
-
-        if (db.EnableSensitiveDataLogging) options.EnableSensitiveDataLogging();
-        if (db.EnableDetailedErrors) options.EnableDetailedErrors();
-        if (db.EnableServiceProviderCaching) options.EnableServiceProviderCaching();
+        services.AddDbContext<TContext>(builder);
+        return services;
     }
 
     private static IServiceCollection AddValidateOptions<T>(this IServiceCollection services)

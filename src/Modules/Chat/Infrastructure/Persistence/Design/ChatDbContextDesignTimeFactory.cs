@@ -1,67 +1,62 @@
-using Axon.Modules.Chat.Application.Services;
-using Axon.Modules.Chat.Infrastructure.Persistence.Interceptors;
-using Axon.Modules.Chat.Infrastructure.Services;
-using Axon.Modules.Chat.Infrastructure.Services.EventSourcing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Design;
 
-/// <summary>
-/// Design-time factory for ChatDbContext to support EF Core migrations
-/// Provides minimal dependencies required for design-time operations
-/// This factory is used during application startup for automatic migrations
-/// </summary>
-public sealed class ChatDbContextDesignTimeFactory : IDesignTimeDbContextFactory<ChatDbContext>
+// ------------------ Write context factory ------------------
+public sealed class ChatWriteDbContextDesignTimeFactory : IDesignTimeDbContextFactory<ChatWriteDbContext>
 {
-    public ChatDbContext CreateDbContext(string[] args)
+    public ChatWriteDbContext CreateDbContext(string[] args)
     {
-        // Create minimal service collection for design-time dependencies
-        var services = new ServiceCollection();
-        
-        // Add logging (minimal for design-time)
-        services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Warning));
-        
-        // Add minimal required services for design-time
-        services.AddScoped<ICurrentUserService, DefaultCurrentUserService>();
-        services.AddScoped<IDateTimeProvider, SystemDateTimeProvider>();
-        services.AddScoped<IEventTypeRegistry, InMemoryEventTypeRegistry>();
-        services.AddScoped<IEventSerializer, SystemTextJsonEventSerializer>();
-        
-        // Build service provider
-        var serviceProvider = services.BuildServiceProvider();
-        
-        // Create interceptors with proper dependencies
-        var auditInterceptor = new AuditSaveChangesInterceptor(
-            serviceProvider.GetRequiredService<ICurrentUserService>(),
-            serviceProvider.GetRequiredService<IDateTimeProvider>(),
-            serviceProvider.GetRequiredService<ILogger<AuditSaveChangesInterceptor>>());
-        
-        var domainEventInterceptor = new DomainEventInterceptor(
-            serviceProvider.GetRequiredService<IEventSerializer>(),
-            serviceProvider.GetRequiredService<ILogger<DomainEventInterceptor>>());
-        
-        // Configure DbContext options
-        var optionsBuilder = new DbContextOptionsBuilder<ChatDbContext>();
-        
-        // Use a default connection string for design-time operations
-        // This will be overridden at runtime by dependency injection
-        optionsBuilder.UseNpgsql("Host=localhost;Database=axon_chat_design;Username=postgres;Password=postgres;Include Error Detail=true",
-            options =>
+        var configuration = DesignTimeHelpers.BuildConfiguration();
+        var cs = DesignTimeHelpers.ResolveConnectionString(configuration, preferredName: "ChatWriteDb", moduleName: "Chat");
+
+        var options = new DbContextOptionsBuilder<ChatWriteDbContext>()
+            .UseNpgsql(cs, npgsql =>
             {
-                options.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-                options.EnableRetryOnFailure(maxRetryCount: 3);
-            });
-            
-        // Add interceptors
-        optionsBuilder.AddInterceptors(auditInterceptor, domainEventInterceptor);
-        
-        // Enable sensitive data logging for design-time debugging
-        optionsBuilder.EnableSensitiveDataLogging();
-        optionsBuilder.EnableDetailedErrors();
-        
-        return new ChatDbContext(optionsBuilder.Options, auditInterceptor, domainEventInterceptor);
+                npgsql.MigrationsAssembly(typeof(ChatWriteDbContext).Assembly.GetName().Name);
+                npgsql.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null);
+            })
+            .Options;
+
+        return new ChatWriteDbContext(options);
+    }
+}
+
+
+// ------------------ helpers ------------------
+internal static class DesignTimeHelpers
+{
+    public static IConfiguration BuildConfiguration()
+    {
+        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+        var basePath = Directory.GetCurrentDirectory();
+
+        return new ConfigurationBuilder()
+            .SetBasePath(basePath)
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile($"appsettings.{env}.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+    }
+
+    public static string ResolveConnectionString(IConfiguration config, string preferredName, string moduleName)
+    {
+        // Try (in order):
+        // 1) ConnectionStrings:{preferredName}
+        // 2) PostgresOptions:ConnectionStrings:{moduleName}
+        // 3) PostgresOptions:ConnectionString
+        // 4) ConnectionStrings:DefaultConnection
+        // 5) Environment variable ConnectionStrings__{preferredName}
+        return
+            config.GetConnectionString(preferredName) ??
+            config[$"PostgresOptions:ConnectionStrings:{moduleName}"] ??
+            config["PostgresOptions:ConnectionString"] ??
+            config.GetConnectionString("DefaultConnection") ??
+            Environment.GetEnvironmentVariable($"ConnectionStrings__{preferredName}") ??
+            throw new InvalidOperationException(
+                $"No connection string found for '{preferredName}'. " +
+                $"Checked ConnectionStrings, PostgresOptions, and env vars.");
     }
 }

@@ -11,6 +11,8 @@ public static class PipelineBehaviorExtensions
     public static IServiceCollection AddPipelineBehaviors(
         this IServiceCollection services, IConfiguration config, IHostEnvironment env)
     {
+        services.AddCachingServices();
+        
         // Always: observability outermost
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
 
@@ -30,13 +32,14 @@ public static class PipelineBehaviorExtensions
 
         // Caching + invalidation
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CommandCacheInvalidationBehavior<,>));
-
+       
         // Transactions (commands) – includes post-commit domain notifications + outbox
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
 
         // Innermost safety net
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ExceptionHandlingBehavior<,>));
+     
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(AutoCommitOnSuccessBehavior<,>));
 
         return services;
     }

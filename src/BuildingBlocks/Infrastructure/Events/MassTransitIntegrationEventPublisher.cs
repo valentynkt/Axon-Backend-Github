@@ -3,7 +3,7 @@ using BuildingBlocks.Application.Events.Publishing;
 using BuildingBlocks.Core.Abstractions.Events;
 using MassTransit;
 
-namespace BuildingBlocks.Infrastructure.Messaging.MassTransit;
+namespace BuildingBlocks.Infrastructure.Events;
 
 public sealed class MassTransitIntegrationEventPublisher : IIntegrationEventPublisher
 {

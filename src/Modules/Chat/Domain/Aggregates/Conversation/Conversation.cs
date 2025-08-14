@@ -28,9 +28,6 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     public string Title { get; private set; }
     public bool IsDefaultTitle { get; private set; }
     
-    // Temporal state
-    public DateTimeOffset CreatedAtUtc { get; private set; }
-    public DateTimeOffset UpdatedAtUtc { get; private set; }
     
     // Computed properties
     public int MessageCount => _messages.Count;
@@ -50,16 +47,13 @@ public sealed class Conversation : AggregateRoot<ConversationId>
         ConversationId id,
         UserId ownerId,
         string title,
-        bool isDefaultTitle,
-        DateTimeOffset createdAtUtc)
+        bool isDefaultTitle)
         : base(id)
     {
         OwnerId = ownerId;
         Status = ConversationStatus.Active;
         Title = title;
         IsDefaultTitle = isDefaultTitle;
-        CreatedAtUtc = createdAtUtc;
-        UpdatedAtUtc = createdAtUtc;
     }
 
     /// <summary>
@@ -103,8 +97,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
                 conversationId,
                 ownerId,
                 actualTitle,
-                isDefault,
-                now);
+                isDefault);
 
             // Raise domain event
             conversation.RaiseDomainEvent(new ConversationStartedEvent(
@@ -142,11 +135,10 @@ public sealed class Conversation : AggregateRoot<ConversationId>
                 Id,
                 MessageRole.User,
                 content,
-                sequence,
-                now);
+                sequence);
             
             _messages.Add(message);
-            UpdatedAtUtc = now;
+            UpdatedAt = now;
 
             // Raise event with content preview
             var contentPreview = CreateContentPreview(content.Value);
@@ -188,11 +180,10 @@ public sealed class Conversation : AggregateRoot<ConversationId>
                 Id,
                 MessageRole.Assistant,
                 content,
-                sequence,
-                now);
+                sequence);
             
             _messages.Add(message);
-            UpdatedAtUtc = now;
+            UpdatedAt = now;
 
             // Raise event with content preview
             var contentPreview = CreateContentPreview(content.Value);
@@ -231,7 +222,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             var now = clock.UtcNow;
             Title = titleResult.Value.Value;
             IsDefaultTitle = false;
-            UpdatedAtUtc = now;
+            UpdatedAt = now;
 
             RaiseDomainEvent(new ConversationTitleUpdatedEvent(
                 Id,
@@ -260,7 +251,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 
             var now = clock.UtcNow;
             Status = ConversationStatus.Completed;
-            UpdatedAtUtc = now;
+            UpdatedAt = now;
 
             RaiseDomainEvent(new ConversationCompletedEvent(
                 Id,

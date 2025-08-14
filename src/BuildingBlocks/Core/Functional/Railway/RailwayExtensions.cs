@@ -264,7 +264,7 @@ public static class RailwayExtensions
     #region Conditional Railway Patterns
 
     /// <summary>
-    /// Executes one of two functions based on a condition, both returning Results.
+    /// Executes one of two functions based on a condition, both returning ResultFactory.
     /// </summary>
     public static Result<T> Branch<T>(
         bool condition,
@@ -278,7 +278,7 @@ public static class RailwayExtensions
     }
 
     /// <summary>
-    /// Executes one of two async functions based on a condition, both returning Results.
+    /// Executes one of two async functions based on a condition, both returning ResultFactory.
     /// </summary>
     public static async Task<Result<T>> BranchAsync<T>(
         bool condition,

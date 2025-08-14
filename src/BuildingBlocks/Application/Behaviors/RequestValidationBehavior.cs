@@ -7,6 +7,7 @@ using BuildingBlocks.Application.Validation;
 
 using System.Diagnostics;
 using BuildingBlocks.Application.Validation;
+using BuildingBlocks.Application.Validation.Core;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -24,12 +25,12 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
 {
     private readonly IValidationService _validationService;
     private readonly ILogger<RequestValidationBehavior<TRequest, TResponse>> _logger;
-    private readonly Validation.IValidationContext? _validationContext;
+    private readonly IValidationContext? _validationContext;
 
     public RequestValidationBehavior(
         IValidationService validationService,
         ILogger<RequestValidationBehavior<TRequest, TResponse>> logger,
-        Validation.IValidationContext? validationContext = null)
+        IValidationContext? validationContext = null)
     {
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -42,7 +43,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         CancellationToken cancellationToken)
     {
         // Check skip conditions
-        if (RequestValidationBehavior<TRequest, TResponse>.ShouldSkipValidation(request))
+        if (ShouldSkipValidation(request))
         {
             _logger.LogDebug("Skipping validation for {RequestType}", typeof(TRequest).Name);
             return await next();
@@ -59,7 +60,7 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
         stopwatch.Stop();
 
         // Emit metrics
-        RequestValidationBehavior<TRequest, TResponse>.EmitMetrics(validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
+        EmitMetrics(validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
 
         if (!validationResult.IsValid)
         {

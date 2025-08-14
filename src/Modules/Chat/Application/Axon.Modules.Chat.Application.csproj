@@ -17,8 +17,4 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Common\Interfaces\" />
-  </ItemGroup>
-
 </Project>

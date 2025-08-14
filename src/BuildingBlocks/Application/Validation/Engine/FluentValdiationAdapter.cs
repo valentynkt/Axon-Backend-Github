@@ -1,7 +1,7 @@
-using BuildingBlocks.Application.Validation;
 using FluentValidation;
+using IValidationContext = BuildingBlocks.Application.Validation.Core.IValidationContext;
 
-namespace BuildingBlocks.Application.Validation;
+namespace BuildingBlocks.Application.Validation.Engine;
 
 /// <summary>
 /// Adapts one or more FluentValidation validators into the unified app validator contract.

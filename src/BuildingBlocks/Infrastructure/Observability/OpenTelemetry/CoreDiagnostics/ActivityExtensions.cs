@@ -139,7 +139,7 @@ internal static class ActivityExtensions
     /// <param name="exception">The exception associated with the error, if available.</param>
     /// <param name="description">An optional description of the error.</param>
     /// <returns>The updated Activity with the status, error details, and tags set.</returns>
-    public static Activity SetErrorStatus(this Activity activity, System.Exception? exception, string? description = null)
+    public static Activity SetErrorStatus(this Activity activity, Exception? exception, string? description = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
 
@@ -156,7 +156,7 @@ internal static class ActivityExtensions
     }
 
     // See https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/exceptions/
-    public static Activity SetExceptionTags(this Activity activity, System.Exception? ex)
+    public static Activity SetExceptionTags(this Activity activity, Exception? ex)
     {
         if (ex is null)
         {

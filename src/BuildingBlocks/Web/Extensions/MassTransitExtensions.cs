@@ -1,5 +1,6 @@
 using System.Reflection;
 using BuildingBlocks.Application.Events.Publishing;
+using BuildingBlocks.Infrastructure.Events;
 using BuildingBlocks.Infrastructure.Messaging.MassTransit;
 using MassTransit;
 using Microsoft.AspNetCore.Hosting;

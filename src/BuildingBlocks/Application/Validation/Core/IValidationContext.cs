@@ -1,4 +1,4 @@
-namespace BuildingBlocks.Application.Validation;
+namespace BuildingBlocks.Application.Validation.Core;
 
 /// <summary>
 /// Provides metadata-aware validation context.

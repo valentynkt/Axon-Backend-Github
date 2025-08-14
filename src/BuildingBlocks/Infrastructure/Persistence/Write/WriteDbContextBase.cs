@@ -1,26 +1,13 @@
-using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
-using BuildingBlocks.Infrastructure.Persistence.StrongIds;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
-/// <summary>
-/// Base class for write-side DbContexts (CQRS).
-/// Responsibilities here:
-/// - Provider schema + configuration
-/// - Transaction helpers
-/// - Minimal, provider-safe auditing hook (override)
-/// - Domain event collection (no dispatch)
-/// - Global soft-delete filter (if bool property "IsDeleted" exists)
-/// - Concurrency token convention for 'Version' (uint/int/long) when present
-/// </summary>
 public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<TModule>
     where TModule : class
 {
@@ -42,19 +29,13 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
     public IExecutionStrategy CreateExecutionStrategy() => Database.CreateExecutionStrategy();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder
+    )
     {
-        // Module schema (when supported)
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
-
-        // Apply configurations
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
-        modelBuilder.ApplyStrongIdConventions(); // StrongId converters/comparers
-
-        // Conventions
         ApplySoftDeleteQueryFilter(modelBuilder);
-        WriteDbContextBase<TModule>.ApplyVersionConcurrencyToken(modelBuilder);
-
+        ApplyVersionConcurrencyToken(modelBuilder);
         base.OnModelCreating(modelBuilder);
     }
 
@@ -100,9 +81,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
     }
 
-    public async Task ExecuteTransactionalAsync(
-        Func<Task> operation,
-        CancellationToken cancellationToken = default)
+    public async Task ExecuteTransactionalAsync(Func<Task> operation, CancellationToken cancellationToken = default)
     {
         var strategy = CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
@@ -122,9 +101,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         });
     }
 
-    public async Task<T> ExecuteTransactionalAsync<T>(
-        Func<Task<T>> operation,
-        CancellationToken cancellationToken = default)
+    public async Task<T> ExecuteTransactionalAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
     {
         var strategy = CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
@@ -145,14 +122,15 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         });
     }
 
-    // --------- SaveChanges (auditing hook + concurrency handling) ---------
+    // --------- SaveChanges ---------
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        ApplyAuditInformation(); // hook for derived contexts
+        ApplyAuditInformation();
         try
         {
-            return await base.SaveChangesAsync(cancellationToken);
+            var affected = await base.SaveChangesAsync(cancellationToken);
+            return affected;
         }
         catch (DbUpdateConcurrencyException ex)
         {
@@ -166,62 +144,27 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
     }
 
-    public IReadOnlyList<IDomainEvent> GetDomainEvents()
-    {
-        var events = new List<IDomainEvent>(capacity: 32);
-
-        foreach (var entry in ChangeTracker.Entries())
-        {
-            if (entry.Entity is null) continue;
-
-            var getter = DomainEventsGetterCache.Get(entry.Entity.GetType());
-            if (getter is null) continue;
-
-            if (getter(entry.Entity) is IEnumerable<IDomainEvent> list)
-                events.AddRange(list);
-        }
-
-        return events;
-    }
-
-    public void ClearDomainEvents()
-    {
-        foreach (var entry in ChangeTracker.Entries())
-        {
-            if (entry.Entity is null) continue;
-
-            var clearer = DomainEventsClearerCache.Get(entry.Entity.GetType());
-            clearer?.Invoke(entry.Entity);
-        }
-    }
+    // --------- Domain events (no dispatch here; App layer coordinates) ---------
+    public IReadOnlyList<IDomainEvent> GetDomainEvents() => Array.Empty<IDomainEvent>();
+    public void ClearDomainEvents() { }
 
     [Obsolete("Use Application TransactionBehavior + IDomainEventCollector. Do not dispatch from DbContext.")]
     public Task<int> SaveChangesAndDispatchDomainEventsAsync(CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Dispatch must be coordinated by Application layer behaviors.");
 
-    // --------- Hooks & Conventions ---------
-
+    // --------- Hooks & Conventions (kept minimal) ---------
     protected virtual void ApplyAuditInformation() { }
 
-    private void ApplySoftDeleteQueryFilter(ModelBuilder modelBuilder)
+    private static void ApplySoftDeleteQueryFilter(ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (entityType.IsOwned() || entityType.ClrType.IsAbstract) continue;
-
-            var isDeletedProp = entityType.FindProperty("IsDeleted");
-            if (isDeletedProp?.ClrType == typeof(bool))
+            if (typeof(Core.Domain.Entities.Abstractions.ISoftDeletable).IsAssignableFrom(entityType.ClrType))
             {
-                var parameter = Expression.Parameter(entityType.ClrType, "e");
-                var body = Expression.Equal(
-                    Expression.Call(
-                        typeof(EF).GetMethod(nameof(EF.Property))!.MakeGenericMethod(typeof(bool)),
-                        parameter,
-                        Expression.Constant("IsDeleted")),
-                    Expression.Constant(false));
-
-                var lambda = Expression.Lambda(body, parameter);
-                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
+                var p = Expression.Parameter(entityType.ClrType, "e");
+                var prop = Expression.Property(p, nameof(Core.Domain.Entities.Abstractions.ISoftDeletable.IsDeleted));
+                var filter = Expression.Lambda(Expression.Not(prop), p);
+                entityType.SetQueryFilter(filter);
             }
         }
     }
@@ -230,19 +173,10 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            var versionProp =
-                entityType.FindProperty("Version") ??
-                entityType.FindProperty("RowVersion");
-
-            if (versionProp is null) continue;
-
-            var t = versionProp.ClrType;
-            if (t == typeof(uint) || t == typeof(int) || t == typeof(long) || t == typeof(byte[]))
+            var versionProp = entityType.FindProperty("Version");
+            if (versionProp != null)
             {
-                modelBuilder
-                    .Entity(entityType.ClrType)
-                    .Property(versionProp.Name)
-                    .IsConcurrencyToken();
+                versionProp.IsConcurrencyToken = true;
             }
         }
     }
@@ -261,51 +195,5 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
         await base.DisposeAsync();
         GC.SuppressFinalize(this);
-    }
-
-    // --------- Reflection helpers (cached) ---------
-
-    private static class DomainEventsGetterCache
-    {
-        private static readonly ConcurrentDictionary<Type, Func<object, object?>?> Cache = new();
-
-        public static Func<object, object?>? Get(Type type) =>
-            Cache.GetOrAdd(type, Create);
-
-        private static Func<object, object?>? Create(Type type)
-        {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var prop = type.GetProperty("DomainEvents", flags);
-            if (prop is null) return null;
-
-            if (!typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
-                return null;
-
-            var obj = Expression.Parameter(typeof(object), "o");
-            var cast = Expression.Convert(obj, type);
-            var read = Expression.Property(cast, prop);
-            var box = Expression.Convert(read, typeof(object));
-            return Expression.Lambda<Func<object, object?>>(box, obj).Compile();
-        }
-    }
-
-    private static class DomainEventsClearerCache
-    {
-        private static readonly ConcurrentDictionary<Type, Action<object>?> Cache = new();
-
-        public static Action<object>? Get(Type type) =>
-            Cache.GetOrAdd(type, Create);
-
-        private static Action<object>? Create(Type type)
-        {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var method = type.GetMethod("ClearDomainEvents", flags, Array.Empty<Type>());
-            if (method is null) return null;
-
-            var obj = Expression.Parameter(typeof(object), "o");
-            var cast = Expression.Convert(obj, type);
-            var call = Expression.Call(cast, method);
-            return Expression.Lambda<Action<object>>(call, obj).Compile();
-        }
     }
 }

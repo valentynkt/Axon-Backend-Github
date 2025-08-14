@@ -12,7 +12,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 /// - Application should prefer repositories/UoW and pipeline behaviors.
 /// - Infrastructure provides EF (or other) implementations.
 /// </summary>
-public interface IDbContext : IDisposable
+public interface IDbContext : IDisposable, IAsyncDisposable
 {
     /// <summary>DbSet accessor. Prefer repositories in Application.</summary>
     DbSet<TEntity> Set<TEntity>() where TEntity : class;

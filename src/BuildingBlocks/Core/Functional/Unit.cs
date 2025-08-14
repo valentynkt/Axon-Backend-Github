@@ -45,7 +45,7 @@ public readonly record struct Unit : IComparable<Unit>
     /// <summary>
     /// Task&lt;Unit&gt; factory (legacy name). Prefer AsTask to avoid ambiguity with System.Threading.Tasks.Task.
     /// </summary>
-    [System.Obsolete("Use Unit.AsTask instead to avoid name collisions.", false)]
+    [Obsolete("Use Unit.AsTask instead to avoid name collisions.", false)]
     public static Task<Unit> Task => System.Threading.Tasks.Task.FromResult(Value);
 
     /// <summary>
@@ -56,7 +56,7 @@ public readonly record struct Unit : IComparable<Unit>
     /// <summary>
     /// ValueTask&lt;Unit&gt; factory for high-performance async operations
     /// </summary>
-    public static ValueTask<Unit> AsValueTask => System.Threading.Tasks.ValueTask.FromResult(Value);
+    public static ValueTask<Unit> AsValueTask => ValueTask.FromResult(Value);
 
     public static bool operator <(Unit left, Unit right)
     {

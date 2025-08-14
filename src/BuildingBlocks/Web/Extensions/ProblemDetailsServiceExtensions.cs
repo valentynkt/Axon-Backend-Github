@@ -20,7 +20,7 @@ public static class ProblemDetailsServiceExtensions
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddEnhancedProblemDetails(
         this IServiceCollection services,
-        Action<Microsoft.AspNetCore.Http.ProblemDetailsOptions>? configure = null)
+        Action<ProblemDetailsOptions>? configure = null)
     {
         services.AddProblemDetails(options =>
         {
