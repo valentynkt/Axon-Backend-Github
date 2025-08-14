@@ -18,6 +18,14 @@ public abstract record DomainEvent : IDomainEvent
         Name = name ?? GetDefaultName(GetType());
     }
 
+    protected DomainEvent(DateTime occurredAt, int version = 1, string? name = null)
+    {
+        EventId = Guid.NewGuid();
+        OccurredAt = occurredAt;
+        Version = version;
+        Name = name ?? GetDefaultName(GetType());
+    }
+
     protected DomainEvent(Guid eventId, DateTime occurredAt, int version = 1, string? name = null)
     {
         EventId = eventId;

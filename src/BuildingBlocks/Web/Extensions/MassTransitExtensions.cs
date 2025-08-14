@@ -76,7 +76,7 @@ public static class MassTransitExtensions
                         var rabbit = services.GetOptions<RabbitMqOptions>(nameof(RabbitMqOptions));
                         ArgumentNullException.ThrowIfNull(rabbit);
 
-                        bus.Host(rabbit.HostName, rabbit.Port.GetValueOrDefault(5672), "/", h =>
+                        bus.Host(rabbit.HostName, rabbit.Port > 0 ? rabbit.Port : 5672, "/", h =>
                         {
                             h.Username(rabbit.UserName ?? "guest");
                             h.Password(rabbit.Password ?? "guest");

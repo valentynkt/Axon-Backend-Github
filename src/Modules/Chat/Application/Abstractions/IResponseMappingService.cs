@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
+using AiResponse = Axon.Modules.Chat.Application.DTOs.AiResponse;
 
 namespace Axon.Modules.Chat.Application.Abstractions;
 

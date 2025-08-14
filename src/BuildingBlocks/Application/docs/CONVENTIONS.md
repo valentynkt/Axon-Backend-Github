@@ -99,7 +99,9 @@ We adopt a **two-lane event handling model** for clear separation of concerns:
 
 #### Component Registration
 ```csharp
-services.AddInProcessDomainEventNotifications();  // Registers collector + publisher
+services.AddOutboxFacade();  // Registers complete eventing pipeline
+// OR for full transaction support:
+services.AddOutboxFacadeWithTransactions();  // Registers eventing + transaction behavior
 ```
 
 #### TransactionBehavior Flow
@@ -206,11 +208,11 @@ The `IOutboxMetrics` interface has been extended with inbound methods:
 ### Registration
 
 ```csharp
-// Register complete pipeline (includes inbound)
-services.AddApplicationEventing();
+// Register complete eventing pipeline (outbound + inbound)
+services.AddOutboxFacadeWithTransactions();
 
-// Or register inbound pipeline separately
-services.AddInboundIntegrationEventPipeline();
+// Or register without transaction behavior
+services.AddOutboxFacade();
 
 // Register event handlers
 services.AddScoped<IIntegrationEventHandler<UserCreatedEvent>, UserCreatedHandler>();

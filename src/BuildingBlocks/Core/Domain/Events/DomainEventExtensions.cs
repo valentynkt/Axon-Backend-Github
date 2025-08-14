@@ -18,4 +18,16 @@ public static class DomainEventExtensions
     /// </summary>
     public static DomainEventEnvelope WithCorrelation(this IDomainEvent @event, string? correlationId, string? causationId = null)
         => new(@event, new DomainEventMetadata { CorrelationId = correlationId, CausationId = causationId });
+
+    /// <summary>
+    /// Convenience to attach tenant context.
+    /// </summary>
+    public static DomainEventEnvelope WithTenant(this IDomainEvent @event, string tenantId)
+        => new(@event, new DomainEventMetadata { TenantId = tenantId });
+
+    /// <summary>
+    /// Convenience to attach custom headers.
+    /// </summary>
+    public static DomainEventEnvelope WithHeaders(this IDomainEvent @event, IReadOnlyDictionary<string, string> headers)
+        => new(@event, new DomainEventMetadata { Headers = headers });
 }

@@ -9,9 +9,7 @@ public sealed record IntegrationEnvelopeContext(
     string? TraceId = null,
     Guid? RequestId = null,
     string? TenantId = null,
-    IReadOnlyDictionary<string, object>? Metadata = null,
-    Guid OutboxEntryId = default,
-    Guid TransactionId = default);
+    IReadOnlyDictionary<string, object>? Metadata = null);
 
 /// <summary>
 /// Accesses the current envelope context and allows scoped overrides.

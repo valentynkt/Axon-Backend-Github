@@ -2,6 +2,7 @@ using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
  
 using BuildingBlocks.Core.Functional.Results;
+using AiRequest = Axon.Modules.Chat.Application.Commands.ProcessMessage.AiRequest;
 
 namespace Axon.Modules.Chat.Application.Abstractions;
 

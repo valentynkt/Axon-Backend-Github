@@ -11,7 +11,7 @@ public interface IIntegrationEventDispatcher
 {
     /// <summary>
     /// Asynchronously dispatches a collection of domain events for outbound publishing.
-    /// Domain events are mapped to integration events and published across boundaries.
+    /// Domain events implementing IHaveIntegrationEvent will emit their integration events for cross-boundary communication.
     /// </summary>
     /// <param name="events">The collection of domain events to dispatch</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
@@ -20,7 +20,7 @@ public interface IIntegrationEventDispatcher
 
     /// <summary>
     /// Asynchronously dispatches a single domain event for outbound publishing.
-    /// The event is mapped to integration events and published according to routing configuration.
+    /// The event implementing IHaveIntegrationEvent will emit its integration events for cross-boundary communication.
     /// </summary>
     /// <param name="event">The domain event to dispatch</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>
@@ -29,7 +29,7 @@ public interface IIntegrationEventDispatcher
 
     /// <summary>
     /// Asynchronously dispatches a collection of integration events for direct publishing.
-    /// Integration events are published directly without mapping.
+    /// Integration events are published directly without transformation.
     /// </summary>
     /// <param name="events">The collection of integration events to dispatch</param>
     /// <param name="cancellationToken">Cancellation token for the operation</param>

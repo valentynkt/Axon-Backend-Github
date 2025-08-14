@@ -6,7 +6,7 @@ namespace BuildingBlocks.Application.Events.Notifications;
 /// <summary>
 /// MediatR notification wrapper for domain events.
 /// Use for in-process, post-commit policy/orchestration within the same process/module.
-/// Cross-boundary communication must go through Outbox + IEventMapper.
+/// Cross-boundary communication must go through Outbox + IHaveIntegrationEvent.
 /// </summary>
 /// <typeparam name="TDomainEvent">Type of domain event being wrapped</typeparam>
 public sealed class DomainEventNotification<TDomainEvent> : INotification

@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Conversation;
 using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
@@ -288,12 +289,6 @@ public interface IAiClient
     Task<AiResponse> ProcessAsync(AiRequest request, CancellationToken cancellationToken = default);
 }
 
-public sealed class AiRequest
-{
-    public List<AiMessage> Messages { get; set; } = new();
-    public string ConversationId { get; set; } = string.Empty;
-    public string UserId { get; set; } = string.Empty;
-}
 
 public sealed class AiMessage
 {
