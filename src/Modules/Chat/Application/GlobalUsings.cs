@@ -7,6 +7,7 @@ global using Microsoft.Extensions.Logging;
 global using Microsoft.EntityFrameworkCore;
 global using BuildingBlocks.Core.Functional.Results;
 global using BuildingBlocks.Core.Diagnostics.Errors;
+global using BuildingBlocks.Core.Abstractions.CQRS;
 global using Axon.Modules.Chat.Domain.ValueObjects;
 global using Axon.Modules.Chat.Application.Abstractions.Security;
 global using Axon.Modules.Chat.Application.Abstractions.Persistence;

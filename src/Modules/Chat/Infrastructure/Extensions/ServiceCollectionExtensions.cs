@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.DependencyInjection;
 using Axon.Modules.Chat.Application.Repositories;
 using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Infrastructure.Configuration;
@@ -8,6 +9,7 @@ using Axon.Modules.Chat.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Infrastructure.Extensions;
@@ -23,8 +25,12 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddChatInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
+        // Register Chat Application layer (MediatR handlers, validators, behaviors)
+        services.AddChatApplication(configuration, environment);
+        
         // Use SPARC-compliant data access registration
         services.AddChatDataAccess(configuration);
 

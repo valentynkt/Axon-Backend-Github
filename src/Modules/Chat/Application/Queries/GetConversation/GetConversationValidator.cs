@@ -1,14 +1,18 @@
+using BuildingBlocks.Application.Validation.Base;
+using BuildingBlocks.Application.Validation.Extensions;
+using BuildingBlocks.Application.Validation.Constants;
+
 namespace Axon.Modules.Chat.Application.Queries.GetConversation;
 
 /// <summary>
 /// Validator for GetConversationQuery
 /// </summary>
-public sealed class GetConversationValidator : AbstractValidator<GetConversationQuery>
+public sealed class GetConversationValidator : BaseValidator<GetConversationQuery>
 {
     public GetConversationValidator()
     {
         RuleFor(x => x.ConversationId)
-            .NotEmpty()
-            .WithMessage("ConversationId is required");
+            .NotEmptyGuid()
+            .WithErrorCode(ValidationErrorCodes.GuidEmpty);
     }
 }

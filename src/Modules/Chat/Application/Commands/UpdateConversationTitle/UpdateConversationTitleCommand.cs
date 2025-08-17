@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace Axon.Modules.Chat.Application.Commands.UpdateConversationTitle;
 
@@ -8,4 +8,4 @@ namespace Axon.Modules.Chat.Application.Commands.UpdateConversationTitle;
 public sealed record UpdateConversationTitleCommand(
     Guid ConversationId,
     string Title
-) : IRequest<Result<UpdateConversationTitleResponse>>;
+) : CommandBase<UpdateConversationTitleResponse>;

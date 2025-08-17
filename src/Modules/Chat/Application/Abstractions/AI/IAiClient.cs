@@ -1,7 +1,7 @@
 using Axon.Modules.Chat.Application.DTOs;
 using BuildingBlocks.Core.Functional.Results;
 
-namespace Axon.Modules.Chat.Application.Abstractions;
+namespace Axon.Modules.Chat.Application.Abstractions.AI;
 
 /// <summary>
 /// Port for AI client that supports direct MCP tool integration

@@ -4,16 +4,15 @@ using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Application.Validation;
-
+using FluentValidation;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
-using BuildingBlocks.Application.Validation;
-using BuildingBlocks.Application.Validation.Core;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Runs validation for the request using IValidationService and converts failures to the unified Result error shape.
-/// - Uses IValidationService for library-agnostic validation orchestration
+/// Runs validation for the request using FluentValidation and converts failures to the unified Result error shape.
+/// - Uses FluentValidation IValidator directly for validation
 /// - Groups errors by Field for cleaner client payloads
 /// - Uses compiled delegates to create Result/Result&lt;T&gt; failures (no reflection on hot path)
 /// - Emits OpenTelemetry metrics and traces
@@ -23,18 +22,15 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
     where TRequest : class, IAxonRequest<TResponse>
     where TResponse : IResult
 {
-    private readonly IValidationService _validationService;
+    private readonly IEnumerable<IValidator<TRequest>> _validators;
     private readonly ILogger<RequestValidationBehavior<TRequest, TResponse>> _logger;
-    private readonly IValidationContext? _validationContext;
 
     public RequestValidationBehavior(
-        IValidationService validationService,
-        ILogger<RequestValidationBehavior<TRequest, TResponse>> logger,
-        IValidationContext? validationContext = null)
+        IEnumerable<IValidator<TRequest>> validators,
+        ILogger<RequestValidationBehavior<TRequest, TResponse>> logger)
     {
-        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
+        _validators = validators ?? throw new ArgumentNullException(nameof(validators));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _validationContext = validationContext;
     }
 
     public async Task<TResponse> Handle(
@@ -54,25 +50,41 @@ public sealed class RequestValidationBehavior<TRequest, TResponse> : IPipelineBe
 
         _logger.LogDebug("Validating {RequestType}", requestType);
 
-        // Run validation through the service
-        var validationResult = await _validationService.ValidateAsync(request, _validationContext, cancellationToken);
+        // Run FluentValidation in parallel for better performance
+        var validationTasks = _validators.Select(async validator =>
+        {
+            var context = new ValidationContext<TRequest>(request);
+            
+            // Add metadata if available from the request
+            if (request.TraceId != null)
+                context.RootContextData["TraceId"] = request.TraceId;
+            if (request.SpanId != null)
+                context.RootContextData["SpanId"] = request.SpanId;
+            context.RootContextData["RequestId"] = request.RequestId;
+            context.RootContextData["RequestedAt"] = request.RequestedAt;
+            
+            return await validator.ValidateAsync(context, cancellationToken);
+        });
+
+        var validationResults = await Task.WhenAll(validationTasks);
+        var validationFailures = validationResults.SelectMany(r => r.Errors).ToList();
 
         stopwatch.Stop();
 
         // Emit metrics
-        EmitMetrics(validationResult.IsValid, validationResult.Errors.Count, stopwatch.ElapsedMilliseconds);
+        EmitMetrics(validationFailures.Count == 0, validationFailures.Count, stopwatch.ElapsedMilliseconds);
 
-        if (!validationResult.IsValid)
+        if (validationFailures.Count > 0)
         {
-            _logger.LogWarning("{RequestType} validation failed with {ErrorCount} errors", requestType, validationResult.Errors.Count);
+            _logger.LogWarning("{RequestType} validation failed with {ErrorCount} errors", requestType, validationFailures.Count);
 
-            // Convert ValidationErrors to Error objects
-            var errors = validationResult.Errors
-                .GroupBy(e => e.Field ?? "_global")
+            // Convert FluentValidation failures to Error objects
+            var errors = validationFailures
+                .GroupBy(e => e.PropertyName ?? "_global")
                 .Select(g =>
                 {
-                    var message = string.Join("; ", g.Select(x => x.Message));
-                    var codes = g.Select(x => x.Code).Distinct().ToArray();
+                    var message = string.Join("; ", g.Select(x => x.ErrorMessage));
+                    var codes = g.Select(x => x.ErrorCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToArray();
 
                     return Error.Validation(
                         message: message,

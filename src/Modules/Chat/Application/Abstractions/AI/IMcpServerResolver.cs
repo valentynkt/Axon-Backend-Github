@@ -1,17 +1,16 @@
 using Axon.Modules.Chat.Application.DTOs;
- 
 using BuildingBlocks.Core.Functional.Results;
 
-namespace Axon.Modules.Chat.Application.Abstractions;
+namespace Axon.Modules.Chat.Application.Abstractions.AI;
 
 /// <summary>
-/// Service for resolving MCP server configurations from centralized settings
+/// Service for resolving and managing MCP server configurations
 /// </summary>
 public interface IMcpServerResolver
 {
     /// <summary>
-    /// Get all enabled MCP server configurations
+    /// Gets all enabled MCP server configurations
     /// </summary>
-    /// <returns>Collection of enabled MCP server configurations</returns>
-    Result<IReadOnlyCollection<McpServerConfig>> GetEnabledServerConfigurations();
+    /// <returns>Result containing list of enabled MCP server configurations</returns>
+    Result<IReadOnlyList<McpServerConfig>> GetEnabledServerConfigurations();
 }

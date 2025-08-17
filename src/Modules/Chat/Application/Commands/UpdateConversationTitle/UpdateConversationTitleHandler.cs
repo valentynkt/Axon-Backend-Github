@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Application.Commands.UpdateConversationTitle;
 /// <summary>
 /// Handler for updating conversation title
 /// </summary>
-public sealed class UpdateConversationTitleHandler : IRequestHandler<UpdateConversationTitleCommand, Result<UpdateConversationTitleResponse>>
+public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConversationTitleCommand, UpdateConversationTitleResponse>
 {
     private readonly IConversationRepository _repository;
     private readonly ICurrentUserService _currentUser;
@@ -37,7 +37,7 @@ public sealed class UpdateConversationTitleHandler : IRequestHandler<UpdateConve
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
             return Result<UpdateConversationTitleResponse>.Failure(
-                Error.Authorization("User must be authenticated to update conversation title.", "CHAT.AUTH.UNAUTHENTICATED"));
+                Error.Unauthorized("User must be authenticated to update conversation title.", "CHAT.AUTH.UNAUTHENTICATED"));
         }
 
         var ownerIdResult = UserId.FromString(_currentUser.UserId!);
@@ -47,13 +47,14 @@ public sealed class UpdateConversationTitleHandler : IRequestHandler<UpdateConve
         }
 
         // 2) Load conversation
-        var conversationIdResult = ConversationId.From(command.ConversationId);
-        if (conversationIdResult.IsFailure)
+        if (command.ConversationId == Guid.Empty)
         {
-            return Result<UpdateConversationTitleResponse>.Failure(conversationIdResult.Error);
+            return Result<UpdateConversationTitleResponse>.Failure(
+                Error.Validation("ConversationId cannot be empty.", "CHAT.ID.EMPTY"));
         }
 
-        var conversation = await _repository.GetByIdAsync(conversationIdResult.Value, cancellationToken);
+        var conversationId = ConversationId.From(command.ConversationId);
+        var conversation = await _repository.GetByIdAsync(conversationId, cancellationToken);
         if (conversation is null)
         {
             return Result<UpdateConversationTitleResponse>.Failure(
@@ -91,7 +92,7 @@ public sealed class UpdateConversationTitleHandler : IRequestHandler<UpdateConve
         // 5) Return
         return Result<UpdateConversationTitleResponse>.Success(
             new UpdateConversationTitleResponse(
-                conversation.Id.Value,
+                conversation.Id,
                 conversation.Title));
     }
 }

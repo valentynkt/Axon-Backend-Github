@@ -1,10 +1,7 @@
-using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
- 
 using BuildingBlocks.Core.Functional.Results;
-using AiRequest = Axon.Modules.Chat.Application.Commands.ProcessMessage.AiRequest;
 
-namespace Axon.Modules.Chat.Application.Abstractions;
+namespace Axon.Modules.Chat.Application.Abstractions.AI;
 
 /// <summary>
 /// Service for building AI requests with MCP configuration integration
@@ -14,8 +11,8 @@ public interface IMessageRequestBuilder
     /// <summary>
     /// Builds an AI request with integrated MCP configuration
     /// </summary>
-    /// <param name="command">Process message command</param>
-    /// <param name="conversationContext">Optional conversation context for continuity</param>
+    /// <param name="message">Message content to process</param>
+    /// <param name="previousResponseId">Previous AI response ID for context continuity</param>
     /// <returns>Result containing AI request and MCP server count</returns>
-    Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(ProcessMessageCommand command, string? conversationContext = null);
+    Result<(AiRequest Request, int McpServerCount)> BuildAiRequest(string message, string? previousResponseId = null);
 }

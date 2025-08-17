@@ -1,9 +1,9 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.AI;
-using Axon.Modules.Chat.Application.Abstractions.Caching;
+using Axon.Modules.Chat.Application.Abstractions.Infrastructure.Caching;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
-using Axon.Modules.Chat.Application.Commands.ProcessMessage;
-using Axon.Modules.Chat.Application.Services.Idempotency;
+using Axon.Modules.Chat.Application.Abstractions.Security;
+using Axon.Modules.Chat.Application.Services.Infrastructure.Idempotency;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Time;
 using Axon.Modules.Chat.Domain.ValueObjects;
@@ -17,7 +17,7 @@ namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 /// Handler for appending user message and getting AI response
 /// Implements two-phase commit pattern with context linking
 /// </summary>
-public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessageCommand, Result<AppendUserMessageResponse>>
+public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessageCommand, AppendUserMessageResponse>
 {
     private readonly IConversationRepository _repository;
     private readonly IAiClient _aiClient;
@@ -56,7 +56,7 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
             return Result<AppendUserMessageResponse>.Failure(
-                Error.Authorization("User must be authenticated to send messages.", "CHAT.AUTH.UNAUTHENTICATED"));
+                Error.Unauthorized("User must be authenticated to send messages.", "CHAT.AUTH.UNAUTHENTICATED"));
         }
 
         var ownerIdResult = UserId.FromString(_currentUser.UserId!);
@@ -66,13 +66,14 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
         }
 
         // 1) Load conversation & check ownership
-        var conversationIdResult = ConversationId.From(command.ConversationId);
-        if (conversationIdResult.IsFailure)
+        if (command.ConversationId == Guid.Empty)
         {
-            return Result<AppendUserMessageResponse>.Failure(conversationIdResult.Error);
+            return Result<AppendUserMessageResponse>.Failure(
+                Error.Validation("ConversationId cannot be empty.", "CHAT.ID.EMPTY"));
         }
 
-        var conversation = await _repository.GetByIdAsync(conversationIdResult.Value, cancellationToken);
+        var conversationId = ConversationId.From(command.ConversationId);
+        var conversation = await _repository.GetByIdAsync(conversationId, cancellationToken);
         if (conversation is null)
         {
             return Result<AppendUserMessageResponse>.Failure(
@@ -92,7 +93,7 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
         
         var idempotencyKey = suppliedKey ?? IdempotencyKey.Compute(
             command.Content, 
-            conversationIdResult.Value.Value, 
+            conversationId.Value, 
             ownerIdResult.Value.Value);
 
         var cachedResult = await _idempotencyCache.GetAsync<AppendUserMessageResponse>(idempotencyKey, cancellationToken);
@@ -130,18 +131,14 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
             conversation.Id.Value);
 
         // 4) Build AI request with previous_response_id (context link) and MCP servers
-        // For MVP, just pass the user's message content
-        var processCommand = new ProcessMessageCommand(
-            Message: command.Content,
-            PreviousResponseId: conversation.LastAiResponseId?.Value
-        );
-
-        var buildResult = _requestBuilder.BuildAiRequest(processCommand);
+        var buildResult = _requestBuilder.BuildAiRequest(
+            command.Content, 
+            conversation.LastAiResponseId?.Value);
         if (buildResult.IsFailure)
         {
             // User message already committed, return service unavailable
             return Result<AppendUserMessageResponse>.Failure(
-                Error.ServiceUnavailable("Failed to build AI request. Please retry.", "CHAT.AI.REQUEST_BUILD_FAILED"));
+                Error.Internal("Failed to build AI request. Please retry.", "CHAT.AI.REQUEST_BUILD_FAILED"));
         }
 
         var (aiRequest, mcpServerCount) = buildResult.Value;
@@ -165,7 +162,7 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
 
                 // User message committed, AI failed - return service unavailable
                 return Result<AppendUserMessageResponse>.Failure(
-                    Error.ServiceUnavailable("AI processing failed. Please retry.", "CHAT.AI.PROCESSING_FAILED"));
+                    Error.Internal("AI processing failed. Please retry.", "CHAT.AI.PROCESSING_FAILED"));
             }
 
             // Validate AI response
@@ -177,7 +174,7 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
                     conversation.Id.Value);
 
                 return Result<AppendUserMessageResponse>.Failure(
-                    Error.ServiceUnavailable("AI returned empty response. Please retry.", "CHAT.AI.EMPTY_RESPONSE"));
+                    Error.Internal("AI returned empty response. Please retry.", "CHAT.AI.EMPTY_RESPONSE"));
             }
 
             // 6) Append assistant with AiResponseId & commit (phase 2)
@@ -217,10 +214,10 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
 
             // Build response
             var response = new AppendUserMessageResponse(
-                conversation.Id.Value,
-                userMessage.Id.Value,
-                assistantMessage.Id.Value,
-                assistantMessage.Content.Value);
+                conversation.Id,
+                userMessage.Id,
+                assistantMessage.Id,
+                assistantMessage.Content);
 
             // Cache successful response
             await _idempotencyCache.SetAsync(
@@ -239,7 +236,7 @@ public sealed class AppendUserMessageHandler : IRequestHandler<AppendUserMessage
 
             // User message already committed, return service unavailable
             return Result<AppendUserMessageResponse>.Failure(
-                Error.ServiceUnavailable("An unexpected error occurred. Please retry.", "CHAT.AI.UNEXPECTED_ERROR"));
+                Error.Internal("An unexpected error occurred. Please retry.", "CHAT.AI.UNEXPECTED_ERROR"));
         }
     }
 }

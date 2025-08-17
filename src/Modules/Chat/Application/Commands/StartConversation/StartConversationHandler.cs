@@ -11,7 +11,7 @@ namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 /// <summary>
 /// Handler for starting a new conversation
 /// </summary>
-public sealed class StartConversationHandler : IRequestHandler<StartConversationCommand, Result<StartConversationResponse>>
+public sealed class StartConversationHandler : ICommandHandler<StartConversationCommand, StartConversationResponse>
 {
     private readonly IConversationRepository _repository;
     private readonly ICurrentUserService _currentUser;
@@ -38,7 +38,7 @@ public sealed class StartConversationHandler : IRequestHandler<StartConversation
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
             return Result<StartConversationResponse>.Failure(
-                Error.Authorization("User must be authenticated to start a conversation.", "CHAT.AUTH.UNAUTHENTICATED"));
+                Error.Unauthorized("User must be authenticated to start a conversation.", "CHAT.AUTH.UNAUTHENTICATED"));
         }
 
         var ownerIdResult = UserId.FromString(_currentUser.UserId!);

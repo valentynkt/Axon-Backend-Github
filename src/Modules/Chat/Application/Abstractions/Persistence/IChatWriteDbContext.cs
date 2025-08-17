@@ -1,8 +1,7 @@
-// Chat/Application/Persistence/IChatWriteDbContext.cs
-
+using Axon.Modules.Chat.Application.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
-namespace Axon.Modules.Chat.Application.Persistence;
+namespace Axon.Modules.Chat.Application.Abstractions.Persistence;
 
 public interface IChatWriteDbContext : IWriteDbContext<ChatModule>
 {

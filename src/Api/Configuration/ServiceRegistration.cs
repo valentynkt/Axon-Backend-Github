@@ -23,7 +23,8 @@ public static class ServiceRegistration
     /// <returns>Service collection for chaining</returns>
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         // Add controllers (MVC)
         services.AddControllers();
@@ -62,7 +63,7 @@ public static class ServiceRegistration
         services.AddScoped<IErrorMapper, ErrorMapper>();
         
         // Add Chat module services
-        services.AddChatInfrastructure(configuration);
+        services.AddChatInfrastructure(configuration, environment);
         
         return services;
     }

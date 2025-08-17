@@ -1,9 +1,11 @@
+using Axon.Modules.Chat.Domain.ValueObjects;
+
 namespace Axon.Modules.Chat.Application.Commands.UpdateConversationTitle;
 
 /// <summary>
 /// Response containing the updated conversation title
 /// </summary>
 public sealed record UpdateConversationTitleResponse(
-    Guid ConversationId,
+    ConversationId ConversationId,
     string Title
 );

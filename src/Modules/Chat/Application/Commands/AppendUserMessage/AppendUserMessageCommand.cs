@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 
@@ -9,4 +9,4 @@ public sealed record AppendUserMessageCommand(
     Guid ConversationId,
     string Content,
     string? IdempotencyKey = null
-) : IRequest<Result<AppendUserMessageResponse>>;
+) : CommandBase<AppendUserMessageResponse>;

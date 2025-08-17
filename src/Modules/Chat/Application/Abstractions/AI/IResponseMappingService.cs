@@ -1,18 +1,17 @@
-using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.DTOs;
-using AiResponse = Axon.Modules.Chat.Application.DTOs.AiResponse;
+using BuildingBlocks.Core.Functional.Results;
 
-namespace Axon.Modules.Chat.Application.Abstractions;
+namespace Axon.Modules.Chat.Application.Abstractions.AI;
 
 /// <summary>
-/// Service for mapping AI responses to API responses
+/// Service for mapping and validating AI responses
 /// </summary>
 public interface IResponseMappingService
 {
     /// <summary>
-    /// Maps an AI response to a process message response
+    /// Validates and processes AI response for conversation use
     /// </summary>
-    /// <param name="aiResponse">AI response to map</param>
-    /// <returns>Mapped process message response</returns>
-    ProcessMessageResponse MapToApiResponse(AiResponse aiResponse);
+    /// <param name="aiResponse">AI response from external service</param>
+    /// <returns>Result indicating validation success and any processing outcome</returns>
+    Result<AiResponse> ValidateAndProcessResponse(AiResponse aiResponse);
 }
