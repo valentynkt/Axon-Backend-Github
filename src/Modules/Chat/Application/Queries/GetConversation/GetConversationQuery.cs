@@ -13,9 +13,9 @@ public sealed record GetConversationQuery(Guid ConversationId) : QueryBase<GetCo
     public override bool UseCache => true;
     
     /// <summary>
-    /// Cache for 5 minutes - conversations are relatively stable
+    /// Cache for 60 seconds - reduce staleness for active conversations
     /// </summary>
-    public override TimeSpan? CacheDuration => TimeSpan.FromMinutes(5);
+    public override TimeSpan? CacheDuration => TimeSpan.FromSeconds(60);
     
     /// <summary>
     /// Include conversation ID in cache key for uniqueness

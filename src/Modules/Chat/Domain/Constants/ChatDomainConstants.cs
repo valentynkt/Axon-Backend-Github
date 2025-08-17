@@ -2,8 +2,9 @@ namespace Axon.Modules.Chat.Domain.Constants;
 
 /// <summary>
 /// Central location for Chat domain constants to avoid magic numbers.
+/// Public to allow Application layer to reference the single source of truth.
 /// </summary>
-internal static class ChatDomainConstants
+public static class ChatDomainConstants
 {
     /// <summary>
     /// Message content limits

@@ -1,9 +1,14 @@
 using BuildingBlocks.Application.Validation.Base;
 using BuildingBlocks.Application.Validation.Extensions;
 using BuildingBlocks.Application.Validation.Constants;
+using Axon.Modules.Chat.Application.Validation.Extensions;
 
 namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 
+/// <summary>
+/// Application layer validation for AppendUserMessage command.
+/// Uses domain validation as single source of truth to eliminate duplication.
+/// </summary>
 public sealed class AppendUserMessageValidator : BaseValidator<AppendUserMessageCommand>
 {
     public AppendUserMessageValidator()
@@ -13,10 +18,11 @@ public sealed class AppendUserMessageValidator : BaseValidator<AppendUserMessage
             .WithErrorCode(ValidationErrorCodes.GuidEmpty);
 
         RuleFor(x => x.Content)
-            .NotEmptyOrWhitespace()
-            .WithErrorCode(ValidationErrorCodes.ContentEmpty);
+            .MustBeValidMessageContent();
 
-        // Note: Domain-specific content validation is handled by MessageContent.Create()
-        // in the domain layer for proper separation of concerns
+        RuleFor(x => x.IdempotencyKey)
+            .ContentLength(1, 256) // When provided, should be reasonable length
+            .When(x => !string.IsNullOrEmpty(x.IdempotencyKey))
+            .WithErrorCode(ValidationErrorCodes.StringInvalidLength);
     }
 }

@@ -1,4 +1,9 @@
+using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Abstractions.AI;
 using Axon.Modules.Chat.Application.Abstractions.Infrastructure.Caching;
+using Axon.Modules.Chat.Application.Services.AI.Configuration;
+using Axon.Modules.Chat.Application.Services.AI.Processing;
+using Axon.Modules.Chat.Application.Services.AI.Tools;
 using Axon.Modules.Chat.Application.Services.Infrastructure.Idempotency;
 using Axon.Modules.Chat.Domain.Time;
 using BuildingBlocks.Application.Configuration;
@@ -39,6 +44,13 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
         services.AddSingleton<IIdempotencyCache, InMemoryIdempotencyCache>();
         services.AddSingleton<IClock, SystemClock>();
+
+        // Application services (provider-agnostic)
+        services.AddScoped<IMessageRequestBuilder, MessageRequestBuilder>();
+        services.AddScoped<IResponseMappingService, ResponseMappingService>();
+        services.AddSingleton<IToolExecutionService, ToolExecutionService>();
+        services.AddScoped<IMcpConfigurationService, McpConfigurationService>();
+        // IAiClient is infrastructure-provided (adapter), register there.
 
         return services;
     }

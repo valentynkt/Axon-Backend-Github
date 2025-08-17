@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.Persistence;
 
@@ -13,15 +14,18 @@ public sealed class GetAllConversationIdsHandler : IQueryHandler<GetAllConversat
     private readonly IChatReadDbContext _readDb;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<GetAllConversationIdsHandler> _logger;
+    private readonly IAppTelemetry? _telemetry;
 
     public GetAllConversationIdsHandler(
         IChatReadDbContext readDb,
         ICurrentUserService currentUser,
-        ILogger<GetAllConversationIdsHandler> logger)
+        ILogger<GetAllConversationIdsHandler> logger,
+        IAppTelemetry? telemetry = null)
     {
         _readDb = readDb;
         _currentUser = currentUser;
         _logger = logger;
+        _telemetry = telemetry;
     }
 
     public async Task<Result<GetAllConversationIdsResponse>> Handle(
@@ -32,6 +36,7 @@ public sealed class GetAllConversationIdsHandler : IQueryHandler<GetAllConversat
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
             _logger.LogWarning("Unauthenticated access attempt to conversation IDs");
+            _telemetry?.TrackValidationFailure(nameof(GetAllConversationIdsQuery), "CHAT.AUTH.UNAUTHENTICATED");
             return Result<GetAllConversationIdsResponse>.Failure(Error.Unauthorized("User must be authenticated"));
         }
 

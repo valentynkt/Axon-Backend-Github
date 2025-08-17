@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
+using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Domain.Time;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -16,26 +17,31 @@ public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConve
     private readonly ICurrentUserService _currentUser;
     private readonly IClock _clock;
     private readonly ILogger<UpdateConversationTitleHandler> _logger;
+    private readonly IAppTelemetry? _telemetry;
 
     public UpdateConversationTitleHandler(
         IConversationRepository repository,
         ICurrentUserService currentUser,
         IClock clock,
-        ILogger<UpdateConversationTitleHandler> logger)
+        ILogger<UpdateConversationTitleHandler> logger,
+        IAppTelemetry? telemetry = null)
     {
         _repository = repository;
         _currentUser = currentUser;
         _clock = clock;
         _logger = logger;
+        _telemetry = telemetry;
     }
 
     public async Task<Result<UpdateConversationTitleResponse>> Handle(
         UpdateConversationTitleCommand command,
         CancellationToken cancellationToken)
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         // 1) Auth
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
+            _telemetry?.TrackValidationFailure(nameof(UpdateConversationTitleCommand), "CHAT.AUTH.UNAUTHENTICATED");
             return Result<UpdateConversationTitleResponse>.Failure(
                 Error.Unauthorized("User must be authenticated to update conversation title.", "CHAT.AUTH.UNAUTHENTICATED"));
         }
@@ -83,6 +89,8 @@ public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConve
         // 4) Persist
         await _repository.UpdateAsync(conversation, cancellationToken);
         await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
+        stopwatch.Stop();
+        _telemetry?.TrackMessageProcessed(conversation.Id.Value, stopwatch.Elapsed, success: true);
 
         _logger.LogInformation(
             "Updated title for conversation {ConversationId} to '{Title}'",
@@ -92,7 +100,7 @@ public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConve
         // 5) Return
         return Result<UpdateConversationTitleResponse>.Success(
             new UpdateConversationTitleResponse(
-                conversation.Id,
+                conversation.Id.Value,
                 conversation.Title));
     }
 }

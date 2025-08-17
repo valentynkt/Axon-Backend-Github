@@ -1,12 +1,14 @@
-using FluentValidation;
+using BuildingBlocks.Application.Validation.Base;
 
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 
-public sealed class StartConversationValidator : AbstractValidator<StartConversationCommand>
+public sealed class StartConversationValidator : BaseValidator<StartConversationCommand>
 {
     public StartConversationValidator()
     {
-        // No validation needed - Domain handles title validation through TitleProvidedMustBeValidRule
-        // Title can be null/empty for default titles
+        // No input validation needed for StartConversation
+        // - Title is optional (can be null for auto-generated titles)
+        // - Domain handles business validation through TitleProvidedMustBeValidRule
+        // - User context validation handled in pipeline
     }
 }

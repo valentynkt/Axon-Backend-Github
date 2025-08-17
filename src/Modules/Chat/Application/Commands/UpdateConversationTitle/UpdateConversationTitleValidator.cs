@@ -1,9 +1,14 @@
 using BuildingBlocks.Application.Validation.Base;
 using BuildingBlocks.Application.Validation.Extensions;
 using BuildingBlocks.Application.Validation.Constants;
+using Axon.Modules.Chat.Application.Validation.Extensions;
 
 namespace Axon.Modules.Chat.Application.Commands.UpdateConversationTitle;
 
+/// <summary>
+/// Application layer validation for UpdateConversationTitle command.
+/// Uses domain validation as single source of truth to eliminate duplication.
+/// </summary>
 public sealed class UpdateConversationTitleValidator : BaseValidator<UpdateConversationTitleCommand>
 {
     public UpdateConversationTitleValidator()
@@ -13,10 +18,8 @@ public sealed class UpdateConversationTitleValidator : BaseValidator<UpdateConve
             .WithErrorCode(ValidationErrorCodes.GuidEmpty);
 
         RuleFor(x => x.Title)
-            .NotEmptyOrWhitespace()
-            .WithErrorCode(ValidationErrorCodes.StringEmptyOrWhitespace);
-
-        // Note: Domain-specific title validation (length, format, etc.) is handled by 
-        // ConversationTitle.Create() and TitleUpdateMustBeValidRule in the domain layer
+            .NotNull()
+            .WithErrorCode(ValidationErrorCodes.Required)
+            .MustBeValidConversationTitle();
     }
 }

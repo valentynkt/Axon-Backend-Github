@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
+using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Time;
 using Axon.Modules.Chat.Domain.ValueObjects;
@@ -17,17 +18,20 @@ public sealed class StartConversationHandler : ICommandHandler<StartConversation
     private readonly ICurrentUserService _currentUser;
     private readonly IClock _clock;
     private readonly ILogger<StartConversationHandler> _logger;
+    private readonly IAppTelemetry? _telemetry;
 
     public StartConversationHandler(
         IConversationRepository repository,
         ICurrentUserService currentUser,
         IClock clock,
-        ILogger<StartConversationHandler> logger)
+        ILogger<StartConversationHandler> logger,
+        IAppTelemetry? telemetry = null)
     {
         _repository = repository;
         _currentUser = currentUser;
         _clock = clock;
         _logger = logger;
+        _telemetry = telemetry;
     }
 
     public async Task<Result<StartConversationResponse>> Handle(
@@ -37,6 +41,7 @@ public sealed class StartConversationHandler : ICommandHandler<StartConversation
         // 1) Auth & owner
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
+            _telemetry?.TrackValidationFailure(nameof(StartConversationCommand), "CHAT.AUTH.UNAUTHENTICATED");
             return Result<StartConversationResponse>.Failure(
                 Error.Unauthorized("User must be authenticated to start a conversation.", "CHAT.AUTH.UNAUTHENTICATED"));
         }
@@ -75,6 +80,9 @@ public sealed class StartConversationHandler : ICommandHandler<StartConversation
             "Started conversation {ConversationId} for user {UserId}",
             conversation.Id.Value,
             ownerIdResult.Value.Value);
+
+        // Track telemetry
+        _telemetry?.TrackConversationStarted(conversation.Id.Value, ownerIdResult.Value.Value);
 
         // 5) Return
         return Result<StartConversationResponse>.Success(
