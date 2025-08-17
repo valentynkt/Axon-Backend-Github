@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Abstractions.Security;
 using Axon.Modules.Chat.Application.Services;
 
 namespace Axon.Modules.Chat.Infrastructure.Services;

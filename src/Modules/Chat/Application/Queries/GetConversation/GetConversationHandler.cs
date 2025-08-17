@@ -1,11 +1,12 @@
 using Axon.Modules.Chat.Application.DTOs;
+using Axon.Modules.Chat.Application.Persistence;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversation;
 
 /// <summary>
 /// Handler for retrieving a conversation with all messages
 /// </summary>
-public sealed class GetConversationHandler : IRequestHandler<GetConversationQuery, Result<GetConversationResponse>>
+public sealed class GetConversationHandler : IQueryHandler<GetConversationQuery, GetConversationResponse>
 {
     private readonly IChatReadDbContext _readDb;
     private readonly ICurrentUserService _currentUser;

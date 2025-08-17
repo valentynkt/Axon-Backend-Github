@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Axon.BuildingBlocks.Persistence.Interfaces;
 using Axon.BuildingBlocks.Postgres;
+using Axon.Modules.Chat.Application.Abstractions.Security;
 using Axon.Modules.Chat.Application.Repositories;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;

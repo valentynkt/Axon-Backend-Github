@@ -1,11 +1,12 @@
 using Axon.Modules.Chat.Application.DTOs;
+using Axon.Modules.Chat.Application.Persistence;
 
 namespace Axon.Modules.Chat.Application.Queries.GetAllConversationIds;
 
 /// <summary>
 /// Handler for retrieving all conversation IDs for the current user
 /// </summary>
-public sealed class GetAllConversationIdsHandler : IRequestHandler<GetAllConversationIdsQuery, Result<GetAllConversationIdsResponse>>
+public sealed class GetAllConversationIdsHandler : IQueryHandler<GetAllConversationIdsQuery, GetAllConversationIdsResponse>
 {
     private const int Cap = 100;
     

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Axon.Modules.Chat.Application.Services;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using Axon.Modules.Chat.Application.Abstractions.Security;
 
 namespace Axon.Modules.Chat.Infrastructure.Services;
 
