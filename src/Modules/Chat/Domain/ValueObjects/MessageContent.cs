@@ -1,9 +1,9 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
+using Axon.Modules.Chat.Domain.Constants;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;
 
@@ -15,7 +15,7 @@ namespace Axon.Modules.Chat.Domain.ValueObjects;
 /// </summary>
 public sealed record MessageContent : ValueObject
 {
-    private const int MaxLength = 100_000;
+    private const int MaxLength = ChatDomainConstants.MessageContent.MaxLength;
     
     public string Value { get; }
     public int Length => Value.Length;
@@ -44,14 +44,14 @@ public sealed record MessageContent : ValueObject
         if (string.IsNullOrEmpty(trimmedValue))
         {
             return Result<MessageContent>.Failure(
-                Error.Validation("Message content cannot be empty.", "CHAT_MESSAGE_CONTENT_EMPTY"));
+                Error.Validation("Message content cannot be empty.", "CHAT.MESSAGE.CONTENT.EMPTY"));
         }
 
         // Check maximum length
         if (trimmedValue.Length > MaxLength)
         {
             return Result<MessageContent>.Failure(
-                Error.Validation("Message content cannot exceed 100000 characters.", "CHAT_MESSAGE_CONTENT_TOO_LONG"));
+                Error.Validation("Message content cannot exceed 100000 characters.", "CHAT.MESSAGE.CONTENT.TOO_LONG"));
         }
 
         return Result<MessageContent>.Success(new MessageContent(trimmedValue));
@@ -82,11 +82,11 @@ public sealed record MessageContent : ValueObject
 
         if (string.IsNullOrWhiteSpace(Value))
         {
-            errors.Add(Error.Validation("Message content cannot be empty.", "CHAT_MESSAGE_CONTENT_EMPTY"));
+            errors.Add(Error.Validation("Message content cannot be empty.", "CHAT.MESSAGE.CONTENT.EMPTY"));
         }
         else if (Value.Length > MaxLength)
         {
-            errors.Add(Error.Validation("Message content cannot exceed 100000 characters.", "CHAT_MESSAGE_CONTENT_TOO_LONG"));
+            errors.Add(Error.Validation("Message content cannot exceed 100000 characters.", "CHAT.MESSAGE.CONTENT.TOO_LONG"));
         }
 
         return errors.Count == 0 

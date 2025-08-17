@@ -1,5 +1,3 @@
-using FluentValidation;
-
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 
 /// <summary>
@@ -10,9 +8,8 @@ public sealed class StartConversationValidator : AbstractValidator<StartConversa
     public StartConversationValidator()
     {
         RuleFor(x => x.Title)
-            .NotEmpty()
-            .WithMessage("Conversation title is required")
-            .MaximumLength(200)
-            .WithMessage("Conversation title cannot exceed 200 characters");
+            .Must(t => t == null || t.Trim().Length <= 200)
+            .WithErrorCode("CHAT.CONVERSATION.TITLE.TOO_LONG")
+            .WithMessage("Title cannot exceed 200 characters.");
     }
 }

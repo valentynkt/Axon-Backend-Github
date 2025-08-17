@@ -1,14 +1,20 @@
- 
-using BuildingBlocks.Core.Functional.Results;
-using MediatR;
-
 namespace Axon.Modules.Chat.Application.Commands.ProcessMessage;
 
 /// <summary>
-/// Command for processing chat messages with automatic MCP support from configuration
+/// Internal command for processing messages through AI
+/// Used by AppendUserMessageHandler to structure AI requests
 /// </summary>
-public sealed record ProcessMessageCommand(
+internal sealed record ProcessMessageCommand(
     string Message,
-    Guid? ConversationId = null,
-    string? UserId = null,
-    string? PreviousResponseId = null) : IRequest<Result<ProcessMessageResponse>>;
+    string? PreviousResponseId = null
+);
+
+/// <summary>
+/// Lightweight AI request structure for internal use
+/// Maps to Application DTOs/AiRequest
+/// </summary>
+internal sealed record AiRequest(
+    string Message,
+    IReadOnlyCollection<object>? McpConfigs = null,
+    string? PreviousResponseId = null
+);

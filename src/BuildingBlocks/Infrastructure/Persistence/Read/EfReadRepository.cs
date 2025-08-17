@@ -193,7 +193,7 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     }
 
     // ——— H e l p e r  M e t h o d s ———
-    private IQueryable<TReadModel> ApplySorting(IQueryable<TReadModel> query, IReadOnlyList<SortCriteria> sortCriteria)
+    private static IQueryable<TReadModel> ApplySorting(IQueryable<TReadModel> query, IReadOnlyList<SortCriteria> sortCriteria)
     {
         if (sortCriteria.Count == 0) return query;
 

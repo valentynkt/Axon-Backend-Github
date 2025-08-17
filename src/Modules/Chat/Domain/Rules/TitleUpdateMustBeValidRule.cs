@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Domain.Rules;
+using Axon.Modules.Chat.Domain.Constants;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
@@ -8,7 +9,7 @@ namespace Axon.Modules.Chat.Domain.Rules;
 /// </summary>
 internal sealed class TitleUpdateMustBeValidRule : BusinessRule
 {
-    private const int MaxTitleLength = 200;
+    private const int MaxTitleLength = ChatDomainConstants.ConversationTitle.MaxLength;
     private readonly string? _newTitle;
 
     public TitleUpdateMustBeValidRule(string? newTitle)
@@ -49,14 +50,14 @@ internal sealed class TitleUpdateMustBeValidRule : BusinessRule
     private static string DetermineCode(string? title)
     {
         if (string.IsNullOrWhiteSpace(title))
-            return "CHAT_CONVERSATION_TITLE_EMPTY";
+            return "CHAT.CONVERSATION.TITLE.EMPTY";
         
         var trimmedLength = title.Trim().Length;
         if (trimmedLength == 0)
-            return "CHAT_CONVERSATION_TITLE_EMPTY";
+            return "CHAT.CONVERSATION.TITLE.EMPTY";
         
         if (trimmedLength > MaxTitleLength)
-            return "CHAT_CONVERSATION_TITLE_TOO_LONG";
+            return "CHAT.CONVERSATION.TITLE.TOO_LONG";
         
         return "CHAT.CONVERSATION.TITLE_VALID";
     }

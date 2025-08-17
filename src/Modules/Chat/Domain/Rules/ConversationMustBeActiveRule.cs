@@ -14,7 +14,7 @@ internal sealed class ConversationMustBeActiveRule : BusinessRule
     public ConversationMustBeActiveRule(ConversationStatus status)
         : base(
             message: "Conversation must be active to perform this operation.",
-            code: "CHAT_CONVERSATION_NOT_ACTIVE")
+            code: "CHAT.CONVERSATION.NOT.ACTIVE")
     {
         _status = status;
     }

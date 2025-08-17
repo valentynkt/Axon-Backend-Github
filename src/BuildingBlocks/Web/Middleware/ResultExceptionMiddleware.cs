@@ -249,7 +249,7 @@ public sealed class ResultExceptionMiddleware
         HttpContext context,
         Error error,
         HttpStatusCode statusCode,
-        Exception exception)
+        Exception _)
     {
         var logLevel = GetLogLevelForStatusCode(statusCode);
         

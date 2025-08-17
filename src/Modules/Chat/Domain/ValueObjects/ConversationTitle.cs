@@ -1,9 +1,9 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
+using Axon.Modules.Chat.Domain.Constants;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;
 
@@ -15,7 +15,7 @@ namespace Axon.Modules.Chat.Domain.ValueObjects;
 /// </summary>
 public sealed record ConversationTitle : ValueObject
 {
-    private const int MaxLength = 200;
+    private const int MaxLength = ChatDomainConstants.ConversationTitle.MaxLength;
     
     public string Value { get; }
     public int Length => Value.Length;
@@ -25,6 +25,11 @@ public sealed record ConversationTitle : ValueObject
     {
         Value = value;
     }
+
+    /// <summary>
+    /// Empty conversation title for default scenarios
+    /// </summary>
+    public static ConversationTitle Empty => new(string.Empty);
 
     /// <summary>
     /// Creates a ConversationTitle with validation.
@@ -52,7 +57,7 @@ public sealed record ConversationTitle : ValueObject
         if (trimmedValue.Length > MaxLength)
         {
             return Result<ConversationTitle>.Failure(
-                Error.Validation("Title cannot exceed 200 characters.", "CHAT_CONVERSATION_TITLE_TOO_LONG"));
+                Error.Validation("Title cannot exceed 200 characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
         }
 
         return Result<ConversationTitle>.Success(new ConversationTitle(trimmedValue));
@@ -69,7 +74,7 @@ public sealed record ConversationTitle : ValueObject
 
         if (Value.Length > MaxLength)
         {
-            errors.Add(Error.Validation("Title cannot exceed 200 characters.", "CHAT_CONVERSATION_TITLE_TOO_LONG"));
+            errors.Add(Error.Validation("Title cannot exceed 200 characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
         }
 
         return errors.Count == 0 

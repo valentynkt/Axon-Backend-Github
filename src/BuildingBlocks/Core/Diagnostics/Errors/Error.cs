@@ -554,7 +554,7 @@ public sealed record Error
 
     private static IReadOnlyDictionary<string, object>? Merge(
         IReadOnlyDictionary<string, object>? a,
-        IReadOnlyDictionary<string, object>? b)
+        Dictionary<string, object>? b)
     {
         if ((a is null || a.Count == 0) && (b is null || b.Count == 0)) return a ?? b;
         var m = new Dictionary<string, object>();
@@ -563,7 +563,7 @@ public sealed record Error
         return m;
     }
 
-    private static void MergeInto(IDictionary<string, object> target, IReadOnlyDictionary<string, object>? source)
+    private static void MergeInto(Dictionary<string, object> target, IReadOnlyDictionary<string, object>? source)
     {
         if (source is null) return;
         foreach (var (k, v) in source) target[k] = v;

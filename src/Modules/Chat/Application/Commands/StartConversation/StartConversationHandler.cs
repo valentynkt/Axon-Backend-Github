@@ -1,11 +1,10 @@
-using Axon.Modules.Chat.Application.Abstractions;
-using Axon.Modules.Chat.Application.Commands.ProcessMessage;
-using Axon.Modules.Chat.Application.Repositories;
+using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using Axon.Modules.Chat.Domain.Conversation;
- 
+using Axon.Modules.Chat.Domain.Time;
+using Axon.Modules.Chat.Domain.ValueObjects;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Results;
-using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 
@@ -14,39 +13,71 @@ namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 /// </summary>
 public sealed class StartConversationHandler : IRequestHandler<StartConversationCommand, Result<StartConversationResponse>>
 {
-    private readonly IConversationRepository _conversationRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IConversationRepository _repository;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IClock _clock;
+    private readonly ILogger<StartConversationHandler> _logger;
 
     public StartConversationHandler(
-        IConversationRepository conversationRepository,
-        IUnitOfWork unitOfWork)
+        IConversationRepository repository,
+        ICurrentUserService currentUser,
+        IClock clock,
+        ILogger<StartConversationHandler> logger)
     {
-        _conversationRepository = conversationRepository;
-        _unitOfWork = unitOfWork;
+        _repository = repository;
+        _currentUser = currentUser;
+        _clock = clock;
+        _logger = logger;
     }
 
     public async Task<Result<StartConversationResponse>> Handle(
-        StartConversationCommand request, 
+        StartConversationCommand command,
         CancellationToken cancellationToken)
     {
-        // Create conversation aggregate
-        var conversationResult = Conversation.Create(request.Title, "default-user");
+        // 1) Auth & owner
+        if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
+        {
+            return Result<StartConversationResponse>.Failure(
+                Error.Authorization("User must be authenticated to start a conversation.", "CHAT.AUTH.UNAUTHENTICATED"));
+        }
+
+        var ownerIdResult = UserId.FromString(_currentUser.UserId!);
+        if (ownerIdResult.IsFailure)
+        {
+            return Result<StartConversationResponse>.Failure(ownerIdResult.Error);
+        }
+
+        // 2) Normalize title (domain allows empty for default)
+        var normalizedTitle = command.Title?.Trim();
+        if (string.IsNullOrEmpty(normalizedTitle))
+        {
+            normalizedTitle = null; // Let domain handle default title
+        }
+
+        // 3) Start aggregate
+        var conversationResult = Conversation.Start(ownerIdResult.Value, normalizedTitle, _clock);
         if (conversationResult.IsFailure)
-            return conversationResult.Error;
+        {
+            _logger.LogWarning(
+                "Failed to start conversation for user {UserId}: {ErrorCode}",
+                _currentUser.UserId,
+                conversationResult.Error.Code);
+            return Result<StartConversationResponse>.Failure(conversationResult.Error);
+        }
 
         var conversation = conversationResult.Value;
 
-        // Add to repository and save
-        await _conversationRepository.AddAsync(conversation, cancellationToken);
-        
-        var saveResult = await _unitOfWork.SaveChangesAsync(cancellationToken);
-        if (saveResult == 0)
-            return Error.Persistence("Failed to save conversation");
+        // 4) Persist
+        await _repository.AddAsync(conversation, cancellationToken);
+        await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Return response using audit accessor methods
-        return new StartConversationResponse(
-            conversation.Id,
-            conversation.Title,
-            conversation.GetCreatedAt());
+        _logger.LogInformation(
+            "Started conversation {ConversationId} for user {UserId}",
+            conversation.Id.Value,
+            ownerIdResult.Value.Value);
+
+        // 5) Return
+        return Result<StartConversationResponse>.Success(
+            new StartConversationResponse(conversation.Id.Value));
     }
 }

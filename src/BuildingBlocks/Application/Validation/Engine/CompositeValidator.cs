@@ -13,7 +13,7 @@ internal enum CompositeMode
 
 internal sealed class CompositeValidator<T> : IAppValidator<T>
 {
-    private readonly IReadOnlyList<IAppValidator<T>> _validators;
+    private readonly IAppValidator<T>[] _validators;
     private readonly CompositeMode _mode;
     private readonly bool _shortCircuitOnError;
 
@@ -43,7 +43,7 @@ internal sealed class CompositeValidator<T> : IAppValidator<T>
 
     public async Task<ValidationResult> ValidateAsync(T instance, IValidationContext? context = null, CancellationToken ct = default)
     {
-        if (_validators.Count == 0) return ValidationResult.Success;
+        if (_validators.Length == 0) return ValidationResult.Success;
 
         if (_mode == CompositeMode.Sequential)
         {

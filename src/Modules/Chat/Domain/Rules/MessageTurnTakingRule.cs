@@ -16,7 +16,7 @@ internal sealed class MessageTurnTakingRule : BusinessRule
     public MessageTurnTakingRule(IReadOnlyList<Message> messages, MessageRole newRole)
         : base(
             message: "Assistant cannot send two messages in a row.",
-            code: "CHAT_MESSAGE_ASSISTANT_TURN_VIOLATION")
+            code: "CHAT.MESSAGE.ASSISTANT.TURN.VIOLATION")
     {
         _messages = messages ?? new List<Message>();
         _newRole = newRole ?? throw new ArgumentNullException(nameof(newRole));

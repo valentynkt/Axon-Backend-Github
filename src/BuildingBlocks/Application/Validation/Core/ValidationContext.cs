@@ -125,7 +125,7 @@ public sealed class ValidationContext : IValidationContext
 
     // ---- helpers ----
 
-    private static IReadOnlyDictionary<string, object> CloneMetadata(IReadOnlyDictionary<string, object>? source)
+    private static Dictionary<string, object> CloneMetadata(IReadOnlyDictionary<string, object>? source)
     {
         if (source is null || source.Count == 0)
             return new Dictionary<string, object>(0);
@@ -133,7 +133,7 @@ public sealed class ValidationContext : IValidationContext
         return new Dictionary<string, object>(source, StringComparer.OrdinalIgnoreCase);
     }
 
-    private IReadOnlyDictionary<string, bool> ExtractFeatureFlags()
+    private Dictionary<string, bool> ExtractFeatureFlags()
     {
         var flags = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 

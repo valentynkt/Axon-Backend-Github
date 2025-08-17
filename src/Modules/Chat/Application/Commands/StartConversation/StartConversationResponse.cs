@@ -1,12 +1,6 @@
-using Axon.Modules.Chat.Domain.Conversation.ValueObjects;
-using Axon.Modules.Chat.Domain.ValueObjects;
-
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 
 /// <summary>
-/// Response for starting a new conversation
+/// Response containing the ID of the newly created conversation
 /// </summary>
-public sealed record StartConversationResponse(
-    ConversationId ConversationId,
-    string Title,
-    DateTime CreatedAt);
+public sealed record StartConversationResponse(Guid ConversationId);

@@ -13,7 +13,7 @@ internal sealed class CompletionRequiresAtLeastOneMessageRule : BusinessRule
     public CompletionRequiresAtLeastOneMessageRule(int messageCount)
         : base(
             message: "Cannot complete an empty conversation.",
-            code: "CHAT_CONVERSATION_EMPTY_ON_COMPLETE",
+            code: "CHAT.CONVERSATION.EMPTY.ON.COMPLETE",
             metadata: new Dictionary<string, object> { ["messageCount"] = messageCount })
     {
         _messageCount = messageCount;

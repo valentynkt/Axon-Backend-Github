@@ -4,6 +4,15 @@ using MediatR;
 namespace BuildingBlocks.Application.Events.Notifications;
 
 /// <summary>
+/// Factory methods for creating domain event notifications.
+/// </summary>
+public static class DomainEventNotification
+{
+    public static DomainEventNotification<TDomainEvent> Wrap<TDomainEvent>(TDomainEvent e)
+        where TDomainEvent : IDomainEvent => new(e);
+}
+
+/// <summary>
 /// MediatR notification wrapper for domain events.
 /// Use for in-process, post-commit policy/orchestration within the same process/module.
 /// Cross-boundary communication must go through Outbox + IHaveIntegrationEvent.
@@ -23,5 +32,5 @@ public sealed class DomainEventNotification<TDomainEvent> : INotification
     public DateTime OccurredAt => DomainEvent.OccurredAt;
     public int Version => DomainEvent.Version;
 
-    public static DomainEventNotification<TDomainEvent> Wrap(TDomainEvent e) => new(e);
+    // Static factory method moved to non-generic utility class to avoid CA1000
 }

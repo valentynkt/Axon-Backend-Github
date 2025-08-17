@@ -14,7 +14,7 @@ internal sealed class ConversationMustHaveOwnerRule : BusinessRule
     public ConversationMustHaveOwnerRule(UserId ownerId)
         : base(
             message: "Conversation owner must be specified.",
-            code: "CHAT_CONVERSATION_OWNER_REQUIRED")
+            code: "CHAT.CONVERSATION.OWNER.REQUIRED")
     {
         _ownerId = ownerId;
     }

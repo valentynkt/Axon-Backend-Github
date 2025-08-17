@@ -8,7 +8,7 @@ namespace BuildingBlocks.Application.Validation.Engine;
 /// </summary>
 public sealed class FluentValidationAdapter<T> : IAppValidator<T>
 {
-    private readonly IReadOnlyList<IValidator<T>> _validators;
+    private readonly IValidator<T>[] _validators;
 
     public FluentValidationAdapter(IEnumerable<IValidator<T>> validators)
     {
@@ -23,7 +23,7 @@ public sealed class FluentValidationAdapter<T> : IAppValidator<T>
 
     private async Task<ValidationResult> RunAsync(T instance, bool synchronous,  CancellationToken ct)
     {
-        if (_validators.Count == 0) return ValidationResult.Success;
+        if (_validators.Length == 0) return ValidationResult.Success;
 
         var failures = new List<ValidationError>();
 

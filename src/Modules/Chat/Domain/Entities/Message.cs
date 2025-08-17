@@ -14,6 +14,7 @@ public sealed class Message : AuditableDeletableEntity<MessageId>
     public MessageRole Role { get; }
     public MessageContent Content { get; }
     public int Sequence { get; }
+    public AiResponseId? AiResponseId { get; private set; }
 
     private Message() : base(MessageId.New()) 
     {
@@ -23,38 +24,87 @@ public sealed class Message : AuditableDeletableEntity<MessageId>
         Content = null!;
     }
 
-    internal Message(
+    private Message(
         MessageId id,
         ConversationId conversationId,
         MessageRole role,
         MessageContent content,
-        int sequence)
+        int sequence,
+        AiResponseId? aiResponseId)
         : base(id)
     {
         ConversationId = conversationId ?? throw new ArgumentNullException(nameof(conversationId));
         Role = role ?? throw new ArgumentNullException(nameof(role));
         Content = content ?? throw new ArgumentNullException(nameof(content));
         Sequence = sequence;
+        AiResponseId = aiResponseId;
+        
+        // Post-construction validation
+        ValidateInvariants();
     }
 
     /// <summary>
-    /// Internal factory for Conversation aggregate use only.
-    /// Ensures messages are created with proper sequence assignment.
+    /// Validates message invariants after construction
     /// </summary>
-    internal static Message Create(
-        ConversationId conversationId,
-        MessageRole role,
-        MessageContent content,
-        int sequence)
+    private void ValidateInvariants()
     {
-        if (sequence <= 0)
-            throw new ArgumentException("Sequence must be positive.", nameof(sequence));
+        ValidateAiResponseIdConsistency(Role, AiResponseId);
+    }
+
+
+
+    /// <summary>
+    /// Factory method for creating assistant messages with REQUIRED AI response tracking.
+    /// Assistant messages MUST have an AI response ID.
+    /// </summary>
+    internal static Message CreateAssistantMessage(
+        ConversationId conversationId,
+        MessageContent content,
+        int sequence,
+        AiResponseId aiResponseId)
+    {
+        ArgumentNullException.ThrowIfNull(aiResponseId, nameof(aiResponseId));
 
         return new Message(
             MessageId.New(),
             conversationId,
-            role,
+            MessageRole.Assistant,
             content,
-            sequence);
+            sequence,
+            aiResponseId);
+    }
+
+    /// <summary>
+    /// Factory method for creating user messages.
+    /// User messages MUST NOT have an AI response ID.
+    /// </summary>
+    internal static Message CreateUserMessage(
+        ConversationId conversationId,
+        MessageContent content,
+        int sequence)
+    {
+        return new Message(
+            MessageId.New(),
+            conversationId,
+            MessageRole.User,
+            content,
+            sequence,
+            aiResponseId: null); // User messages never have AI response ID
+    }
+
+
+
+    /// <summary>
+    /// Validates the consistency between message role and AI response ID.
+    /// </summary>
+    private static void ValidateAiResponseIdConsistency(MessageRole role, AiResponseId? aiResponseId)
+    {
+        // Assistant messages MUST have an AI response ID
+        if (role.IsAssistant && aiResponseId is null)
+            throw new InvalidOperationException("Assistant messages must have an AI response ID");
+
+        // User messages MUST NOT have an AI response ID
+        if (role.IsUser && aiResponseId is not null)
+            throw new InvalidOperationException("User messages cannot have an AI response ID");
     }
 }

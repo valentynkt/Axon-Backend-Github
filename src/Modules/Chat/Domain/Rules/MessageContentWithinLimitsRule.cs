@@ -1,49 +1,31 @@
 using BuildingBlocks.Core.Domain.Rules;
+using Axon.Modules.Chat.Domain.Constants;
+using Axon.Modules.Chat.Domain.ValueObjects;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
 /// <summary>
-/// Validates message content before creating MessageContent value object.
-/// Broken when content is null/whitespace or exceeds 100,000 characters.
+/// Business rule that validates message content is within acceptable limits.
+/// Delegates to MessageContent value object for consistent validation.
 /// </summary>
 internal sealed class MessageContentWithinLimitsRule : BusinessRule
 {
-    private const int MaxContentLength = 100_000;
     private readonly string? _content;
 
     public MessageContentWithinLimitsRule(string? content)
         : base(
-            message: DetermineMessage(content),
-            code: DetermineCode(content))
+            message: "Message content is invalid.",
+            code: "CHAT.MESSAGE.CONTENT.INVALID")
     {
         _content = content;
     }
 
-    public override bool IsBroken() 
-        => string.IsNullOrWhiteSpace(_content) || _content.Length > MaxContentLength;
+    public override bool IsBroken()
+    {
+        var result = MessageContent.Create(_content);
+        return result.IsFailure;
+    }
 
     public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 
         => ValueTask.FromResult(IsBroken());
-
-    private static string DetermineMessage(string? content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-            return "Message content cannot be empty.";
-        
-        if (content.Length > MaxContentLength)
-            return $"Message content cannot exceed {MaxContentLength} characters.";
-        
-        return "Message content is within limits.";
-    }
-
-    private static string DetermineCode(string? content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-            return "CHAT_MESSAGE_CONTENT_EMPTY";
-        
-        if (content.Length > MaxContentLength)
-            return "CHAT_MESSAGE_CONTENT_TOO_LONG";
-        
-        return "CHAT_MESSAGE_CONTENT_VALID";
-    }
 }

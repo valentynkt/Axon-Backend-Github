@@ -1,5 +1,4 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional.Results;
 

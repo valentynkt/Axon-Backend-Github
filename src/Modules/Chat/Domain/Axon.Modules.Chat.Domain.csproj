@@ -21,4 +21,8 @@
     <InternalsVisibleTo Include="Axon.Modules.Chat.Domain.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Events\" />
+  </ItemGroup>
+
 </Project>

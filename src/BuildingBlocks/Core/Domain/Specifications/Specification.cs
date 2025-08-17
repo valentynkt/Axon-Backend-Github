@@ -2,6 +2,15 @@ using System.Linq.Expressions;
 
 namespace BuildingBlocks.Core.Domain.Specifications;
 
+/// <summary>
+/// Factory methods for creating specifications.
+/// </summary>
+public static class Specification
+{
+    public static Specification<T> Create<T>(Expression<Func<T, bool>> predicate)
+        => new AdHocSpecification<T>(predicate);
+}
+
 /// <summary>Minimal, composable specification (expression-based, infra-agnostic).</summary>
 public interface ISpecification<T>
 {
@@ -20,8 +29,7 @@ public abstract class Specification<T> : ISpecification<T>
 
     public abstract Expression<Func<T, bool>> ToExpression();
 
-    public static Specification<T> Create(Expression<Func<T, bool>> predicate)
-        => new AdHocSpecification<T>(predicate);
+    // Static factory method moved to non-generic utility class to avoid CA1000
 
     public Specification<T> And(ISpecification<T> other) => new AndSpecification<T>(this, other);
     public Specification<T> Or(ISpecification<T> other)  => new OrSpecification<T>(this, other);
@@ -75,6 +83,19 @@ internal sealed class NotSpecification<T> : Specification<T>
     public NotSpecification(ISpecification<T> inner) => _inner = inner;
     public override Expression<Func<T, bool>> ToExpression()
         => _inner.ToExpression().Not();
+}
+
+/// <summary>Wraps an arbitrary expression into a specification.</summary>
+public sealed class AdHocSpecification<T> : Specification<T>
+{
+    private readonly Expression<Func<T, bool>> _expression;
+
+    public AdHocSpecification(Expression<Func<T, bool>> expression)
+    {
+        _expression = expression ?? throw new ArgumentNullException(nameof(expression));
+    }
+
+    public override Expression<Func<T, bool>> ToExpression() => _expression;
 }
 
 /// <summary>Always true.</summary>

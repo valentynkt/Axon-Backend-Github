@@ -14,7 +14,7 @@ internal sealed class MessageSequenceIntegrityRule : BusinessRule
     public MessageSequenceIntegrityRule(IReadOnlyList<Message> messages)
         : base(
             message: "Message sequence must be contiguous starting at 1.",
-            code: "CHAT_INVARIANT_SEQUENCE_VIOLATION")
+            code: "CHAT.INVARIANT.SEQUENCE.VIOLATION")
     {
         _messages = messages ?? new List<Message>();
     }
