@@ -35,11 +35,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Persistence\Configurations\" />
-    <Folder Include="Persistence\Entities\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Remove="Persistence\Configurations\OutboxMessageConfiguration.cs" />
     <Compile Remove="Persistence\Configurations\ConversationReadModelConfiguration.cs" />
     <Compile Remove="Migrations\20250804192135_InitialCreate.Designer.cs" />

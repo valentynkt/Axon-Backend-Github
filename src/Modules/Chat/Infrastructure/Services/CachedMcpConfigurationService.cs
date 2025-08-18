@@ -37,29 +37,29 @@ public sealed class CachedMcpConfigurationService : IMcpServerResolver, IDisposa
     }
 
     /// <inheritdoc />
-    public Result<IReadOnlyCollection<McpServerConfig>> GetEnabledServerConfigurations()
+    public async Task<McpServerConfig[]> ResolveServersAsync(CancellationToken cancellationToken = default)
     {
         // Fast path: try cache first (90% CPU reduction for repeated calls)
         if (_cache.TryGetValue(CacheKey, out var cachedResult))
         {
             IncrementCacheHits();
             _logger.LogTrace("Cache hit for MCP server configurations");
-            return (Result<IReadOnlyCollection<McpServerConfig>>)cachedResult!;
+            return (McpServerConfig[])cachedResult!;
         }
 
         // Slow path: load from underlying resolver
         IncrementCacheMisses();
         _logger.LogDebug("Cache miss for MCP server configurations, loading from resolver");
         
-        var result = _innerResolver.GetEnabledServerConfigurations();
+        var result = await _innerResolver.ResolveServersAsync(cancellationToken);
         
-        if (result.IsSuccess)
+        if (result != null && result.Length > 0)
         {
             // Cache successful results with sliding expiration
             var cacheOptions = new MemoryCacheEntryOptions
             {
                 SlidingExpiration = CacheDuration,
-                Size = EstimateSize(result.Value),
+                Size = EstimateSize(result),
                 Priority = CacheItemPriority.High
             };
             
@@ -67,7 +67,7 @@ public sealed class CachedMcpConfigurationService : IMcpServerResolver, IDisposa
             
             _logger.LogInformation(
                 "Cached {ServerCount} MCP server configurations for {Duration} minutes. Cache efficiency: {HitRate:P1}",
-                result.Value.Count,
+                result.Length,
                 CacheDuration.TotalMinutes,
                 GetCacheHitRate());
         }
@@ -76,6 +76,35 @@ public sealed class CachedMcpConfigurationService : IMcpServerResolver, IDisposa
             _logger.LogWarning("Failed to load MCP server configurations, result not cached");
         }
 
+        return result ?? Array.Empty<McpServerConfig>();
+    }
+    
+    /// <inheritdoc />
+    public async Task<McpServerConfig?> GetServerAsync(string serverId, CancellationToken cancellationToken = default)
+    {
+        var cacheKey = $"mcp_server_{serverId}";
+        
+        if (_cache.TryGetValue(cacheKey, out var cachedResult))
+        {
+            IncrementCacheHits();
+            return (McpServerConfig?)cachedResult;
+        }
+        
+        IncrementCacheMisses();
+        var result = await _innerResolver.GetServerAsync(serverId, cancellationToken);
+        
+        if (result != null)
+        {
+            var cacheOptions = new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = CacheDuration,
+                Size = 1024,
+                Priority = CacheItemPriority.High
+            };
+            
+            _cache.Set(cacheKey, result, cacheOptions);
+        }
+        
         return result;
     }
 
@@ -126,10 +155,10 @@ public sealed class CachedMcpConfigurationService : IMcpServerResolver, IDisposa
         }
     }
 
-    private static int EstimateSize(IReadOnlyCollection<McpServerConfig> configs)
+    private static int EstimateSize(McpServerConfig[] configs)
     {
         // Rough estimate: each config ~1KB, reasonable for memory cache sizing
-        return configs.Count * 1024;
+        return configs.Length * 1024;
     }
 
     public void Dispose()

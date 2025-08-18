@@ -42,7 +42,7 @@ internal sealed class TitleUpdateMustBeValidRule : BusinessRule
             return "Title cannot be empty.";
         
         if (trimmedLength > MaxTitleLength)
-            return "Title cannot exceed 200 characters.";
+            return $"Title cannot exceed {MaxTitleLength} characters.";
         
         return "Title is valid.";
     }

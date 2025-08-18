@@ -1,47 +1,29 @@
 namespace BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
 
+/// <summary>
+/// Minimal options controlling Azure Monitor (Application Insights) export and basic knobs.
+/// </summary>
 public sealed class ObservabilityOptions
 {
-    public string InstrumentationName { get; init; } = string.Empty;
+    /// <summary> Optional override; defaults to ServiceName. Drives ActivitySource/Meter names. </summary>
+    public string? InstrumentationName { get; init; }
+
+    /// <summary> Service name reported to Azure Monitor; default is entry assembly name. </summary>
     public string? ServiceName { get; init; }
-    public bool MetricsEnabled { get; init; } = true;
+
+    /// <summary> Enable/disable telemetry types. </summary>
     public bool TracingEnabled { get; init; } = true;
+    public bool MetricsEnabled { get; init; } = true;
     public bool LoggingEnabled { get; init; } = true;
-    public bool UsePrometheusExporter { get; init; } = true;
-    public bool UseOTLPExporter { get; init; } = true;
-    public bool UseAspireOTLPExporter { get; init; } = true;
-    public bool UseGrafanaExporter { get; init; }
-    public bool UseConsoleExporter { get; init; }
-    public bool UseJaegerExporter { get; init; }
-    public bool UseZipkinExporter { get; init; }
-    public ZipkinOptions ZipkinOptions { get; init; } = new();
-    public JaegerOptions JaegerOptions { get; init; } = new();
-    public OTLPOptions OTLPOptions { get; init; } = new();
-    public AspireDashboardOTLPOptions AspireDashboardOTLPOptions { get; init; } = new();
-}
 
-// https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/src/OpenTelemetry.Exporter.Zipkin/README.md
-public sealed record ZipkinOptions
-{
     /// <summary>
-    /// Gets or sets endpoint address to receive telemetry
+    /// Sampling ratio (0.0 - 1.0). Use 1.0 in lower envs; consider 0.1–0.3 in high traffic prod.
     /// </summary>
-    public string HttpExporterEndpoint { get; init; } = "http://localhost:9411/api/v2/spans";
-}
+    public double SamplingRatio { get; init; } = 1.0;
 
-public sealed record JaegerOptions
-{
-    public string OTLPGrpcExporterEndpoint { get; init; } = "http://localhost:14317";
-    public string HttpExporterEndpoint { get; init; } = "http://localhost:14268/api/traces";
-}
-
-public sealed record OTLPOptions
-{
-    public string OTLPGrpcExporterEndpoint { get; init; } = "http://localhost:4317";
-    public string OTLPHttpExporterEndpoint { get; init; } = "http://localhost:4318";
-}
-
-public sealed record AspireDashboardOTLPOptions
-{
-    public string OTLPGrpcExporterEndpoint { get; init; } = "http://localhost:4319";
+    /// <summary>
+    /// Optional override for Azure Monitor connection string.
+    /// If not set, SDK will use the APPLICATIONINSIGHTS_CONNECTION_STRING environment variable.
+    /// </summary>
+    public string? AzureMonitorConnectionString { get; init; }
 }

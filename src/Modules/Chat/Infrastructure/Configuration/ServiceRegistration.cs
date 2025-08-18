@@ -36,24 +36,28 @@ public static class ServiceRegistration
             configuration.GetSection(McpServersOptions.SectionName));
 
         // Register Application services (maintaining clean architecture)
-        services.AddScoped<IErrorMappingService, ErrorMappingService>();
-        services.AddScoped<IToolExecutionService, ToolExecutionService>();
+        services.AddScoped<IToolExecutionService, Application.Services.AI.Tools.ToolExecutionService>();
         services.AddScoped<IJsonSerializationService, JsonSerializationService>();
-        services.AddScoped<IActivityTracker, ActivityTracker>();
-        services.AddScoped<IMessageRequestBuilder, MessageRequestBuilder>();
-        services.AddScoped<IResponseMappingService, ResponseMappingService>();
+        services.AddScoped<Application.Abstractions.IActivityTracker, Application.Services.ActivityTracker>();
+        services.AddScoped<Application.Abstractions.AI.IMessageRequestBuilder, Application.Services.AI.Processing.MessageRequestBuilder>();
+        services.AddScoped<Application.Abstractions.AI.IResponseMappingService, Application.Services.AI.Processing.ResponseMappingService>();
         
         // Register extracted SRP-compliant services
-        services.AddScoped<Ai.Abstractions.IHttpRequestBuilder, Axon.Modules.Chat.Infrastructure.Ai.Services.HttpRequestBuilder>();
-        services.AddScoped<Ai.Abstractions.IResponseParser, Axon.Modules.Chat.Infrastructure.Ai.Services.ResponseParser>();
-        services.AddScoped<Ai.Abstractions.IPayloadSerializer, Axon.Modules.Chat.Infrastructure.Ai.Services.PayloadSerializer>();
+        services.AddScoped<Ai.Abstractions.IHttpRequestBuilder, Ai.Services.HttpRequestBuilder>();
+        services.AddScoped<Ai.Abstractions.IResponseParser, Ai.Services.ResponseParser>();
+        services.AddScoped<Ai.Abstractions.IPayloadSerializer, Ai.Services.PayloadSerializer>();
+        services.AddScoped<Ai.Abstractions.IErrorMappingService, Ai.Services.ErrorMappingService>();
+        services.AddScoped<Ai.Abstractions.IActivityTracker, Ai.Services.InfrastructureActivityTracker>();
+        services.AddScoped<Ai.Abstractions.IToolExecutionExtractor, Ai.Services.ToolExecutionExtractor>();
         
-        // Register Infrastructure services
-        services.AddHttpClient<IAiClient, OpenAiClient>(client =>
+        // Register simple POC implementation for Direct MCP
+        services.AddHttpClient<Application.Abstractions.AI.IAiClient, OpenAiMcpClient>(client =>
         {
             client.BaseAddress = new Uri("https://api.openai.com/");
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = TimeSpan.FromSeconds(60); // Longer timeout for POC testing
         });
+        
+        
         services.AddScoped<IMcpServerResolver, McpServerResolver>();
 
         return services;

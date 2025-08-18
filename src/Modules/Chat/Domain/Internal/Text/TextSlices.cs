@@ -10,13 +10,13 @@ internal static class TextSlices
 {
     /// <summary>
     /// Creates a preview of the source string, optimized for minimal allocations.
-    /// If source.Length maxLen, returns the original string reference (0 allocations).
-    /// If source.Length > maxLen, returns a substring (1 allocation).
+    /// If source.Length is less than or equal to maxLen, returns the original string reference (0 allocations).
+    /// If source.Length is greater than maxLen, returns a substring (1 allocation).
     /// No trimming or ellipsis is applied.
     /// </summary>
     /// <param name="source">Source string to create preview from</param>
     /// <param name="maxLen">Maximum preview length</param>
-    /// <returns>Preview string (same reference if  maxLen, substring if > maxLen)</returns>
+    /// <returns>Preview string (same reference if within limit, substring if over limit)</returns>
     /// <exception cref="ArgumentNullException">When source is null</exception>
     public static string Preview(string source, int maxLen)
     {

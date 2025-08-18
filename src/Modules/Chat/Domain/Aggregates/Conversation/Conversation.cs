@@ -126,16 +126,17 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     {
         try
         {
-            // Validate preconditions (no turn-taking rule for user messages)
-            CheckRule(new ConversationMustBeActiveRule(Status));
-            CheckRule(new MessageContentWithinLimitsRule(content.Value));
-            CheckRule(new ConversationMessageLimitRule(MessageCount));
+            // Validate preconditions (APP-01: block user→user)
+            ValidateMessageAppendPreconditions(content.Value, MessageRole.User);
 
             var now = clock.UtcNow;
             var message = CreateAndAddUserMessage(content, now);
             
             RaiseUserMessageEvent(message, content.Value, now);
 
+            #if DEBUG
+            CheckRule(new MessageSequenceIntegrityRule(_messages));
+            #endif
             return Result<Message>.Success(message);
         }
         catch (BusinessRuleException ex)
@@ -195,6 +196,9 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             
             RaiseAssistantMessageEvent(message, content.Value, aiResponseId, now);
 
+            #if DEBUG
+            CheckRule(new MessageSequenceIntegrityRule(_messages));
+            #endif
             return Result<Message>.Success(message);
         }
         catch (BusinessRuleException ex)

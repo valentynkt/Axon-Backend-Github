@@ -1,175 +1,55 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Infrastructure.Ai.Abstractions;
-using Axon.Modules.Chat.Infrastructure.Ai.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Axon.Modules.Chat.Infrastructure.Ai.Services;
 
 /// <summary>
-/// Service responsible for building HTTP requests and payloads for OpenAI API
+/// Simple HTTP request builder implementation
 /// </summary>
 public sealed class HttpRequestBuilder : IHttpRequestBuilder
 {
     private readonly OpenAiOptions _options;
-    private readonly IPayloadSerializer _payloadSerializer;
-    private readonly ILogger<HttpRequestBuilder> _logger;
     
-    // LoggerMessage delegates for CA1848 compliance
-    private static readonly Action<ILogger, int, string, Exception?> LogRequestContentAction =
-        LoggerMessage.Define<int, string>(
-            LogLevel.Debug,
-            new EventId(8001, "LogRequestContent"),
-            "Sending request to OpenAI Responses API with payload size {PayloadSize} bytes. Payload: {Payload}");
-
-    // Constants for configuration values
-    private const string OpenAiResponsesApiUrl = "https://api.openai.com/v1/responses";
-    private const string DefaultMcpServerLabel = "mcp_server";
-
-    public HttpRequestBuilder(
-        IOptions<OpenAiOptions> openAiOptions,
-        IPayloadSerializer payloadSerializer,
-        ILogger<HttpRequestBuilder> logger)
+    public HttpRequestBuilder(IOptions<OpenAiOptions> options)
     {
-        _options = openAiOptions.Value;
-        _payloadSerializer = payloadSerializer;
-        _logger = logger;
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
-
-    /// <summary>
-    /// Configures HttpClient with OpenAI authentication and headers
-    /// </summary>
-    /// <param name="httpClient">HttpClient to configure</param>
+    
     public void ConfigureHttpClient(HttpClient httpClient)
     {
-        // Configure HttpClient for OpenAI API
+        httpClient.DefaultRequestHeaders.Clear();
         httpClient.DefaultRequestHeaders.Authorization = 
             new AuthenticationHeaderValue("Bearer", _options.ApiKey);
-        httpClient.DefaultRequestHeaders.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        
-        // Configure timeout from options
-        httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
     }
-
-    /// <summary>
-    /// Builds HTTP content for OpenAI Responses API request
-    /// </summary>
-    /// <param name="request">AI request</param>
-    /// <param name="activity">Activity for tracing</param>
-    /// <returns>HTTP content ready for sending</returns>
-    public StringContent BuildRequestContent(AiRequest request, Activity? activity)
+    
+    public HttpContent BuildRequestContent(AiRequest request, Activity? activity)
     {
-        // Build tools array with MCP servers
-        var tools = new List<object>();
-        
-        if (_options.McpEnabled && request.McpConfigs?.Count > 0)
-        {
-            foreach (var mcpConfig in request.McpConfigs)
-            {
-                var mcpTool = CreateMcpTool(mcpConfig);
-                tools.Add(mcpTool);
-                
-                activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.domain", new Uri(mcpConfig.ServerUrl).Host);
-                activity?.SetTag($"mcp.server.{mcpConfig.ServerLabel}.tools_count", mcpConfig.AllowedTools?.Length ?? 0);
-            }
-            
-            activity?.SetTag("mcp.enabled", true);
-            activity?.SetTag("mcp.servers_configured", request.McpConfigs.Count);
-        }
-
-        // Build request payload
-        var jsonPayload = BuildRequestPayload(request, tools);
-        
-        LogRequestContentAction(_logger, jsonPayload.Length, jsonPayload, null);
-
-        return new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-    }
-
-    /// <summary>
-    /// Gets the OpenAI API URL
-    /// </summary>
-    /// <returns>API URL</returns>
-    public string GetApiUrl() => OpenAiResponsesApiUrl;
-
-    /// <summary>
-    /// Build the request payload for OpenAI Responses API
-    /// </summary>
-    private string BuildRequestPayload(AiRequest request, List<object> tools)
-    {
-        // Build base payload - only include supported parameters
-        var requestPayload = new Dictionary<string, object>
+        // Build payload according to OpenAI Responses API format
+        var payload = new Dictionary<string, object>
         {
             ["model"] = _options.Model,
             ["input"] = request.Message
         };
-
-        // Add tools if any are configured
-        if (tools.Count > 0)
+        
+        // Add optional parameters only if they have valid values
+        if (_options.Temperature > 0)
         {
-            requestPayload["tools"] = tools.ToArray();
+            payload["temperature"] = _options.Temperature;
         }
-
-        // Add optional parameters if they have valid values
+        
         if (_options.MaxTokens > 0)
         {
-            requestPayload["max_output_tokens"] = _options.MaxTokens;
+            payload["max_output_tokens"] = _options.MaxTokens; // Changed from max_tokens
         }
-
-        // Only include temperature for models that support it (not o1/o4 models)
-        if (_options.Temperature >= 0.0 && _options.Temperature <= 2.0 && !IsReasoningModel(_options.Model))
-        {
-            requestPayload["temperature"] = _options.Temperature;
-        }
-
-        // Note: previous_response_id removed as it may not be supported by the API
-        // TODO: Re-add when conversation context is officially supported
-
-        return _payloadSerializer.Serialize(requestPayload);
+        
+        var json = JsonSerializer.Serialize(payload);
+        return new StringContent(json, Encoding.UTF8, "application/json");
     }
-
-    /// <summary>
-    /// Create MCP tool definition for Responses API
-    /// </summary>
-    private static Dictionary<string, object> CreateMcpTool(McpServerConfig mcpConfig)
-    {
-        var tool = new Dictionary<string, object>
-        {
-            ["type"] = "mcp",
-            ["server_url"] = mcpConfig.ServerUrl,
-            ["server_label"] = mcpConfig.ServerLabel ?? DefaultMcpServerLabel,
-            ["require_approval"] = mcpConfig.RequireApproval ? "always" : "never"
-        };
-
-        // Add headers if configured
-        if (mcpConfig.Headers?.Count > 0)
-        {
-            tool["headers"] = mcpConfig.Headers;
-        }
-
-        // Add allowed tools if configured
-        if (mcpConfig.AllowedTools?.Length > 0)
-        {
-            tool["allowed_tools"] = mcpConfig.AllowedTools;
-        }
-
-        // Note: timeout_seconds removed as it may not be supported
-        // The timeout is typically handled at the HTTP client level
-
-        return tool;
-    }
-
-    /// <summary>
-    /// Check if the model is a reasoning model (o1/o4 series) that doesn't support temperature parameter
-    /// </summary>
-    /// <param name="model">The model name</param>
-    /// <returns>True if it's a reasoning model</returns>
-    private static bool IsReasoningModel(string model)
-    {
-        return model.StartsWith("o1", StringComparison.OrdinalIgnoreCase) ||
-               model.StartsWith("o4", StringComparison.OrdinalIgnoreCase);
-    }
+    
+    public string GetApiUrl() => "https://api.openai.com/v1/responses";
 }

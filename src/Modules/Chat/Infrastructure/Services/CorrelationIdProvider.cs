@@ -104,7 +104,7 @@ public sealed class CorrelationIdProvider : ICorrelationIdProvider
             // Add to response headers for client tracking
             if (!httpContext.Response.Headers.ContainsKey(CorrelationIdHeaderName))
             {
-                httpContext.Response.Headers.Add(CorrelationIdHeaderName, correlationId);
+                httpContext.Response.Headers.Append(CorrelationIdHeaderName, correlationId);
             }
         }
 

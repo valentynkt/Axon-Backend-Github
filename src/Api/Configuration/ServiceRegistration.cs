@@ -1,6 +1,6 @@
-using Axon.Api.Common.ErrorHandling;
+// using Axon.Api.Common.ErrorHandling;  // Not needed for POC
 using Axon.Modules.Chat.Infrastructure.Configuration;
-using Axon.Modules.Chat.Infrastructure.Extensions;
+// using Axon.Modules.Chat.Infrastructure.Extensions;  // Not needed for POC
 using BuildingBlocks.Application.Configuration;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -23,8 +23,7 @@ public static class ServiceRegistration
     /// <returns>Service collection for chaining</returns>
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services,
-        IConfiguration configuration,
-        IHostEnvironment environment)
+        IConfiguration configuration)
     {
         // Add controllers (MVC)
         services.AddControllers();
@@ -52,18 +51,16 @@ public static class ServiceRegistration
             config.RegisterServicesFromAssembly(typeof(Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageCommand).Assembly);
         });
         
-        // Register pipeline behaviors in correct Epic 5 order
-        services.AddPipelineBehaviors();
+        // Register pipeline behaviors - commented out for POC
+        // services.AddPipelineBehaviors(configuration, environment);
         
         // Add FluentValidation
         services.AddValidatorsFromAssembly(
             typeof(Modules.Chat.Application.Commands.ProcessMessage.ProcessMessageValidator).Assembly);
         
-        // Add error handling services
-        services.AddScoped<IErrorMapper, ErrorMapper>();
         
-        // Add Chat module services
-        services.AddChatInfrastructure(configuration, environment);
+        // Add Chat module services - manually add what we need for POC
+        services.AddChatApplicationServices(configuration);
         
         return services;
     }

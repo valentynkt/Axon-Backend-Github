@@ -42,7 +42,7 @@ public sealed record AiResponseId : ValueObject
         if (trimmed.Length < MinLength)
         {
             return Result<AiResponseId>.Failure(
-                Error.Validation($"AI response ID must be at least {MinLength} character", "CHAT.AI.RESPONSE_ID.TOO_SHORT"));
+                Error.Validation($"AI response ID must be at least {MinLength} characters", "CHAT.AI.RESPONSE_ID.TOO_SHORT"));
         }
         
         if (trimmed.Length > MaxLength)
@@ -77,9 +77,7 @@ public sealed record AiResponseId : ValueObject
             errors.Add(Error.Validation("AI response ID is required", "CHAT.AI.RESPONSE_ID.EMPTY"));
         }
         else if (Value.Length < MinLength)
-        {
-            errors.Add(Error.Validation($"AI response ID must be at least {MinLength} character", "CHAT.AI.RESPONSE_ID.TOO_SHORT"));
-        }
+            errors.Add(Error.Validation($"AI response ID must be at least {MinLength} characters", "CHAT.AI.RESPONSE_ID.TOO_SHORT"));
         else if (Value.Length > MaxLength)
         {
             errors.Add(Error.Validation($"AI response ID cannot exceed {MaxLength} characters", "CHAT.AI.RESPONSE_ID.TOO_LONG"));

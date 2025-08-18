@@ -6,7 +6,7 @@ namespace Axon.Modules.Chat.Domain.Rules;
 
 /// <summary>
 /// Enforces turn-taking rules for messages.
-/// MVP: No consecutive assistant messages allowed. Assistant CAN be first message.
+/// Enforces APP-01 rule: User cannot send two messages in a row. Either role can be first.
 /// </summary>
 internal sealed class MessageTurnTakingRule : BusinessRule
 {
@@ -15,8 +15,8 @@ internal sealed class MessageTurnTakingRule : BusinessRule
 
     public MessageTurnTakingRule(IReadOnlyList<Message> messages, MessageRole newRole)
         : base(
-            message: "Assistant cannot send two messages in a row.",
-            code: "CHAT.MESSAGE.ASSISTANT.TURN.VIOLATION")
+            message: "User cannot send two messages in a row.",
+            code: "CHAT.MESSAGE.USER.TURN.VIOLATION")
     {
         _messages = messages ?? new List<Message>();
         _newRole = newRole ?? throw new ArgumentNullException(nameof(newRole));
@@ -28,9 +28,9 @@ internal sealed class MessageTurnTakingRule : BusinessRule
         if (_messages.Count == 0)
             return false;
 
-        // Check if trying to add consecutive assistant messages
+        // Block consecutive user messages (APP-01).
         var lastMessage = _messages[^1];
-        return lastMessage.Role.IsAssistant && _newRole.IsAssistant;
+        return lastMessage.Role.IsUser && _newRole.IsUser;
     }
 
     public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 

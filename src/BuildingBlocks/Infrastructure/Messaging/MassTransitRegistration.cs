@@ -1,435 +1,185 @@
+// File: BuildingBlocks/Infrastructure/Messaging/MassTransitRegistration.cs
 using System.Reflection;
 using System.Text.RegularExpressions;
 using BuildingBlocks.Application.Events.Publishing;
 using BuildingBlocks.Infrastructure.Events;
 using BuildingBlocks.Infrastructure.Messaging.MassTransit;
-using BuildingBlocks.Infrastructure.Messaging.Serialization;
 using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace BuildingBlocks.Infrastructure.Messaging;
 
-/// <summary>
-/// MassTransit infrastructure registration with EF Outbox support.
-/// Provides transactional reliability for integration event publishing.
-/// </summary>
 public static partial class MassTransitRegistration
 {
     [GeneratedRegex(@"[^a-zA-Z0-9\-]")]
     private static partial Regex InvalidCharRegex();
+
     /// <summary>
-    /// Registers MassTransit messaging infrastructure with EF Outbox.
-    /// Replaces the NoOp publisher with MassTransit-backed implementation.
-    /// 
-    /// IMPORTANT: EF Outbox tables must be included in your database migrations:
-    /// - OutboxMessage: Stores messages to be published
-    /// - OutboxState: Tracks outbox processing state
-    /// - InboxState: Prevents duplicate message processing (for consumers)
-    /// 
-    /// The outbox ensures messages are persisted atomically with business data
-    /// and dispatched reliably after transaction commit.
+    /// MassTransit + EF Bus Outbox with pluggable transport (RabbitMQ/AzureSB/InMemory).
+    /// Consumers/sagas/activities can be auto-discovered from assemblies.
     /// </summary>
-    /// <typeparam name="TDbContext">The DbContext type that will host the outbox tables</typeparam>
-    /// <param name="services">Service collection</param>
-    /// <param name="configure">Optional configuration action</param>
-    /// <param name="consumerAssemblies">Assemblies to scan for consumers (optional)</param>
     public static IServiceCollection AddInfrastructureMessaging<TDbContext>(
         this IServiceCollection services,
+        IConfiguration configuration,
         Action<MassTransitOptions>? configure = null,
         params Assembly[] consumerAssemblies)
         where TDbContext : DbContext
     {
-        // Bind configuration from appsettings
-        services.AddOptions<MassTransitOptions>()
-            .Configure<IConfiguration>((opt, config) =>
-            {
-                config.GetSection("MassTransit").Bind(opt);
-                configure?.Invoke(opt);
-            });
+        // Bind options once; allow caller overrides
+        services.Configure<MassTransitOptions>(configuration.GetSection("MassTransit"));
+        if (configure is not null) services.PostConfigure(configure);
 
-        // Replace NoOp publisher with MassTransit implementation
+        // Replace no-op publisher with the MT publisher
         services.RemoveAll<IIntegrationEventPublisher>();
         services.AddScoped<IIntegrationEventPublisher, MassTransitIntegrationEventPublisher>();
 
-        // Register MassTransit
-        services.AddMassTransit(cfg =>
+        // Transport choice is read directly from configuration (no provider build)
+        var transport = configuration
+            .GetSection("MassTransit")
+            .GetValue("Transport", TransportType.RabbitMq);
+
+        services.AddMassTransit(x =>
         {
-            // Early check for endpoint naming (needs to be set before transport config)
-            var tempProvider = services.BuildServiceProvider();
-            var tempOptions = tempProvider.GetService<IOptions<MassTransitOptions>>()?.Value ?? new MassTransitOptions();
-            
-            // Set endpoint naming convention
-            if (!string.IsNullOrEmpty(tempOptions.EndpointPrefix))
+            // Discover consumers/sagas if provided
+            if (consumerAssemblies is { Length: > 0 })
             {
-                cfg.SetEndpointNameFormatter(new PrefixEndpointNameFormatter(ValidateEndpointPrefix(tempOptions.EndpointPrefix)));
-            }
-            else
-            {
-                cfg.SetKebabCaseEndpointNameFormatter();
+                x.AddConsumers(consumerAssemblies);
+                x.AddSagaStateMachines(consumerAssemblies);
+                x.AddSagas(consumerAssemblies);
+                x.AddActivities(consumerAssemblies);
             }
 
-            // Register consumers if provided
-            if (consumerAssemblies.Length > 0)
+            // EF Bus Outbox (one simple path; provider-agnostic)
+            x.AddEntityFrameworkOutbox<TDbContext>(o =>
             {
-                cfg.AddConsumers(consumerAssemblies);
-                cfg.AddSagaStateMachines(consumerAssemblies);
-                cfg.AddSagas(consumerAssemblies);
-                cfg.AddActivities(consumerAssemblies);
-            }
+                o.UseBusOutbox();
+                // Default polling is fine; uncomment if you need tuning
+                // o.QueryDelay = TimeSpan.FromSeconds(1);
+            });
 
-            // Configure transport - this will resolve options inside
-            ConfigureTransport<TDbContext>(cfg, services, consumerAssemblies);
+            // Consistent default naming style; we'll apply prefix at ConfigureEndpoints
+            x.SetKebabCaseEndpointNameFormatter();
+
+            switch (transport)
+            {
+                case TransportType.RabbitMq:
+                    x.UsingRabbitMq((context, cfg) =>
+                    {
+                        var opts = context.GetRequiredService<IOptions<MassTransitOptions>>().Value;
+
+                        if (!string.IsNullOrWhiteSpace(opts.RabbitMqConnectionString))
+                        {
+                            cfg.Host(new Uri(opts.RabbitMqConnectionString));
+                        }
+                        else
+                        {
+                            cfg.Host(
+                                opts.RabbitMq.Host,
+                                (ushort)opts.RabbitMq.Port,  // <-- cast to ushort
+                                opts.RabbitMq.VirtualHost,
+                                h =>
+                                {
+                                    h.Username(opts.RabbitMq.Username);
+                                    h.Password(opts.RabbitMq.Password);
+                                    if (opts.RabbitMq.UseSsl)
+                                    {
+                                        // Provide the lambda overload; empty is fine if defaults are OK
+                                        h.UseSsl(_ => { });
+                                    }
+                                });
+                        }
+
+                        ApplyCommon(cfg, opts);
+
+                        if (!opts.Durable)
+                        {
+                            cfg.Durable = false;
+                            cfg.AutoDelete = true;
+                        }
+
+                        cfg.ConfigureEndpoints(context, new PrefixFormatterIfAny(opts.EndpointPrefix));
+                    });
+                    break;
+
+
+                case TransportType.AzureServiceBus:
+                    x.UsingAzureServiceBus((context, cfg) =>
+                    {
+                        var opts = context.GetRequiredService<IOptions<MassTransitOptions>>().Value;
+                        var conn = opts.AzureServiceBusConnectionString
+                                   ?? configuration.GetConnectionString("azureservicebus")
+                                   ?? throw new InvalidOperationException(
+                                       "Azure Service Bus connection string is not configured.");
+
+                        cfg.Host(conn);
+
+                        ApplyCommon(cfg, opts);
+                        cfg.ConfigureEndpoints(context, new PrefixFormatterIfAny(opts.EndpointPrefix));
+                    });
+                    break;
+
+                case TransportType.InMemory:
+                    x.UsingInMemory((context, cfg) =>
+                    {
+                        var opts = context.GetRequiredService<IOptions<MassTransitOptions>>().Value;
+                        ApplyCommon(cfg, opts);
+                        cfg.ConfigureEndpoints(context, new PrefixFormatterIfAny(opts.EndpointPrefix));
+                    });
+                    break;
+
+                default:
+                    throw new NotSupportedException($"Unsupported transport: {transport}");
+            }
         });
 
-        // Add health checks if enabled
-        services.AddHealthChecks()
-            .AddCheck<Health.MessagingHealthCheck>("messaging", tags: new[] { "ready", "messaging" });
-
+        // MT hosted service is added automatically.
         return services;
     }
 
-    private static void ConfigureTransport<TDbContext>(
-        IBusRegistrationConfigurator cfg,
-        IServiceCollection services,
-        Assembly[] consumerAssemblies)
-        where TDbContext : DbContext
+    private static void ApplyCommon(IBusFactoryConfigurator cfg, MassTransitOptions opts)
     {
-        // Determine transport type early for registration
-        // This reads from a temporary options instance just for transport selection
-        var tempOptions = new MassTransitOptions();
-        var config = services.BuildServiceProvider().GetService<IConfiguration>();
-        config?.GetSection("MassTransit").Bind(tempOptions);
-        
-        switch (tempOptions.Transport)
-        {
-            case TransportType.RabbitMq:
-                ConfigureRabbitMq<TDbContext>(cfg, services, consumerAssemblies);
-                break;
+        cfg.UseMessageRetry(r => r.Exponential(
+            retryLimit: opts.Retry.MaxAttempts,
+            minInterval: opts.Retry.InitialInterval,
+            maxInterval: opts.Retry.MaxInterval,
+            intervalDelta: opts.Retry.IntervalIncrement));
 
-            case TransportType.AzureServiceBus:
-                ConfigureAzureServiceBus<TDbContext>(cfg, services, consumerAssemblies);
-                break;
-
-            case TransportType.InMemory:
-                ConfigureInMemory<TDbContext>(cfg, services, consumerAssemblies);
-                break;
-
-            default:
-                throw new NotSupportedException($"Transport type {tempOptions.Transport} is not supported");
-        }
+        // Leave serialization & OpenTelemetry to MassTransit defaults
+        // (System.Text.Json + W3C TraceContext + OTel activities)
     }
 
-    private static void ConfigureRabbitMq<TDbContext>(
-        IBusRegistrationConfigurator cfg,
-        IServiceCollection services,
-        Assembly[] consumerAssemblies)
-        where TDbContext : DbContext
+    /// <summary>Prefix wrapper that defers to kebab-case formatter.</summary>
+    private sealed class PrefixFormatterIfAny : IEndpointNameFormatter
     {
-        _ = consumerAssemblies; // Part of consistent API pattern
-        // Configure EF Outbox first (before transport)
-        cfg.AddEntityFrameworkOutbox<TDbContext>(o =>
-        {
-            // Determine provider from DbContext options
-            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
-            
-            // Use bus outbox for all sends/publishes
-            o.UseBusOutbox();
-            
-            // Query delay for polling (can be overridden for production)
-            o.QueryDelay = TimeSpan.FromSeconds(1);
-            
-            // Provider-specific tuning
-            ConfigureOutboxProvider<TDbContext>(o, services);
-        });
+        private readonly string? _prefix;
+        private readonly IEndpointNameFormatter _inner = KebabCaseEndpointNameFormatter.Instance;
 
-        cfg.UsingRabbitMq((context, bus) =>
-        {
-            // Resolve options from DI at configuration time
-            var options = context.GetRequiredService<IOptions<MassTransitOptions>>().Value;
-            // Note: Endpoint naming is set at the configurator level, not per-transport
-            // The PrefixEndpointNameFormatter is already applied if configured
-
-            // Try Aspire connection string first
-            var configuration = context.GetRequiredService<IConfiguration>();
-            var aspireConnectionString = configuration.GetConnectionString("rabbitmq");
-
-            if (!string.IsNullOrEmpty(aspireConnectionString))
-            {
-                bus.Host(new Uri(aspireConnectionString));
-            }
-            else if (options.RabbitMq != null)
-            {
-                // Use configured options
-                var rabbit = options.RabbitMq;
-                bus.Host(rabbit.Host, rabbit.VirtualHost, h =>
-                {
-                    h.Username(rabbit.Username);
-                    h.Password(rabbit.Password);
-
-                    if (rabbit.UseSsl)
-                    {
-                        h.UseSsl(ssl =>
-                        {
-                            ssl.Protocol = System.Security.Authentication.SslProtocols.Tls12;
-                        });
-                    }
-                });
-            }
-            else
-            {
-                // Default to localhost
-                bus.Host("localhost", "/", h =>
-                {
-                    h.Username("guest");
-                    h.Password("guest");
-                });
-            }
-
-            // Configure serialization
-            ConfigureSerialization(bus, options.Serialization);
-
-            // Configure retry policy
-            bus.UseMessageRetry(r => ConfigureRetry(r, options.Retry));
-
-            // Configure observability
-            // Note: OpenTelemetry is automatically integrated in MassTransit 8.x
-            // No explicit configuration needed
-
-            // Configure endpoints
-            bus.ConfigureEndpoints(context);
-
-            // Configure durability
-            if (!options.Durable)
-            {
-                bus.Durable = false;
-                bus.AutoDelete = true;
-            }
-        });
-    }
-
-    private static void ConfigureAzureServiceBus<TDbContext>(
-        IBusRegistrationConfigurator cfg,
-        IServiceCollection services,
-        Assembly[] consumerAssemblies)
-        where TDbContext : DbContext
-    {
-        _ = consumerAssemblies; // Part of consistent API pattern
-        // Configure EF Outbox first (before transport)
-        cfg.AddEntityFrameworkOutbox<TDbContext>(o =>
-        {
-            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
-            o.UseBusOutbox();
-            o.QueryDelay = TimeSpan.FromSeconds(1);
-            
-            // Provider-specific tuning
-            ConfigureOutboxProvider<TDbContext>(o, services);
-        });
-
-        cfg.UsingAzureServiceBus((context, bus) =>
-        {
-            // Resolve options from DI at configuration time
-            var options = context.GetRequiredService<IOptions<MassTransitOptions>>().Value;
-            var connectionString = options.AzureServiceBusConnectionString
-                ?? context.GetRequiredService<IConfiguration>().GetConnectionString("azureservicebus")
-                ?? throw new InvalidOperationException("Azure Service Bus connection string not configured");
-
-            bus.Host(connectionString);
-
-            // Configure serialization
-            ConfigureSerialization(bus, options.Serialization);
-
-            // Configure retry policy
-            bus.UseMessageRetry(r => ConfigureRetry(r, options.Retry));
-
-            // Configure observability
-            // Note: OpenTelemetry is automatically integrated in MassTransit 8.x
-            // No explicit configuration needed
-
-            // Configure endpoints
-            bus.ConfigureEndpoints(context);
-        });
-    }
-
-    private static void ConfigureInMemory<TDbContext>(
-        IBusRegistrationConfigurator cfg,
-        IServiceCollection services,
-        Assembly[] consumerAssemblies)
-        where TDbContext : DbContext
-    {
-        _ = consumerAssemblies; // Part of consistent API pattern
-        // Configure EF Outbox even for in-memory (for consistency)
-        cfg.AddEntityFrameworkOutbox<TDbContext>(o =>
-        {
-            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(30);
-            o.UseBusOutbox();
-            o.QueryDelay = TimeSpan.FromSeconds(1);
-            
-            // Provider-specific tuning
-            ConfigureOutboxProvider<TDbContext>(o, services);
-        });
-
-        cfg.UsingInMemory((context, bus) =>
-        {
-            // Resolve options from DI at configuration time
-            var options = context.GetRequiredService<IOptions<MassTransitOptions>>().Value;
-
-            // Configure serialization
-            ConfigureSerialization(bus, options.Serialization);
-
-            // Configure retry policy
-            bus.UseMessageRetry(r => ConfigureRetry(r, options.Retry));
-
-            // Configure observability (limited for in-memory)
-            // Note: OpenTelemetry is automatically integrated in MassTransit 8.x
-            // No explicit configuration needed
-
-            // Configure endpoints
-            bus.ConfigureEndpoints(context);
-        });
-    }
-
-    private static void ConfigureSerialization<T>(T configurator, SerializationOptions options)
-        where T : IBusFactoryConfigurator
-    {
-        // Use System.Text.Json with our custom configuration
-        var jsonOptions = SystemTextJsonConfigurator.CreateOptions(options);
-        configurator.ConfigureJsonSerializerOptions(opts => jsonOptions);
-    }
-
-    private static void ConfigureRetry(IRetryConfigurator retry, RetryOptions options)
-    {
-        retry.Exponential(
-            options.MaxAttempts,
-            options.InitialInterval,
-            options.MaxInterval,
-            options.IntervalIncrement);
-
-        // Don't retry validation exceptions (fully qualified to avoid ambiguity)
-        retry.Ignore<System.ComponentModel.DataAnnotations.ValidationException>();
-        retry.Ignore<FluentValidation.ValidationException>();
-        retry.Ignore<ArgumentException>();
-        retry.Ignore<ArgumentNullException>();
-        retry.Ignore<InvalidOperationException>();
-    }
-
-    /// <summary>
-    /// Validates and sanitizes endpoint prefix to ensure valid naming.
-    /// </summary>
-    private static string ValidateEndpointPrefix(string prefix)
-    {
-        if (string.IsNullOrWhiteSpace(prefix))
-            return prefix;
-
-        // Remove invalid characters (keep only letters, digits, hyphens)
-        var sanitized = InvalidCharRegex().Replace(prefix, "");
-        
-        // Ensure it doesn't end with a separator
-        sanitized = sanitized.TrimEnd('-', '_');
-        
-        // Add separator if not present
-        if (!sanitized.EndsWith('-') && !sanitized.EndsWith('_'))
-            sanitized += "-";
-
-        return sanitized;
-    }
-
-    /// <summary>
-    /// Configures provider-specific EF Outbox settings.
-    /// </summary>
-    private static void ConfigureOutboxProvider<TDbContext>(IEntityFrameworkOutboxConfigurator config, IServiceCollection services)
-        where TDbContext : DbContext
-    {
-        // Try to detect the database provider from the DbContext configuration
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        
-        try
-        {
-            var dbContext = scope.ServiceProvider.GetService<TDbContext>();
-            if (dbContext != null)
-            {
-                var database = dbContext.Database;
-                var providerName = database.ProviderName;
-                
-                if (providerName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true ||
-                    providerName?.Contains("PostgreSQL", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    // PostgreSQL specific optimizations
-                    config.UseBusOutbox(cfg =>
-                    {
-                        cfg.MessageDeliveryLimit = 100;
-                    });
-                    
-                    // Use advisory locks for PostgreSQL
-                    config.LockStatementProvider = new PostgresLockStatementProvider();
-                }
-                else if (providerName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) == true ||
-                         providerName?.Contains("Microsoft.EntityFrameworkCore.SqlServer", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    // SQL Server specific optimizations
-                    config.UseBusOutbox(cfg =>
-                    {
-                        cfg.MessageDeliveryLimit = 100;
-                    });
-                    
-                    // Use UPDLOCK for SQL Server
-                    config.LockStatementProvider = new SqlServerLockStatementProvider();
-                }
-                // Add other providers as needed
-            }
-        }
-        catch
-        {
-            // If we can't detect the provider, use defaults
-            // This is fine - MassTransit will use sensible defaults
-        }
-    }
-
-    /// <summary>
-    /// Custom endpoint name formatter that adds a prefix.
-    /// </summary>
-    private class PrefixEndpointNameFormatter : IEndpointNameFormatter
-    {
-        private readonly string _prefix;
-        private readonly IEndpointNameFormatter _inner;
-
-        public PrefixEndpointNameFormatter(string prefix)
-        {
-            _prefix = prefix;
-            _inner = KebabCaseEndpointNameFormatter.Instance;
-        }
+        public PrefixFormatterIfAny(string? prefix) => _prefix = Sanitize(prefix);
 
         public string Separator => _inner.Separator;
 
-        public string Consumer<T>() where T : class, IConsumer
-            => $"{_prefix}{_inner.Consumer<T>()}";
+        public string Consumer<T>() where T : class, IConsumer => Prefix(_inner.Consumer<T>());
+        public string Message<T>() where T : class => Prefix(_inner.Message<T>());
+        public string Saga<T>() where T : class, ISaga => Prefix(_inner.Saga<T>());
+        public string ExecuteActivity<T, TArgs>() where T : class, IExecuteActivity<TArgs> where TArgs : class
+            => Prefix(_inner.ExecuteActivity<T, TArgs>());
+        public string CompensateActivity<T, TLog>() where T : class, ICompensateActivity<TLog> where TLog : class
+            => Prefix(_inner.CompensateActivity<T, TLog>());
+        public string TemporaryEndpoint(string tag) => Prefix(_inner.TemporaryEndpoint(tag));
+        public string SanitizeName(string name) => _inner.SanitizeName(name);
 
-        public string Message<T>() where T : class
-            => $"{_prefix}{_inner.Message<T>()}";
+        private string Prefix(string name) => string.IsNullOrEmpty(_prefix) ? name : $"{_prefix}{name}";
 
-        public string Saga<T>() where T : class, ISaga
-            => $"{_prefix}{_inner.Saga<T>()}";
-
-        public string ExecuteActivity<T, TArguments>()
-            where T : class, IExecuteActivity<TArguments>
-            where TArguments : class
-            => $"{_prefix}{_inner.ExecuteActivity<T, TArguments>()}";
-
-        public string CompensateActivity<T, TLog>()
-            where T : class, ICompensateActivity<TLog>
-            where TLog : class
-            => $"{_prefix}{_inner.CompensateActivity<T, TLog>()}";
-
-        public string TemporaryEndpoint(string tag)
-            => $"{_prefix}{_inner.TemporaryEndpoint(tag)}";
-
-        public string SanitizeName(string name)
-            => _inner.SanitizeName(name);
+        private static string? Sanitize(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            var clean = InvalidCharRegex().Replace(s, string.Empty).TrimEnd('-', '_');
+            return clean.Length == 0 ? null : (clean.EndsWith('-') || clean.EndsWith('_') ? clean : clean + "-");
+        }
     }
 }

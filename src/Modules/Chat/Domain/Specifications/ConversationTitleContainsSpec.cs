@@ -19,6 +19,6 @@ internal sealed class ConversationTitleContainsSpec : Specification<Conversation
         if (_normalizedTerm == string.Empty)
             return c => true;
 
-        return c => c.Title != null && c.Title.ToLower().Contains(_normalizedTerm);
+        return c => c.Title != null && c.Title.ToLowerInvariant().Contains(_normalizedTerm);
     }
 }

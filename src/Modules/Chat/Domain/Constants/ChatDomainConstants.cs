@@ -14,7 +14,7 @@ public static class ChatDomainConstants
         /// <summary>
         /// Maximum length for message content in characters
         /// </summary>
-        public const int MaxLength = 100_000;
+        public const int MaxLength = 16_000;
     }
     
     /// <summary>
@@ -25,7 +25,7 @@ public static class ChatDomainConstants
         /// <summary>
         /// Maximum length for conversation title in characters
         /// </summary>
-        public const int MaxLength = 200;
+        public const int MaxLength = 120;
     }
     
     /// <summary>

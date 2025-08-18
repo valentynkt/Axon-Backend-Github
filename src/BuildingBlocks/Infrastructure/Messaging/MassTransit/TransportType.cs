@@ -4,6 +4,5 @@ public enum TransportType
 {
     InMemory,
     RabbitMq,
-    AzureServiceBus,
-    AmazonSqs
+    AzureServiceBus
 }

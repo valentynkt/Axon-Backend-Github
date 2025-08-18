@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.ValueObjects;
 /// <summary>
 /// Represents message content with validation rules.
 /// - Cannot be null or empty (after trimming)
-/// - Maximum length of 100,000 characters
+/// - Maximum length of 16,000 characters
 /// - Provides preview functionality
 /// </summary>
 public sealed record MessageContent : ValueObject
@@ -49,10 +49,8 @@ public sealed record MessageContent : ValueObject
 
         // Check maximum length
         if (trimmedValue.Length > MaxLength)
-        {
             return Result<MessageContent>.Failure(
-                Error.Validation("Message content cannot exceed 100000 characters.", "CHAT.MESSAGE.CONTENT.TOO_LONG"));
-        }
+                Error.Validation($"Message content cannot exceed {MaxLength} characters.", "CHAT.MESSAGE.CONTENT.TOO_LONG"));
 
         return Result<MessageContent>.Success(new MessageContent(trimmedValue));
     }
@@ -85,9 +83,7 @@ public sealed record MessageContent : ValueObject
             errors.Add(Error.Validation("Message content cannot be empty.", "CHAT.MESSAGE.CONTENT.EMPTY"));
         }
         else if (Value.Length > MaxLength)
-        {
-            errors.Add(Error.Validation("Message content cannot exceed 100000 characters.", "CHAT.MESSAGE.CONTENT.TOO_LONG"));
-        }
+            errors.Add(Error.Validation($"Message content cannot exceed {MaxLength} characters.", "CHAT.MESSAGE.CONTENT.TOO_LONG"));
 
         return errors.Count == 0 
             ? Validation.Valid(Unit.Value)

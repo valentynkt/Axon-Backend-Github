@@ -27,8 +27,10 @@ public sealed class McpServerResolver : IMcpServerResolver
     }
 
     /// <inheritdoc />
-    public Result<IReadOnlyCollection<McpServerConfig>> GetEnabledServerConfigurations()
+    public async Task<McpServerConfig[]> ResolveServersAsync(CancellationToken cancellationToken = default)
     {
+        await Task.CompletedTask; // Async for future expansion
+        
         var enabledServers = new List<McpServerConfig>();
 
         foreach (var (configKey, serverConfig) in _mcpServersOptions.Servers)
@@ -53,7 +55,20 @@ public sealed class McpServerResolver : IMcpServerResolver
 
         _logger.LogInformation("Loaded {EnabledCount} enabled MCP servers from configuration", enabledServers.Count);
         
-        return enabledServers.AsReadOnly();
+        return enabledServers.ToArray();
+    }
+    
+    /// <inheritdoc />
+    public async Task<McpServerConfig?> GetServerAsync(string serverId, CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask; // Async for future expansion
+        
+        if (_mcpServersOptions.Servers.TryGetValue(serverId, out var serverConfig) && serverConfig.Enabled)
+        {
+            return ToMcpServerConfig(serverId, serverConfig);
+        }
+        
+        return null;
     }
 
     private static bool ShouldIncludeServer(McpServerOptions serverConfig) => serverConfig.Enabled;

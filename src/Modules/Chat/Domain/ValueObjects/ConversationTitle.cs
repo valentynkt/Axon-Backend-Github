@@ -11,7 +11,7 @@ namespace Axon.Modules.Chat.Domain.ValueObjects;
 /// Represents a conversation title with validation rules.
 /// - Allows empty strings (MVP defaulting path)
 /// - Trims leading/trailing whitespace while preserving internal whitespace and case
-/// - Maximum length of 200 characters
+/// - Maximum length of 120 characters
 /// </summary>
 public sealed record ConversationTitle : ValueObject
 {
@@ -55,10 +55,8 @@ public sealed record ConversationTitle : ValueObject
 
         // Check maximum length
         if (trimmedValue.Length > MaxLength)
-        {
             return Result<ConversationTitle>.Failure(
-                Error.Validation("Title cannot exceed 200 characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
-        }
+                Error.Validation($"Title cannot exceed {MaxLength} characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
 
         return Result<ConversationTitle>.Success(new ConversationTitle(trimmedValue));
     }
@@ -73,9 +71,7 @@ public sealed record ConversationTitle : ValueObject
         var errors = new List<Error>();
 
         if (Value.Length > MaxLength)
-        {
-            errors.Add(Error.Validation("Title cannot exceed 200 characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
-        }
+            errors.Add(Error.Validation($"Title cannot exceed {MaxLength} characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
 
         return errors.Count == 0 
             ? Validation.Valid(Unit.Value)
