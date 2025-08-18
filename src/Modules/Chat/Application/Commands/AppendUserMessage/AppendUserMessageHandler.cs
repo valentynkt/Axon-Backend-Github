@@ -28,8 +28,6 @@ public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessage
 {
     private readonly IConversationRepository _repository;
     private readonly IAiClient _aiClient;
-    private readonly IMessageRequestBuilder _requestBuilder;
-    private readonly IResponseMappingService _responseMapper;
     private readonly IIdempotencyCache _idempotencyCache;
     private readonly ICurrentUserService _currentUser;
     private readonly IClock _clock;
@@ -39,8 +37,6 @@ public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessage
     public AppendUserMessageHandler(
         IConversationRepository repository,
         IAiClient aiClient,
-        IMessageRequestBuilder requestBuilder,
-        IResponseMappingService responseMapper,
         IIdempotencyCache idempotencyCache,
         ICurrentUserService currentUser,
         IClock clock,
@@ -49,8 +45,6 @@ public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessage
     {
         _repository = repository;
         _aiClient = aiClient;
-        _requestBuilder = requestBuilder;
-        _responseMapper = responseMapper;
         _idempotencyCache = idempotencyCache;
         _currentUser = currentUser;
         _clock = clock;

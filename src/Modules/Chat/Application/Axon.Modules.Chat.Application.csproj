@@ -17,6 +17,10 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Services\AI\" />
+  </ItemGroup>
+
 
 
 </Project>
