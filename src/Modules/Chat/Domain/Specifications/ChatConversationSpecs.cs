@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Domain.Specifications;
 
 namespace Axon.Modules.Chat.Domain.Specifications;

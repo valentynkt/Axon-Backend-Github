@@ -12,7 +12,7 @@ Creates a new conversation owned by the current authenticated user.
 - User must be authenticated
 - Title is optional (null or empty creates default title)
 - Title max length: 200 characters after trim
-- Domain aggregate: `Conversation.Start(ownerId, titleOrNull, clock)`
+- Domain aggregate: `Conversation.StartNewConversation(ownerId, titleOrNull, clock)`
 
 ## Files
 - `StartConversationCommand.cs` - Command DTO

@@ -6,7 +6,9 @@ The Chat domain module implements single-owner conversational functionality betw
 
 **Problem Statement**: Enable users to engage in structured conversations with LLM assistants while maintaining data integrity, enforcing business constraints, and providing audit trails through domain events.
 
-**Scope**: Domain layer only. Contains aggregates, entities, value objects, domain events, and business rules. No infrastructure, application, or presentation concerns.
+**Scope**: Domain layer with Value Objects in Primitives library. Contains aggregates, entities, value objects, domain events, and business rules. No infrastructure, application, or presentation concerns.
+
+**Architecture Note**: This module uses **Value Objects** from the `Primitives` library for strict typing and validation. All domain methods now use strongly-typed VOs (e.g., `MessageContent`, `ConversationId`) instead of primitive types to eliminate primitive obsession and centralize validation.
 
 ### Ubiquous Language
 
@@ -59,11 +61,11 @@ The following types constitute the stable public contract of the Chat domain. Al
 
 ```csharp
 // Factory method
-public static Result<Conversation> Start(UserId ownerId, string? titleOrNull, IClock clock)
+public static Result<Conversation> StartNewConversation(UserId ownerId, string? titleOrNull, IClock clock)
 
 // Message operations  
-public Result<Message> AppendUserMessage(MessageContent content, IClock clock)
-public Result<Message> AppendAssistantMessage(MessageContent content, IClock clock)
+public Result<Message> AppendUserMessageToConversation(MessageContent content, IClock clock)
+public Result<Message> AppendAssistantResponseToConversation(MessageContent content, AiResponseId aiResponseId, IClock clock)
 
 // Title operations
 public Result<Unit> UpdateTitle(string newTitleValue, IClock clock)
@@ -123,13 +125,13 @@ Exact error codes returned by each operation. See `04_VALIDATION & ERROR CATALOG
 - `CHAT_CONVERSATION_OWNER_REQUIRED` - Missing or empty owner ID
 - `CHAT_CONVERSATION_TITLE_TOO_LONG` - Provided title exceeds 200 characters
 
-### AppendUserMessage(content, clock)  
+### AppendUserMessageToConversation(content, clock)  
 - `CHAT_CONVERSATION_NOT_ACTIVE` - Conversation status is not Active
 - `CHAT_MESSAGE_CONTENT_EMPTY` - Message content is null, empty, or whitespace
 - `CHAT_MESSAGE_CONTENT_TOO_LONG` - Content exceeds 100,000 characters
 - `CHAT_MESSAGE_LIMIT_EXCEEDED` - Conversation already has 10,000 messages
 
-### AppendAssistantMessage(content, clock)
+### AppendAssistantResponseToConversation(content, aiResponseId, clock)
 - `CHAT_CONVERSATION_NOT_ACTIVE` - Conversation status is not Active  
 - `CHAT_MESSAGE_CONTENT_EMPTY` - Message content is null, empty, or whitespace
 - `CHAT_MESSAGE_CONTENT_TOO_LONG` - Content exceeds 100,000 characters
@@ -215,7 +217,7 @@ public sealed record ConversationCompletedEvent(
 **With title:**
 ```csharp
 var clock = new SystemClock();
-var result = Conversation.Start(
+var result = Conversation.StartNewConversation(
     UserId.New(), 
     "My Chat Session", 
     clock);
@@ -229,8 +231,8 @@ if (result.IsSuccess)
 
 **Without title (empty allowed):**
 ```csharp
-var result = Conversation.Start(UserId.New(), null, clock);
-// or: Conversation.Start(UserId.New(), "", clock);  
+var result = Conversation.StartNewConversation(UserId.New(), null, clock);
+// or: Conversation.StartNewConversation(UserId.New(), "", clock);  
 // ConversationStartedEvent emitted with IsDefaultTitle = true
 ```
 
@@ -240,7 +242,7 @@ var result = Conversation.Start(UserId.New(), null, clock);
 var conversation = // ... existing conversation
 var content = MessageContent.Create("Hello, assistant!").Value;
 
-var result = conversation.AppendUserMessage(content, clock);
+var result = conversation.AppendUserMessageToConversation(content, clock);
 if (result.IsSuccess)
 {
     var message = result.Value;
@@ -250,7 +252,7 @@ if (result.IsSuccess)
 
 // Assistant response
 var assistantContent = MessageContent.Create("Hello! How can I help?").Value;
-var assistantResult = conversation.AppendAssistantMessage(assistantContent, clock);
+var assistantResult = conversation.AppendAssistantResponseToConversation(assistantContent, clock);
 // AssistantMessageAppendedEvent emitted  
 // Sequence computed automatically (e.g., 2, 4, 6...)
 ```
@@ -380,7 +382,7 @@ public void AppendUserMessage_WithValidContent_ShouldSucceedAndEmitEvent()
     var clock = new FixedClock(DateTime.UtcNow);
     
     // Act
-    var result = conversation.AppendUserMessage(content, clock);
+    var result = conversation.AppendUserMessageToConversation(content, clock);
     
     // Assert  
     result.IsSuccess.Should().BeTrue();

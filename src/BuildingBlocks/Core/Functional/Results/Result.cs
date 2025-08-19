@@ -248,13 +248,13 @@ public readonly record struct Result<T> : IResult<T>
     /// <summary>
     /// Creates a successful Result with the provided value.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000:Do not declare static members on generic types")]
+    [SuppressMessage("Design", "CA1000:Do not declare static members on generic types")]
     public static Result<T> Success(T value) => new(value);
 
     /// <summary>
     /// Creates a failed Result with the provided error.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000:Do not declare static members on generic types")]
+    [SuppressMessage("Design", "CA1000:Do not declare static members on generic types")]
     public static Result<T> Failure(Error error) => new(error);
 
     #endregion

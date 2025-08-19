@@ -1,28 +1,26 @@
+// File: /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Application/Commands/AppendUserMessage/AppendUserMessageValidator.cs
 using BuildingBlocks.Application.Validation.Base;
-using BuildingBlocks.Application.Validation.Extensions;
-using BuildingBlocks.Application.Validation.Constants;
 using Axon.Modules.Chat.Application.Validation.Extensions;
+using FluentValidation;
 
 namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 
 /// <summary>
-/// Application layer validation for AppendUserMessage command.
-/// Uses domain validation as single source of truth to eliminate duplication.
+/// Validates appending a user message to an existing conversation
+/// (requires valid conversation ID and message content).
 /// </summary>
 public sealed class AppendUserMessageValidator : BaseValidator<AppendUserMessageCommand>
 {
     public AppendUserMessageValidator()
     {
+        // ConversationId Value Object handles its own validation when created
         RuleFor(x => x.ConversationId)
-            .NotEmptyGuid()
-            .WithErrorCode(ValidationErrorCodes.GuidEmpty);
+            .NotNull()
+            .WithMessage("ConversationId is required to append a message.");
 
+        // MessageContent Value Object handles its own validation when created  
         RuleFor(x => x.Content)
-            .MustBeValidMessageContent();
-
-        RuleFor(x => x.IdempotencyKey)
-            .ContentLength(1, 256) // When provided, should be reasonable length
-            .When(x => !string.IsNullOrEmpty(x.IdempotencyKey))
-            .WithErrorCode(ValidationErrorCodes.StringInvalidLength);
+            .NotNull()
+            .WithMessage("Content is required.");
     }
 }

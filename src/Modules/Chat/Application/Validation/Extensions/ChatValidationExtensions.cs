@@ -1,5 +1,6 @@
 using FluentValidation;
 using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Primitives.ValueObjects;
 
 namespace Axon.Modules.Chat.Application.Validation.Extensions;
 

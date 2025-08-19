@@ -12,14 +12,21 @@
   <ItemGroup>
     <PackageReference Include="MediatR" Version="13.0.0" />
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.8">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageReference Include="FastEndpoints" Version="7.0.1" />
     <PackageReference Include="FastEndpoints.Swagger" Version="7.0.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BuildingBlocks\BuildingBlocks.csproj" />
     <ProjectReference Include="..\Modules\Chat\Application\Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="..\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
+    <!-- Reference Primitives for shared Value Objects -->
+    <ProjectReference Include="..\Modules\Chat\Primitives\Axon.Modules.Chat.Primitives.csproj" />
   </ItemGroup>
 
 </Project>

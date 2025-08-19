@@ -49,7 +49,7 @@ All domain events carry (at minimum):
 ### 1) ConversationStarted
 
 **Why**: Announces a new conversation exists and is `Active`.
-**Emitted**: After `Conversation.Start(...)` succeeds.
+**Emitted**: After `Conversation.StartNewConversation(...)` succeeds.
 **Never when**: Title validation fails; ownership invalid.
 
 **Payload**

@@ -1,8 +1,19 @@
-using BuildingBlocks.Core.Abstractions.CQRS;
+using Axon.Modules.Chat.Application.Common;
+using Axon.Modules.Chat.Primitives.ValueObjects;
+using BuildingBlocks.Core.Abstractions.Idempotency;
 
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 
 /// <summary>
-/// Command to start a new conversation with optional title
+/// Starts a new conversation, appends the user's first message, calls the AI,
+/// and appends the assistant's reply. Returns a unified ChatMessageResponse.
 /// </summary>
-public sealed record StartConversationCommand(string? Title) : CommandBase<StartConversationResponse>;
+public sealed record StartConversationCommand(
+    MessageContent Message
+) : IdempotentCommandBase<ChatMessageResponse>
+{
+    /// <summary>
+    /// Chat operations require a longer idempotency window due to AI processing time.
+    /// </summary>
+    public override TimeSpan GetIdempotencyWindow() => TimeSpan.FromMinutes(15);
+}

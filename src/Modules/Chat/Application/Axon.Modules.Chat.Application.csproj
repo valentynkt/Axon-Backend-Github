@@ -15,6 +15,8 @@
   <ItemGroup>
     <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.csproj" />
+    <!-- Reference Primitives for shared Value Objects -->
+    <ProjectReference Include="..\Primitives\Axon.Modules.Chat.Primitives.csproj" />
   </ItemGroup>
 
   <ItemGroup>

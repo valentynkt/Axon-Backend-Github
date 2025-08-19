@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Domain.Rules;
 using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Primitives.ValueObjects;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
@@ -22,7 +23,11 @@ internal sealed class TitleProvidedMustBeValidRule : BusinessRule
 
     public override bool IsBroken()
     {
-        // Empty/null title is allowed on Start
+        // Null title is allowed on Start (will become null in domain)
+        if (_title is null)
+            return false;
+
+        // Empty string title is allowed on Start (will become null in domain)
         if (string.IsNullOrEmpty(_title))
             return false;
 

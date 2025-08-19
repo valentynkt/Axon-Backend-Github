@@ -1,5 +1,4 @@
-using Axon.Modules.Chat.Application.Abstractions.Security;
-using Axon.Modules.Chat.Application.Services;
+using BuildingBlocks.Core.Abstractions.Authentication;
 
 namespace Axon.Modules.Chat.Infrastructure.Services;
 
@@ -8,9 +7,12 @@ namespace Axon.Modules.Chat.Infrastructure.Services;
 /// </summary>
 public sealed class DefaultCurrentUserService : ICurrentUserService
 {
-    public string? UserId => "system";
+    // Use a well-known GUID for the system user instead of a string
+    private static readonly Guid SystemUserGuid = new("00000000-0000-0000-0000-000000000001");
+    
+    public string? UserId => SystemUserGuid.ToString();
     public string? UserName => "System";
-    public bool IsAuthenticated => false;
+    public bool IsAuthenticated => true;
 
     public string GetUserIdOrDefault(string systemUserId = "SYSTEM")
     {

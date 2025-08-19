@@ -1,7 +1,8 @@
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
-using Axon.Modules.Chat.Domain.Time;
+using BuildingBlocks.Core.Abstractions.Time;
 using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;
@@ -97,7 +98,13 @@ public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConve
             conversation.Id.Value,
             conversation.Title);
 
-        // 5) Return
+        // 5) Return - Title should never be null after successful update
+        if (conversation.Title is null)
+        {
+            return Result<UpdateConversationTitleResponse>.Failure(
+                Error.Internal("Title update succeeded but title is still null", "CHAT.TITLE.UPDATE_FAILED"));
+        }
+        
         return Result<UpdateConversationTitleResponse>.Success(
             new UpdateConversationTitleResponse(
                 conversation.Id.Value,

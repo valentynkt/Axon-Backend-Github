@@ -3,7 +3,7 @@ using Polly;
 
 namespace BuildingBlocks.Infrastructure.Resilience;
 
-using Exception = System.Exception;
+using Exception = Exception;
 
 public static class PollyExtensions
 {

@@ -1,4 +1,4 @@
-using Axon.Modules.Chat.Domain.Time;
+using BuildingBlocks.Core.Abstractions.Time;
 
 namespace Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
 

@@ -11,7 +11,7 @@ public abstract class BaseValidator<T> : AbstractValidator<T>
     protected BaseValidator()
     {
         // Performance optimization: Stop on first failure per property  
-        ClassLevelCascadeMode = FluentValidation.CascadeMode.Stop;
+        ClassLevelCascadeMode = CascadeMode.Stop;
         
         // Enable async validation support
         SetupAsyncValidation();

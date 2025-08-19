@@ -1,7 +1,7 @@
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
-using Axon.Modules.Chat.Domain.Time;
+using BuildingBlocks.Core.Abstractions.Time;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Core.Functional.Results;
 

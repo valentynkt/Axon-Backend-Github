@@ -10,7 +10,10 @@ public sealed class ProcessMessageResponse
     /// <summary>Assistant text content (may be empty on error).</summary>
     public string Content { get; init; } = string.Empty;
 
-    /// <summary>OpenAI Responses API response id (use it as PreviousResponseId next time).</summary>
+    /// <summary>The conversation ID (use this for subsequent messages).</summary>
+    public Guid? ConversationId { get; init; }
+
+    /// <summary>OpenAI Responses API response id for internal tracking.</summary>
     public string? ResponseId { get; init; }
 
     /// <summary>Server timestamp (UTC).</summary>

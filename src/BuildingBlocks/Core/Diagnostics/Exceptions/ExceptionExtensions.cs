@@ -62,7 +62,7 @@ public static class ExceptionExtensions
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        if (exception is Exceptions.DomainException de)
+        if (exception is DomainException de)
             return de.Error.ToHttpStatusCode();
 
         return Error.FromException(exception).ToHttpStatusCode();
@@ -76,7 +76,7 @@ public static class ExceptionExtensions
         ArgumentNullException.ThrowIfNull(exception);
 
         // DomainException uses Error hints
-        if (exception is Exceptions.DomainException de)
+        if (exception is DomainException de)
             return de.Error.IsTransient;
 
         // Broad heuristics
@@ -103,7 +103,7 @@ public static class ExceptionExtensions
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        if (exception is Exceptions.DomainException de)
+        if (exception is DomainException de)
             return de.Error.IsRetryable;
 
         if (exception.IsTransient()) return true;
@@ -203,7 +203,7 @@ public static class ExceptionExtensions
         ArgumentNullException.ThrowIfNull(exception);
 
         var domain = exception.Flatten()
-                              .OfType<Exceptions.DomainException>()
+                              .OfType<DomainException>()
                               .FirstOrDefault();
         return (domain?.Error ?? Error.FromException(exception))
                .WithCorrelationFromActivity();

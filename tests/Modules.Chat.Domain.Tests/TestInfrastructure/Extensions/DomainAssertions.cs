@@ -110,8 +110,9 @@ public static class DomainAssertions
     /// </summary>
     public static void ShouldHaveDefaultTitle(this Conversation conversation)
     {
-        conversation.IsDefaultTitle.ShouldBeTrue(
+        conversation.HasDefaultTitle.ShouldBeTrue(
             "Expected conversation to have default title");
+        conversation.Title.ShouldBeNull("Default title should be null");
     }
 
     /// <summary>
@@ -119,8 +120,9 @@ public static class DomainAssertions
     /// </summary>
     public static void ShouldHaveUserTitle(this Conversation conversation, string? expectedTitle = null)
     {
-        conversation.IsDefaultTitle.ShouldBeFalse(
+        conversation.HasDefaultTitle.ShouldBeFalse(
             "Expected conversation to have user-provided title");
+        conversation.Title.ShouldNotBeNull("User-provided title should not be null");
         
         if (expectedTitle != null)
         {

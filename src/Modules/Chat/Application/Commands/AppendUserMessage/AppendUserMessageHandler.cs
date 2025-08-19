@@ -1,34 +1,28 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.AI;
-using Axon.Modules.Chat.Application.Abstractions.Infrastructure.Caching;
-using Axon.Modules.Chat.Application.Abstractions.Persistence;
-using Axon.Modules.Chat.Application.Abstractions.Security;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
-using Axon.Modules.Chat.Application.Services.Infrastructure.Idempotency;
-using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-
-using Axon.Modules.Chat.Domain.Time;
-using Axon.Modules.Chat.Domain.ValueObjects;
-using BuildingBlocks.Core.Diagnostics.Errors;
+using Axon.Modules.Chat.Application.Common;
+using Axon.Modules.Chat.Application.DTOs;
+using BuildingBlocks.Core.Abstractions.Time;
+using BuildingBlocks.Core.Abstractions.Authentication;
+using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional.Results;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 
 /// <summary>
-/// Internal cache record for tracking phase-1 user message commitment
+/// Handler to append a user message and persist the assistant reply.
+/// This handler focuses purely on business logic - idempotency is handled by the IdempotencyBehavior.
+/// Clean Architecture: Domain logic orchestrated through application services.
 /// </summary>
-internal sealed record Phase1Cache(string Type, Guid ConversationId, Guid UserMessageId, string Content);
-
-/// <summary>
-/// Handler for appending user message and getting AI response
-/// Implements two-phase commit pattern with context linking
-/// </summary>
-public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessageCommand, AppendUserMessageResponse>
+public sealed class AppendUserMessageHandler
+    : ICommandHandler<AppendUserMessageCommand, ChatMessageResponse>
 {
     private readonly IConversationRepository _repository;
     private readonly IAiClient _aiClient;
-    private readonly IIdempotencyCache _idempotencyCache;
+    private readonly IMcpServerResolver _mcpResolver;
     private readonly ICurrentUserService _currentUser;
     private readonly IClock _clock;
     private readonly ILogger<AppendUserMessageHandler> _logger;
@@ -37,249 +31,176 @@ public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessage
     public AppendUserMessageHandler(
         IConversationRepository repository,
         IAiClient aiClient,
-        IIdempotencyCache idempotencyCache,
+        IMcpServerResolver mcpResolver,
         ICurrentUserService currentUser,
         IClock clock,
         ILogger<AppendUserMessageHandler> logger,
         IAppTelemetry? telemetry = null)
     {
-        _repository = repository;
-        _aiClient = aiClient;
-        _idempotencyCache = idempotencyCache;
-        _currentUser = currentUser;
-        _clock = clock;
-        _logger = logger;
-        _telemetry = telemetry;
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _aiClient = aiClient ?? throw new ArgumentNullException(nameof(aiClient));
+        _mcpResolver = mcpResolver ?? throw new ArgumentNullException(nameof(mcpResolver));
+        _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _telemetry = telemetry; // optional
     }
 
-    public async Task<Result<AppendUserMessageResponse>> Handle(
+    public async Task<Result<ChatMessageResponse>> Handle(
         AppendUserMessageCommand command,
         CancellationToken cancellationToken)
     {
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        
-        // 0) Require auth & resolve owner
+        var overall = System.Diagnostics.Stopwatch.StartNew();
+
+        // 1) Authentication & Authorization
         if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
         {
             _telemetry?.TrackValidationFailure(nameof(AppendUserMessageCommand), "CHAT.AUTH.UNAUTHENTICATED");
-            return Result<AppendUserMessageResponse>.Failure(
+            return Result<ChatMessageResponse>.Failure(
                 Error.Unauthorized("User must be authenticated to send messages.", "CHAT.AUTH.UNAUTHENTICATED"));
         }
 
         var ownerIdResult = UserId.FromString(_currentUser.UserId!);
         if (ownerIdResult.IsFailure)
-        {
-            return Result<AppendUserMessageResponse>.Failure(ownerIdResult.Error);
-        }
+            return Result<ChatMessageResponse>.Failure(ownerIdResult.Error);
 
-        // 1) Load conversation & check ownership
-        if (command.ConversationId == Guid.Empty)
+        // 2) Load conversation & validate ownership
+        if (command.ConversationId.Value == Guid.Empty)
         {
-            return Result<AppendUserMessageResponse>.Failure(
+            return Result<ChatMessageResponse>.Failure(
                 Error.Validation("ConversationId cannot be empty.", "CHAT.ID.EMPTY"));
         }
 
-        var conversationId = ConversationId.From(command.ConversationId);
-        var conversation = await _repository.GetByIdAsync(conversationId, cancellationToken);
+        var conversation = await _repository.GetByIdAsync(command.ConversationId, cancellationToken);
         if (conversation is null)
         {
-            return Result<AppendUserMessageResponse>.Failure(
-                Error.NotFound($"Conversation {command.ConversationId} not found.", "CHAT.CONVERSATION.NOT_FOUND"));
+            return Result<ChatMessageResponse>.Failure(
+                Error.NotFound($"Conversation {command.ConversationId.Value} not found.", "CHAT.CONVERSATION.NOT_FOUND"));
         }
 
         if (!conversation.BelongsTo(ownerIdResult.Value))
         {
-            return Result<AppendUserMessageResponse>.Failure(
+            return Result<ChatMessageResponse>.Failure(
                 Error.Forbidden("Conversation does not belong to the current user.", "CHAT.CONVERSATION.ACCESS_DENIED"));
         }
 
-        // 2) Idempotency (app-level) — compute key if header missing
-        var suppliedKey = string.IsNullOrWhiteSpace(command.IdempotencyKey) 
-            ? null 
-            : command.IdempotencyKey!.Trim();
-        
-        var idempotencyKey = suppliedKey ?? IdempotencyKey.Compute(
-            command.Content, 
-            conversationId.Value, 
-            ownerIdResult.Value.Value);
+        // 3) Append user message - Updated method name with enhanced domain validation
+        var userMessageResult = conversation.AppendUserMessageToConversation(command.Content, _clock);
+        if (userMessageResult.IsFailure)
+            return Result<ChatMessageResponse>.Failure(userMessageResult.Error);
 
-        // Check for final cached response
-        var cachedResult = await _idempotencyCache.GetAsync<AppendUserMessageResponse>(idempotencyKey, cancellationToken);
-        if (cachedResult is not null)
-        {
-            _logger.LogInformation(
-                "Idempotency cache hit for conversation {ConversationId}, key {IdempotencyKey}",
-                command.ConversationId,
-                idempotencyKey);
-            return Result<AppendUserMessageResponse>.Success(cachedResult);
-        }
+        var userMessageId = userMessageResult.Value.Id.Value;
 
-        // Check for phase-1 cache (user message already committed)
-        var phase1 = await _idempotencyCache.GetAsync<Phase1Cache>(idempotencyKey, cancellationToken);
-        bool reusePhase1 = phase1 is { Type: "phase1" }
-                           && phase1.ConversationId == command.ConversationId
-                           && string.Equals(phase1.Content, command.Content, StringComparison.Ordinal);
-        Guid userMessageId;
+        await _repository.UpdateAsync(conversation, cancellationToken);
+        await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
-        // 3) Append user message & commit (phase 1)
-        var contentResult = MessageContent.Create(command.Content);
-        if (contentResult.IsFailure)
-        {
-            _telemetry?.TrackValidationFailure(nameof(AppendUserMessageCommand), contentResult.Error.Code);
-            return Result<AppendUserMessageResponse>.Failure(contentResult.Error);
-        }
+        _logger.LogInformation(
+            "User message {MessageId} appended to conversation {ConversationId}",
+            userMessageId, conversation.Id.Value);
 
-        if (reusePhase1)
-        {
-            // Reuse existing user message from phase-1 cache
-            userMessageId = phase1!.UserMessageId;
-            
-            _logger.LogInformation(
-                "Reusing user message {MessageId} from phase-1 cache for conversation {ConversationId}",
-                userMessageId,
-                conversation.Id.Value);
-        }
-        else
-        {
-            // Append new user message
-            var userMessageResult = conversation.AppendUserMessage(contentResult.Value, _clock);
-            if (userMessageResult.IsFailure)
-            {
-                return Result<AppendUserMessageResponse>.Failure(userMessageResult.Error);
-            }
-
-            var userMessage = userMessageResult.Value;
-            userMessageId = userMessage.Id.Value;
-
-            // Commit user message (phase 1)
-            await _repository.UpdateAsync(conversation, cancellationToken);
-            await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Store phase-1 cache to prevent duplicate user messages on retry
-            await _idempotencyCache.SetAsync(
-                idempotencyKey,
-                new Phase1Cache("phase1", conversation.Id.Value, userMessageId, command.Content),
-                IdempotencyDefaults.Window,
-                cancellationToken);
-
-            _logger.LogInformation(
-                "User message {MessageId} appended to conversation {ConversationId}",
-                userMessage.Id.Value,
-                conversation.Id.Value);
-        }
-
-        // 4) Build AI request with previous_response_id (context link) and MCP servers
-        var buildResult = _requestBuilder.BuildAiRequest(
-            command.Content, 
-            conversation.LastAiResponseId?.Value);
-        if (buildResult.IsFailure)
-        {
-            // User message already committed, return service unavailable
-            return Result<AppendUserMessageResponse>.Failure(
-                Error.Internal("Failed to build AI request. Please retry.", "CHAT.AI.REQUEST_BUILD_FAILED"));
-        }
-
-        var (aiRequest, mcpServerCount) = buildResult.Value;
-
-        // 5) Call AI (non-streaming)
+        // 4) Resolve MCP servers (optional, non-failing)
+        McpServerConfig[]? mcpConfigs = null;
         try
         {
-            _logger.LogInformation(
-                "Calling AI for conversation {ConversationId} with {McpServerCount} MCP servers, previous_response_id: {PreviousResponseId}",
-                conversation.Id.Value,
-                mcpServerCount,
-                conversation.LastAiResponseId?.Value ?? "none");
+            var resolved = await _mcpResolver.ResolveServersAsync(cancellationToken);
+            if (resolved is { Length: > 0 })
+                mcpConfigs = resolved;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to resolve MCP servers for conversation {ConversationId}. Continuing without MCP.",
+                conversation.Id.Value);
+        }
 
-            var aiStopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var aiResponse = await _aiClient.ProcessMessageAsync(aiRequest, cancellationToken);
-            aiStopwatch.Stop();
-            
-            _telemetry?.TrackAiClientRequest("responses.mcp", aiStopwatch.Elapsed, aiResponse.IsSuccess);
-            
-            if (aiResponse.IsFailure)
+        // 5) Build AI request and process
+        var previousResponseId = conversation.GetLastAiResponseId();
+        _logger.LogInformation(
+            "Building AI request for conversation {ConversationId} with previousResponseId: {PreviousResponseId}",
+            conversation.Id.Value,
+            previousResponseId ?? "none");
+
+        var aiRequest = new AiRequest(
+            Message: command.Content.Value,
+            McpConfigs: mcpConfigs,
+            PreviousResponseId: previousResponseId);
+
+        try
+        {
+            var aiTimer = System.Diagnostics.Stopwatch.StartNew();
+            var ai = await _aiClient.ProcessMessageAsync(aiRequest, cancellationToken);
+            aiTimer.Stop();
+            _telemetry?.TrackAiClientRequest("responses.mcp", aiTimer.Elapsed, ai.IsSuccess);
+
+            if (ai.IsFailure)
             {
                 _logger.LogWarning(
                     "AI call failed for conversation {ConversationId}: {ErrorCode}",
-                    conversation.Id.Value,
-                    aiResponse.Error.Code);
+                    conversation.Id.Value, ai.Error.Code);
 
-                // User message committed, AI failed - return service unavailable
-                stopwatch.Stop();
-                _telemetry?.TrackMessageProcessed(conversation.Id.Value, stopwatch.Elapsed, success: false);
-                return Result<AppendUserMessageResponse>.Failure(
+                overall.Stop();
+                _telemetry?.TrackMessageProcessed(conversation.Id.Value, overall.Elapsed, success: false);
+
+                return Result<ChatMessageResponse>.Failure(
                     Error.Internal("AI processing failed. Please retry.", "CHAT.AI.PROCESSING_FAILED"));
             }
 
-            // Validate AI response using centralized service
-            var validated = _responseMapper.ValidateAndProcessResponse(aiResponse.Value);
-            if (validated.IsFailure)
+            // Validate AI response
+            if (string.IsNullOrWhiteSpace(ai.Value.Content) || string.IsNullOrWhiteSpace(ai.Value.ResponseId))
             {
                 _logger.LogWarning(
-                    "AI response validation failed for conversation {ConversationId}: {Code}",
-                    conversation.Id.Value,
-                    validated.Error.Code);
+                    "AI returned invalid response for conversation {ConversationId}.",
+                    conversation.Id.Value);
 
-                stopwatch.Stop();
-                _telemetry?.TrackMessageProcessed(conversation.Id.Value, stopwatch.Elapsed, success: false);
-                return Result<AppendUserMessageResponse>.Failure(
+                overall.Stop();
+                _telemetry?.TrackMessageProcessed(conversation.Id.Value, overall.Elapsed, success: false);
+
+                return Result<ChatMessageResponse>.Failure(
                     Error.Internal("AI returned invalid response. Please retry.", "CHAT.AI.INVALID_RESPONSE"));
             }
 
-            var finalAi = validated.Value;
-
-            // 6) Append assistant with AiResponseId & commit (phase 2)
-            var aiResponseIdResult = AiResponseId.Create(finalAi.ResponseId!);
+            // 6) Append assistant message - Updated method name with enhanced domain validation
+            var aiResponseIdResult = AiResponseId.Create(ai.Value.ResponseId);
             if (aiResponseIdResult.IsFailure)
-            {
-                return Result<AppendUserMessageResponse>.Failure(aiResponseIdResult.Error);
-            }
+                return Result<ChatMessageResponse>.Failure(aiResponseIdResult.Error);
 
-            var assistantContentResult = MessageContent.Create(finalAi.Content!);
+            var assistantContentResult = MessageContent.Create(ai.Value.Content);
             if (assistantContentResult.IsFailure)
-            {
-                return Result<AppendUserMessageResponse>.Failure(assistantContentResult.Error);
-            }
+                return Result<ChatMessageResponse>.Failure(assistantContentResult.Error);
 
-            var assistantMessageResult = conversation.AppendAssistantMessage(
-                assistantContentResult.Value,
-                aiResponseIdResult.Value,
-                _clock);
+            var assistantMessageResult = conversation.AppendAssistantResponseToConversation(
+                assistantContentResult.Value, aiResponseIdResult.Value, _clock);
 
             if (assistantMessageResult.IsFailure)
-            {
-                return Result<AppendUserMessageResponse>.Failure(assistantMessageResult.Error);
-            }
+                return Result<ChatMessageResponse>.Failure(assistantMessageResult.Error);
 
-            var assistantMessage = assistantMessageResult.Value;
-
-            // Commit assistant message (phase 2)
             await _repository.UpdateAsync(conversation, cancellationToken);
             await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
+            var assistantMessageId = assistantMessageResult.Value.Id.Value;
+
             _logger.LogInformation(
-                "Assistant message {MessageId} appended to conversation {ConversationId} with response_id {ResponseId}",
-                assistantMessage.Id.Value,
-                conversation.Id.Value,
+                "Assistant message {MessageId} appended to conversation {ConversationId}. Previous AI response: {PreviousResponseId} -> New AI response: {NewResponseId}",
+                assistantMessageId, 
+                conversation.Id.Value, 
+                previousResponseId ?? "none",
                 aiResponseIdResult.Value.Value);
 
-            // Build response
-            var response = new AppendUserMessageResponse(
-                conversation.Id.Value,
-                userMessageId,
-                assistantMessage.Id.Value,
-                assistantMessage.Content.Value);
+            var response = new ChatMessageResponse(
+                ConversationId: conversation.Id,
+                UserMessageId: MessageId.From(userMessageId),
+                AssistantMessageId: MessageId.From(assistantMessageId),
+                AssistantMessage: assistantMessageResult.Value.Content.Value);
 
-            // Cache successful response
-            await _idempotencyCache.SetAsync(
-                idempotencyKey,
-                response,
-                IdempotencyDefaults.Window,
-                cancellationToken);
+            overall.Stop();
+            _telemetry?.TrackMessageProcessed(conversation.Id.Value, overall.Elapsed, success: true);
 
-            stopwatch.Stop();
-            _telemetry?.TrackMessageProcessed(conversation.Id.Value, stopwatch.Elapsed, success: true);
-
-            return Result<AppendUserMessageResponse>.Success(response);
+            return Result<ChatMessageResponse>.Success(response);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("AI call cancelled for conversation {ConversationId}", conversation.Id.Value);
+            throw;
         }
         catch (Exception ex)
         {
@@ -287,8 +208,7 @@ public sealed class AppendUserMessageHandler : ICommandHandler<AppendUserMessage
                 "Unexpected error processing message for conversation {ConversationId}",
                 conversation.Id.Value);
 
-            // User message already committed, return service unavailable
-            return Result<AppendUserMessageResponse>.Failure(
+            return Result<ChatMessageResponse>.Failure(
                 Error.Internal("An unexpected error occurred. Please retry.", "CHAT.AI.UNEXPECTED_ERROR"));
         }
     }

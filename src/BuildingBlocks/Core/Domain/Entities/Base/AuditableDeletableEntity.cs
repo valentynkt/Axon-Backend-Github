@@ -1,3 +1,4 @@
+using BuildingBlocks.Core.Abstractions.Time;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Primitives;
 
@@ -13,8 +14,9 @@ public abstract class AuditableDeletableEntity<TId> : Entity<TId>, IAuditable, I
 {
     protected AuditableDeletableEntity(TId id) : base(id)
     {
-        CreatedAt = DateTimeOffset.UtcNow;
-        UpdatedAt = CreatedAt;
+        var now = Clock.Instance.UtcNow;
+        CreatedAt = now;
+        UpdatedAt = now;
     }
 
     /// <summary>
@@ -23,24 +25,24 @@ public abstract class AuditableDeletableEntity<TId> : Entity<TId>, IAuditable, I
     protected AuditableDeletableEntity() : base() { }
 
     // IAuditable
-    public DateTimeOffset CreatedAt { get; protected set; }
-    public DateTimeOffset? UpdatedAt { get; protected set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset? UpdatedAt { get; private set; }
 
     // ISoftDeletable
-    public bool IsDeleted { get; protected set; }
-    public DateTimeOffset? DeletedAt { get; protected set; }
+    public bool IsDeleted { get; private set; }
+    public DateTimeOffset? DeletedAt { get; private set; }
 
     /// <summary>Mark entity as updated (infra can also overwrite on save).</summary>
-    protected void MarkUpdated() => UpdatedAt = DateTimeOffset.UtcNow;
-    
-    protected void MarkCreated() => CreatedAt = DateTimeOffset.UtcNow;
+    protected void MarkUpdated() => UpdatedAt = Clock.Instance.UtcNow;
+
+    protected void MarkCreated() => CreatedAt = Clock.Instance.UtcNow;
 
     /// <summary>Soft delete the entity.</summary>
     public virtual void SoftDelete()
     {
         if (IsDeleted) return;
         IsDeleted = true;
-        DeletedAt = DateTimeOffset.UtcNow;
+        DeletedAt = Clock.Instance.UtcNow;
         MarkUpdated();
     }
 

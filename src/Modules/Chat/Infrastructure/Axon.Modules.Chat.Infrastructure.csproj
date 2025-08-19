@@ -24,6 +24,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
@@ -32,6 +33,10 @@
   <ItemGroup>
     <ProjectReference Include="../Application/Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
+    <!-- Reference Primitives for shared Value Objects -->
+    <ProjectReference Include="..\Primitives\Axon.Modules.Chat.Primitives.csproj" />
+    <!-- Reference BuildingBlocks for infrastructure patterns -->
+    <ProjectReference Include="../../../BuildingBlocks/BuildingBlocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

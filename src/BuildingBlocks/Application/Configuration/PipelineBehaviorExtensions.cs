@@ -30,6 +30,9 @@ public static class PipelineBehaviorExtensions
         // Validation (Fluent + domain)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
 
+        // Idempotency (commands only)
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
+
         // Caching + invalidation
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
        

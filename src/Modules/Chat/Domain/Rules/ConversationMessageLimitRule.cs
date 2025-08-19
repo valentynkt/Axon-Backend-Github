@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Domain.Rules;
 using Axon.Modules.Chat.Domain.Constants;
+using Axon.Modules.Chat.Primitives.Constants;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
@@ -9,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Rules;
 /// </summary>
 internal sealed class ConversationMessageLimitRule : BusinessRule
 {
-    private const int DefaultMaxMessages = ChatDomainConstants.Conversation.MaxMessages;
+    private const int DefaultMaxMessages = ChatPrimitiveConstants.Conversation.MaxMessages;
     private readonly int _currentCount;
     private readonly int _maxMessages;
 

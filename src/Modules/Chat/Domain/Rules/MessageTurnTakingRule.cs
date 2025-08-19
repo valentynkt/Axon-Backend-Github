@@ -1,12 +1,14 @@
 using BuildingBlocks.Core.Domain.Rules;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Primitives.ValueObjects;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
 /// <summary>
-/// Enforces turn-taking rules for messages.
-/// Enforces APP-01 rule: User cannot send two messages in a row. Either role can be first.
+/// Business rule that enforces strict alternation: no consecutive messages from the same role.
+/// Also ensures that users must start conversations (no assistant-first messages).
+/// Implements requirements: strict alternation and user-must-start policy.
 /// </summary>
 internal sealed class MessageTurnTakingRule : BusinessRule
 {
@@ -15,8 +17,8 @@ internal sealed class MessageTurnTakingRule : BusinessRule
 
     public MessageTurnTakingRule(IReadOnlyList<Message> messages, MessageRole newRole)
         : base(
-            message: "User cannot send two messages in a row.",
-            code: "CHAT.MESSAGE.USER.TURN.VIOLATION")
+            message: "Messages must alternate between user and assistant.",
+            code: "CHAT.MESSAGE.TURN.VIOLATION")
     {
         _messages = messages ?? new List<Message>();
         _newRole = newRole ?? throw new ArgumentNullException(nameof(newRole));
@@ -24,13 +26,13 @@ internal sealed class MessageTurnTakingRule : BusinessRule
 
     public override bool IsBroken()
     {
-        // Empty conversation - any role is allowed (assistant can be first)
+        // Empty conversation - only user can be first (no assistant-first messages)
         if (_messages.Count == 0)
-            return false;
+            return _newRole.IsAssistant;
 
-        // Block consecutive user messages (APP-01).
+        // Block consecutive messages from the same role (strict alternation)
         var lastMessage = _messages[^1];
-        return lastMessage.Role.IsUser && _newRole.IsUser;
+        return lastMessage.Role.Value == _newRole.Value;
     }
 
     public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 

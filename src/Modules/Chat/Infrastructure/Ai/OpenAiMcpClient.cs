@@ -180,7 +180,7 @@ public sealed class OpenAiMcpClient : IAiClient
         if (!root.TryGetProperty("output", out var output) || output.ValueKind != JsonValueKind.Array)
             return null;
 
-        var sb = new System.Text.StringBuilder();
+        var sb = new StringBuilder();
 
         foreach (var item in output.EnumerateArray())
         {

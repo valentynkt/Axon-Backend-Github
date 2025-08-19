@@ -1,5 +1,5 @@
 using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
-using Axon.Modules.Chat.Domain.Time;
+using BuildingBlocks.Core.Abstractions.Time;
 using Shouldly;
 using Xunit;
 

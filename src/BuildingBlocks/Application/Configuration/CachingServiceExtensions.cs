@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Abstractions.Caching;
+using BuildingBlocks.Infrastructure.Caching;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BuildingBlocks.Application.Configuration;
@@ -12,6 +14,10 @@ public static class CachingServiceExtensions
     {
         services.AddMemoryCache();
         services.AddDistributedMemoryCache(); // replace with Redis if/when needed
+        
+        // Register idempotency cache implementation
+        services.AddSingleton<IIdempotencyCache, InMemoryIdempotencyCache>();
+        
         return services;
     }
 }

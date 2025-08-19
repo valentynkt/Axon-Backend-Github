@@ -5,12 +5,14 @@ using BuildingBlocks.Core.Domain.Rules;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using Axon.Modules.Chat.Domain.Constants;
+using Axon.Modules.Chat.Primitives.Constants;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.Events;
 using Axon.Modules.Chat.Domain.Rules;
-using Axon.Modules.Chat.Domain.Time;
+using BuildingBlocks.Core.Abstractions.Time;
 using Axon.Modules.Chat.Domain.Internal.Text;
 using Axon.Modules.Chat.Domain.ValueObjects;
+using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Domain.Entities.Base;
 
 namespace Axon.Modules.Chat.Domain.Aggregates.Conversation;
@@ -26,10 +28,12 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     // Core state
     public UserId OwnerId { get; private set; }
     public ConversationStatus Status { get; private set; }
-    public string Title { get; private set; }
-    public bool IsDefaultTitle { get; private set; }
+    public string? Title { get; private set; }
     
-    // AI context tracking
+    /// <summary>
+    /// The anchor for the next model call (use as 'previous_response_id').
+    /// Set only when an assistant message is appended successfully.
+    /// </summary>
     public AiResponseId? LastAiResponseId { get; private set; }
     
     
@@ -39,57 +43,60 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     
     // Helpers
     public bool IsActive => Status == ConversationStatus.Active;
+    public bool HasDefaultTitle => Title is null;
 
     private Conversation() : base(ConversationId.New())
     {
         // Required for EF Core
-        Title = string.Empty;
+        Title = null;
         OwnerId = UserId.New(); // Temporary for EF
     }
 
     private Conversation(
         ConversationId id,
         UserId ownerId,
-        string title,
-        bool isDefaultTitle)
+        string? title)
         : base(id)
     {
         OwnerId = ownerId;
         Status = ConversationStatus.Active;
         Title = title;
-        IsDefaultTitle = isDefaultTitle;
     }
 
     /// <summary>
     /// Starts a new conversation with the specified owner.
     /// </summary>
-    public static Result<Conversation> Start(
+    public static Result<Conversation> StartNewConversation(
         UserId ownerId,
         string? titleOrNull,
         IClock clock)
     {
         try
         {
-            // Validate inputs
+            // Validate inputs with more specific error messages
             CheckRule(new ConversationMustHaveOwnerRule(ownerId));
             CheckRule(new TitleProvidedMustBeValidRule(titleOrNull));
 
             var conversationId = ConversationId.New();
             var now = clock.UtcNow;
             
-            // Process title
-            var titleResult = ProcessStartTitle(titleOrNull);
-            if (titleResult.IsFailure)
-                return Result<Conversation>.Failure(titleResult.Error);
-
-            var (actualTitle, isDefault) = titleResult.Value;
+            // Process title - if provided, validate it; if null/empty, keep as null
+            string? processedTitle = null;
+            if (!string.IsNullOrEmpty(titleOrNull))
+            {
+                var titleResult = ConversationTitle.Create(titleOrNull);
+                if (titleResult.IsFailure)
+                    return Result<Conversation>.Failure(titleResult.Error);
+                
+                processedTitle = titleResult.Value.Value;
+            }
 
             // Create conversation
-            var conversation = new Conversation(conversationId, ownerId, actualTitle, isDefault);
+            var conversation = new Conversation(conversationId, ownerId, processedTitle);
 
             // Raise domain event
             conversation.RaiseDomainEvent(new ConversationStartedEvent(
-                conversationId, ownerId, actualTitle, isDefault, now));
+                conversationId, ownerId, processedTitle, now));
 
             return Result<Conversation>.Success(conversation);
         }
@@ -122,12 +129,18 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// <summary>
     /// Appends a user message to the conversation.
     /// </summary>
-    public Result<Message> AppendUserMessage(MessageContent content, IClock clock)
+    public Result<Message> AppendUserMessageToConversation(MessageContent content, IClock clock)
     {
         try
         {
-            // Validate preconditions (APP-01: block user→user)
+            // Enhanced validation with specific business rule enforcement
             ValidateMessageAppendPreconditions(content.Value, MessageRole.User);
+            
+            // Additional domain rule: Ensure conversation can accept more messages
+            CheckRule(new ConversationCanAcceptMoreMessagesRule(_messages.Count));
+            
+            // Additional domain rule: Validate message content meets domain standards
+            CheckRule(new MessageContentMeetsDomainStandardsRule(content.Value));
 
             var now = clock.UtcNow;
             var message = CreateAndAddUserMessage(content, now);
@@ -135,6 +148,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             RaiseUserMessageEvent(message, content.Value, now);
 
             #if DEBUG
+            // Verify message sequence integrity as additional safety check during development
             CheckRule(new MessageSequenceIntegrityRule(_messages));
             #endif
             return Result<Message>.Success(message);
@@ -149,13 +163,13 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// <summary>
     /// Creates user message and adds to conversation.
     /// </summary>
-    private Message CreateAndAddUserMessage(MessageContent content, DateTimeOffset now)
+    private Message CreateAndAddUserMessage(MessageContent content)
     {
         var sequence = MessageCount + 1;
         var message = Message.CreateUserMessage(Id, content, sequence);
         
         _messages.Add(message);
-        UpdatedAt = now;
+        MarkUpdated();
         
         return message;
     }
@@ -174,19 +188,30 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 
     /// <summary>
     /// Appends an assistant message with AI response tracking.
-    /// Ensures idempotency and maintains conversation context.
+    /// If a message with the same AiResponseId exists, returns that message without 
+    /// mutating timestamps or emitting new events. This guarantees at-least-once 
+    /// delivery semantics are safe to retry. Assistant must follow user (enforced by turn-taking rule).
     /// </summary>
-    public Result<Message> AppendAssistantMessage(
+    public Result<Message> AppendAssistantResponseToConversation(
         MessageContent content, 
         AiResponseId aiResponseId,
         IClock clock)
     {
         try
         {
-            // Validate preconditions
+            // Enhanced validation with specific business rule enforcement
             ValidateMessageAppendPreconditions(content.Value, MessageRole.Assistant);
             
-            // Check for idempotency
+            // Additional domain rule: Ensure conversation can accept more messages
+            CheckRule(new ConversationCanAcceptMoreMessagesRule(_messages.Count));
+            
+            // Additional domain rule: Validate assistant response content standards  
+            CheckRule(new AssistantResponseContentValidRule(content.Value));
+            
+            // Additional domain rule: AI Response ID must be unique and valid
+            CheckRule(new AiResponseIdMustBeUniqueRule(aiResponseId, _messages));
+            
+            // Check for idempotency (existing behavior preserved)
             var existingMessage = FindExistingMessageByAiResponseId(aiResponseId);
             if (existingMessage != null)
                 return Result<Message>.Success(existingMessage);
@@ -197,6 +222,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             RaiseAssistantMessageEvent(message, content.Value, aiResponseId, now);
 
             #if DEBUG
+            // Verify message sequence integrity as additional safety check during development
             CheckRule(new MessageSequenceIntegrityRule(_messages));
             #endif
             return Result<Message>.Success(message);
@@ -237,7 +263,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
         
         _messages.Add(message);
         LastAiResponseId = aiResponseId;
-        UpdatedAt = now;
+        MarkUpdated();
         
         return message;
     }
@@ -270,13 +296,11 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             
             var now = clock.UtcNow;
             Title = titleResult.Value.Value;
-            IsDefaultTitle = false;
-            UpdatedAt = now;
+            MarkUpdated();
 
             RaiseDomainEvent(new ConversationTitleUpdatedEvent(
                 Id,
                 Title,
-                IsDefaultTitle,
                 now));
 
             return Result<Unit>.Success(Unit.Value);
@@ -300,7 +324,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 
             var now = clock.UtcNow;
             Status = ConversationStatus.Completed;
-            UpdatedAt = now;
+            MarkUpdated();
 
             RaiseDomainEvent(new ConversationCompletedEvent(
                 Id,
@@ -322,17 +346,17 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     public bool BelongsTo(UserId userId) => OwnerId == userId;
 
     /// <summary>
-    /// Gets the previous AI response ID for context linking.
-    /// Used by application layer to maintain conversation continuity with OpenAI.
+    /// Gets the last AI response ID for threading anchor in subsequent AI requests.
+    /// Use this value as 'previous_response_id' in downstream AI requests.
     /// </summary>
-    public string? GetPreviousResponseId() => LastAiResponseId?.Value;
+    public string? GetLastAiResponseId() => LastAiResponseId?.Value;
 
     /// <summary>
     /// Creates content preview - plain truncation to configured length, no ellipsis.
     /// </summary>
     private static string CreateContentPreview(string content)
     {
-        return TextSlices.Preview(content, ChatDomainConstants.Conversation.ContentPreviewLength);
+        return TextSlices.Preview(content, ChatPrimitiveConstants.Conversation.ContentPreviewLength);
     }
 
     /// <summary>

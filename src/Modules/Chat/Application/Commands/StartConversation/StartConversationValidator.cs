@@ -1,14 +1,17 @@
 using BuildingBlocks.Application.Validation.Base;
+using FluentValidation;
 
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;
 
+/// <summary>
+/// Lean validator: Message is required (VO handles detailed validation).
+/// </summary>
 public sealed class StartConversationValidator : BaseValidator<StartConversationCommand>
 {
     public StartConversationValidator()
     {
-        // No input validation needed for StartConversation
-        // - Title is optional (can be null for auto-generated titles)
-        // - Domain handles business validation through TitleProvidedMustBeValidRule
-        // - User context validation handled in pipeline
+        RuleFor(x => x.Message)
+            .NotNull()
+            .WithMessage("Message is required.");
     }
 }

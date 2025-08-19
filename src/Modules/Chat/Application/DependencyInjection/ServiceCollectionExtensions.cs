@@ -1,5 +1,9 @@
-using Axon.Modules.Chat.Domain.Time;
+using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
+using Axon.Modules.Chat.Application.Services.Idempotency;
+using BuildingBlocks.Core.Abstractions.Time;
 using BuildingBlocks.Application.Configuration;
+using BuildingBlocks.Core.Abstractions.Caching;
+using BuildingBlocks.Core.Abstractions.Idempotency;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -33,9 +37,10 @@ public static class ServiceCollectionExtensions
         services.AddPipelineBehaviors(configuration, environment);
 
         // Register Chat-specific services
-        services.AddMemoryCache();
-        // services.AddSingleton<IIdempotencyCache, InMemoryIdempotencyCache>();
         services.AddSingleton<IClock, SystemClock>();
+        
+        // Register idempotency key providers
+        services.AddTransient<IIdempotencyKeyProvider<AppendUserMessageCommand>, ChatIdempotencyKeyProvider>();
         
         // IAiClient is infrastructure-provided (adapter), register there.
 
