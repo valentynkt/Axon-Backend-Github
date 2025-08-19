@@ -19,6 +19,9 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageReference Include="FastEndpoints" Version="7.0.1" />
     <PackageReference Include="FastEndpoints.Swagger" Version="7.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OData" Version="9.0.0" />
+    <PackageReference Include="Asp.Versioning.Http" Version="8.1.0" />
+    <PackageReference Include="Asp.Versioning.OData" Version="8.1.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +30,8 @@
     <ProjectReference Include="..\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
     <!-- Reference Primitives for shared Value Objects -->
     <ProjectReference Include="..\Modules\Chat\Primitives\Axon.Modules.Chat.Primitives.csproj" />
+    <!-- Reference ReadModels for OData DTOs -->
+    <ProjectReference Include="..\Modules\Chat\ReadModels\Axon.Modules.Chat.ReadModels.csproj" />
   </ItemGroup>
 
 </Project>

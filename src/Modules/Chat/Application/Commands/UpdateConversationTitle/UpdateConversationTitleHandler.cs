@@ -1,6 +1,6 @@
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
-using BuildingBlocks.Core.Abstractions.Time;
+
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -16,20 +16,20 @@ public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConve
 {
     private readonly IConversationRepository _repository;
     private readonly ICurrentUserService _currentUser;
-    private readonly IClock _clock;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<UpdateConversationTitleHandler> _logger;
     private readonly IAppTelemetry? _telemetry;
 
     public UpdateConversationTitleHandler(
         IConversationRepository repository,
         ICurrentUserService currentUser,
-        IClock clock,
+        TimeProvider timeProvider,
         ILogger<UpdateConversationTitleHandler> logger,
         IAppTelemetry? telemetry = null)
     {
         _repository = repository;
         _currentUser = currentUser;
-        _clock = clock;
+        _timeProvider = timeProvider;
         _logger = logger;
         _telemetry = telemetry;
     }
@@ -77,7 +77,7 @@ public sealed class UpdateConversationTitleHandler : ICommandHandler<UpdateConve
 
         // 3) Update title (domain)
         var trimmedTitle = command.Title.Trim();
-        var updateResult = conversation.UpdateTitle(trimmedTitle, _clock);
+        var updateResult = conversation.UpdateTitle(trimmedTitle, _timeProvider);
         if (updateResult.IsFailure)
         {
             _logger.LogWarning(

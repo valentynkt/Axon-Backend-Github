@@ -1,38 +1,36 @@
-using BuildingBlocks.Core.Abstractions.Time;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
 
 /// <summary>
-/// Test implementation of IClock that advances time by a fixed step on each UtcNow call.
+/// Test TimeProvider that advances time by a fixed step on each GetUtcNow() call.
 /// Useful for sequence-dependent tests where you need predictable time progression.
+/// This is a wrapper around Microsoft's FakeTimeProvider for backwards compatibility.
 /// </summary>
-public sealed class AdvancingClock : IClock
+public sealed class AdvancingClock : TimeProvider
 {
-    private DateTimeOffset _current;
+    private readonly FakeTimeProvider _fakeTimeProvider;
     private readonly TimeSpan _step;
 
     /// <summary>
     /// Initializes a new instance of AdvancingClock with a seed time and step interval.
     /// </summary>
     /// <param name="seed">The initial time to start from.</param>
-    /// <param name="step">The amount of time to advance on each UtcNow call.</param>
+    /// <param name="step">The amount of time to advance on each GetUtcNow() call.</param>
     public AdvancingClock(DateTimeOffset seed, TimeSpan step)
     {
-        _current = seed;
+        _fakeTimeProvider = new FakeTimeProvider(seed);
         _step = step;
     }
 
     /// <summary>
     /// Returns the current time and then advances it by the step interval.
     /// </summary>
-    public DateTimeOffset UtcNow
+    public override DateTimeOffset GetUtcNow()
     {
-        get
-        {
-            var now = _current;
-            _current = _current.Add(_step);
-            return now;
-        }
+        var now = _fakeTimeProvider.GetUtcNow();
+        _fakeTimeProvider.Advance(_step);
+        return now;
     }
 
     /// <summary>

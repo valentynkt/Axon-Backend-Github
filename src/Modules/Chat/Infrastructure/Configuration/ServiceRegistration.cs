@@ -3,8 +3,7 @@ using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Persistence;
 using Axon.Modules.Chat.Application.Services;
-using BuildingBlocks.Core.Abstractions.Time;
-using BuildingBlocks.Infrastructure.Time;
+
 using Axon.Modules.Chat.Infrastructure.Ai;
 using Axon.Modules.Chat.Infrastructure.Persistence;
 using Axon.Modules.Chat.Infrastructure.Services;
@@ -77,8 +76,8 @@ public static class ServiceRegistration
             return new EfUnitOfWork<ChatDbContext, ChatModule>(context);
         });
         
-        // Register Clock
-        services.AddSingleton<IClock, SystemClock>();
+        // Register TimeProvider
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
         
         // Register CurrentUserService
         services.AddScoped<ICurrentUserService, DefaultCurrentUserService>();

@@ -1,16 +1,22 @@
 using System.Linq.Expressions;
-using BuildingBlocks.Core.Abstractions.Pagination;
 
 namespace BuildingBlocks.Application;
 
 /// <summary>
 /// Read-side repository abstraction (query only, <b>no tracking</b>).
-/// Provider-agnostic: no IQueryable/raw SQL/compiled-query exposure.
+/// Returns IQueryable for OData composition.
 /// </summary>
 public interface IReadRepository<TReadModel, in TId> : IDisposable
     where TReadModel : class
     where TId : notnull
 {
+    // ——— Query builder (for OData) ———
+    /// <summary>
+    /// Returns an IQueryable with optional predicate.
+    /// User-scoped filtering and stable ordering are applied at the repository level.
+    /// </summary>
+    IQueryable<TReadModel> Query(Expression<Func<TReadModel, bool>>? predicate = null);
+
     // ——— Simple fetches ———
     Task<TReadModel?> FindByIdAsync(TId id, CancellationToken ct = default);
 
@@ -28,18 +34,6 @@ public interface IReadRepository<TReadModel, in TId> : IDisposable
 
     Task<IReadOnlyList<TReadModel>> GetByIdsAsync(
         IReadOnlyList<TId> ids,
-        CancellationToken ct = default);
-
-    // ——— Paged / filtered ———
-    Task<IPageList<TReadModel>> GetPagedAsync<TPageRequest>(
-        TPageRequest request,
-        CancellationToken ct = default)
-        where TPageRequest : IPageRequest;
-
-    Task<IPageList<TReadModel>> GetPagedAsync(
-        Expression<Func<TReadModel, bool>>? predicate,
-        int pageNumber,
-        int pageSize,
         CancellationToken ct = default);
 
     // ——— Aggregate functions ———

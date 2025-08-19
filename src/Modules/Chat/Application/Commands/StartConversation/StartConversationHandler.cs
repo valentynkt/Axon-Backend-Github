@@ -4,7 +4,7 @@ using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.Common;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using BuildingBlocks.Core.Abstractions.Time;
+
 using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.CQRS;
@@ -29,7 +29,7 @@ public sealed class StartConversationHandler
     private readonly IAiClient _aiClient;
     private readonly IMcpServerResolver _mcpResolver;
     private readonly ICurrentUserService _currentUser;
-    private readonly IClock _clock;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<StartConversationHandler> _logger;
     private readonly IAppTelemetry? _telemetry;
 
@@ -38,7 +38,7 @@ public sealed class StartConversationHandler
         IAiClient aiClient,
         IMcpServerResolver mcpResolver,
         ICurrentUserService currentUser,
-        IClock clock,
+        TimeProvider timeProvider,
         ILogger<StartConversationHandler> logger,
         IAppTelemetry? telemetry = null)
     {
@@ -46,7 +46,7 @@ public sealed class StartConversationHandler
         _aiClient = aiClient ?? throw new ArgumentNullException(nameof(aiClient));
         _mcpResolver = mcpResolver ?? throw new ArgumentNullException(nameof(mcpResolver));
         _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
-        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _telemetry = telemetry; // optional
     }
@@ -70,14 +70,14 @@ public sealed class StartConversationHandler
             return Result<ChatMessageResponse>.Failure(ownerIdResult.Error);
 
         // 2) Start conversation (no title in MVP)
-        var startResult = Conversation.StartNewConversation(ownerIdResult.Value, titleOrNull: null, _clock);
+        var startResult = Conversation.StartNewConversation(ownerIdResult.Value, titleOrNull: null, _timeProvider);
         if (startResult.IsFailure)
             return Result<ChatMessageResponse>.Failure(startResult.Error);
 
         var conversation = startResult.Value;
 
         // 3) Append the first user message (Phase 1) and persist
-        var userMessageResult = conversation.AppendUserMessageToConversation(command.Message, _clock);
+        var userMessageResult = conversation.AppendUserMessageToConversation(command.Message, _timeProvider);
         if (userMessageResult.IsFailure)
             return Result<ChatMessageResponse>.Failure(userMessageResult.Error);
 
@@ -158,7 +158,7 @@ public sealed class StartConversationHandler
                 return Result<ChatMessageResponse>.Failure(assistantContentResult.Error);
 
             var assistantMessageResult = conversation.AppendAssistantResponseToConversation(
-                assistantContentResult.Value, aiResponseIdResult.Value, _clock);
+                assistantContentResult.Value, aiResponseIdResult.Value, _timeProvider);
 
             if (assistantMessageResult.IsFailure)
                 return Result<ChatMessageResponse>.Failure(assistantMessageResult.Error);

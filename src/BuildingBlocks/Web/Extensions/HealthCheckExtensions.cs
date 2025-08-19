@@ -1,6 +1,7 @@
 using BuildingBlocks.Infrastructure.Messaging.MassTransit;
 using BuildingBlocks.Infrastructure.Observability.HealthChecks;
 using BuildingBlocks.Infrastructure.Persistence.Postgres;
+using BuildingBlocks.Web.HealthChecks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,8 @@ public static class HealthCheckExtensions
             var healthChecksBuilder = services.AddHealthChecks()
                 // Add a default liveness check to ensure app is responsive
                 .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"])
+                // Add clock system health check
+                .AddClockHealthCheck()
                 .AddRabbitMQ(
                     serviceProvider =>
                     {
@@ -79,5 +82,25 @@ public static class HealthCheckExtensions
             app.MapHealthChecksUI(options => options.UIPath = "/health-ui");
 
         return app;
+    }
+
+    /// <summary>
+    /// Adds the Clock health check to the service collection.
+    /// </summary>
+    /// <param name="builder">The health checks builder</param>
+    /// <param name="name">The health check name (defaults to "clock")</param>
+    /// <param name="failureStatus">The status to report on failure (defaults to Unhealthy)</param>
+    /// <param name="tags">Optional tags for the health check</param>
+    /// <returns>The health checks builder for chaining</returns>
+    public static IHealthChecksBuilder AddClockHealthCheck(
+        this IHealthChecksBuilder builder,
+        string name = "clock",
+        HealthStatus? failureStatus = null,
+        IEnumerable<string>? tags = null)
+    {
+        return builder.AddCheck<ClockHealthCheck>(
+            name, 
+            failureStatus ?? HealthStatus.Unhealthy, 
+            tags ?? []);
     }
 }

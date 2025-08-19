@@ -1,28 +1,29 @@
-using BuildingBlocks.Core.Abstractions.Time;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
 
 /// <summary>
-/// Test implementation of IClock that always returns a fixed instant in time.
+/// Test TimeProvider that always returns a fixed instant in time.
 /// Useful for deterministic tests that need consistent timestamps.
+/// This is a wrapper around Microsoft's FakeTimeProvider for backwards compatibility.
 /// </summary>
-public sealed class FixedClock : IClock
+public sealed class FixedClock : TimeProvider
 {
-    private readonly DateTimeOffset _fixedInstant;
+    private readonly FakeTimeProvider _fakeTimeProvider;
 
     /// <summary>
     /// Initializes a new instance of FixedClock with the specified fixed instant.
     /// </summary>
-    /// <param name="fixedInstant">The fixed instant to return on every UtcNow call.</param>
+    /// <param name="fixedInstant">The fixed instant to return on every GetUtcNow() call.</param>
     public FixedClock(DateTimeOffset fixedInstant)
     {
-        _fixedInstant = fixedInstant;
+        _fakeTimeProvider = new FakeTimeProvider(fixedInstant);
     }
 
     /// <summary>
     /// Always returns the fixed instant provided in the constructor.
     /// </summary>
-    public DateTimeOffset UtcNow => _fixedInstant;
+    public override DateTimeOffset GetUtcNow() => _fakeTimeProvider.GetUtcNow();
 
     /// <summary>
     /// Factory method for creating a FixedClock with the current system time.

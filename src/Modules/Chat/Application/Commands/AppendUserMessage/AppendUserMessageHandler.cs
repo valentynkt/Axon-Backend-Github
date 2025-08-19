@@ -3,7 +3,7 @@ using Axon.Modules.Chat.Application.Abstractions.AI;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.Common;
 using Axon.Modules.Chat.Application.DTOs;
-using BuildingBlocks.Core.Abstractions.Time;
+
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Domain.Primitives;
@@ -24,7 +24,7 @@ public sealed class AppendUserMessageHandler
     private readonly IAiClient _aiClient;
     private readonly IMcpServerResolver _mcpResolver;
     private readonly ICurrentUserService _currentUser;
-    private readonly IClock _clock;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppendUserMessageHandler> _logger;
     private readonly IAppTelemetry? _telemetry;
 
@@ -33,7 +33,7 @@ public sealed class AppendUserMessageHandler
         IAiClient aiClient,
         IMcpServerResolver mcpResolver,
         ICurrentUserService currentUser,
-        IClock clock,
+        TimeProvider timeProvider,
         ILogger<AppendUserMessageHandler> logger,
         IAppTelemetry? telemetry = null)
     {
@@ -41,7 +41,7 @@ public sealed class AppendUserMessageHandler
         _aiClient = aiClient ?? throw new ArgumentNullException(nameof(aiClient));
         _mcpResolver = mcpResolver ?? throw new ArgumentNullException(nameof(mcpResolver));
         _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
-        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _telemetry = telemetry; // optional
     }
@@ -85,7 +85,7 @@ public sealed class AppendUserMessageHandler
         }
 
         // 3) Append user message - Updated method name with enhanced domain validation
-        var userMessageResult = conversation.AppendUserMessageToConversation(command.Content, _clock);
+        var userMessageResult = conversation.AppendUserMessageToConversation(command.Content, _timeProvider);
         if (userMessageResult.IsFailure)
             return Result<ChatMessageResponse>.Failure(userMessageResult.Error);
 
@@ -169,7 +169,7 @@ public sealed class AppendUserMessageHandler
                 return Result<ChatMessageResponse>.Failure(assistantContentResult.Error);
 
             var assistantMessageResult = conversation.AppendAssistantResponseToConversation(
-                assistantContentResult.Value, aiResponseIdResult.Value, _clock);
+                assistantContentResult.Value, aiResponseIdResult.Value, _timeProvider);
 
             if (assistantMessageResult.IsFailure)
                 return Result<ChatMessageResponse>.Failure(assistantMessageResult.Error);

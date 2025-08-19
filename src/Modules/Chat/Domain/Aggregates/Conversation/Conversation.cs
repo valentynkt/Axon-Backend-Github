@@ -9,7 +9,6 @@ using Axon.Modules.Chat.Primitives.Constants;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.Events;
 using Axon.Modules.Chat.Domain.Rules;
-using BuildingBlocks.Core.Abstractions.Time;
 using Axon.Modules.Chat.Domain.Internal.Text;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Primitives.ValueObjects;
@@ -69,7 +68,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     public static Result<Conversation> StartNewConversation(
         UserId ownerId,
         string? titleOrNull,
-        IClock clock)
+        TimeProvider timeProvider)
     {
         try
         {
@@ -78,7 +77,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             CheckRule(new TitleProvidedMustBeValidRule(titleOrNull));
 
             var conversationId = ConversationId.New();
-            var now = clock.UtcNow;
+            var now = timeProvider.GetUtcNow();
             
             // Process title - if provided, validate it; if null/empty, keep as null
             string? processedTitle = null;
@@ -129,7 +128,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// <summary>
     /// Appends a user message to the conversation.
     /// </summary>
-    public Result<Message> AppendUserMessageToConversation(MessageContent content, IClock clock)
+    public Result<Message> AppendUserMessageToConversation(MessageContent content, TimeProvider timeProvider)
     {
         try
         {
@@ -142,8 +141,8 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             // Additional domain rule: Validate message content meets domain standards
             CheckRule(new MessageContentMeetsDomainStandardsRule(content.Value));
 
-            var now = clock.UtcNow;
-            var message = CreateAndAddUserMessage(content, now);
+            var now = timeProvider.GetUtcNow();
+            var message = CreateAndAddUserMessage(content);
             
             RaiseUserMessageEvent(message, content.Value, now);
 
@@ -195,7 +194,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     public Result<Message> AppendAssistantResponseToConversation(
         MessageContent content, 
         AiResponseId aiResponseId,
-        IClock clock)
+        TimeProvider timeProvider)
     {
         try
         {
@@ -216,8 +215,8 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             if (existingMessage != null)
                 return Result<Message>.Success(existingMessage);
 
-            var now = clock.UtcNow;
-            var message = CreateAndAddAssistantMessage(content, aiResponseId, now);
+            var now = timeProvider.GetUtcNow();
+            var message = CreateAndAddAssistantMessage(content, aiResponseId);
             
             RaiseAssistantMessageEvent(message, content.Value, aiResponseId, now);
 
@@ -256,7 +255,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// <summary>
     /// Creates assistant message and adds to conversation.
     /// </summary>
-    private Message CreateAndAddAssistantMessage(MessageContent content, AiResponseId aiResponseId, DateTimeOffset now)
+    private Message CreateAndAddAssistantMessage(MessageContent content, AiResponseId aiResponseId)
     {
         var sequence = MessageCount + 1;
         var message = Message.CreateAssistantMessage(Id, content, sequence, aiResponseId);
@@ -282,7 +281,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// Updates the conversation title with a user-provided value.
     /// For title updates, empty titles are not allowed (unlike creation).
     /// </summary>
-    public Result<Unit> UpdateTitle(string newTitleValue, IClock clock)
+    public Result<Unit> UpdateTitle(string newTitleValue, TimeProvider timeProvider)
     {
         try
         {
@@ -294,7 +293,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             if (titleResult.IsFailure)
                 return Result<Unit>.Failure(titleResult.Error);
             
-            var now = clock.UtcNow;
+            var now = timeProvider.GetUtcNow();
             Title = titleResult.Value.Value;
             MarkUpdated();
 
@@ -315,14 +314,14 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// <summary>
     /// Completes the conversation, preventing further messages.
     /// </summary>
-    public Result<Unit> Complete(IClock clock)
+    public Result<Unit> Complete(TimeProvider timeProvider)
     {
         try
         {
             CheckRule(new ConversationMustBeActiveRule(Status));
             CheckRule(new CompletionRequiresAtLeastOneMessageRule(MessageCount));
 
-            var now = clock.UtcNow;
+            var now = timeProvider.GetUtcNow();
             Status = ConversationStatus.Completed;
             MarkUpdated();
 

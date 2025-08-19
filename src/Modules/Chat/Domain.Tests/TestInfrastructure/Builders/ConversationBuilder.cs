@@ -2,7 +2,7 @@ using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.Events;
 using Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Time;
-using BuildingBlocks.Core.Abstractions.Time;
+
 using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Core.Domain.Primitives;
@@ -18,7 +18,7 @@ namespace Axon.Modules.Chat.Domain.Tests.TestInfrastructure.Builders;
 public sealed class ConversationBuilder
 {
     private readonly UserId _ownerId;
-    private readonly IClock _clock;
+    private readonly TimeProvider _timeProvider;
     private string? _title;
     private Conversation? _conversation;
     
@@ -28,11 +28,11 @@ public sealed class ConversationBuilder
     // Default to stable test values
     public ConversationBuilder(
         UserId? ownerId = null, 
-        IClock? clock = null, 
+        TimeProvider? timeProvider = null, 
         string? title = null)
     {
         _ownerId = ownerId ?? UserId.New();
-        _clock = clock ?? FixedClock.At("2025-01-01T00:00:00Z");
+        _timeProvider = timeProvider ?? FixedClock.At(DateTimeOffset.Parse("2025-01-01T00:00:00Z"));
         _title = title; // null = empty title (default behavior)
     }
 
@@ -42,9 +42,9 @@ public sealed class ConversationBuilder
     public static ConversationBuilder WithOwner(UserId ownerId) => new(ownerId);
 
     /// <summary>
-    /// Creates a new builder with specified clock.
+    /// Creates a new builder with specified time provider.
     /// </summary>
-    public static ConversationBuilder WithClock(IClock clock) => new(clock: clock);
+    public static ConversationBuilder WithClock(TimeProvider timeProvider) => new(timeProvider: timeProvider);
 
     /// <summary>
     /// Creates a new builder with specified title.
@@ -63,17 +63,17 @@ public sealed class ConversationBuilder
     {
         if (_conversation != null)
             throw new InvalidOperationException("Cannot change owner after conversation is started");
-        return new ConversationBuilder(ownerId, _clock, _title);
+        return new ConversationBuilder(ownerId, _timeProvider, _title);
     }
 
     /// <summary>
-    /// Updates the clock for this builder.
+    /// Updates the time provider for this builder.
     /// </summary>
-    public ConversationBuilder SetClock(IClock clock)
+    public ConversationBuilder SetClock(TimeProvider timeProvider)
     {
         if (_conversation != null)
-            throw new InvalidOperationException("Cannot change clock after conversation is started");
-        return new ConversationBuilder(_ownerId, clock, _title);
+            throw new InvalidOperationException("Cannot change time provider after conversation is started");
+        return new ConversationBuilder(_ownerId, timeProvider, _title);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public sealed class ConversationBuilder
     {
         if (_conversation != null)
             throw new InvalidOperationException("Cannot change initial title after conversation is started");
-        return new ConversationBuilder(_ownerId, _clock, title);
+        return new ConversationBuilder(_ownerId, _timeProvider, title);
     }    /// <summary>
     /// Starts the conversation. Must be called before any append operations.
     /// Returns the started conversation for further operations.
@@ -93,7 +93,7 @@ public sealed class ConversationBuilder
         if (_conversation != null)
             throw new InvalidOperationException("Conversation already started");
 
-        var result = Conversation.Start(_ownerId, _title, _clock);
+        var result = Conversation.StartNewConversation(_ownerId, _title, _timeProvider);
         if (result.IsFailure)
             throw new InvalidOperationException($"Failed to start conversation: {result.Error.Message}");
 
@@ -115,7 +115,7 @@ public sealed class ConversationBuilder
         if (contentResult.IsFailure)
             throw new InvalidOperationException($"Invalid content: {contentResult.Error.Message}");
 
-        var result = _conversation!.AppendUserMessage(contentResult.Value, _clock);
+        var result = _conversation!.AppendUserMessageToConversation(contentResult.Value, _timeProvider);
         if (result.IsFailure)
             throw new InvalidOperationException($"Failed to append user message: {result.Error.Message}");
 
@@ -136,7 +136,7 @@ public sealed class ConversationBuilder
         if (contentResult.IsFailure)
             throw new InvalidOperationException($"Invalid content: {contentResult.Error.Message}");
 
-        var result = _conversation!.AppendAssistantMessage(contentResult.Value, _clock);
+        var result = _conversation!.AppendAssistantResponseToConversation(contentResult.Value, AiResponseId.New(), _timeProvider);
         if (result.IsFailure)
             throw new InvalidOperationException($"Failed to append assistant message: {result.Error.Message}");
 
@@ -156,7 +156,7 @@ public sealed class ConversationBuilder
         if (contentResult.IsFailure)
             return Result<int>.Failure(contentResult.Error);
 
-        var result = _conversation!.AppendUserMessage(contentResult.Value, _clock);
+        var result = _conversation!.AppendUserMessageToConversation(contentResult.Value, _timeProvider);
         if (result.IsSuccess)
         {
             _capturedEvents.AddRange(_conversation.GetDomainEvents());
@@ -176,7 +176,7 @@ public sealed class ConversationBuilder
         if (contentResult.IsFailure)
             return Result<int>.Failure(contentResult.Error);
 
-        var result = _conversation!.AppendAssistantMessage(contentResult.Value, _clock);
+        var result = _conversation!.AppendAssistantResponseToConversation(contentResult.Value, AiResponseId.New(), _timeProvider);
         if (result.IsSuccess)
         {
             _capturedEvents.AddRange(_conversation.GetDomainEvents());
@@ -194,7 +194,7 @@ public sealed class ConversationBuilder
     {
         EnsureStarted();
         
-        var result = _conversation!.Complete(_clock);
+        var result = _conversation!.Complete(_timeProvider);
         if (result.IsFailure)
             throw new InvalidOperationException($"Failed to complete conversation: {result.Error.Message}");
 
@@ -210,7 +210,7 @@ public sealed class ConversationBuilder
     {
         EnsureStarted();
         
-        var result = _conversation!.Complete(_clock);
+        var result = _conversation!.Complete(_timeProvider);
         if (result.IsSuccess)
         {
             _capturedEvents.AddRange(_conversation.GetDomainEvents());
@@ -227,7 +227,7 @@ public sealed class ConversationBuilder
     {
         EnsureStarted();
         
-        var result = _conversation!.UpdateTitle(newTitle, _clock);
+        var result = _conversation!.UpdateTitle(newTitle, _timeProvider);
         if (result.IsSuccess)
         {
             _capturedEvents.AddRange(_conversation.GetDomainEvents());

@@ -1,3 +1,4 @@
+
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Primitives;
 
@@ -12,27 +13,21 @@ public abstract class AuditableEntity<TId> : Entity<TId>, IAuditable
 {
     protected AuditableEntity(TId id) : base(id)
     {
-        CreatedAt = DateTimeOffset.UtcNow;
-        UpdatedAt = CreatedAt;
+        var now = TimeProvider.System.GetUtcNow();
+        CreatedAt = now;
+        UpdatedAt = now;
     }
 
     /// <summary>
     /// Parameterless ctor for ORM materialization only.
     /// </summary>
-    protected AuditableEntity() : base()
-    {
-    }
+    protected AuditableEntity() : base() { }
 
-    public DateTimeOffset CreatedAt { get; protected set; }
-    public DateTimeOffset? UpdatedAt { get; protected set; }
+    public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset? UpdatedAt { get; private set; }
 
-    /// <summary>
-    /// Call when entity is updated to refresh UpdatedAt timestamp.
-    /// Infrastructure typically overwrites this on save, but calling
-    /// MarkUpdated keeps intent explicit.
-    /// </summary>
-    protected void MarkUpdated()
-    {
-        UpdatedAt = DateTimeOffset.UtcNow;
-    }
+    /// <summary>Mark entity as updated (infra can also overwrite on save).</summary>
+    protected void MarkUpdated() => UpdatedAt = TimeProvider.System.GetUtcNow();
+
+    protected void MarkCreated() => CreatedAt = TimeProvider.System.GetUtcNow();
 }

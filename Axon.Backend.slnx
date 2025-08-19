@@ -25,6 +25,9 @@
   <Folder Name="/src/Modules/Chat/Primitives/">
     <Project Path="src/Modules/Chat/Primitives/Axon.Modules.Chat.Primitives.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Chat/ReadModels/">
+    <Project Path="src/Modules/Chat/ReadModels/Axon.Modules.Chat.ReadModels.csproj" />
+  </Folder>
 
   <Folder Name="/tests/" />
   <Folder Name="/tests/Api.Tests/">

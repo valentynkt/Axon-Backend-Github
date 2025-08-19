@@ -35,6 +35,8 @@
     <ProjectReference Include="../Domain/Axon.Modules.Chat.Domain.csproj" />
     <!-- Reference Primitives for shared Value Objects -->
     <ProjectReference Include="..\Primitives\Axon.Modules.Chat.Primitives.csproj" />
+    <!-- Reference ReadModels for OData DTOs -->
+    <ProjectReference Include="..\ReadModels\Axon.Modules.Chat.ReadModels.csproj" />
     <!-- Reference BuildingBlocks for infrastructure patterns -->
     <ProjectReference Include="../../../BuildingBlocks/BuildingBlocks.csproj" />
   </ItemGroup>

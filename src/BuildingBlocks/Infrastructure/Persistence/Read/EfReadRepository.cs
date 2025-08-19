@@ -1,15 +1,13 @@
-using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
 using BuildingBlocks.Application;
-using BuildingBlocks.Core.Abstractions.Pagination;
 using Microsoft.EntityFrameworkCore;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Read;
 
 /// <summary>
 /// Generic Entity Framework read repository implementation
-/// Optimized for queries with no tracking
+/// Optimized for OData queries with no tracking
 /// </summary>
 public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId>
     where TReadModel : class
@@ -25,6 +23,80 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _dbSet = _context.Set<TReadModel>();
+    }
+
+    // ——— Query builder (for OData) ———
+    public virtual IQueryable<TReadModel> Query(Expression<Func<TReadModel, bool>>? predicate = null)
+    {
+        var query = _dbSet.AsNoTracking();
+        
+        // Apply user-scoped security filter (override in derived classes)
+        query = ApplyUserScopeFilter(query);
+        
+        // Apply additional predicate if provided
+        if (predicate != null)
+            query = query.Where(predicate);
+        
+        // Apply stable ordering (always end with Id for cursor stability)
+        // This ensures consistent pagination with $skiptoken
+        query = ApplyStableOrdering(query);
+        
+        return query;
+    }
+
+    /// <summary>
+    /// Override this to apply user-scoped filtering
+    /// </summary>
+    protected virtual IQueryable<TReadModel> ApplyUserScopeFilter(IQueryable<TReadModel> query)
+    {
+        // Default: no filtering (override in derived classes for security)
+        return query;
+    }
+
+    /// <summary>
+    /// Apply stable ordering for consistent pagination
+    /// </summary>
+    protected virtual IQueryable<TReadModel> ApplyStableOrdering(IQueryable<TReadModel> query)
+    {
+        // Try to find UpdatedAt property
+        var updatedAtProperty = typeof(TReadModel).GetProperty("UpdatedAt");
+        if (updatedAtProperty != null)
+        {
+            var parameter = Expression.Parameter(typeof(TReadModel), "x");
+            var property = Expression.Property(parameter, updatedAtProperty);
+            var lambda = Expression.Lambda(property, parameter);
+
+            var orderByMethod = typeof(Queryable).GetMethods()
+                .First(m => m.Name == "OrderBy" && m.GetParameters().Length == 2)
+                .MakeGenericMethod(typeof(TReadModel), updatedAtProperty.PropertyType);
+
+            query = (IQueryable<TReadModel>)orderByMethod.Invoke(null, new object[] { query, lambda })!;
+        }
+
+        // Always end with Id for stable ordering
+        var idProperty = GetIdProperty();
+        var idParameter = Expression.Parameter(typeof(TReadModel), "x");
+        var idPropertyAccess = Expression.Property(idParameter, idProperty);
+        var idLambda = Expression.Lambda(idPropertyAccess, idParameter);
+
+        var thenByMethod = typeof(Queryable).GetMethods()
+            .First(m => m.Name == "ThenBy" && m.GetParameters().Length == 2)
+            .MakeGenericMethod(typeof(TReadModel), idProperty.PropertyType);
+
+        if (updatedAtProperty != null)
+        {
+            query = (IQueryable<TReadModel>)thenByMethod.Invoke(null, new object[] { query, idLambda })!;
+        }
+        else
+        {
+            var orderByIdMethod = typeof(Queryable).GetMethods()
+                .First(m => m.Name == "OrderBy" && m.GetParameters().Length == 2)
+                .MakeGenericMethod(typeof(TReadModel), idProperty.PropertyType);
+
+            query = (IQueryable<TReadModel>)orderByIdMethod.Invoke(null, new object[] { query, idLambda })!;
+        }
+
+        return query;
     }
 
     // ——— Simple fetches ———
@@ -84,75 +156,6 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
         return result.AsReadOnly();
     }
 
-    // ——— Paged / filtered ———
-    public virtual async Task<IPageList<TReadModel>> GetPagedAsync<TPageRequest>(
-        TPageRequest request,
-        CancellationToken ct = default)
-        where TPageRequest : IPageRequest
-    {
-        var query = _dbSet.AsNoTracking();
-        
-        // Apply sorting if request implements ISortablePageQuery
-        if (request is ISortablePageQuery<TReadModel> sortableQuery && sortableQuery.EffectiveSortBy != null)
-        {
-            query = ApplySorting(query, sortableQuery.EffectiveSortBy);
-        }
-
-        var totalItems = await query.CountAsync(ct);
-        
-        var items = await query
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ToListAsync(ct);
-
-        var meta = PaginationMeta.CreateWithTotals(
-            totalItems,
-            request.PageNumber,
-            request.PageSize,
-            items.Count);
-
-        return new PageList<TReadModel>(
-            items,
-            request.PageNumber,
-            request.PageSize,
-            totalItems,
-            meta);
-    }
-
-    public virtual async Task<IPageList<TReadModel>> GetPagedAsync(
-        Expression<Func<TReadModel, bool>>? predicate,
-        int pageNumber,
-        int pageSize,
-        CancellationToken ct = default)
-    {
-        var query = _dbSet.AsNoTracking();
-        
-        if (predicate != null)
-        {
-            query = query.Where(predicate);
-        }
-
-        var totalItems = await query.CountAsync(ct);
-        
-        var items = await query
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(ct);
-
-        var meta = PaginationMeta.CreateWithTotals(
-            totalItems,
-            pageNumber,
-            pageSize,
-            items.Count);
-
-        return new PageList<TReadModel>(
-            items,
-            pageNumber,
-            pageSize,
-            totalItems,
-            meta);
-    }
-
     // ——— Aggregate functions ———
     public virtual async Task<long> CountAsync(
         Expression<Func<TReadModel, bool>>? predicate = null,
@@ -193,45 +196,6 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     }
 
     // ——— H e l p e r  M e t h o d s ———
-    private static IQueryable<TReadModel> ApplySorting(IQueryable<TReadModel> query, IReadOnlyList<SortCriteria> sortCriteria)
-    {
-        if (sortCriteria.Count == 0) return query;
-
-        IOrderedQueryable<TReadModel>? ordered = null;
-
-        foreach (var criteria in sortCriteria)
-        {
-            var parameter = Expression.Parameter(typeof(TReadModel), "x");
-
-            // Allow nested property paths ("Foo.Bar.Baz")
-            Expression property = parameter;
-            foreach (var part in criteria.PropertyName.Split('.'))
-            {
-                var prop = property.Type.GetProperty(
-                    part,
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                           ?? throw new ArgumentException($"Property '{part}' not found on '{property.Type.Name}'");
-
-                property = Expression.Property(property, prop);
-            }
-
-            var lambda = Expression.Lambda(property, parameter);
-
-            var methodName =
-                ordered == null
-                    ? (criteria.Direction == SortDirection.Asc ? "OrderBy" : "OrderByDescending")
-                    : (criteria.Direction == SortDirection.Asc ? "ThenBy" : "ThenByDescending");
-
-            var method = typeof(Queryable).GetMethods()
-                .First(m => m.Name == methodName && m.GetParameters().Length == 2)
-                .MakeGenericMethod(typeof(TReadModel), property.Type);
-
-            ordered = (IOrderedQueryable<TReadModel>)method.Invoke(null, new object[] { ordered ?? query, lambda })!;
-        }
-
-        return ordered ?? query;
-    }
-
     protected virtual PropertyInfo GetIdProperty()
     {
         var idProperty = typeof(TReadModel).GetProperty("Id");
@@ -270,34 +234,4 @@ public class EfReadRepository<TReadModel> : EfReadRepository<TReadModel, Guid>, 
     where TReadModel : class
 {
     public EfReadRepository(DbContext context) : base(context) { }
-}
-
-internal class PageList<T> : IPageList<T>, IEnumerable
-{
-    private readonly List<T> _items;
-
-    public PageList(IEnumerable<T> items, int pageNumber, int pageSize, long totalItems, PaginationMeta meta)
-    {
-        _items = items?.ToList() ?? new List<T>();
-        PageNumber = pageNumber;
-        PageSize = pageSize;
-        TotalItems = totalItems;
-        Meta = meta;
-        TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
-    }
-
-    public IReadOnlyList<T> Items => _items.AsReadOnly();
-    public PaginationMeta Meta { get; }
-    public int PageNumber { get; }
-    public int PageSize { get; }
-    public long TotalItems { get; }
-    public int TotalPages { get; }
-    public bool HasPreviousPage => PageNumber > 1;
-    public bool HasNextPage => PageNumber < TotalPages;
-
-    public T this[int index] => _items[index];
-    public int Count => _items.Count;
-
-    public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
