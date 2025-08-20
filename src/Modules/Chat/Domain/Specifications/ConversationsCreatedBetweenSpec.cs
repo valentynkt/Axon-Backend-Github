@@ -1,28 +1,18 @@
-using System.Linq.Expressions;
-using BuildingBlocks.Core.Domain.Specifications;
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Domain/Specifications/ConversationsCreatedBetweenSpec.cs
+#nullable enable
+using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
 internal sealed class ConversationsCreatedBetweenSpec : Specification<Conversation>
 {
-    private readonly DateTimeOffset _fromUtc;
-    private readonly DateTimeOffset _toUtc;
-
     public ConversationsCreatedBetweenSpec(DateTimeOffset fromUtc, DateTimeOffset toUtc)
     {
-        // Normalize: if fromUtc > toUtc, swap for ergonomics
-        if (fromUtc > toUtc)
-        {
-            (_fromUtc, _toUtc) = (toUtc, fromUtc);
-        }
-        else
-        {
-            _fromUtc = fromUtc;
-            _toUtc = toUtc;
-        }
-    }
+        if (fromUtc > toUtc) (fromUtc, toUtc) = (toUtc, fromUtc);
+        var from = fromUtc;
+        var to   = toUtc;
 
-    public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.CreatedAt >= _fromUtc && c.CreatedAt <= _toUtc;
+        Query.Where(c => c.CreatedAt >= from && c.CreatedAt <= to);
+    }
 }

@@ -1,18 +1,15 @@
-using System.Linq.Expressions;
-using BuildingBlocks.Core.Domain.Specifications;
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Domain/Specifications/ConversationsUpdatedSinceSpec.cs
+#nullable enable
+using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
 internal sealed class ConversationsUpdatedSinceSpec : Specification<Conversation>
 {
-    private readonly DateTimeOffset _sinceUtc;
-
     public ConversationsUpdatedSinceSpec(DateTimeOffset sinceUtc)
     {
-        _sinceUtc = sinceUtc;
+        var since = sinceUtc;
+        Query.Where(c => (c.UpdatedAt ?? c.CreatedAt) >= since);
     }
-
-    public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.UpdatedAt >= _sinceUtc;
 }

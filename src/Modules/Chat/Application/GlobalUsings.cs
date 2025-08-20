@@ -5,7 +5,7 @@ global using MediatR;
 global using FluentValidation;
 global using Microsoft.Extensions.Logging;
 global using Microsoft.EntityFrameworkCore;
-global using BuildingBlocks.Core.Functional.Results;
+global 
 global using BuildingBlocks.Core.Diagnostics.Errors;
 global using BuildingBlocks.Core.Abstractions.CQRS;
 global using Axon.Modules.Chat.Domain.ValueObjects;

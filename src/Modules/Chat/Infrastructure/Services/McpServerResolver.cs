@@ -2,7 +2,7 @@ using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Infrastructure.Configuration;
  
-using BuildingBlocks.Core.Functional.Results;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

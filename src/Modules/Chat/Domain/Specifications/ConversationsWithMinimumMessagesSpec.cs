@@ -1,19 +1,16 @@
-using System.Linq.Expressions;
-using BuildingBlocks.Core.Domain.Specifications;
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Domain/Specifications/ConversationsWithMinimumMessagesSpec.cs
+#nullable enable
+using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
 internal sealed class ConversationsWithMinimumMessagesSpec : Specification<Conversation>
 {
-    private readonly int _minCount;
-
     public ConversationsWithMinimumMessagesSpec(int minCount)
     {
-        // Clamp negative values to 0
-        _minCount = Math.Max(0, minCount);
+        var min = Math.Max(0, minCount);
+        // Uses the aggregate's computed MessageCount; ensure your infra can translate or map accordingly.
+        Query.Where(c => c.MessageCount >= min);
     }
-
-    public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.MessageCount >= _minCount;
 }

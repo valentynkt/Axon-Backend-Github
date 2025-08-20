@@ -1,18 +1,14 @@
-using System.Linq.Expressions;
-using BuildingBlocks.Core.Domain.Specifications;
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Domain/Specifications/ConversationsByStatusSpec.cs
+#nullable enable
+using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
 internal sealed class ConversationsByStatusSpec : Specification<Conversation>
 {
-    private readonly ConversationStatus _status;
-
     public ConversationsByStatusSpec(ConversationStatus status)
     {
-        _status = status;
+        Query.Where(c => c.Status == status);
     }
-
-    public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.Status == _status;
 }

@@ -9,7 +9,7 @@ using Axon.Modules.Chat.Application.DTOs;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Functional.Results;
+
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using FastEndpoints;

@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
 namespace BuildingBlocks.Web.Mappers;
@@ -16,5 +16,5 @@ public interface IRequestMapper<in TRequest, TCommand>
     /// <param name="request">The HTTP request</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A Result containing the mapped command or validation errors</returns>
-    Task<Result<TCommand>> MapAsync(TRequest request, CancellationToken cancellationToken = default);
+    Task<Result<TCommand, Error>> MapAsync(TRequest request, CancellationToken cancellationToken = default);
 }

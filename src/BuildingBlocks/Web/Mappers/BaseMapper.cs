@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
@@ -19,19 +19,19 @@ public abstract class BaseMapper
     /// <summary>
     /// Creates a validation error result for mapping failures.
     /// </summary>
-    protected static Result<T> ValidationError<T>(string code, string message)
+    protected static Result<T, Error> ValidationError<T>(string message, string code = "VALIDATION_ERROR")
     {
-        var error = BuildingBlocks.Core.Diagnostics.Errors.Error.Validation(code, message);
-        return Result<T>.Failure(error);
+        var error = Error.Validation(message, code);
+        return Result.Failure<T, Error>(error);
     }
 
     /// <summary>
     /// Creates a validation error result for missing required values.
     /// </summary>
-    protected static Result<T> RequiredValueMissing<T>(string fieldName)
+    protected static Result<T, Error> RequiredValueMissing<T>(string fieldName)
     {
         return ValidationError<T>(
-            "REQUIRED_VALUE_MISSING",
-            $"Required field '{fieldName}' is missing or invalid");
+            $"Required field '{fieldName}' is missing or invalid",
+            "REQUIRED_VALUE_MISSING");
     }
 }

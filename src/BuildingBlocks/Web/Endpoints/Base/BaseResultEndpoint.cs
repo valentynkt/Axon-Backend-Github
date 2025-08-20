@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Extensions;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
@@ -50,7 +50,7 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
         {
             LogRequestFailed(ex);
             await HttpContext.SendProblemDetailsAsync(
-                BuildingBlocks.Core.Diagnostics.Errors.Error.Internal(
+                Error.Internal(
                     $"An unexpected error occurred: {ex.Message}",
                     "UNEXPECTED_ERROR",
                     ex),
@@ -64,5 +64,5 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
     /// <param name="request">The incoming request</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A Result containing the response or an error</returns>
-    protected abstract Task<Result<TResponse>> ExecuteAsync(TRequest request, CancellationToken cancellationToken);
+    protected abstract Task<Result<TResponse, Error>> ExecuteAsync(TRequest request, CancellationToken cancellationToken);
 }

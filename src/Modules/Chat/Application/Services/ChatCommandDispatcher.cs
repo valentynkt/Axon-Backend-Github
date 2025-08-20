@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+
 using Axon.Api.Contracts.Chat;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Commands.StartConversation;

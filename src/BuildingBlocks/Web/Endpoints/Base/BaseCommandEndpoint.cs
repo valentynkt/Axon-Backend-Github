@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Mappers;
 using CSharpFunctionalExtensions;
 using MediatR;
@@ -34,25 +34,25 @@ public abstract class BaseCommandEndpoint<TRequest, TResponse, TCommand, TComman
         ResponseMapper = responseMapper ?? throw new ArgumentNullException(nameof(responseMapper));
     }
 
-    protected override async Task<Result<TResponse>> ExecuteAsync(TRequest request, CancellationToken cancellationToken)
+    protected override async Task<Result<TResponse, Error>> ExecuteAsync(TRequest request, CancellationToken cancellationToken)
     {
         // Map HTTP request to domain command
         var commandResult = await RequestMapper.MapAsync(request, cancellationToken);
         if (commandResult.IsFailure)
-            return Result<TResponse>.Failure(commandResult.Error);
+            return Result.Failure<TResponse, Error>(commandResult.Error);
 
         // Execute the command via MediatR
         var result = await Mediator.Send(commandResult.Value, cancellationToken);
-        if (result is Result<TCommandResult> typedResult)
+        if (result is Result<TCommandResult, Error> typedResult)
         {
             if (typedResult.IsFailure)
-                return Result<TResponse>.Failure(typedResult.Error);
+                return Result.Failure<TResponse, Error>(typedResult.Error);
 
             // Map domain result to HTTP response
             var responseResult = await ResponseMapper.MapAsync(typedResult.Value, cancellationToken);
             return responseResult;
         }
 
-        throw new InvalidOperationException($"Command {typeof(TCommand).Name} must return Result<{typeof(TCommandResult).Name}>");
+        throw new InvalidOperationException($"Command {typeof(TCommand).Name} must return Result<{typeof(TCommandResult).Name}, Error>");
     }
 }

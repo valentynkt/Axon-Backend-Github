@@ -1,21 +1,15 @@
-using System.Linq.Expressions;
-using BuildingBlocks.Core.Domain.Specifications;
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Domain/Specifications/ConversationsByOwnerSpec.cs
+#nullable enable
+using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using Axon.Modules.Chat.Domain.ValueObjects;
-;
 using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
 internal sealed class ConversationsByOwnerSpec : Specification<Conversation>
 {
-    private readonly UserId _ownerId;
-
     public ConversationsByOwnerSpec(UserId ownerId)
     {
-        _ownerId = ownerId ?? throw new ArgumentNullException(nameof(ownerId));
+        Query.Where(c => c.OwnerId == ownerId);
     }
-
-    public override Expression<Func<Conversation, bool>> ToExpression()
-        => c => c.OwnerId == _ownerId;
 }

@@ -2,7 +2,7 @@
 
 using Axon.Api.Contracts.Chat;
 using Axon.BuildingBlocks.Core.Constants;
-using Axon.Modules.Chat.Primitives.Constants;
+
 using FastEndpoints;
 using FluentValidation;
 

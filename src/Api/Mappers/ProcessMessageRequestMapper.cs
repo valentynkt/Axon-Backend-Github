@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+
 using BuildingBlocks.Web.Mappers;
 using Axon.Api.Contracts.Chat;
 using Axon.Modules.Chat.Application.Services;

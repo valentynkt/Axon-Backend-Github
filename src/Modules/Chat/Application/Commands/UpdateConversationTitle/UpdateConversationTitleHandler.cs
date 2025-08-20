@@ -7,7 +7,7 @@ using CSharpFunctionalExtensions;
 
 ;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Functional.Results;
+
 using BuildingBlocks.Primitives.Ids;
 using FastEndpoints;
 using Microsoft.Extensions.Logging;

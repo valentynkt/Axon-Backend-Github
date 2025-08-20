@@ -26,6 +26,10 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 {
     private readonly List<Message> _messages = new();
 
+// Queryable, read-only navigation for EF/specs.
+// Mutations still go through aggregate methods; EF maps the backing field.
+    public IReadOnlyCollection<Message> Messages => _messages;
+
     // Core state
     public UserId OwnerId { get; private set; }
     public ConversationStatus Status { get; private set; }

@@ -1,5 +1,5 @@
 using Axon.Modules.Chat.Application.DTOs;
-using BuildingBlocks.Core.Functional.Results;
+
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Abstractions.AI;

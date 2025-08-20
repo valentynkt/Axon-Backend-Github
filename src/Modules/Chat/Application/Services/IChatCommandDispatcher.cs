@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+
 using Axon.Api.Contracts.Chat;
 using CSharpFunctionalExtensions;
 

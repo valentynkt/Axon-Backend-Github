@@ -26,4 +26,8 @@
     <Folder Include="Events\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Ardalis.Specification" Version="9.3.0" />
+  </ItemGroup>
+
 </Project>

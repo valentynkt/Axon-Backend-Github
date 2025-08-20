@@ -11,7 +11,7 @@ namespace BuildingBlocks.Web.Endpoints.Base;
 public abstract class BaseEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse>
     where TRequest : notnull
 {
-    protected ILogger Logger { get; }
+    protected new ILogger Logger { get; }
 
     protected BaseEndpoint(ILogger logger)
     {

@@ -1,4 +1,4 @@
-using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
 namespace BuildingBlocks.Web.Mappers;
@@ -16,5 +16,5 @@ public interface IResponseMapper<in TDomainResult, TResponse>
     /// <param name="domainResult">The domain result</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A Result containing the mapped response</returns>
-    Task<Result<TResponse>> MapAsync(TDomainResult domainResult, CancellationToken cancellationToken = default);
+    Task<Result<TResponse, Error>> MapAsync(TDomainResult domainResult, CancellationToken cancellationToken = default);
 }

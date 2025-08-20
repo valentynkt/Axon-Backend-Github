@@ -1,24 +1,18 @@
-using System.Linq.Expressions;
-using BuildingBlocks.Core.Domain.Specifications;
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Domain/Specifications/ConversationTitleContainsSpec.cs
+#nullable enable
+using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using Axon.Modules.Chat.Domain.Internal.Text;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
 internal sealed class ConversationTitleContainsSpec : Specification<Conversation>
 {
-    private readonly string _normalizedTerm;
-
     public ConversationTitleContainsSpec(string? term)
     {
-        _normalizedTerm = TextSlices.NormalizeForSearchConst(term);
-    }
+        if (string.IsNullOrWhiteSpace(term))
+            return;
 
-    public override Expression<Func<Conversation, bool>> ToExpression()
-    {
-        if (_normalizedTerm == string.Empty)
-            return c => true;
-
-        return c => c.Title != null && c.Title.ToLowerInvariant().Contains(_normalizedTerm);
+        var lowered = term.Trim().ToLowerInvariant();
+        Query.Where(c => c.Title != null && c.Title.ToLower().Contains(lowered));
     }
 }

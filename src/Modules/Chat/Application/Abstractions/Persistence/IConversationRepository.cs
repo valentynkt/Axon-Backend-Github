@@ -1,6 +1,4 @@
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using Axon.Modules.Chat.Domain.ValueObjects;
-;
 using BuildingBlocks.Application;
 using BuildingBlocks.Primitives.Ids;
 
