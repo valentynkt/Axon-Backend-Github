@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using Axon.Api.Configuration;
 using Axon.Modules.Chat.ReadModels;
@@ -13,6 +14,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddApplicationServices(builder.Configuration);
+
+// Configure JSON serialization options
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    // No need to add converters for IDs/VOs; attributes handle it per type
+});
 
 // Add API versioning and OData
 builder.Services.AddApiVersioning(options =>

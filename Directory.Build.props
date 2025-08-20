@@ -4,7 +4,8 @@
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-
+        <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
+        
         <!-- Analyzers: newest rules but allow warnings in development -->
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>          <!-- strictest, evolves with SDK -->

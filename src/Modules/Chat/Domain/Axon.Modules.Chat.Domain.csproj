@@ -15,7 +15,6 @@
     <!-- Only reference BuildingBlocks for domain core functionality -->
     <ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.csproj" />
     <!-- Reference Primitives for shared Value Objects -->
-    <ProjectReference Include="..\Primitives\Axon.Modules.Chat.Primitives.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -22,13 +22,8 @@
   <Folder Name="/src/Modules/Chat/Infrastructure/">
     <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/src/Modules/Chat/Primitives/">
-    <Project Path="src/Modules/Chat/Primitives/Axon.Modules.Chat.Primitives.csproj" />
-  </Folder>
-  <Folder Name="/src/Modules/Chat/ReadModels/">
-    <Project Path="src/Modules/Chat/ReadModels/Axon.Modules.Chat.ReadModels.csproj" />
-  </Folder>
-
+  <Folder Name="/src/Modules/Chat/Primitives/" />
+  <Folder Name="/src/Modules/Chat/ReadModels/" />
   <Folder Name="/tests/" />
   <Folder Name="/tests/Api.Tests/">
     <Project Path="tests/Api.Tests/Axon.Api.Tests.csproj" />
@@ -42,8 +37,5 @@
   <Folder Name="/tests/Modules.Chat.Application.Tests/">
     <Project Path="tests/Modules.Chat.Application.Tests/Axon.Modules.Chat.Application.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Modules.Chat.Domain.Tests/">
-    <Project Path="src/Modules/Chat/Domain.Tests/Axon.Modules.Chat.Domain.Tests.csproj" />
-  </Folder>
-
+  <Folder Name="/tests/Modules.Chat.Domain.Tests/" />
 </Solution>

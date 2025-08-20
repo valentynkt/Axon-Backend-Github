@@ -1,5 +1,4 @@
 using Axon.Modules.Chat.Application.Common;
-using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;

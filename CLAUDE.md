@@ -68,8 +68,27 @@ src/
 - **MediatR** - CQRS command/query dispatch
 - **FluentValidation** - Request validation
 - **Entity Framework Core 9.0** - ORM with PostgreSQL
+- **System.Text.Json** - API serialization with custom converters
 - **OpenTelemetry** - Observability and monitoring
 - **xUnit** - Testing framework
+
+### JSON Serialization Configuration
+
+Both generators decorate types with a concrete `[JsonConverter]`, so you do not need to register custom converters globally.
+
+For standard API JSON settings (camelCase, enums as strings, etc.):
+
+```csharp
+// During web host setup
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    // No need to add converters for your IDs/VOs; attributes handle it per type.
+});
+```
+
+This keeps your pipeline clean and avoids reflection-based "catch-all" converters.
 
 ## Development Guidelines
 
