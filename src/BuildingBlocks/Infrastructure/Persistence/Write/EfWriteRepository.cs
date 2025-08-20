@@ -1,7 +1,6 @@
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Primitives;
 using Microsoft.EntityFrameworkCore;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Write;
@@ -12,7 +11,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// </summary>
 public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, TId>
     where TAggregate : class, IAggregateRoot<TId>
-    where TId : IStrongId
+    where TId : notnull
 {
     private readonly DbContext _context;
     private readonly DbSet<TAggregate> _dbSet;
@@ -159,8 +158,8 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 }
 
-public class EfWriteRepository<TAggregate> : EfWriteRepository<TAggregate, StrongId<Guid>>, IWriteRepository<TAggregate>
-    where TAggregate : class, IAggregateRoot<StrongId<Guid>>
+public class EfWriteRepository<TAggregate> : EfWriteRepository<TAggregate, Guid>, IWriteRepository<TAggregate>
+    where TAggregate : class, IAggregateRoot<Guid>
 {
     public EfWriteRepository(DbContext context) : base(context) { }
 }

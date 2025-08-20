@@ -19,7 +19,7 @@ internal sealed class ConversationMustHaveOwnerRule : BusinessRule
         _ownerId = ownerId;
     }
 
-    public override bool IsBroken() => _ownerId == null || _ownerId.Value == Guid.Empty;
+    public override bool IsBroken() => _ownerId.Value == Guid.Empty;
 
     public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 
         => ValueTask.FromResult(IsBroken());

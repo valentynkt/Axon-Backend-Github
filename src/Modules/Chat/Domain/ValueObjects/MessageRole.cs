@@ -1,90 +1,65 @@
+// /Axon/Modules/Chat/Domain/ValueObjects/MessageRole.cs
+#nullable enable
+using BuildingBlocks.Application.Exceptions;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Functional;
-using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional.Validation;
 using CSharpFunctionalExtensions;
-using MediatR;
+using Vogen;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;
 
 /// <summary>
-/// Represents a message role with validation rules.
-/// - Only allows "user" and "assistant" roles (case-insensitive)
-/// - Provides convenience properties for role checking
+/// Message role as a validated value object (Vogen).
+/// Allowed values (case-insensitive input, canonical storage):
+/// - "user"
+/// - "assistant"
 /// </summary>
-public sealed record MessageRole : ValueObject
+[ValueObject<string>(
+    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
+public readonly partial struct MessageRole
 {
-    private const string UserRole = "user";
-    private const string AssistantRole = "assistant";
-    
-    public string Value { get; }
-    public bool IsUser => string.Equals(Value, UserRole, StringComparison.OrdinalIgnoreCase);
-    public bool IsAssistant => string.Equals(Value, AssistantRole, StringComparison.OrdinalIgnoreCase);
+    public const string UserValue      = "user";
+    public const string AssistantValue = "assistant";
 
-    private MessageRole(string value)
-    {
-        Value = value;
-    }
+    /// <summary>Normalize inputs before validation (trim + lower-invariant).</summary>
+    private static string NormalizeInput(string input) => input.Trim().ToLowerInvariant();
 
-    /// <summary>
-    /// Predefined User role
-    /// </summary>
-    public static MessageRole User => new(UserRole);
+    /// <summary>Validate normalized input.</summary>
+    private static Validation Validate(string input)
+        => input is UserValue or AssistantValue
+            ? Validation.Ok
+            : Validation.Invalid("Invalid message role (allowed: user, assistant).");
 
-    /// <summary>
-    /// Predefined Assistant role
-    /// </summary>
-    public static MessageRole Assistant => new(AssistantRole);
+    /// <summary>Convenience: is this "user"?</summary>
+    public bool IsUser => Value == UserValue;
 
-    /// <summary>
-    /// Creates a MessageRole from string with case-insensitive validation.
-    /// </summary>
-    /// <param name="value">The role value to validate</param>
-    /// <returns>Success with MessageRole or failure with validation error</returns>
-    public static Result<MessageRole> FromString(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return Result<MessageRole>.Failure(
-                Error.Validation("Invalid message role (allowed: user, assistant)", "CHAT.ROLE.INVALID"));
-        }
+    /// <summary>Convenience: is this "assistant"?</summary>
+    public bool IsAssistant => Value == AssistantValue;
 
-        var trimmedValue = value.Trim();
-
-        // Check if it's a valid role (case-insensitive)
-        if (string.Equals(trimmedValue, UserRole, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result<MessageRole>.Success(new MessageRole(UserRole));
-        }
-
-        if (string.Equals(trimmedValue, AssistantRole, StringComparison.OrdinalIgnoreCase))
-        {
-            return Result<MessageRole>.Success(new MessageRole(AssistantRole));
-        }
-
-        return Result<MessageRole>.Failure(
-            Error.Validation("Invalid message role (allowed: user, assistant)", "CHAT.ROLE.INVALID"));
-    }
-
-    protected override IEnumerable<object?> GetEqualityComponents()
-    {
-        yield return Value;
-    }
-
-    public override ValidationResult<Unit> Validate()
-    {
-        var errors = new List<Error>();
-
-        if (!IsUser && !IsAssistant)
-        {
-            errors.Add(Error.Validation("Invalid message role (allowed: user, assistant)", "CHAT.ROLE.INVALID"));
-        }
-
-        return errors.Count == 0 
-            ? Validation.Valid(Unit.Value)
-            : Validation.Invalid<Unit>(errors);
-    }
+    /// <summary>Predefined canonical roles.</summary>
+    public static MessageRole User      => From(UserValue);
+    public static MessageRole Assistant => From(AssistantValue);
 
     public override string ToString() => Value;
+
+    /// <summary>
+    /// Non-throwing factory bridging Vogen to CFE <c>Result</c>.
+    /// Accepts any casing, trims whitespace, stores canonical lowercase.
+    /// </summary>
+    public static Result<MessageRole, Error> FromString(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Result.Failure<MessageRole, Error>(
+                Error.Validation("Invalid message role (allowed: user, assistant).", "CHAT.ROLE.INVALID"));
+
+        try
+        {
+            var vo = From(value); // Vogen will normalize + validate
+            return Result.Success<MessageRole, Error>(vo);
+        }
+        catch (ValidationException vex)
+        {
+            return Result.Failure<MessageRole, Error>(
+                Error.Validation(vex.Message, "CHAT.ROLE.INVALID"));
+        }
+    }
 }

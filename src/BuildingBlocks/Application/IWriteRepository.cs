@@ -10,7 +10,7 @@ namespace BuildingBlocks.Application;
 /// </summary>
 public interface IWriteRepository<TAggregate, TId> : IDisposable
     where TAggregate : class, IAggregateRoot<TId>
-    where TId : struct
+    where TId : notnull
 {
     // C R E A T E
     Task<TAggregate> AddAsync(TAggregate aggregate, CancellationToken ct = default);
@@ -32,4 +32,12 @@ public interface IWriteRepository<TAggregate, TId> : IDisposable
     Task<bool> ExistsAsync(TId id, CancellationToken ct = default);
     Task<bool> AnyAsync(Expression<Func<TAggregate, bool>> predicate, CancellationToken ct = default);
     Task<bool> AnyAsync(CancellationToken ct); // convenience
+}
+
+/// <summary>
+/// Convenience shortcut for Guid keys.
+/// </summary>
+public interface IWriteRepository<TAggregate> : IWriteRepository<TAggregate, Guid>
+    where TAggregate : class, IAggregateRoot<Guid>
+{
 }

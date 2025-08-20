@@ -1,86 +1,70 @@
+// /Axon/Modules/Chat/Domain/ValueObjects/ConversationTitle.cs
+#nullable enable
 using Axon.BuildingBlocks.Core.Constants;
+using BuildingBlocks.Application.Exceptions;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Functional;
-using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Core.Functional.Validation;
-using Axon.Modules.Chat.Domain.Constants;
-using Axon.Modules.Chat.Primitives.Constants;
 using CSharpFunctionalExtensions;
-using MediatR;
+using Vogen;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;
 
 /// <summary>
-/// Represents a conversation title with validation rules.
-/// - Allows empty strings (MVP defaulting path)
-/// - Trims leading/trailing whitespace while preserving internal whitespace and case
-/// - Maximum length of 120 characters
+/// Conversation title as a validated value object (Vogen).
+/// Rules:
+/// - Trim leading/trailing whitespace
+/// - Must be non-empty after trimming
+/// - Max length: <see cref="ConversationTitle.MaxLength"/>
+/// Generated converters: System.Text.Json, TypeConverter, EF Core.
 /// </summary>
-public sealed record ConversationTitle : ValueObject
+[ValueObject<string>(
+    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
+public readonly partial struct ConversationTitle
 {
     private const int MaxLength = ChatPrimitiveConstants.ConversationTitleDefault.MaxLength;
-    
-    public string Value { get; }
+
+    /// <summary>Normalize inputs before validation.</summary>
+    private static string NormalizeInput(string input) => input.Trim();
+
+    /// <summary>Validate normalized input.</summary>
+    private static Validation Validate(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return Validation.Invalid("Title cannot be empty.");
+
+        if (input.Length > MaxLength)
+            return Validation.Invalid($"Title cannot exceed {MaxLength} characters. Current length: {input.Length}.");
+
+        return Validation.Ok;
+    }
+
+    /// <summary>Length convenience.</summary>
     public int Length => Value.Length;
-    public bool IsEmpty => string.IsNullOrEmpty(Value);
 
-    private ConversationTitle(string value)
-    {
-        Value = value;
-    }
-
-    /// <summary>
-    /// Empty conversation title for default scenarios
-    /// </summary>
-    public static ConversationTitle Empty => new(string.Empty);
-
-    /// <summary>
-    /// Creates a ConversationTitle with validation.
-    /// </summary>
-    /// <param name="value">The title value to validate</param>
-    /// <returns>Success with ConversationTitle or failure with validation error</returns>
-    public static Result<ConversationTitle> Create(string? value)
-    {
-        if (value is null)
-        {
-            return Result<ConversationTitle>.Failure(
-                Error.Validation("Title is invalid", "CHAT.TITLE.INVALID"));
-        }
-
-        // Trim leading/trailing whitespace but preserve internal whitespace and case
-        var trimmedValue = value.Trim();
-
-        // Empty string is allowed (MVP defaulting path)
-        if (trimmedValue.Length == 0)
-        {
-            return Result<ConversationTitle>.Success(new ConversationTitle(trimmedValue));
-        }
-
-        // Check maximum length
-        if (trimmedValue.Length > MaxLength)
-            return Result<ConversationTitle>.Failure(
-                Error.Validation($"Title cannot exceed {MaxLength} characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
-
-        return Result<ConversationTitle>.Success(new ConversationTitle(trimmedValue));
-    }
-
-    protected override IEnumerable<object?> GetEqualityComponents()
-    {
-        yield return Value;
-    }
-
-    public override ValidationResult<Unit> Validate()
-    {
-        var errors = new List<Error>();
-
-        if (Value.Length > MaxLength)
-            errors.Add(Error.Validation($"Title cannot exceed {MaxLength} characters.", "CHAT.CONVERSATION.TITLE.TOO_LONG"));
-
-        return errors.Count == 0 
-            ? Validation.Valid(Unit.Value)
-            : Validation.Invalid<Unit>(errors);
-    }
+    /// <summary>Simple preview with hard cutoff (no ellipsis).</summary>
+    public string Preview(int maxLength = ChatPrimitiveConstants.ConversationDefault.ContentPreviewLength)
+        => maxLength <= 0 ? string.Empty : (Value.Length <= maxLength ? Value : Value[..maxLength]);
 
     public override string ToString() => Value;
+
+    /// <summary>
+    /// Non-throwing factory bridging Vogen to CFE <c>Result</c>.
+    /// </summary>
+    public static Result<ConversationTitle, Error> Create(string? value)
+    {
+        if (value is null)
+            return Result.Failure<ConversationTitle, Error>(
+                Error.Validation("Title is required.", "CHAT.CONVERSATION.TITLE.REQUIRED"));
+
+        try
+        {
+            // Vogen validates via NormalizeInput + Validate
+            var vo = From(value);
+            return Result.Success<ConversationTitle, Error>(vo);
+        }
+        catch (ValidationException vex)
+        {
+            return Result.Failure<ConversationTitle, Error>(
+                Error.Validation(vex.Message, "CHAT.CONVERSATION.TITLE.INVALID"));
+        }
+    }
 }

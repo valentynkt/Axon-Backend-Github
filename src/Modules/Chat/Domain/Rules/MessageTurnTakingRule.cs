@@ -20,7 +20,7 @@ internal sealed class MessageTurnTakingRule : BusinessRule
             code: "CHAT.MESSAGE.TURN.VIOLATION")
     {
         _messages = messages ?? new List<Message>();
-        _newRole = newRole ?? throw new ArgumentNullException(nameof(newRole));
+        _newRole = newRole;
     }
 
     public override bool IsBroken()
