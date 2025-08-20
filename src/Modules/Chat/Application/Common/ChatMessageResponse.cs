@@ -1,4 +1,4 @@
-using Axon.Modules.Chat.Primitives.ValueObjects;
+;
 using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Application.Common;

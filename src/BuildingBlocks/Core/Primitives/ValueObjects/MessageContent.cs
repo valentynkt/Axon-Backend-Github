@@ -17,7 +17,7 @@ namespace Axon.BuildingBlocks.Core.Primitives.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct MessageContent
 {
-    private const int MaxLength = ChatPrimitiveConstants.MessageContent.MaxLength;
+    private const int MaxLength = ChatPrimitiveConstants.MessageContentDefault.MaxLength;
 
     // Vogen will call this before Validate and before storing the value
     private static string NormalizeInput(string input) => input.Trim();
@@ -35,7 +35,7 @@ public readonly partial struct MessageContent
     }
 
     /// <summary>Preview (no ellipsis; hard cutoff).</summary>
-    public string Preview(int maxLength = ChatPrimitiveConstants.Conversation.ContentPreviewLength)
+    public string Preview(int maxLength = ChatPrimitiveConstants.ConversationDefault.ContentPreviewLength)
         => maxLength <= 0 ? string.Empty : (Value.Length <= maxLength ? Value : Value[..maxLength]);
 
     public override string ToString() => Value;

@@ -62,14 +62,6 @@
     <PackageReference Include="Scrutor" Version="6.1.0" />
     <PackageReference Include="Sieve" Version="2.5.5" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.58" />
-    <PackageReference Include="StronglyTypedId" Version="1.0.0-beta08" />
-    <PackageReference Include="StronglyTypedId.Attributes" Version="1.0.0-beta04" />
-    <PackageReference Include="StronglyTypedId.Generator" Version="0.2.1">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="StronglyTypedId.Templates" Version="1.0.0-beta08" />
-    <PackageReference Include="StronglyTypedIds.EFConverters" Version="1.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="9.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="9.0.3" />
@@ -134,13 +126,11 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Core\Abstractions\Events\" />
-    <Folder Include="Core\Domain\Events\" />
-    <Folder Include="Web\Endpoints\" />
-    <Folder Include="Web\Middleware\" />
+    <!-- StronglyTypedId: Source generator + attributes (compile-time only) -->
+    <PackageReference Include="StronglyTypedId" Version="1.0.0-beta08" PrivateAssets="all" ExcludeAssets="runtime" />
+    <!-- Community templates: "guid-full", "guid-efcore", "guid-dapper", etc. -->
+    <PackageReference Include="StronglyTypedId.Templates" Version="1.0.0-beta08" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
 
 </Project>

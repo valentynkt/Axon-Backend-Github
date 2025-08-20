@@ -7,6 +7,7 @@ using Axon.Modules.Chat.Application.Abstractions.AI;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Errors;
 using BuildingBlocks.Core.Functional.Results;
+using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

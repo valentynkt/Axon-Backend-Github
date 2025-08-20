@@ -37,6 +37,6 @@ internal sealed class AssistantResponseContentValidRule : BusinessRule
         return false;
     }
 
-    public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 
+    public override ValueTask<bool> IsBrokenAsync(CancellationToken cancellationToken = default) 
         => ValueTask.FromResult(IsBroken());
 }

@@ -28,7 +28,8 @@ public static class ServiceRegistration
     /// <returns>Service collection for chaining</returns>
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         // Add controllers (MVC)
         services.AddControllers();
@@ -46,8 +47,8 @@ public static class ServiceRegistration
             config.RegisterServicesFromAssembly(typeof(Modules.Chat.Application.Commands.StartConversation.StartConversationCommand).Assembly);
         });
         
-        // Register pipeline behaviors - commented out for POC
-        // services.AddPipelineBehaviors(configuration, environment);
+        // Register pipeline behaviors
+        services.AddPipelineBehaviors(configuration, environment);
         
         // Add FluentValidation
         services.AddValidatorsFromAssembly(

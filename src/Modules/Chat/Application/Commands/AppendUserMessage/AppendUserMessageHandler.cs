@@ -1,5 +1,7 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.AI;
+using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.Common;
 using Axon.Modules.Chat.Application.DTOs;
@@ -9,6 +11,7 @@ using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Primitives.Ids;
+using CSharpFunctionalExtensions;
 using FastEndpoints;
 using Microsoft.Extensions.Logging;
 

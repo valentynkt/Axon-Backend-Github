@@ -1,0 +1,222 @@
+# Axon Backend - Product Requirements Document
+
+## Project Overview
+Axon Backend is a sophisticated Modular Monolith application built on .NET 10 preview, following Clean Architecture, Domain-Driven Design (DDD), and CQRS patterns. The system is designed for high scalability, maintainability, and clear separation of concerns.
+
+## Architecture & Design Patterns
+
+### Core Architectural Principles
+- **Modular Monolith**: Self-contained modules with clear boundaries
+- **Clean Architecture**: Domain → Application → Infrastructure → API layer separation
+- **Domain-Driven Design (DDD)**: Rich domain models, aggregates, entities, value objects
+- **CQRS Pattern**: Command Query Responsibility Segregation using MediatR
+- **Result Pattern**: Functional error handling with Result<T> and Validation<T>
+- **Strong Typing**: Type-safe identifiers using StrongId<T> pattern
+- **Functional Programming**: Immutable records, Result/Option monads
+
+### Technology Stack
+- **.NET 10.0** (preview 5.25277.114) - Latest C# features
+- **FastEndpoints** - High-performance minimal API framework
+- **MediatR** - CQRS implementation and command/query dispatch
+- **FluentValidation** - Request validation pipeline
+- **Entity Framework Core 9.0** - ORM with PostgreSQL support
+- **System.Text.Json** - High-performance JSON serialization
+- **OpenTelemetry** - Observability and distributed tracing
+- **xUnit** - Testing framework
+- **FluentAssertions** - Readable test assertions
+- **Testcontainers** - Integration testing with real databases
+- **NSubstitute** - Mocking framework
+
+## Project Structure
+
+### Solution Organization
+```
+src/
+├── Api/                    # HTTP host layer
+│   ├── Endpoints/          # FastEndpoints implementations
+│   ├── Contracts/          # Request/response DTOs
+│   ├── Configuration/      # Service registration and setup
+│   └── Program.cs          # Application entry point
+│
+├── BuildingBlocks/         # Shared technical infrastructure
+│   ├── Core/              # Domain primitives and abstractions
+│   │   ├── Abstractions/  # CQRS interfaces, idempotency
+│   │   ├── Domain/        # Domain events, entities, aggregates
+│   │   ├── Functional/    # Result pattern, Option types
+│   │   └── Types/         # Strong IDs, value objects
+│   │
+│   ├── Application/       # Application layer components
+│   │   ├── Behaviors/     # MediatR pipeline behaviors
+│   │   ├── Configuration/ # Service extensions
+│   │   ├── Observability/ # Telemetry and monitoring
+│   │   └── Validation/    # FluentValidation integration
+│   │
+│   ├── Infrastructure/    # Infrastructure concerns
+│   │   ├── Persistence/   # EF Core configurations
+│   │   ├── Caching/       # Distributed caching
+│   │   └── Resilience/    # Polly policies
+│   │
+│   └── Web/              # Web-specific components
+│       ├── Endpoints/     # Base endpoint classes
+│       └── ProblemDetails/# Error response formatting
+│
+└── Modules/               # Business modules (bounded contexts)
+    └── Identity/          # User identity and authentication
+        ├── Domain/        # Identity aggregates and entities
+        ├── Application/   # Identity commands and queries
+        └── Infrastructure/# Identity persistence
+```
+
+## Core Features & Requirements
+
+### 1. Domain Modeling
+- **Rich Domain Models**: Business logic encapsulated in domain entities
+- **Aggregates**: Consistency boundaries with invariant protection
+- **Value Objects**: Immutable types for domain concepts
+- **Domain Events**: Event-driven architecture support
+- **Strong IDs**: Type-safe identifiers (UserId, OrderId, etc.)
+
+### 2. CQRS Implementation
+- **Commands**: State-changing operations with validation
+- **Queries**: Read operations with pagination support
+- **Handlers**: Isolated business logic processing
+- **Pipeline Behaviors**: Cross-cutting concerns (validation, logging, idempotency)
+
+### 3. Error Handling
+- **Result Pattern**: Explicit error handling without exceptions
+- **Validation**: Input validation with detailed error messages
+- **Problem Details**: RFC 7807 compliant error responses
+- **Domain Errors**: Business rule violations as first-class citizens
+
+### 4. API Design
+- **FastEndpoints**: Performance-optimized minimal APIs
+- **Request/Response DTOs**: Clear contract definitions
+- **Versioning**: API version management strategy
+- **OpenAPI/Swagger**: Auto-generated documentation
+
+### 5. Persistence Layer
+- **Entity Framework Core 9**: Code-first approach
+- **PostgreSQL**: Primary database
+- **Migrations**: Database schema versioning
+- **Repositories**: Abstraction over data access
+- **Unit of Work**: Transaction management
+
+### 6. Observability
+- **OpenTelemetry**: Distributed tracing
+- **Structured Logging**: Contextual logging with Serilog
+- **Metrics**: Performance and business metrics
+- **Health Checks**: Liveness and readiness probes
+
+### 7. Testing Strategy
+- **Unit Tests**: Domain logic validation
+- **Integration Tests**: API endpoint testing
+- **Testcontainers**: Real database testing
+- **Test Data Builders**: Maintainable test fixtures
+
+## Development Guidelines
+
+### Code Standards
+- **File-scoped namespaces**: Modern C# syntax
+- **Records for DTOs**: Immutable data transfer objects
+- **Target-typed new**: Simplified object creation
+- **Nullable reference types**: Explicit null handling
+- **Primary constructors**: Streamlined class definitions
+
+### Patterns to Follow
+1. **Result Pattern Usage**
+   - All domain operations return Result<T>
+   - No exceptions for expected failures
+   - Clear error propagation
+
+2. **Strong ID Pattern**
+   - All entity IDs use StrongId<T>
+   - Type safety at compile time
+   - Prevents ID mix-ups
+
+3. **Clean Architecture Layers**
+   - Domain has no dependencies
+   - Application depends only on Domain
+   - Infrastructure implements Application interfaces
+   - API orchestrates and configures all layers
+
+4. **Module Boundaries**
+   - No shared kernel between modules
+   - Clear public contracts
+   - Internal implementation details hidden
+
+### Build Configuration
+- **Warnings as Errors**: Enabled in Release mode
+- **AOT Analysis**: Library compatibility verification
+- **Deterministic Builds**: Reproducible outputs
+- **XML Documentation**: Auto-generated for all public APIs
+
+## Current Development Focus
+
+### Immediate Priorities
+1. **Identity Module Completion**
+   - User registration and authentication
+   - JWT token management
+   - Role-based authorization
+   - Password reset functionality
+
+2. **Observability Enhancement**
+   - Complete OpenTelemetry integration
+   - Custom metrics implementation
+   - Distributed tracing setup
+   - Performance monitoring
+
+3. **Testing Infrastructure**
+   - Integration test base classes
+   - Test container setup
+   - Fixture management
+   - Coverage reporting
+
+### Future Modules
+1. **Chat Module**: Real-time messaging system
+2. **Notification Module**: Email and push notifications  
+3. **Payment Module**: Transaction processing
+4. **Analytics Module**: Business intelligence
+
+## Technical Debt & Improvements
+1. Migrate fully to .NET 10 stable when released
+2. Implement distributed caching strategy
+3. Add API rate limiting
+4. Implement event sourcing for audit trails
+5. Add GraphQL support alongside REST
+
+## Performance Requirements
+- API response time: < 200ms (p95)
+- Database query time: < 50ms (p95)
+- Concurrent users: 10,000+
+- Throughput: 1000 requests/second
+
+## Security Requirements
+- JWT-based authentication
+- Role-based authorization (RBAC)
+- API key management for external services
+- Input validation and sanitization
+- SQL injection prevention
+- XSS protection
+- CORS configuration
+
+## Deployment & Infrastructure
+- Docker containerization
+- Kubernetes orchestration
+- PostgreSQL database
+- Redis for caching
+- CI/CD with GitHub Actions
+- Azure/AWS cloud deployment ready
+
+## Success Metrics
+- Code coverage > 80%
+- Zero critical security vulnerabilities
+- API availability > 99.9%
+- Build time < 2 minutes
+- Deployment time < 5 minutes
+
+## Development Workflow
+1. Feature branch development
+2. Pull request with code review
+3. Automated testing pipeline
+4. Continuous integration
+5. Staged deployments (dev → staging → production)

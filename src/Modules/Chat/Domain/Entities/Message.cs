@@ -1,6 +1,7 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using BuildingBlocks.Core.Domain.Primitives;
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Modules.Chat.Primitives.ValueObjects;
+;
 using BuildingBlocks.Core.Domain.Entities.Base;
 using BuildingBlocks.Primitives.Ids;
 
@@ -35,9 +36,9 @@ public sealed class Message : AuditableDeletableEntity<MessageId>
         AiResponseId? aiResponseId)
         : base(id)
     {
-        ConversationId = conversationId ?? throw new ArgumentNullException(nameof(conversationId));
+        ConversationId = conversationId;
         Role = role ?? throw new ArgumentNullException(nameof(role));
-        Content = content ?? throw new ArgumentNullException(nameof(content));
+        Content = content;
         Sequence = sequence;
         AiResponseId = aiResponseId;
         

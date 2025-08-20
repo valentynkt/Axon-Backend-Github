@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using BuildingBlocks.Core.Domain.Rules;
 
 namespace Axon.Modules.Chat.Domain.Rules;
@@ -20,7 +21,4 @@ internal sealed class CompletionRequiresAtLeastOneMessageRule : BusinessRule
     }
 
     public override bool IsBroken() => _messageCount == 0;
-
-    public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 
-        => ValueTask.FromResult(IsBroken());
 }

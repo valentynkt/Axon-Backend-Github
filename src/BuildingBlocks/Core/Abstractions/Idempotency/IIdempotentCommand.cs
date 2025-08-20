@@ -12,6 +12,9 @@ public interface IIdempotentCommand
 
     /// <summary>Override cache window per request. Null → options.DefaultWindow.</summary>
     TimeSpan? GetIdempotencyWindow() => null;
+
+    /// <summary>Whether to cache failures in addition to successes. Default is false (success-only).</summary>
+    bool CacheFailures => false;
 }
 
 /// <summary>Typed idempotent command.</summary>

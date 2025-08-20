@@ -6,6 +6,7 @@ using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
 using Axon.Modules.Chat.Domain.Constants;
 using Axon.Modules.Chat.Primitives.Constants;
+using CSharpFunctionalExtensions;
 using MediatR;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;
@@ -18,7 +19,7 @@ namespace Axon.Modules.Chat.Domain.ValueObjects;
 /// </summary>
 public sealed record ConversationTitle : ValueObject
 {
-    private const int MaxLength = ChatPrimitiveConstants.ConversationTitle.MaxLength;
+    private const int MaxLength = ChatPrimitiveConstants.ConversationTitleDefault.MaxLength;
     
     public string Value { get; }
     public int Length => Value.Length;

@@ -1,9 +1,10 @@
 // /BuildingBlocks/Application/Behaviors/QueryCachingBehavior.cs
 #nullable enable
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using BuildingBlocks.Application.Caching;
+using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Core.Abstractions.CQRS.Policies;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
@@ -22,22 +23,23 @@ public sealed class QueryCachingBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>
     where TRequest : IQuery<TValue>, ICacheableQuery
 {
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     private readonly IMemoryCache _memory;
     private readonly IDistributedCache? _distributed;
+    private readonly ICurrentUserService? _currentUserService;
     private readonly ILogger<QueryCachingBehavior<TRequest, TValue>> _logger;
 
     public QueryCachingBehavior(
         IMemoryCache memory,
         ILogger<QueryCachingBehavior<TRequest, TValue>> logger,
-        IDistributedCache? distributed = null)
-    { _memory = memory; _logger = logger; _distributed = distributed; }
+        IDistributedCache? distributed = null,
+        ICurrentUserService? currentUserService = null)
+    { 
+        _memory = memory; 
+        _logger = logger; 
+        _distributed = distributed;
+        _currentUserService = currentUserService;
+    }
 
     public async Task<Result<TValue, Error>> Handle(
         TRequest request,
@@ -48,7 +50,7 @@ public sealed class QueryCachingBehavior<TRequest, TValue>
         var ttl = request.CacheDuration ?? TimeSpan.FromMinutes(5);
         if (ttl <= TimeSpan.Zero) return await next();
 
-        var key = BuildKeySafe(request);
+        var key = CacheKeyBuilder.BuildKey(request, _currentUserService);
 
         if (_memory.TryGetValue(key, out TValue? l1) && l1 is not null)
         {
@@ -61,7 +63,7 @@ public sealed class QueryCachingBehavior<TRequest, TValue>
             var raw = await _distributed.GetStringAsync(key, ct);
             if (!string.IsNullOrWhiteSpace(raw))
             {
-                var value = JsonSerializer.Deserialize<TValue>(raw, Json)!;
+                var value = JsonSerializer.Deserialize<TValue>(raw, CacheSerializationOptions.Default)!;
                 _memory.Set(key, value, ttl);
                 _logger.LogDebug("Query cache L2 hit {Key}", key);
                 return Result.Success<TValue, Error>(value);
@@ -79,7 +81,7 @@ public sealed class QueryCachingBehavior<TRequest, TValue>
         _memory.Set(key, valueToCache, ttl);
         if (_distributed is not null)
         {
-            var payload = JsonSerializer.Serialize(valueToCache, Json);
+            var payload = JsonSerializer.Serialize(valueToCache, CacheSerializationOptions.Default);
             await _distributed.SetStringAsync(key, payload, new DistributedCacheEntryOptions
             { AbsoluteExpirationRelativeToNow = ttl }, ct);
         }
@@ -88,29 +90,5 @@ public sealed class QueryCachingBehavior<TRequest, TValue>
         return result;
     }
 
-    private static string BuildKeySafe(TRequest request)
-    {
-        var prefix = string.IsNullOrWhiteSpace(request.CacheKeyPrefix) ? typeof(TRequest).Name : request.CacheKeyPrefix!;
-        try
-        {
-            var json = JsonSerializer.Serialize(request, Json);
-            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
-            return $"q:{prefix}:{hash[..16]}";
-        }
-        catch
-        {
-            // Fallback: type name + hash of ToString()
-            var fallback = request.ToString() ?? typeof(TRequest).FullName ?? typeof(TRequest).Name;
-            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fallback))).ToLowerInvariant();
-            return $"q:{prefix}:{hash[..16]}";
-        }
-    }
 }
 
-/// <summary>Explicit opt-in contract for query caching.</summary>
-public interface ICacheableQuery
-{
-    bool UseCache { get; }
-    TimeSpan? CacheDuration { get; }
-    string? CacheKeyPrefix { get; }
-}

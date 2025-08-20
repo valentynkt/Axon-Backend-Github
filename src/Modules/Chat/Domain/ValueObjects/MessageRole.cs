@@ -3,6 +3,7 @@ using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
+using CSharpFunctionalExtensions;
 using MediatR;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;

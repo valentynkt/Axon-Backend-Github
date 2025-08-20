@@ -1,48 +1,58 @@
-using BuildingBlocks.Application.Behaviors;
-using BuildingBlocks.Core.Idempotency;
+// /BuildingBlocks/Application/Behaviors/PipelineBehaviorExtensions.cs
+#nullable enable
+using System;
+using System.Reflection;
+using FluentValidation;
 using MediatR;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
-namespace BuildingBlocks.Application.Configuration;
+namespace BuildingBlocks.Application.Behaviors;
 
+/// <summary>
+/// Registers all Application pipeline behaviors in the correct execution order
+/// (outer → inner) and wires up FluentValidation validators.
+/// 
+/// Execution order:
+/// 1) ObservabilityBehavior        – tracing/metrics/logging
+/// 2) RequestValidationBehavior    – FluentValidation (fail-fast)
+/// 3) QueryCachingBehavior         – L1/L2 read-through cache (queries only)
+/// 4) QueryRetryBehavior           – Polly-native retry (queries w/ [Retryable])
+/// 5) IdempotencyBehavior          – success-only cache for commands
+/// 6) UnitOfWorkBehavior           – transactional commit on success (commands)
+/// 7) Handler
+/// 
+/// Notes:
+/// - Registration order matters in MediatR; earlier is outermost.
+/// - Validators: pass specific assemblies to limit scanning, or omit to scan all loaded assemblies.
+/// </summary>
 public static class PipelineBehaviorExtensions
 {
-    public static IServiceCollection AddPipelineBehaviors(
-        this IServiceCollection services, IConfiguration config, IHostEnvironment env)
+    /// <summary>
+    /// Add Axon pipeline behaviors and register FluentValidation validators.
+    /// </summary>
+    /// <param name="services">DI container</param>
+    /// <param name="validatorAssemblies">
+    /// Optional assemblies to scan for FluentValidation validators.
+    /// If empty, all currently loaded assemblies are scanned.
+    /// </param>
+    public static IServiceCollection AddApplicationPipelineBehaviors(
+        this IServiceCollection services,
+        params Assembly[] validatorAssemblies)
     {
-        services.AddCachingServices();
-        
-        // Always: observability outermost
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior_Result<,>));
+        // 1) Validators (FluentValidation)
+        var assembliesToScan = (validatorAssemblies is { Length: > 0 })
+            ? validatorAssemblies
+            : AppDomain.CurrentDomain.GetAssemblies();
 
-        // Optional: lightweight logging
-        var enableReqLogging =
-            config.GetValue<bool?>("Pipeline:EnableRequestLogging")
-            ?? env.IsDevelopment(); // default: dev-only
+        services.AddValidatorsFromAssemblies(assembliesToScan, includeInternalTypes: true);
 
-        if (enableReqLogging)
-            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestLoggingBehavior<,>));
-
-        // Resilience (queries only)
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryRetryBehavior<,>));
-
-     // Startup/Composition root
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior_Result<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior_Unit<>));
-
-
-        // Idempotency (commands only)
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
-
-        // Caching + invalidation
+        // 2) MediatR pipeline (outer → inner)
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
-        
-
-        // Innermost safety net
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ExceptionHandlingBehavior<,>));
-
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryRetryBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(UnitOfWorkBehavior<,>));
 
         return services;
     }

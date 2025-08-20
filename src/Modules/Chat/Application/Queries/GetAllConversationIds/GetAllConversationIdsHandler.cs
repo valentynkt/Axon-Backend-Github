@@ -1,7 +1,10 @@
+using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.Persistence;
+using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Primitives.Ids;
+using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Queries.GetAllConversationIds;
 

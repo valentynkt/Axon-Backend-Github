@@ -4,6 +4,7 @@ using Axon.Api.Contracts.Chat;
 using BuildingBlocks.Web.Endpoints.Base;
 using BuildingBlocks.Core.Functional.Results;
 using Axon.Modules.Chat.Application.Services;
+using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Api.Endpoints.Chat;

@@ -9,7 +9,7 @@ public static class ChatPrimitiveConstants
     /// <summary>
     /// Message content limits
     /// </summary>
-    public static class MessageContent
+    public static class MessageContentDefault
     {
         /// <summary>
         /// Maximum length for message content in characters
@@ -20,7 +20,7 @@ public static class ChatPrimitiveConstants
     /// <summary>
     /// Conversation title limits  
     /// </summary>
-    public static class ConversationTitle
+    public static class ConversationTitleDefault
     {
         /// <summary>
         /// Maximum length for conversation title in characters
@@ -31,7 +31,7 @@ public static class ChatPrimitiveConstants
     /// <summary>
     /// AI Response ID limits
     /// </summary>
-    public static class AiResponseId
+    public static class AiResponseIdDefault
     {
         /// <summary>
         /// Maximum length for AI response ID in characters
@@ -47,7 +47,7 @@ public static class ChatPrimitiveConstants
     /// <summary>
     /// Conversation limits
     /// </summary>
-    public static class Conversation
+    public static class ConversationDefault
     {
         /// <summary>
         /// Maximum number of messages per conversation

@@ -14,7 +14,7 @@ public sealed class ProcessMessageValidator : Validator<ProcessMessageRequest>
     {
         RuleFor(x => x.Message)
             .NotEmpty().WithMessage("Message is required.")
-            .MaximumLength(ChatPrimitiveConstants.MessageContent.MaxLength)
-            .WithMessage($"Message cannot exceed {ChatPrimitiveConstants.MessageContent.MaxLength} characters.");
+            .MaximumLength(ChatPrimitiveConstants.MessageContentDefault.MaxLength)
+            .WithMessage($"Message cannot exceed {ChatPrimitiveConstants.MessageContentDefault.MaxLength} characters.");
     }
 }

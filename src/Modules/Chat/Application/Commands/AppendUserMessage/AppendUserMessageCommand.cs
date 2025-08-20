@@ -1,6 +1,8 @@
 // File: /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Application/Commands/AppendUserMessage/AppendUserMessageCommand.cs
+
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Common;
-using Axon.Modules.Chat.Primitives.ValueObjects;
+;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using BuildingBlocks.Primitives.Ids;
 

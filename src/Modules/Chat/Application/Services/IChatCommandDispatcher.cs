@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Functional.Results;
 using Axon.Api.Contracts.Chat;
+using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Services;
 

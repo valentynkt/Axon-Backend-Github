@@ -12,7 +12,7 @@ namespace Axon.Api.Contracts.Chat;
 public sealed class ProcessMessageRequest
 {
     /// <summary>User message (required).</summary>
-    [Required, MinLength(1), MaxLength(ChatPrimitiveConstants.MessageContent.MaxLength)]
+    [Required, MinLength(1), MaxLength(ChatPrimitiveConstants.MessageContentDefault.MaxLength)]
     public string Message { get; init; } = string.Empty;
 
     /// <summary>

@@ -1,6 +1,7 @@
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Web.Mappers;
 using Axon.Api.Contracts.Chat;
+using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Api.Mappers;

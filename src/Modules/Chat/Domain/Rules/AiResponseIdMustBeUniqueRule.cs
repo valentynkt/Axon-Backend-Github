@@ -1,6 +1,6 @@
 using Axon.Modules.Chat.Domain.Entities;
-using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Domain.Rules;
+using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
@@ -17,7 +17,7 @@ internal sealed class AiResponseIdMustBeUniqueRule : BusinessRule
             message: "AI Response ID must be unique within the conversation to prevent duplicate responses.",
             code: "CHAT.AI.RESPONSE.ID.DUPLICATE")
     {
-        _aiResponseId = aiResponseId ?? throw new ArgumentNullException(nameof(aiResponseId));
+        _aiResponseId = aiResponseId;
         _existingMessages = existingMessages ?? throw new ArgumentNullException(nameof(existingMessages));
     }
 

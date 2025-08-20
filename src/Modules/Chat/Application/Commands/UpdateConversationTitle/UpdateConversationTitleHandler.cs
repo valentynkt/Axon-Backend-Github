@@ -2,7 +2,10 @@ using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Modules.Chat.Primitives.ValueObjects;
+using BuildingBlocks.Core.Abstractions.Authentication;
+using CSharpFunctionalExtensions;
+
+;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Primitives.Ids;

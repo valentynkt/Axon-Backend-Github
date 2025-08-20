@@ -1,11 +1,15 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.AI;
+using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.Common;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
+using CSharpFunctionalExtensions;
 
-using Axon.Modules.Chat.Primitives.ValueObjects;
+;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Domain.Primitives;
@@ -103,7 +107,7 @@ public sealed class StartConversationHandler
             if (resolved is { Length: > 0 })
                 mcpConfigs = resolved;
         }
-        catch (Exception ex)
+        catch (TelemetryTags.Tracing.Exception ex)
         {
             _logger.LogWarning(ex,
                 "Failed to resolve MCP servers for conversation {ConversationId}. Continuing without MCP.",
@@ -192,7 +196,7 @@ public sealed class StartConversationHandler
             _logger.LogWarning("AI call cancelled for new conversation {ConversationId}", conversation.Id.Value);
             throw;
         }
-        catch (Exception ex)
+        catch (TelemetryTags.Tracing.Exception ex)
         {
             _logger.LogError(ex,
                 "Unexpected error starting conversation {ConversationId}",

@@ -1,3 +1,4 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Common;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 

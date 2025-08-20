@@ -1,26 +1,24 @@
-// /BuildingBlocks/Core/Idempotency/IdempotencyBehavior.cs
-#nullable enable
 using System.Reflection;
 using System.Text.Json;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Idempotency;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace BuildingBlocks.Core.Idempotency;
+namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Caches responses for idempotent commands:
-/// - If cached → short-circuit and return cached response
-/// - Else     → execute, cache, return
-/// Uses IDistributedCache (Redis/memory etc.)
-/// Supports CFE Result&lt;T, Error&gt; and UnitResult&lt;Error&gt;.
+/// Handles command idempotency by caching responses.
+/// Only processes commands that implement IIdempotentCommand.
+/// By default caches only successes; failures cached only when CacheFailures = true.
 /// </summary>
 public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : IIdempotentCommand, IRequest<TResponse>
+    where TRequest : IRequest<TResponse>
 {
     private readonly IdempotencyKeyResolver _keyResolver;
     private readonly IDistributedCache _cache;
@@ -47,88 +45,211 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
     {
-        var key = _keyResolver.Resolve(request);
-        var window = request.GetIdempotencyWindow() ?? _options.Value.DefaultWindow;
+        // Only process idempotent commands
+        if (request is not IIdempotentCommand idempotentCommand)
+        {
+            return await next();
+        }
 
+        var key = _keyResolver.Resolve(idempotentCommand);
+        var window = idempotentCommand.GetIdempotencyWindow() ?? _options.Value.DefaultWindow;
+
+        // Try to get cached response
         var cached = await _cache.GetStringAsync(key, ct);
         if (cached is not null)
         {
             _logger.LogDebug("Idempotency hit for {Key}", key);
-            return IdempotencyBehavior<TRequest, TResponse>.DeserializeResponse(cached);
+            var cachedResponse = DeserializeResponse(cached);
+            if (cachedResponse is not null)
+            {
+                return cachedResponse;
+            }
+            _logger.LogWarning("Failed to deserialize cached response for {Key}, proceeding with handler", key);
         }
 
+        // Execute handler
         var response = await next();
 
-        try
+        // Determine whether to cache based on success/failure and CacheFailures setting
+        var shouldCache = ShouldCacheResponse(response, idempotentCommand.CacheFailures);
+        
+        if (shouldCache)
         {
-            var payload = SerializeResponse(response);
-            var opts = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = window };
-            await _cache.SetStringAsync(key, payload, opts, ct);
-            _logger.LogDebug("Idempotency store for {Key} (TTL: {Window})", key, window);
+            try
+            {
+                var payload = SerializeResponse(response);
+                var opts = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = window };
+                await _cache.SetStringAsync(key, payload, opts, ct);
+                _logger.LogDebug("Idempotency store for {Key} (TTL: {Window})", key, window);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to store idempotent response for {Key}", key);
+            }
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogWarning(ex, "Failed to store idempotent response for {Key}", key);
+            _logger.LogDebug("Skipping cache storage for {Key} (failure, CacheFailures=false)", key);
         }
 
         return response;
     }
 
-    // ---------- Serialization envelope ----------
-    private sealed record Envelope(
-        bool IsSuccess,
-        string? ValueJson,
-        Error? Error,
-        string? ValueType // AssemblyQualifiedName for TValue (when IsSuccess=true on Result<T,Error>)
+    private static bool ShouldCacheResponse(TResponse response, bool cacheFailures)
+    {
+        // If CacheFailures is true, always cache
+        if (cacheFailures)
+            return true;
+
+        // Otherwise, only cache successes
+        return IsSuccessResponse(response);
+    }
+
+    private static bool IsSuccessResponse(TResponse response)
+    {
+        if (response is null)
+            return false;
+
+        // Check for UnitResult<Error>
+        if (IsUnitResultError(response, out var unitResult))
+            return unitResult.IsSuccess;
+
+        // Check for Result<TValue, Error>
+        if (IsResultWithError(response, out var isSuccess, out _, out _, out _))
+            return isSuccess;
+
+        // If not a known Result type, assume success
+        return true;
+    }
+
+    // ---------- Envelope v2 Serialization ----------
+    
+    private sealed record EnvelopeV2(
+        int V,
+        bool Ok,
+        string? Type = null,
+        string? Val = null,
+        ErrorDto? Err = null
+    );
+
+    private sealed record ErrorDto(
+        string Code,
+        string Msg,
+        string Type,
+        string Sev,
+        object? Meta = null
     );
 
     private static string SerializeResponse(TResponse response)
     {
-        // Defensive: allow handlers to (wrongly) return null
+        // Handle null response
         if (response is null)
         {
-            var envNull = new Envelope(false, null, Error.Internal("Null response from handler", "NULL_RESPONSE"), null);
-            return JsonSerializer.Serialize(envNull, JsonOptions);
+            var errorEnv = new EnvelopeV2(
+                V: 2,
+                Ok: false,
+                Err: new ErrorDto("NULL_RESPONSE", "Null response from handler", "Internal", "Error")
+            );
+            return JsonSerializer.Serialize(errorEnv, JsonOptions);
         }
 
         // UnitResult<Error>
         if (IsUnitResultError(response, out var unit))
         {
-            var env = new Envelope(unit.IsSuccess, null, unit.IsSuccess ? null : unit.Error, null);
-            return JsonSerializer.Serialize(env, JsonOptions);
+            if (unit.IsSuccess)
+            {
+                var successEnv = new EnvelopeV2(V: 2, Ok: true);
+                return JsonSerializer.Serialize(successEnv, JsonOptions);
+            }
+            else
+            {
+                var errorDto = CreateErrorDto(unit.Error);
+                var failureEnv = new EnvelopeV2(V: 2, Ok: false, Err: errorDto);
+                return JsonSerializer.Serialize(failureEnv, JsonOptions);
+            }
         }
 
         // Result<TValue, Error>
         if (IsResultWithError(response, out var isSuccess, out var value, out var error, out var valueType))
         {
-            var valueJson = isSuccess && value is not null
-                ? JsonSerializer.Serialize(value, valueType, JsonOptions)
-                : null;
-
-            var env = new Envelope(isSuccess, valueJson, isSuccess ? null : error, isSuccess ? valueType.AssemblyQualifiedName : null);
-            return JsonSerializer.Serialize(env, JsonOptions);
+            if (isSuccess && value is not null)
+            {
+                var valueJson = JsonSerializer.Serialize(value, valueType, JsonOptions);
+                var successEnv = new EnvelopeV2(
+                    V: 2,
+                    Ok: true,
+                    Type: valueType.FullName,
+                    Val: valueJson
+                );
+                return JsonSerializer.Serialize(successEnv, JsonOptions);
+            }
+            else
+            {
+                var errorDto = CreateErrorDto(error);
+                var failureEnv = new EnvelopeV2(V: 2, Ok: false, Err: errorDto);
+                return JsonSerializer.Serialize(failureEnv, JsonOptions);
+            }
         }
 
-        // Fallback: serialize as-is
-        return JsonSerializer.Serialize(response, JsonOptions);
+        // Fallback: serialize response as-is (assume success)
+        var fallbackJson = JsonSerializer.Serialize(response, JsonOptions);
+        var fallbackEnv = new EnvelopeV2(
+            V: 2,
+            Ok: true,
+            Type: typeof(TResponse).FullName,
+            Val: fallbackJson
+        );
+        return JsonSerializer.Serialize(fallbackEnv, JsonOptions);
     }
 
-    private static TResponse DeserializeResponse(string json)
+    private static ErrorDto CreateErrorDto(Error? error)
     {
-        var env = JsonSerializer.Deserialize<Envelope>(json, JsonOptions);
-        if (env is null)
-            return JsonSerializer.Deserialize<TResponse>(json, JsonOptions)!;
+        if (error is null)
+        {
+            return new ErrorDto("UNKNOWN", "Unknown error", "Unknown", "Error");
+        }
 
-        // UnitResult<Error>
-        if (TryRehydrateUnitResult(env, out var unitResp))
-            return unitResp;
+        return new ErrorDto(
+            Code: error.Code,
+            Msg: error.Message,
+            Type: error.Type.ToString(),
+            Sev: error.Severity.ToString(),
+            Meta: error.Metadata
+        );
+    }
 
-        // Result<TValue, Error>
-        if (TryRehydrateResult(env, out var resResp))
-            return resResp;
+    private static TResponse? DeserializeResponse(string json)
+    {
+        try
+        {
+            var env = JsonSerializer.Deserialize<EnvelopeV2>(json, JsonOptions);
+            if (env is null || env.V != 2)
+            {
+                // Try fallback to direct deserialization
+                return JsonSerializer.Deserialize<TResponse>(json, JsonOptions);
+            }
 
-        // Fallback: response was serialized directly
-        return JsonSerializer.Deserialize<TResponse>(json, JsonOptions)!;
+            // UnitResult<Error>
+            if (TryRehydrateUnitResult(env, out var unitResp))
+                return unitResp;
+
+            // Result<TValue, Error>
+            if (TryRehydrateResult(env, out var resResp))
+                return resResp;
+
+            // Fallback for direct serialized responses
+            if (env.Ok && env.Val is not null)
+            {
+                return JsonSerializer.Deserialize<TResponse>(env.Val, JsonOptions);
+            }
+
+            return default;
+        }
+        catch (Exception)
+        {
+            // If deserialization fails, return null to force re-execution
+            return default;
+        }
     }
 
     // ---------- Type shape detection ----------
@@ -186,7 +307,7 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
 
     // ---------- Rehydration ----------
 
-    private static bool TryRehydrateUnitResult(Envelope env, out TResponse response)
+    private static bool TryRehydrateUnitResult(EnvelopeV2 env, out TResponse response)
     {
         response = default!;
         var target = typeof(TResponse);
@@ -194,19 +315,25 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         if (target.IsGenericType && target.GetGenericTypeDefinition() == typeof(UnitResult<>) &&
             target.GetGenericArguments()[0] == typeof(Error))
         {
-            // CFE: UnitResult.Success<Error>() / UnitResult.Failure<Error>(error)
-            var res = env.IsSuccess
-                ? UnitResult.Success<Error>()
-                : UnitResult.Failure(env.Error!);
+            object res;
+            if (env.Ok)
+            {
+                res = UnitResult.Success<Error>();
+            }
+            else
+            {
+                var error = RehydrateError(env.Err);
+                res = UnitResult.Failure(error);
+            }
 
-            response = (TResponse)(object)res;
+            response = (TResponse)res;
             return true;
         }
 
         return false;
     }
 
-    private static bool TryRehydrateResult(Envelope env, out TResponse response)
+    private static bool TryRehydrateResult(EnvelopeV2 env, out TResponse response)
     {
         response = default!;
         var target = typeof(TResponse);
@@ -220,15 +347,20 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         if (errorType != typeof(Error))
             return false;
 
-        if (env.IsSuccess)
+        if (env.Ok)
         {
-            if (env.ValueJson is null || string.IsNullOrWhiteSpace(env.ValueType))
+            if (env.Val is null || string.IsNullOrWhiteSpace(env.Type))
                 return false;
 
-            var vt = Type.GetType(env.ValueType, throwOnError: true)!;
-            var value = JsonSerializer.Deserialize(env.ValueJson, vt, JsonOptions)!;
+            var vt = Type.GetType(env.Type, throwOnError: false);
+            if (vt is null || !valueType.IsAssignableFrom(vt))
+                return false;
 
-            // CFE: Result.Success<TValue, Error>(value)
+            var value = JsonSerializer.Deserialize(env.Val, vt, JsonOptions);
+            if (value is null)
+                return false;
+
+            // Result.Success<TValue, Error>(value)
             var method = typeof(Result)
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .First(m => m.Name == "Success" && m.IsGenericMethodDefinition && m.GetGenericArguments().Length == 2);
@@ -238,15 +370,65 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         }
         else
         {
-            // CFE: Result.Failure<TValue, Error>(error)
+            var error = RehydrateError(env.Err);
+            // Result.Failure<TValue, Error>(error)
             var method = typeof(Result)
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .First(m => m.Name == "Failure" && m.IsGenericMethodDefinition && m.GetParameters().Length == 1);
             var generic = method.MakeGenericMethod(valueType, typeof(Error));
-            var res = generic.Invoke(null, new object?[] { env.Error! })!;
+            var res = generic.Invoke(null, new object?[] { error })!;
             response = (TResponse)res;
         }
 
         return true;
+    }
+
+    private static Error RehydrateError(ErrorDto? errorDto)
+    {
+        if (errorDto is null)
+        {
+            return Error.Internal("Unknown error during deserialization", "DESERIALIZATION_ERROR");
+        }
+
+        if (!Enum.TryParse<ErrorType>(errorDto.Type, out var errorType))
+            errorType = ErrorType.Internal;
+
+        if (!Enum.TryParse<ErrorSeverity>(errorDto.Sev, out var severity))
+            severity = ErrorSeverity.Error;
+
+        // Use appropriate factory method based on error type
+        var error = errorType switch
+        {
+            ErrorType.Validation => Error.Validation(errorDto.Msg, errorDto.Code),
+            ErrorType.NotFound => Error.NotFound(errorDto.Msg, errorDto.Code),
+            ErrorType.Conflict => Error.Conflict(errorDto.Msg, errorDto.Code),
+            ErrorType.Unauthorized => Error.Unauthorized(errorDto.Msg, errorDto.Code),
+            ErrorType.Forbidden => Error.Forbidden(errorDto.Msg, errorDto.Code),
+            ErrorType.BusinessRule => Error.BusinessRule(errorDto.Msg, errorDto.Code),
+            ErrorType.External => Error.External(errorDto.Msg, errorDto.Code),
+            ErrorType.Network => Error.Network(errorDto.Msg, errorDto.Code),
+            ErrorType.Timeout => Error.Timeout(errorDto.Msg, errorDto.Code),
+            ErrorType.Unavailable => Error.Unavailable(errorDto.Msg, errorDto.Code),
+            ErrorType.Persistence => Error.Persistence(errorDto.Msg, errorDto.Code),
+            ErrorType.Configuration => Error.Configuration(errorDto.Msg, errorDto.Code),
+            ErrorType.Security => Error.Security(errorDto.Msg, errorDto.Code),
+            ErrorType.RateLimit => Error.RateLimit(errorDto.Msg, errorDto.Code),
+            ErrorType.Cancelled => Error.Cancelled(errorDto.Msg, errorDto.Code),
+            _ => Error.Internal(errorDto.Msg, errorDto.Code)
+        };
+
+        // Apply metadata if available
+        if (errorDto.Meta is Dictionary<string, object> meta && meta.Count > 0)
+        {
+            error = error.WithMetadata(meta);
+        }
+
+        // Apply severity if different from default
+        if (error.Severity != severity)
+        {
+            error = error.WithSeverity(severity);
+        }
+
+        return error;
     }
 }

@@ -1,8 +1,13 @@
 using BuildingBlocks.Core.Functional.Results;
 using Axon.Api.Contracts.Chat;
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Commands.StartConversation;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
-using Axon.Modules.Chat.Primitives.ValueObjects;
+using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
+using CSharpFunctionalExtensions;
+using IMediator = MassTransit.Mediator.IMediator;
+
+;
 using BuildingBlocks.Primitives.Ids;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -42,7 +47,7 @@ public sealed class ChatCommandDispatcher : IChatCommandDispatcher
 
             return await AppendToExistingConversationAsync(request, cancellationToken);
         }
-        catch (Exception ex)
+        catch (TelemetryTags.Tracing.Exception ex)
         {
             _logger.LogError(ex, "Unexpected error dispatching chat command");
             return Result<ProcessMessageResponse>.Failure(

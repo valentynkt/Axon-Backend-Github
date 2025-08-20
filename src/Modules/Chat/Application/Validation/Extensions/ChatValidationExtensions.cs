@@ -1,6 +1,9 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using FluentValidation;
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Modules.Chat.Primitives.ValueObjects;
+using BuildingBlocks.Primitives.Ids;
+
+;
 
 namespace Axon.Modules.Chat.Application.Validation.Extensions;
 

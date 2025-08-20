@@ -1,7 +1,5 @@
 using Axon.BuildingBlocks.Core.Constants;
 using BuildingBlocks.Core.Domain.Rules;
-using Axon.Modules.Chat.Domain.Constants;
-using Axon.Modules.Chat.Primitives.Constants;
 
 namespace Axon.Modules.Chat.Domain.Rules;
 
@@ -11,7 +9,7 @@ namespace Axon.Modules.Chat.Domain.Rules;
 /// </summary>
 internal sealed class TitleUpdateMustBeValidRule : BusinessRule
 {
-    private const int MaxTitleLength = ChatPrimitiveConstants.ConversationTitle.MaxLength;
+    private const int MaxTitleLength = ChatPrimitiveConstants.ConversationTitleDefault.MaxLength;
     private readonly string? _newTitle;
 
     public TitleUpdateMustBeValidRule(string? newTitle)

@@ -16,7 +16,7 @@ using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddApplicationServices(builder.Configuration, builder.Environment);
 
 // Configure JSON serialization options
 builder.Services.ConfigureHttpJsonOptions(options =>

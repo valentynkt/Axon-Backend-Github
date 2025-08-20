@@ -2,11 +2,13 @@
 #nullable enable
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using BuildingBlocks.Application.Observability;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BuildingBlocks.Application.Behaviors;
 
@@ -21,18 +23,15 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>
     where TRequest : IAxonRequest
 {
-    private static readonly ActivitySource ActivitySource = new("Axon.Application");
-    private static readonly Meter Meter = new("Axon.Application");
-    private static readonly Counter<long> Requests = Meter.CreateCounter<long>("axon.requests", description: "Total requests");
-    private static readonly Counter<long> Failures = Meter.CreateCounter<long>("axon.requests.failures", description: "Failed requests");
-    private static readonly Counter<long> Cancelled = Meter.CreateCounter<long>("axon.requests.cancelled", description: "Cancelled requests");
-    private static readonly Histogram<double> Duration = Meter.CreateHistogram<double>("axon.request.duration", unit: "ms", description: "Request duration (ms)");
-
-    // Optional: tweak the slow threshold if you want a heads-up in logs
-    private const int SlowRequestWarningMs = 2_000;
 
     private readonly ILogger<ObservabilityBehavior<TRequest, TValue>> _logger;
-    public ObservabilityBehavior(ILogger<ObservabilityBehavior<TRequest, TValue>> logger) => _logger = logger;
+    private readonly ObservabilityOptions _options;
+    
+    public ObservabilityBehavior(ILogger<ObservabilityBehavior<TRequest, TValue>> logger, IOptions<ObservabilityOptions> options)
+    {
+        _logger = logger;
+        _options = options.Value;
+    }
 
     public async Task<Result<TValue, Error>> Handle(
         TRequest request,
@@ -48,7 +47,7 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
         };
 
         var sw = Stopwatch.StartNew();
-        using var activity = ActivitySource.StartActivity($"Application.{category}.{name}", ActivityKind.Internal);
+        using var activity = Instrumentation.ActivitySource.StartActivity($"Application.{category}.{name}", ActivityKind.Internal);
         activity?.SetTag("axon.request.type", name);
         activity?.SetTag("axon.request.category", category);
         activity?.SetTag("axon.request.id", request.RequestId);
@@ -81,13 +80,13 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
                 { "axon.request.category", category },
                 { "axon.outcome", outcome }
             };
-            Requests.Add(1, tags);
-            Duration.Record(sw.Elapsed.TotalMilliseconds, tags);
-            if (result.IsFailure) Failures.Add(1, tags);
+            Instrumentation.Requests.Add(1, tags);
+            Instrumentation.Duration.Record(sw.Elapsed.TotalMilliseconds, tags);
+            if (result.IsFailure) Instrumentation.Failures.Add(1, tags);
 
             if (result.IsSuccess)
             {
-                if (ms >= SlowRequestWarningMs)
+                if (ms >= _options.SlowRequestWarningMs)
                     _logger.LogWarning("{Category} {Type} succeeded but slow: {Ms} ms", category, name, ms);
                 else
                     _logger.LogInformation("{Category} {Type} succeeded in {Ms} ms", category, name, ms);
@@ -106,7 +105,7 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
             var ms = sw.ElapsedMilliseconds;
 
             activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
-            Cancelled.Add(1, new TagList { { "axon.request.type", name }, { "axon.request.category", category } });
+            Instrumentation.Cancelled.Add(1, new TagList { { "axon.request.type", name }, { "axon.request.category", category } });
             _logger.LogWarning("{Category} {Type} cancelled after {Ms} ms", category, name, ms);
             throw;
         }
@@ -122,7 +121,7 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
                 ["exception.message"] = ex.Message,
                 ["exception.stacktrace"] = ex.StackTrace ?? string.Empty
             }));
-            Failures.Add(1, new TagList { { "axon.request.type", name }, { "axon.request.category", category } });
+            Instrumentation.Failures.Add(1, new TagList { { "axon.request.type", name }, { "axon.request.category", category } });
             _logger.LogError(ex, "{Category} {Type} threw after {Ms} ms", category, name, ms);
             throw;
         }

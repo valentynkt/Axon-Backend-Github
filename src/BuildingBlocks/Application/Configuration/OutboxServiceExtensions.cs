@@ -52,7 +52,6 @@ public static class OutboxServiceExtensions
     public static IServiceCollection AddOutboxFacadeWithTransactions(this IServiceCollection services)
     {
         services.AddOutboxFacade();
-        services.TryAddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
         return services;
     }
 }
