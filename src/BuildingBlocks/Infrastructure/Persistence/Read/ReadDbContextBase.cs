@@ -1,6 +1,6 @@
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
-using BuildingBlocks.Infrastructure.Persistence.StrongIds;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
@@ -57,7 +57,6 @@ public abstract class ReadDbContextBase<TModule> : DbContext, IReadDbContext<TMo
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
 
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
-        modelBuilder.ApplyStrongIdConventions(); // StrongId converters/comparers
         ConfigureReadModelOptimizations(modelBuilder);
 
         base.OnModelCreating(modelBuilder);

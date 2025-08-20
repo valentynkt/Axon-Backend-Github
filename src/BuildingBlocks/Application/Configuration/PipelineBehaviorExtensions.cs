@@ -1,4 +1,5 @@
 using BuildingBlocks.Application.Behaviors;
+using BuildingBlocks.Core.Idempotency;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +15,7 @@ public static class PipelineBehaviorExtensions
         services.AddCachingServices();
         
         // Always: observability outermost
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior_Result<,>));
 
         // Optional: lightweight logging
         var enableReqLogging =
@@ -27,22 +28,21 @@ public static class PipelineBehaviorExtensions
         // Resilience (queries only)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryRetryBehavior<,>));
 
-        // Validation (Fluent + domain)
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
+     // Startup/Composition root
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior_Result<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior_Unit<>));
+
 
         // Idempotency (commands only)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
 
         // Caching + invalidation
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
-       
-        // Transactions (commands) – includes post-commit domain notifications + outbox
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CommandTransactionBehavior<,>));
+        
 
         // Innermost safety net
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ExceptionHandlingBehavior<,>));
-     
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(AutoCommitOnSuccessBehavior<,>));
+
 
         return services;
     }

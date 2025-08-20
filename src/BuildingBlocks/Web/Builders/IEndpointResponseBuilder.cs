@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Functional.Results;
+using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Http;
 
 namespace BuildingBlocks.Web.Builders;

@@ -1,201 +1,130 @@
+// /BuildingBlocks/Application/Behaviors/ObservabilityBehavior.cs
+#nullable enable
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using BuildingBlocks.Core.Abstractions.CQRS;
-using BuildingBlocks.Core.Functional.Results;
-using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Application.Behaviors;
 
 /// <summary>
-/// Single source of truth for tracing + metrics + structured logging.
-/// CorrelationId == W3C TraceId (Activity.TraceId). No custom correlation provider.
-/// Emits low-cardinality metrics and result-aware span tags.
+/// Single source of truth for tracing + metrics + structured logging over Result&lt;TValue, Error&gt;.
+/// Use this instead of a separate logging behavior.
+/// - Creates/uses an Activity (W3C TraceContext)
+/// - Emits low-cardinality tags and OTel metrics
+/// - Logs success/failure with duration; warns on slow requests
 /// </summary>
-public sealed class ObservabilityBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : IAxonRequest<TResponse>
-    where TResponse : IResult
+public sealed class ObservabilityBehavior<TRequest, TValue>
+    : IPipelineBehavior<TRequest, Result<TValue, Error>>
+    where TRequest : IAxonRequest
 {
-    private readonly ILogger<ObservabilityBehavior<TRequest, TResponse>> _logger;
+    private static readonly ActivitySource ActivitySource = new("Axon.Application");
+    private static readonly Meter Meter = new("Axon.Application");
+    private static readonly Counter<long> Requests = Meter.CreateCounter<long>("axon.requests", description: "Total requests");
+    private static readonly Counter<long> Failures = Meter.CreateCounter<long>("axon.requests.failures", description: "Failed requests");
+    private static readonly Counter<long> Cancelled = Meter.CreateCounter<long>("axon.requests.cancelled", description: "Cancelled requests");
+    private static readonly Histogram<double> Duration = Meter.CreateHistogram<double>("axon.request.duration", unit: "ms", description: "Request duration (ms)");
 
-    public ObservabilityBehavior(ILogger<ObservabilityBehavior<TRequest, TResponse>> logger)
-    {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    // Optional: tweak the slow threshold if you want a heads-up in logs
+    private const int SlowRequestWarningMs = 2_000;
 
-    public async Task<TResponse> Handle(
+    private readonly ILogger<ObservabilityBehavior<TRequest, TValue>> _logger;
+    public ObservabilityBehavior(ILogger<ObservabilityBehavior<TRequest, TValue>> logger) => _logger = logger;
+
+    public async Task<Result<TValue, Error>> Handle(
         TRequest request,
-        RequestHandlerDelegate<TResponse> next,
-        CancellationToken cancellationToken)
+        RequestHandlerDelegate<Result<TValue, Error>> next,
+        CancellationToken ct)
     {
-        var requestName = typeof(TRequest).Name;
-        var requestCategory = request switch
+        var name = typeof(TRequest).Name;
+        var category = request switch
         {
-            ICommand<TResponse> => "Command",
-            IQuery<TResponse>   => "Query",
-            _                   => "Request"
+            IQuery<TValue>   => "Query",
+            ICommand<TValue> => "Command",
+            _                => "Request"
         };
 
-        var start = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();
+        using var activity = ActivitySource.StartActivity($"Application.{category}.{name}", ActivityKind.Internal);
+        activity?.SetTag("axon.request.type", name);
+        activity?.SetTag("axon.request.category", category);
+        activity?.SetTag("axon.request.id", request.RequestId);
+        activity?.SetTag("axon.request.at", request.RequestedAt);
 
-        using var activity = Instrumentation.ActivitySource.StartActivity(
-            $"Observability.{requestCategory}.{requestName}",
-            ActivityKind.Internal);
-
-        var traceId = (activity ?? Activity.Current)?.TraceId.ToString() ?? "none";
-        var spanId  = (activity ?? Activity.Current)?.SpanId.ToString()  ?? "none";
-
-        if (activity is not null)
+        using var scope = _logger.BeginScope(new Dictionary<string, object?>
         {
-            activity.SetTag("operation.name", $"{requestCategory}.{requestName}");
-            activity.SetTag("axon.request.id", request.RequestId.ToString());
-            activity.SetTag("axon.request.type", requestName);
-            activity.SetTag("axon.request.category", requestCategory);
-            activity.SetTag("axon.request.timestamp", request.RequestedAt.ToString("O"));
-            activity.SetTag("axon.correlation.id", traceId); // == trace_id
-            activity.SetTag("trace.trace_id", activity.TraceId.ToString());
-            activity.SetTag("trace.span_id", activity.SpanId.ToString());
-
-            if (request.Metadata?.Count > 0)
-                activity.SetTag("axon.metadata.count", request.Metadata.Count);
-        }
-
-        using var scope = _logger.BeginScope(new Dictionary<string, object>
-        {
-            ["RequestType"]     = requestName,
-            ["RequestCategory"] = requestCategory,
-            ["TraceId"]         = traceId,
-            ["SpanId"]          = spanId,
-            ["RequestId"]       = request.RequestId,
-            ["StartTime"]       = start
+            ["request.type"]     = name,
+            ["request.category"] = category,
+            ["trace.id"]         = (activity ?? Activity.Current)?.TraceId.ToString(),
+            ["request.id"]       = request.RequestId
         });
-
-        _logger.LogDebug("Starting {Category} {Type} (TraceId={TraceId}, RequestId={RequestId})",
-            requestCategory, requestName, traceId, request.RequestId);
 
         try
         {
-            var response = await next(); // MediatR delegate has no token parameter
+            var result = await next();
             sw.Stop();
 
-            var elapsedMs = sw.ElapsedMilliseconds;
-            var outcome   = response.IsSuccess ? "success" : "failure";
+            var ms = sw.ElapsedMilliseconds;
+            var outcome = result.IsSuccess ? "success" : "failure";
 
-            if (activity is not null)
+            activity?.SetTag("axon.outcome", outcome);
+            activity?.SetTag("axon.duration.ms", ms);
+            activity?.SetStatus(result.IsSuccess ? ActivityStatusCode.Ok : ActivityStatusCode.Error,
+                result.IsFailure ? result.Error.Message : null);
+
+            var tags = new TagList
             {
-                activity.SetTag("axon.outcome", outcome);
-                activity.SetTag("axon.duration.ms", elapsedMs);
-                activity.SetTag(TelemetryTags.Tracing.Otel.StatusCode, response.IsSuccess ? "OK" : "ERROR");
-                if (response.IsFailure && response.Error is not null)
-                {
-                    activity.SetTag("axon.error.type", response.Error.Type.ToString());
-                    activity.SetTag("axon.error.code", response.Error.Code);
-                    activity.SetTag("error.type", response.Error.Type.ToString());
-                    activity.SetTag("error.message", response.Error.Message);
-                    activity.SetStatus(ActivityStatusCode.Error, response.Error.Message);
-                    activity.SetTag(TelemetryTags.Tracing.Otel.StatusDescription, response.Error.Message);
-                }
+                { "axon.request.type", name },
+                { "axon.request.category", category },
+                { "axon.outcome", outcome }
+            };
+            Requests.Add(1, tags);
+            Duration.Record(sw.Elapsed.TotalMilliseconds, tags);
+            if (result.IsFailure) Failures.Add(1, tags);
+
+            if (result.IsSuccess)
+            {
+                if (ms >= SlowRequestWarningMs)
+                    _logger.LogWarning("{Category} {Type} succeeded but slow: {Ms} ms", category, name, ms);
                 else
-                {
-                    activity.SetStatus(ActivityStatusCode.Ok);
-                }
+                    _logger.LogInformation("{Category} {Type} succeeded in {Ms} ms", category, name, ms);
+            }
+            else
+            {
+                _logger.LogWarning("{Category} {Type} failed ({Code}) in {Ms} ms",
+                    category, name, result.Error.Code, ms);
             }
 
-            var tags = new TagList
-            {
-                { "axon.request.type", requestName },
-                { "axon.request.category", requestCategory },
-                { "axon.outcome", outcome },
-                { "axon.metadata.has_data", (request.Metadata?.Count > 0) ? "true" : "false" }
-            };
-
-            Instrumentation.RequestCounter.Add(1, tags);
-            Instrumentation.RequestDuration.Record(elapsedMs, tags);
-            if (response.IsFailure) Instrumentation.RequestErrors.Add(1, tags);
-
-            _logger.LogInformation("Request {RequestType} ({RequestCategory}) completed with {Outcome} in {ElapsedMs}ms",
-                requestName, requestCategory, outcome, elapsedMs);
-
-            return response;
+            return result;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             sw.Stop();
-            var elapsedMs = sw.ElapsedMilliseconds;
+            var ms = sw.ElapsedMilliseconds;
 
-            activity?.SetTag("axon.outcome", "cancelled");
-            activity?.SetStatus(ActivityStatusCode.Error, "Request was cancelled");
-
-            var tags = new TagList
-            {
-                { "axon.request.type", requestName },
-                { "axon.request.category", requestCategory },
-                { "axon.outcome", "cancelled" }
-            };
-
-            Instrumentation.RequestCounter.Add(1, tags);
-            Instrumentation.RequestDuration.Record(elapsedMs, tags);
-            Instrumentation.RequestCancelled.Add(1, tags);
-
-            _logger.LogWarning("{RequestCategory} {RequestType} was cancelled after {ElapsedMs}ms",
-                requestCategory, requestName, elapsedMs);
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            Cancelled.Add(1, new TagList { { "axon.request.type", name }, { "axon.request.category", category } });
+            _logger.LogWarning("{Category} {Type} cancelled after {Ms} ms", category, name, ms);
             throw;
         }
         catch (Exception ex)
         {
             sw.Stop();
-            var elapsedMs = sw.ElapsedMilliseconds;
+            var ms = sw.ElapsedMilliseconds;
 
-            activity?.SetTag("axon.outcome", "exception");
-            activity?.SetTag("axon.exception.type", ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent(
-                TelemetryTags.Tracing.Exception.EventName,
-                DateTimeOffset.UtcNow,
-                new ActivityTagsCollection
-                {
-                    [TelemetryTags.Tracing.Exception.Type] = ex.GetType().FullName,
-                    [TelemetryTags.Tracing.Exception.Message] = ex.Message,
-                    [TelemetryTags.Tracing.Exception.Stacktrace] = ex.StackTrace ?? string.Empty
-                }));
-
-            var tags = new TagList
+            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
             {
-                { "axon.request.type", requestName },
-                { "axon.request.category", requestCategory },
-                { "axon.outcome", "exception" }
-            };
-
-            Instrumentation.RequestCounter.Add(1, tags);
-            Instrumentation.RequestDuration.Record(elapsedMs, tags);
-            Instrumentation.RequestErrors.Add(1, tags);
-
-            _logger.LogError(ex, "{RequestCategory} {RequestType} failed after {ElapsedMs}ms",
-                requestCategory, requestName, elapsedMs);
+                ["exception.type"] = ex.GetType().FullName!,
+                ["exception.message"] = ex.Message,
+                ["exception.stacktrace"] = ex.StackTrace ?? string.Empty
+            }));
+            Failures.Add(1, new TagList { { "axon.request.type", name }, { "axon.request.category", category } });
+            _logger.LogError(ex, "{Category} {Type} threw after {Ms} ms", category, name, ms);
             throw;
         }
-    }
-
-    private static class Instrumentation
-    {
-        public static readonly ActivitySource ActivitySource =
-            new(TelemetryTags.Tracing.Application.AppService);
-
-        public static readonly Meter Meter =
-            new(TelemetryTags.Metrics.Application.AppService);
-
-        public static readonly Counter<long> RequestCounter =
-            Meter.CreateCounter<long>("axon.observability.requests.total", description: "Total requests");
-
-        public static readonly Histogram<double> RequestDuration =
-            Meter.CreateHistogram<double>("axon.observability.request.duration", unit: "ms", description: "Request duration (ms)");
-
-        public static readonly Counter<long> RequestErrors =
-            Meter.CreateCounter<long>("axon.observability.requests.errors.total", description: "Failed requests");
-
-        public static readonly Counter<long> RequestCancelled =
-            Meter.CreateCounter<long>("axon.observability.requests.cancelled.total", description: "Cancelled requests");
     }
 }

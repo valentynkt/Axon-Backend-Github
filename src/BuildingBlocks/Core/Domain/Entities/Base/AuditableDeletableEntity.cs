@@ -1,6 +1,4 @@
-
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
@@ -10,7 +8,7 @@ namespace BuildingBlocks.Core.Domain.Entities.Base;
 /// </summary>
 /// <typeparam name="TId">Strongly typed ID type</typeparam>
 public abstract class AuditableDeletableEntity<TId> : Entity<TId>, IAuditable, ISoftDeletable
-    where TId : notnull, IStrongId
+    where TId : notnull
 {
     protected AuditableDeletableEntity(TId id) : base(id)
     {
@@ -19,9 +17,7 @@ public abstract class AuditableDeletableEntity<TId> : Entity<TId>, IAuditable, I
         UpdatedAt = now;
     }
 
-    /// <summary>
-    /// Parameterless ctor for ORM materialization only.
-    /// </summary>
+    /// <summary>Parameterless ctor for ORM materialization only.</summary>
     protected AuditableDeletableEntity() : base() { }
 
     // IAuditable

@@ -1,6 +1,4 @@
-
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
@@ -9,7 +7,7 @@ namespace BuildingBlocks.Core.Domain.Entities.Base;
 /// </summary>
 /// <typeparam name="TId">Strongly typed ID type</typeparam>
 public abstract class AuditableEntity<TId> : Entity<TId>, IAuditable
-    where TId : notnull, IStrongId
+    where TId : notnull
 {
     protected AuditableEntity(TId id) : base(id)
     {
@@ -18,9 +16,7 @@ public abstract class AuditableEntity<TId> : Entity<TId>, IAuditable
         UpdatedAt = now;
     }
 
-    /// <summary>
-    /// Parameterless ctor for ORM materialization only.
-    /// </summary>
+    /// <summary>Parameterless ctor for ORM materialization only.</summary>
     protected AuditableEntity() : base() { }
 
     public DateTimeOffset CreatedAt { get; private set; }

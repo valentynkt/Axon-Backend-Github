@@ -1,6 +1,5 @@
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
-using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
@@ -11,7 +10,7 @@ namespace BuildingBlocks.Core.Domain.Entities.Base;
 /// </summary>
 /// <typeparam name="TId">Strongly typed ID type</typeparam>
 public abstract class AggregateRoot<TId> : AuditableDeletableEntity<TId>, IAggregateRoot<TId>
-    where TId : notnull, IStrongId
+    where TId : notnull
 {
     private readonly List<IDomainEvent> _domainEvents = new();
 
@@ -30,18 +29,13 @@ public abstract class AggregateRoot<TId> : AuditableDeletableEntity<TId>, IAggre
     /// <summary>Current domain events raised by this aggregate.</summary>
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
-    /// <summary>
-    /// Raise (enqueue) a domain event. Prefer immutable event records.
-    /// </summary>
-    /// <param name="event">Domain event instance</param>
+    /// <summary>Raise (enqueue) a domain event.</summary>
     protected void RaiseDomainEvent(IDomainEvent @event)
     {
         ArgumentNullException.ThrowIfNull(@event);
         _domainEvents.Add(@event);
     }
 
-    /// <summary>
-    /// Clears all domain events (typically after persistence/dispatch).
-    /// </summary>
+    /// <summary>Clears all domain events (typically after persistence/dispatch).</summary>
     public void ClearDomainEvents() => _domainEvents.Clear();
 }

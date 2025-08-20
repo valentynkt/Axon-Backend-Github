@@ -1,6 +1,3 @@
-using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Domain.Entities.Abstractions;
-
 namespace BuildingBlocks.Core.Domain.Entities.Abstractions;
 
 /// <summary>
@@ -15,6 +12,6 @@ public interface IAggregateRoot : IHasDomainEvents, IVersioned { }
 /// </summary>
 /// <typeparam name="TId">Strong ID type</typeparam>
 public interface IAggregateRoot<out TId> : IAggregateRoot, IIdentifiable<TId>
-    where TId : notnull, IStrongId
+    where TId : notnull
 {
 }

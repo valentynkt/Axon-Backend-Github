@@ -1,3 +1,5 @@
+using BuildingBlocks.Infrastructure.Persistence.Write;
+
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
 
 using Axon.Modules.Chat.Application.Abstractions.Persistence;

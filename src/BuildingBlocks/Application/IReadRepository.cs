@@ -1,29 +1,22 @@
+#nullable enable
 using System.Linq.Expressions;
 
 namespace BuildingBlocks.Application;
 
 /// <summary>
-/// Read-side repository abstraction (query only, <b>no tracking</b>).
-/// Returns IQueryable for OData composition.
+/// Read-side repository abstraction (query-only, no tracking).
+/// Returns IQueryable for composition (OData/EF Core).
 /// </summary>
 public interface IReadRepository<TReadModel, in TId> : IDisposable
     where TReadModel : class
     where TId : notnull
 {
-    // ——— Query builder (for OData) ———
-    /// <summary>
-    /// Returns an IQueryable with optional predicate.
-    /// User-scoped filtering and stable ordering are applied at the repository level.
-    /// </summary>
+    // Query builder (projectors can compose on top)
     IQueryable<TReadModel> Query(Expression<Func<TReadModel, bool>>? predicate = null);
 
-    // ——— Simple fetches ———
+    // Simple fetches
     Task<TReadModel?> FindByIdAsync(TId id, CancellationToken ct = default);
 
-    /// <summary>
-    /// Returns a single item that matches the predicate or null.
-    /// NOTE: The expression is a query description; infra translates it.
-    /// </summary>
     Task<TReadModel?> FindOneAsync(
         Expression<Func<TReadModel, bool>> predicate,
         CancellationToken ct = default);
@@ -36,7 +29,7 @@ public interface IReadRepository<TReadModel, in TId> : IDisposable
         IReadOnlyList<TId> ids,
         CancellationToken ct = default);
 
-    // ——— Aggregate functions ———
+    // Aggregates
     Task<long> CountAsync(
         Expression<Func<TReadModel, bool>>? predicate = null,
         CancellationToken ct = default);
@@ -50,7 +43,7 @@ public interface IReadRepository<TReadModel, in TId> : IDisposable
     Task<bool> AnyAsync(CancellationToken ct); // convenience
 }
 
-/// <summary> Convenience shortcut for Guid keys. </summary>
+/// <summary>Convenience shortcut for Guid keys.</summary>
 public interface IReadRepository<TReadModel> : IReadRepository<TReadModel, Guid>
     where TReadModel : class
 {

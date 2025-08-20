@@ -1,5 +1,6 @@
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Web.Mappers;
+using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

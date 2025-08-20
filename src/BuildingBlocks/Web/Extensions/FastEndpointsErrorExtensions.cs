@@ -1,6 +1,7 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Web.ProblemDetails;
+using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Http;
 
 namespace BuildingBlocks.Web.Extensions;

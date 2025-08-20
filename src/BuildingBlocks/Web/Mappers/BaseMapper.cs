@@ -1,4 +1,5 @@
 using BuildingBlocks.Core.Functional.Results;
+using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Web.Mappers;

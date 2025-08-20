@@ -1,5 +1,4 @@
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
@@ -8,13 +7,16 @@ namespace BuildingBlocks.Core.Domain.Entities.Base;
 /// Holds identity and value-based equality only.
 /// No events and no concurrency here by design (aggregate concern).
 /// </summary>
-/// <typeparam name="TId">Strongly typed ID type</typeparam>
+/// <typeparam name="TId">Strongly-typed ID (e.g., ConversationId)</typeparam>
 public abstract class Entity<TId> : IEntity<TId>
-    where TId : notnull, IStrongId
+    where TId : notnull
 {
     protected Entity(TId id)
     {
-        Id = id ?? throw new ArgumentNullException(nameof(id));
+        if (EqualityComparer<TId>.Default.Equals(id, default!))
+            throw new ArgumentException("Entity id cannot be default(TId).", nameof(id));
+
+        Id = id;
     }
 
     /// <summary>
@@ -59,16 +61,7 @@ public abstract class Entity<TId> : IEntity<TId>
     }
 
     private static bool IsTransient(Entity<TId> entity)
-    {
-        // If the underlying strong id holds default(TPrimitive), treat as transient
-        var raw = entity.Id?.GetValue();
-        if (raw is null) return true;
-
-        var valueType = entity.Id?.GetValueType();
-        if (valueType is null) return true;
-        var defaultValue = valueType.IsValueType ? Activator.CreateInstance(valueType) : null;
-        return Equals(raw, defaultValue);
-    }
+        => EqualityComparer<TId>.Default.Equals(entity.Id, default!);
 
     #endregion
 }

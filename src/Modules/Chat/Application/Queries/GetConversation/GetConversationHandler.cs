@@ -1,6 +1,7 @@
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.Persistence;
+using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversation;
 

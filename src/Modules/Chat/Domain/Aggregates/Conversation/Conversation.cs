@@ -1,18 +1,15 @@
+using Axon.BuildingBlocks.Core.Constants;
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Diagnostics.Exceptions;
-using BuildingBlocks.Core.Domain.Primitives;
-using BuildingBlocks.Core.Domain.Rules;
-using BuildingBlocks.Core.Functional;
-using BuildingBlocks.Core.Functional.Results;
-using Axon.Modules.Chat.Domain.Constants;
-using Axon.Modules.Chat.Primitives.Constants;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.Events;
 using Axon.Modules.Chat.Domain.Rules;
 using Axon.Modules.Chat.Domain.Internal.Text;
 using Axon.Modules.Chat.Domain.ValueObjects;
-using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Domain.Entities.Base;
+using BuildingBlocks.Primitives.Ids;
+using MediatR;
 
 namespace Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
@@ -348,7 +345,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// Gets the last AI response ID for threading anchor in subsequent AI requests.
     /// Use this value as 'previous_response_id' in downstream AI requests.
     /// </summary>
-    public string? GetLastAiResponseId() => LastAiResponseId?.Value;
+    public string? GetLastAiResponseId() => LastAiResponseId?.ToString();
 
     /// <summary>
     /// Creates content preview - plain truncation to configured length, no ellipsis.

@@ -1,5 +1,6 @@
 // File: /Users/valentynkit/Repos/Axon-Backend/src/Api/Contracts/Chat/ProcessMessageRequest.cs
 using System.ComponentModel.DataAnnotations;
+using Axon.BuildingBlocks.Core.Constants;
 using Axon.Modules.Chat.Primitives.Constants;
 
 namespace Axon.Api.Contracts.Chat;

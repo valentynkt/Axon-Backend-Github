@@ -10,6 +10,8 @@ using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Primitives.Ids;
+using FastEndpoints;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Commands.StartConversation;

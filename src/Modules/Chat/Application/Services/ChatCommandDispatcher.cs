@@ -3,6 +3,7 @@ using Axon.Api.Contracts.Chat;
 using Axon.Modules.Chat.Application.Commands.StartConversation;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using Axon.Modules.Chat.Primitives.ValueObjects;
+using BuildingBlocks.Primitives.Ids;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

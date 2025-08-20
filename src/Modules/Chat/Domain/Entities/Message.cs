@@ -2,6 +2,7 @@ using BuildingBlocks.Core.Domain.Primitives;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Domain.Entities.Base;
+using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Domain.Entities;
 

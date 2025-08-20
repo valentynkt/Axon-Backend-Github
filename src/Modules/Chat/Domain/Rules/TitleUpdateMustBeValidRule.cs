@@ -1,3 +1,4 @@
+using Axon.BuildingBlocks.Core.Constants;
 using BuildingBlocks.Core.Domain.Rules;
 using Axon.Modules.Chat.Domain.Constants;
 using Axon.Modules.Chat.Primitives.Constants;

@@ -5,6 +5,7 @@ using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using BuildingBlocks.Core.Domain.Primitives;
+using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Application.Services.Idempotency;
 

@@ -5,6 +5,8 @@ using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Primitives.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Functional.Results;
+using BuildingBlocks.Primitives.Ids;
+using FastEndpoints;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Commands.UpdateConversationTitle;

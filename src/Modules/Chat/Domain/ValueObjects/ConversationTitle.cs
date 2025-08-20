@@ -1,3 +1,4 @@
+using Axon.BuildingBlocks.Core.Constants;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Domain.Primitives;
 using BuildingBlocks.Core.Functional;
@@ -5,6 +6,7 @@ using BuildingBlocks.Core.Functional.Results;
 using BuildingBlocks.Core.Functional.Validation;
 using Axon.Modules.Chat.Domain.Constants;
 using Axon.Modules.Chat.Primitives.Constants;
+using MediatR;
 
 namespace Axon.Modules.Chat.Domain.ValueObjects;
 

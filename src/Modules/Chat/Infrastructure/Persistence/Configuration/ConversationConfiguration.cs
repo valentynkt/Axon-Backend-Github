@@ -1,9 +1,12 @@
+using BuildingBlocks.Primitives.Ids;
+
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Configuration;
 
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Primitives.ValueObjects;
+using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -16,15 +19,11 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.HasKey(c => c.Id);
         
         builder.Property(c => c.Id)
-            .HasConversion(
-                id => id.Value,
-                value => ConversationId.From(value))
+            .HasConversion(new ConversationId.EfCoreValueConverter())
             .IsRequired();
 
         builder.Property(c => c.OwnerId)
-            .HasConversion(
-                id => id.Value,
-                value => UserId.From(value))
+            .HasConversion(new UserId.EfCoreValueConverter())
             .IsRequired();
 
         builder.Property(c => c.Title)
@@ -36,9 +35,7 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .IsRequired();
 
         builder.Property(c => c.LastAiResponseId)
-            .HasConversion(
-                id => id != null ? id.Value : null,
-                value => value != null ? AiResponseId.Create(value).Value : null)
+            .HasConversion(new AiResponseId.EfCoreValueConverter())
             .HasMaxLength(100);
 
         // Audit fields from AuditableDeletableEntity

@@ -1,15 +1,18 @@
-using BuildingBlocks.Core.Functional;
-using BuildingBlocks.Core.Functional.Results;
+// /BuildingBlocks/Core/Abstractions/CQRS/ICommand.cs
+#nullable enable
+using CSharpFunctionalExtensions;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using MediatR;
 
 namespace BuildingBlocks.Core.Abstractions.CQRS;
 
-/// <summary>Commands that do not return a value. Result&lt;Unit&gt; ensures consistent errors.</summary>
-public interface ICommand : ICommand<Unit>
-{
-}
+/// <summary>
+/// Command that mutates state; unified on Result&lt;Unit, Error&gt;.
+/// </summary>
+public interface ICommand : IAxonRequest, IRequest<Result<Unit, Error>> { }
 
-/// <summary>Commands that return a response wrapped in Result&lt;TResponse&gt;.</summary>
-public interface ICommand<TResponse> : IAxonRequest<Result<TResponse>>, MediatR.IRequest<Result<TResponse>>
-    where TResponse : notnull
-{
-}
+/// <summary>
+/// Command returning a value; unified on Result&lt;TResponse, Error&gt;.
+/// </summary>
+public interface ICommand<TResponse> : IAxonRequest, IRequest<Result<TResponse, Error>>
+    where TResponse : notnull { }

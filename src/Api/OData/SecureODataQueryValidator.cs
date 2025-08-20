@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.AspNetCore.OData.Query.Validator;
+using Microsoft.OData;
+using Microsoft.OData.UriParser;
 
 namespace Axon.Api.OData;
 

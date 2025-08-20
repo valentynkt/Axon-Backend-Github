@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Vogen;
 using Axon.BuildingBlocks.Core.Constants;
 
@@ -5,22 +6,23 @@ namespace Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 
 /// <summary>
 /// Chat message content with compile-time validation and generated converters.
-/// <para>Creation: MessageContent.From("...")  // throws on invalid</para>
-/// <para>Non-throwing: MessageContent.TryParse("...", out var vo)</para>
-/// <para>JSON: System.Text.Json converter generated</para>
-/// <para>EF Core: value converter generated (see OnModelCreating note below)</para>
-/// <para>TypeConverter: generated (useful for binding, config, etc.)</para>
+/// Creation: <c>MessageContent.From("...")</c> (throws on invalid)
+/// Non-throwing: <c>MessageContent.TryParse("...", out var vo)</c>
+/// JSON: STJ converter generated
+/// EF Core: value converter generated
+/// TypeConverter: generated (useful for binding, config, etc.)
 /// </summary>
+[DebuggerDisplay("{Value}")]
 [ValueObject<string>(
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct MessageContent
 {
     private const int MaxLength = ChatPrimitiveConstants.MessageContent.MaxLength;
 
-    // Normalize before validation/persistence (keeps stored value trimmed)
+    // Vogen will call this before Validate and before storing the value
     private static string NormalizeInput(string input) => input.Trim();
 
-    // Business invariants - validates the normalized input
+    // Vogen passes the normalized input here
     private static Validation Validate(string input)
     {
         if (string.IsNullOrWhiteSpace(input))
@@ -32,16 +34,9 @@ public readonly partial struct MessageContent
         return Validation.Ok;
     }
 
-    /// <summary>
-    /// Gets a preview of the message content, truncated to the specified length.
-    /// </summary>
-    /// <param name="maxLength">Maximum length for the preview. Defaults to the standard preview length.</param>
-    /// <returns>The message content truncated to the specified length, or the full content if shorter.</returns>
+    /// <summary>Preview (no ellipsis; hard cutoff).</summary>
     public string Preview(int maxLength = ChatPrimitiveConstants.Conversation.ContentPreviewLength)
         => maxLength <= 0 ? string.Empty : (Value.Length <= maxLength ? Value : Value[..maxLength]);
 
-    /// <summary>
-    /// Returns the string representation of the message content.
-    /// </summary>
     public override string ToString() => Value;
 }

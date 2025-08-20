@@ -1,6 +1,4 @@
-
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
-using BuildingBlocks.Core.Domain.Primitives;
 
 namespace BuildingBlocks.Core.Domain.Entities.Base;
 
@@ -9,13 +7,11 @@ namespace BuildingBlocks.Core.Domain.Entities.Base;
 /// </summary>
 /// <typeparam name="TId">Strongly typed ID type</typeparam>
 public abstract class SoftDeletableEntity<TId> : Entity<TId>, ISoftDeletable
-    where TId : notnull, IStrongId
+    where TId : notnull
 {
     protected SoftDeletableEntity(TId id) : base(id) { }
 
-    /// <summary>
-    /// Parameterless ctor for ORM materialization only.
-    /// </summary>
+    /// <summary>Parameterless ctor for ORM materialization only.</summary>
     protected SoftDeletableEntity() : base() { }
 
     public bool IsDeleted { get; private set; }

@@ -1,6 +1,5 @@
 using System.Linq.Expressions;
-using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Core.Functional.Results;
+using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
