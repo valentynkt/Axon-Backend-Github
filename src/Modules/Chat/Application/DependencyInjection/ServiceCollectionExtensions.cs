@@ -5,6 +5,7 @@ using Axon.Modules.Chat.Application.Services.Idempotency;
 using BuildingBlocks.Application.Configuration;
 using BuildingBlocks.Core.Abstractions.Caching;
 using BuildingBlocks.Core.Abstractions.Idempotency;
+using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

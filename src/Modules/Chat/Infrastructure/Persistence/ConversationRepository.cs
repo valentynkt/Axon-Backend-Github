@@ -2,14 +2,9 @@ using Axon.Modules.Chat.Domain.Errors;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
-
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
-
-using BuildingBlocks.Application;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
-using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-;
-using BuildingBlocks.Infrastructure.Persistence.Write;
+
 
 public sealed class ConversationRepository : EfWriteRepository<ChatErrors.Conversation, ConversationId>, IConversationRepository
 {

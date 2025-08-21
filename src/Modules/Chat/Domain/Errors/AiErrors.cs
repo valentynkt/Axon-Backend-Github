@@ -11,21 +11,21 @@ public static class AiErrors
     public static Error ServiceUnavailable => 
         Error.Unavailable("The AI service is currently unavailable", "AI.SERVICE_UNAVAILABLE");
     
-    public static Error ServiceUnavailable(string message) => 
+    public static Error ServiceUnavailableWithMessage(string message) => 
         Error.Unavailable(message, "AI.SERVICE_UNAVAILABLE");
     
     // Configuration errors
     public static Error InvalidConfiguration => 
         Error.Configuration("The AI configuration is invalid", "AI.INVALID_CONFIGURATION");
     
-    public static Error InvalidConfiguration(string configKey) => 
+    public static Error InvalidConfigurationFor(string configKey) => 
         Error.Configuration($"Invalid AI configuration: {configKey}", "AI.INVALID_CONFIGURATION", configKey);
     
     // Request errors
     public static Error RequestFailed => 
         Error.External("The AI request failed", "AI.REQUEST_FAILED");
     
-    public static Error RequestFailed(string message, string code = "AI.REQUEST_FAILED") => 
+    public static Error RequestFailedWithMessage(string message, string code = "AI.REQUEST_FAILED") => 
         Error.External(message, code);
     
     public static Error EmptyMessage => 
@@ -38,21 +38,21 @@ public static class AiErrors
     public static Error ResponseInvalid => 
         Error.Serialization("The AI response is invalid", "AI.RESPONSE_INVALID");
     
-    public static Error ResponseInvalid(string message) => 
+    public static Error ResponseInvalidWithMessage(string message) => 
         Error.Serialization(message, "AI.RESPONSE_INVALID");
     
     // Timeout errors
     public static Error Timeout => 
         Error.Timeout("The AI request timed out", "AI.TIMEOUT");
     
-    public static Error Timeout(TimeSpan duration) => 
+    public static Error TimeoutAfter(TimeSpan duration) => 
         Error.Timeout($"The AI request timed out after {duration.TotalSeconds:F1} seconds", "AI.TIMEOUT", duration);
     
     // Rate limiting errors
     public static Error RateLimited => 
         Error.RateLimit("Too many requests to the AI service", "AI.RATE_LIMITED");
     
-    public static Error RateLimited(TimeSpan? retryAfter) => 
+    public static Error RateLimitedWithRetry(TimeSpan? retryAfter) => 
         Error.RateLimit("Too many requests to the AI service", "AI.RATE_LIMITED", retryAfter);
     
     // Network errors

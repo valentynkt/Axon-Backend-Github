@@ -1,13 +1,11 @@
 using BuildingBlocks.Infrastructure.Persistence.Write;
-
-namespace Axon.Modules.Chat.Infrastructure.Persistence;
-
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+namespace Axon.Modules.Chat.Infrastructure.Persistence;
 
 public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDbContext
 {

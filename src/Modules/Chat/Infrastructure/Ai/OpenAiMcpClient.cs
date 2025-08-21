@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects; // MessageContent (Vogen)
@@ -47,8 +46,7 @@ public sealed class OpenAiMcpClient : IAiClient
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.Message))
-                return Result.Failure<AiResponse, Error>(AiErrors.RequestFailed);
+            // MessageContent VO already guarantees validity; no string checks here.
 
             var requestPayload = BuildRequestPayload(request);
 
@@ -120,7 +118,7 @@ public sealed class OpenAiMcpClient : IAiClient
         var payload = new
         {
             model = _options.Model,
-            input = request.Message,
+            input = request.Message, // Vogen VO → STJ converter serializes underlying string
             tools = tools, // null omitted by serializer
             previous_response_id = string.IsNullOrWhiteSpace(request.PreviousResponseId) ? null : request.PreviousResponseId,
         };
@@ -194,11 +192,13 @@ public sealed class OpenAiMcpClient : IAiClient
             if (!MessageContent.TryParse(contentStr, provider: null, out var contentVo))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            var responseIdVo = new AiResponseId(responseId);
+            var responseIdVoResult = AiResponseId.Create(responseId);
+            if (responseIdVoResult.IsFailure)
+                return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
             var ai = new AiResponse(
                 Content: contentVo,
-                ResponseId: responseIdVo,
+                ResponseId: responseIdVoResult.Value,
                 ToolExecutions: null);
 
             return Result.Success<AiResponse, Error>(ai);
