@@ -54,7 +54,11 @@ public sealed class IdempotencyKeyResolver
         {
             var k = provider.GenerateKey(request, _currentUser);
             if (!string.IsNullOrWhiteSpace(k))
-                return Compose(k, typeof(TRequest));
+            {
+                // IMPORTANT: return provider key *as-is* to allow cross-command de-duplication
+                // (i.e., no request-type suffix). Providers should namespace their keys.
+                return k!;
+            }
         }
 
         // 4) Generic, deterministic fallback (prefix + type + optional user + optional payload hash)
@@ -65,7 +69,6 @@ public sealed class IdempotencyKeyResolver
 
         if (_options.Value.IncludePayloadHash)
         {
-            // stable-ish payload hash (good enough for commands)
             var json = JsonSerializer.Serialize(request, JsonOptions);
             parts.Add(Sha256Base64(json));
         }

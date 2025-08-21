@@ -13,11 +13,6 @@ public sealed class AppendUserMessageValidator : BaseValidator<AppendUserMessage
 {
     public AppendUserMessageValidator()
     {
-        // ConversationId Value Object handles its own validation when created
-        RuleFor(x => x.ConversationId)
-            .NotNull()
-            .WithMessage("ConversationId is required to append a message.");
-
         // MessageContent Value Object handles its own validation when created  
         RuleFor(x => x.Content)
             .NotNull()

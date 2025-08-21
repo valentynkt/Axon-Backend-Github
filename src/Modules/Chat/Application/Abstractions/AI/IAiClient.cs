@@ -1,5 +1,5 @@
 using Axon.Modules.Chat.Application.DTOs;
-
+using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Abstractions.AI;
@@ -15,5 +15,5 @@ public interface IAiClient
     /// <param name="request">Message processing request with MCP configuration</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result containing AI response with tool results</returns>
-    Task<Result<AiResponse>> ProcessMessageAsync(AiRequest request, CancellationToken cancellationToken);
+    Task<Result<AiResponse, Error>> ProcessMessageAsync(AiRequest request, CancellationToken cancellationToken);
 }

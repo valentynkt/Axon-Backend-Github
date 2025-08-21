@@ -1,8 +1,8 @@
-// File: /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Application/Commands/AppendUserMessage/AppendUserMessageCommand.cs
-
+// /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Application/Commands/AppendUserMessage/AppendUserMessageCommand.cs
+#nullable enable
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Common;
-;
+using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using BuildingBlocks.Primitives.Ids;
 
@@ -11,16 +11,17 @@ namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 /// <summary>
 /// Appends a user message to an existing conversation. The conversation aggregate
 /// maintains the previous response ID for proper AI threading.
-/// MCP servers (if any) are resolved by the handler from configuration.
-/// This command supports idempotency to prevent duplicate message processing.
+/// This command is idempotent to prevent duplicate processing.
 /// </summary>
 public sealed record AppendUserMessageCommand(
     ConversationId ConversationId,
     MessageContent Content
-) : IdempotentCommandBase<ChatMessageResponse>
+) : RequestBase, IIdempotentCommand<ProcessMessageResponse>
 {
-    /// <summary>
-    /// Chat operations require a longer idempotency window due to AI processing time.
-    /// </summary>
-    public override TimeSpan GetIdempotencyWindow() => TimeSpan.FromMinutes(15);
+    /// <summary>Chat operations require a longer idempotency window due to AI processing time.</summary>
+    public TimeSpan? GetIdempotencyWindow() => TimeSpan.FromMinutes(15);
+
+    // Optional overrides (keep defaults unless you need them)
+    // public string? GetExplicitIdempotencyKey() => null;
+    // public bool CacheFailures => false;
 }

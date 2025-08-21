@@ -1,13 +1,17 @@
+// /BuildingBlocks/Core/Primitives/ValueObjects/MessageContent.cs
+#nullable enable
 using System.Diagnostics;
 using Vogen;
 using Axon.BuildingBlocks.Core.Constants;
+using CSharpFunctionalExtensions;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 
 /// <summary>
 /// Chat message content with compile-time validation and generated converters.
 /// Creation: <c>MessageContent.From("...")</c> (throws on invalid)
-/// Non-throwing: <c>MessageContent.TryParse("...", out var vo)</c>
+/// Non-throwing: <c>MessageContent.TryParse("...", provider, out var vo)</c>
 /// JSON: STJ converter generated
 /// EF Core: value converter generated
 /// TypeConverter: generated (useful for binding, config, etc.)
@@ -39,4 +43,23 @@ public readonly partial struct MessageContent
         => maxLength <= 0 ? string.Empty : (Value.Length <= maxLength ? Value : Value[..maxLength]);
 
     public override string ToString() => Value;
+
+    /// <summary>
+    /// Non-throwing factory bridging Vogen to CFE <c>Result</c>.
+    /// Preferred in application layer to avoid exception-based control flow.
+    /// </summary>
+    public static Result<MessageContent, Error> Create(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Result.Failure<MessageContent, Error>(
+                Error.Validation("Message content cannot be empty or whitespace.", "CHAT.MESSAGE.EMPTY"));
+        }
+
+        // Use generated TryParse; provider null is fine
+        return TryParse(value, provider: null, out var vo)
+            ? Result.Success<MessageContent, Error>(vo)
+            : Result.Failure<MessageContent, Error>(
+                Error.Validation("Message content is invalid.", "CHAT.MESSAGE.INVALID"));
+    }
 }

@@ -1,4 +1,6 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Domain.Types;
+using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Application.DTOs;
 
@@ -6,6 +8,6 @@ namespace Axon.Modules.Chat.Application.DTOs;
 /// AI response with tool execution results
 /// </summary>
 public sealed record AiResponse(
-    string Content,
-    string? ResponseId = null,
+    MessageContent Content,
+    AiResponseId ResponseId,
     ToolExecution[]? ToolExecutions = null);

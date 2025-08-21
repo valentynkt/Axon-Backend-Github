@@ -18,10 +18,6 @@
     <!-- Reference Primitives for shared Value Objects -->
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Services\AI\" />
-  </ItemGroup>
-
 
 
 </Project>

@@ -1,6 +1,7 @@
+using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
+using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Application.Services.Idempotency;
-
 using BuildingBlocks.Application.Configuration;
 using BuildingBlocks.Core.Abstractions.Caching;
 using BuildingBlocks.Core.Abstractions.Idempotency;
@@ -21,9 +22,7 @@ public static class ServiceCollectionExtensions
     /// Registers all Chat Application layer services
     /// </summary>
     public static IServiceCollection AddChatApplication(
-        this IServiceCollection services,
-        IConfiguration configuration,
-        IHostEnvironment environment)
+        this IServiceCollection services)
     {
         // Register MediatR handlers from this assembly
         services.AddMediatR(cfg => 
@@ -35,13 +34,19 @@ public static class ServiceCollectionExtensions
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
         // Register BuildingBlocks pipeline behaviors
-        services.AddPipelineBehaviors(configuration, environment);
+        services.AddApplicationServices();
 
         // Register Chat-specific services
-        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton(TimeProvider.System);
         
         // Register idempotency key providers
         services.AddTransient<IIdempotencyKeyProvider<AppendUserMessageCommand>, ChatIdempotencyKeyProvider>();
+        
+        // Register extracted chat services
+        services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();
+        services.AddScoped<IMcpServerResolutionService, McpServerResolutionService>();
+        services.AddScoped<IAiProcessingService, AiProcessingService>();
+        services.AddScoped<IMessageProcessingOrchestrator, MessageProcessingOrchestrator>();
         
         // IAiClient is infrastructure-provided (adapter), register there.
 

@@ -3,10 +3,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects; // MessageContent (Vogen)
 using Axon.Modules.Chat.Application.Abstractions.AI;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Domain.Errors;
-
+using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -39,16 +41,17 @@ public sealed class OpenAiMcpClient : IAiClient
         ConfigureHttpClient();
     }
 
-    public async Task<Result<AiResponse>> ProcessMessageAsync(
+    public async Task<Result<AiResponse, Error>> ProcessMessageAsync(
         AiRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
             if (string.IsNullOrWhiteSpace(request.Message))
-                return AiErrors.RequestFailed;
+                return Result.Failure<AiResponse, Error>(AiErrors.RequestFailed);
 
             var requestPayload = BuildRequestPayload(request);
+
             // Serialize to JSON
             var jsonContent = JsonSerializer.Serialize(requestPayload);
             using var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -66,18 +69,26 @@ public sealed class OpenAiMcpClient : IAiClient
                 _logger.LogError("OpenAI error {StatusCode}. Code={ErrCode} Message={ErrMsg}. Raw={Raw}",
                     (int)response.StatusCode, errCode ?? "-", errMsg ?? "-", body);
 
-                return response.StatusCode switch
+                var error = response.StatusCode switch
                 {
-                    HttpStatusCode.TooManyRequests => AiErrors.ServiceUnavailable,  // simplest mapping
+                    HttpStatusCode.TooManyRequests => AiErrors.RateLimited,
                     HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => AiErrors.RequestFailed,
                     HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => AiErrors.RequestFailed,
                     _ => AiErrors.ServiceUnavailable
                 };
+
+                return Result.Failure<AiResponse, Error>(error);
             }
 
-            var ai = ParseResponse(body);
-            _logger.LogInformation("Responses API request succeeded (responseId={ResponseId})", ai.ResponseId);
-            return Result<AiResponse>.Success(ai);
+            var parsed = ParseResponse(body);
+            if (parsed.IsFailure)
+            {
+                _logger.LogWarning("Failed to parse/validate AI response: {ErrorCode}", parsed.Error.Code);
+                return parsed;
+            }
+
+            _logger.LogInformation("Responses API request succeeded (responseId={ResponseId})", parsed.Value.ResponseId.Value);
+            return Result.Success<AiResponse, Error>(parsed.Value);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -87,7 +98,7 @@ public sealed class OpenAiMcpClient : IAiClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Responses API call failed.");
-            return AiErrors.RequestFailed;
+            return Result.Failure<AiResponse, Error>(AiErrors.RequestFailed);
         }
     }
 
@@ -105,7 +116,7 @@ public sealed class OpenAiMcpClient : IAiClient
         // Build the smallest object that matches the Responses API
         var tools = BuildMcpTools(request.McpConfigs);
 
-        // NOTE: use anonymous type to keep it simple; PostAsJsonAsync will serialize it
+        // anonymous object to keep it small and serializer-friendly
         var payload = new
         {
             model = _options.Model,
@@ -119,27 +130,25 @@ public sealed class OpenAiMcpClient : IAiClient
 
     private static object[]? BuildMcpTools(IReadOnlyCollection<McpServerConfig>? mcpConfigs)
     {
-        if (mcpConfigs == null || mcpConfigs.Count == 0)
+        if (mcpConfigs is null || mcpConfigs.Count == 0)
             return null;
 
         var tools = new List<object>(mcpConfigs.Count);
 
         foreach (var cfg in mcpConfigs)
         {
-            // Only include what we actually have; keep it minimal
             var tool = new Dictionary<string, object?>
             {
                 ["type"] = "mcp",
                 ["server_url"] = cfg.ServerUrl,
                 ["server_label"] = string.IsNullOrWhiteSpace(cfg.ServerLabel) ? "MCP Server" : cfg.ServerLabel,
-                // The Responses API currently accepts approval policies; keep the semantics simple:
                 ["require_approval"] = cfg.RequireApproval ? "always" : "never"
             };
 
             if (cfg.Headers is { Count: > 0 })
                 tool["headers"] = cfg.Headers;
 
-            if (cfg.AllowedTools != null && cfg.AllowedTools.Any())
+            if (cfg.AllowedTools is { Count: > 0 })
                 tool["allowed_tools"] = cfg.AllowedTools;
 
             tools.Add(tool);
@@ -148,32 +157,56 @@ public sealed class OpenAiMcpClient : IAiClient
         return tools.ToArray();
     }
 
-    private static AiResponse ParseResponse(string body)
+    /// <summary>
+    /// Parses OpenAI Responses API JSON into a validated, domain-typed <see cref="AiResponse"/>.
+    /// </summary>
+    private static Result<AiResponse, Error> ParseResponse(string body)
     {
-        using var doc = JsonDocument.Parse(body);
-        var root = doc.RootElement;
-
-        // id
-        var responseId = root.TryGetProperty("id", out var idEl)
-            ? idEl.GetString() ?? Guid.NewGuid().ToString("N")
-            : Guid.NewGuid().ToString("N");
-
-        // Prefer top-level "output_text" when present (Responses API often includes it)
-        if (root.TryGetProperty("output_text", out var ot) && ot.ValueKind == JsonValueKind.String)
+        try
         {
-            return new AiResponse(
-                Content: ot.GetString() ?? string.Empty,
-                ResponseId: responseId,
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            // id
+            var responseId = root.TryGetProperty("id", out var idEl)
+                ? idEl.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(responseId))
+                return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+
+            // Prefer top-level "output_text" when present
+            string? contentStr = null;
+            if (root.TryGetProperty("output_text", out var ot) && ot.ValueKind == JsonValueKind.String)
+            {
+                contentStr = ot.GetString();
+            }
+            else
+            {
+                // Fallback: output[].content[].text (message items)
+                contentStr = ExtractTextFromOutputArray(root);
+            }
+
+            if (string.IsNullOrWhiteSpace(contentStr))
+                return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+
+            // Validate/construct VOs
+            if (!MessageContent.TryParse(contentStr, provider: null, out var contentVo))
+                return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+
+            var responseIdVo = new AiResponseId(responseId);
+
+            var ai = new AiResponse(
+                Content: contentVo,
+                ResponseId: responseIdVo,
                 ToolExecutions: null);
+
+            return Result.Success<AiResponse, Error>(ai);
         }
-
-        // Fallback: output[].content[].text (message items)
-        var content = ExtractTextFromOutputArray(root) ?? string.Empty;
-
-        return new AiResponse(
-            Content: content,
-            ResponseId: responseId,
-            ToolExecutions: null);
+        catch
+        {
+            return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+        }
     }
 
     private static string? ExtractTextFromOutputArray(JsonElement root)

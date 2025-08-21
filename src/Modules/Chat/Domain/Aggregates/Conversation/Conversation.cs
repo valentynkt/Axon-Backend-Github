@@ -227,12 +227,6 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// <summary>Checks if the conversation belongs to a specific user.</summary>
     public bool BelongsTo(UserId userId) => OwnerId == userId;
 
-    /// <summary>
-    /// Gets the last AI response ID for threading anchor in subsequent AI requests.
-    /// Use this value as 'previous_response_id' in downstream AI requests.
-    /// </summary>
-    public string? GetLastAiResponseId() => LastAiResponseId?.ToString();
-
     // ---------- Internals ----------
 
     private void ValidateMessageAppendPreconditions(string content, MessageRole role)

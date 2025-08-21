@@ -1,128 +1,109 @@
-
 using Axon.Api.Contracts.Chat;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
-using Axon.Modules.Chat.Application.Commands.StartConversation;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
-using BuildingBlocks.Infrastructure.Observability.OpenTelemetry;
-using CSharpFunctionalExtensions;
-using IMediator = MassTransit.Mediator.IMediator;
-
-;
+using Axon.Modules.Chat.Application.Commands.StartConversation;
+using Axon.Modules.Chat.Application.Common;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
+using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Services;
 
 /// <summary>
-/// Default implementation of chat command dispatcher.
+/// Translates API requests into domain commands and routes via MediatR.
+/// Uses Result&lt;T, Error&gt; for clear success/failure without extra status flags.
 /// </summary>
 public sealed class ChatCommandDispatcher : IChatCommandDispatcher
 {
     private readonly IMediator _mediator;
     private readonly ILogger<ChatCommandDispatcher> _logger;
 
-    public ChatCommandDispatcher(
-        IMediator mediator,
-        ILogger<ChatCommandDispatcher> logger)
+    public ChatCommandDispatcher(IMediator mediator, ILogger<ChatCommandDispatcher> logger)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<Result<ProcessMessageResponse>> ProcessMessageAsync(
+    public async Task<Result<ProcessMessageResponse, Error>> ProcessMessageAsync(
         ProcessMessageRequest request,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug(
-            "Processing message request (isNewConversation={IsNewConversation})",
-            request.ConversationId == null);
+        _logger.LogDebug("Processing chat message (isNewConversation={IsNew})",
+            request.ConversationId is null);
 
         try
         {
-            if (request.ConversationId == null)
-            {
-                return await StartNewConversationAsync(request, cancellationToken);
-            }
-
-            return await AppendToExistingConversationAsync(request, cancellationToken);
+            return request.ConversationId is null
+                ? await StartNewConversationAsync(request, cancellationToken)
+                : await AppendToExistingConversationAsync(request, cancellationToken);
         }
-        catch (TelemetryTags.Tracing.Exception ex)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error dispatching chat command");
-            return Result<ProcessMessageResponse>.Failure(
-                BuildingBlocks.Core.Diagnostics.Errors.Error.Unexpected(
-                    "CHAT_DISPATCH_ERROR",
-                    "An unexpected error occurred while processing the message"));
+            return Result.Failure<ProcessMessageResponse, Error>(
+                Error.Internal("An unexpected error occurred while processing the message.", "CHAT_DISPATCH_ERROR"));
         }
     }
 
-    private async Task<Result<ProcessMessageResponse>> StartNewConversationAsync(
+    private async Task<Result<ProcessMessageResponse, Error>> StartNewConversationAsync(
         ProcessMessageRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
-        var messageResult = MessageContent.Create(request.Message);
-        if (messageResult.IsFailure)
-            return Result<ProcessMessageResponse>.Failure(messageResult.Error);
+        var msg = MessageContent.Create(request.Message);
+        if (msg.IsFailure)
+            return Result.Failure<ProcessMessageResponse, Error>(msg.Error);
 
-        var command = new StartConversationCommand(Message: messageResult.Value);
-        var result = await _mediator.Send(command, cancellationToken);
+        var cmd = new StartConversationCommand(Message: msg.Value);
+        var result = await _mediator.Send(cmd, ct); // Result<ChatMessageResponse, Error>
 
         if (result.IsFailure)
-            return Result<ProcessMessageResponse>.Failure(result.Error);
+            return Result.Failure<ProcessMessageResponse, Error>(result.Error);
 
-        var response = new ProcessMessageResponse
-        {
-            Success = true,
-            Content = result.Value.AssistantMessage,
-            ConversationId = result.Value.ConversationId.Value,
-            ResponseId = result.Value.AssistantMessageId.Value.ToString(),
-            Timestamp = DateTime.UtcNow
-        };
+        var r = result.Value;
+        var response = new ProcessMessageResponse(
+            ConversationId: r.ConversationId,
+            UserMessageId: r.UserMessageId,
+            AssistantMessageId: r.AssistantMessageId,
+            AssistantMessage: r.AssistantMessage);
 
-        return Result<ProcessMessageResponse>.Success(response);
+        return Result.Success<ProcessMessageResponse, Error>(response);
     }
 
-    private async Task<Result<ProcessMessageResponse>> AppendToExistingConversationAsync(
+    private async Task<Result<ProcessMessageResponse, Error>> AppendToExistingConversationAsync(
         ProcessMessageRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
-        // Validate ConversationId
-        ConversationId conversationId;
-        try
+        var guid = request.ConversationId!.Value;
+        if (guid == Guid.Empty)
         {
-            conversationId = ConversationId.From(request.ConversationId!.Value);
-        }
-        catch (ArgumentException ex)
-        {
-            _logger.LogWarning(ex, "Invalid ConversationId provided: {ConversationId}", request.ConversationId);
-            return Result<ProcessMessageResponse>.Failure(
-                BuildingBlocks.Core.Diagnostics.Errors.Error.Validation(
-                    "INVALID_CONVERSATION_ID",
-                    "The provided conversation ID is invalid"));
+            return Result.Failure<ProcessMessageResponse, Error>(
+                Error.Validation("The provided conversation ID is invalid.", "INVALID_CONVERSATION_ID"));
         }
 
-        var messageResult = MessageContent.Create(request.Message);
-        if (messageResult.IsFailure)
-            return Result<ProcessMessageResponse>.Failure(messageResult.Error);
+        var conversationId = new ConversationId(guid);
 
-        var command = new AppendUserMessageCommand(
+        var msg = MessageContent.Create(request.Message);
+        if (msg.IsFailure)
+            return Result.Failure<ProcessMessageResponse, Error>(msg.Error);
+
+        var cmd = new AppendUserMessageCommand(
             ConversationId: conversationId,
-            Content: messageResult.Value);
+            Content: msg.Value);
 
-        var result = await _mediator.Send(command, cancellationToken);
+        var result = await _mediator.Send(cmd, ct); // Result<ChatMessageResponse, Error>
+
         if (result.IsFailure)
-            return Result<ProcessMessageResponse>.Failure(result.Error);
+            return Result.Failure<ProcessMessageResponse, Error>(result.Error);
 
-        var response = new ProcessMessageResponse
-        {
-            Success = true,
-            Content = result.Value.AssistantMessage,
-            ConversationId = result.Value.ConversationId.Value,
-            ResponseId = result.Value.AssistantMessageId.Value.ToString(),
-            Timestamp = DateTime.UtcNow
-        };
+        var r = result.Value;
+        var response = new ProcessMessageResponse(
+            ConversationId: r.ConversationId,
+            UserMessageId: r.UserMessageId,
+            AssistantMessageId: r.AssistantMessageId,
+            AssistantMessage: r.AssistantMessage);
 
-        return Result<ProcessMessageResponse>.Success(response);
+        return Result.Success<ProcessMessageResponse, Error>(response);
     }
 }

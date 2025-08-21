@@ -1,5 +1,6 @@
-
 using Axon.Api.Contracts.Chat;
+using Axon.Modules.Chat.Application.Common;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Services;
@@ -11,11 +12,9 @@ public interface IChatCommandDispatcher
 {
     /// <summary>
     /// Processes a chat message request by dispatching to the appropriate command.
+    /// Result-based contract carries success/failure (no extra status field needed).
     /// </summary>
-    /// <param name="request">The chat message request</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Result containing the chat response</returns>
-    Task<Result<ProcessMessageResponse>> ProcessMessageAsync(
-        ProcessMessageRequest request, 
+    Task<Result<ProcessMessageResponse, Error>> ProcessMessageAsync(
+        ProcessMessageRequest request,
         CancellationToken cancellationToken = default);
 }
