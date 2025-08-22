@@ -192,7 +192,7 @@ public sealed class OpenAiMcpClient : IAiClient
             if (!MessageContent.TryParse(contentStr, provider: null, out var contentVo))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            var responseIdVoResult = AiResponseId.Create(responseId);
+            var responseIdVoResult = AiResponseId(responseId);
             if (responseIdVoResult.IsFailure)
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
