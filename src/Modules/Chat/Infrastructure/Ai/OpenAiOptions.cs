@@ -24,11 +24,7 @@ public sealed class OpenAiOptions
     /// Maximum tokens in response
     /// </summary>
     public int MaxTokens { get; set; } = 4000;
-
-    /// <summary>
-    /// Temperature for response randomness (0.0 to 2.0)
-    /// </summary>
-    public double Temperature { get; set; } = 0.7;
+    
 
     /// <summary>
     /// Whether MCP integration is enabled

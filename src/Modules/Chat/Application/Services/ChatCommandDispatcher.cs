@@ -1,4 +1,3 @@
-using Axon.Api.Contracts.Chat;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using Axon.Modules.Chat.Application.Commands.StartConversation;
@@ -12,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Axon.Modules.Chat.Application.Services;
 
 /// <summary>
-/// Translates API requests into domain commands and routes via MediatR.
+/// Translates application-level requests into domain commands and routes via MediatR.
 /// Uses Result&lt;T, Error&gt; for clear success/failure without extra status flags.
 /// </summary>
 public sealed class ChatCommandDispatcher : IChatCommandDispatcher
@@ -51,24 +50,13 @@ public sealed class ChatCommandDispatcher : IChatCommandDispatcher
         ProcessMessageRequest request,
         CancellationToken ct)
     {
-        var msg = MessageContent.Create(request.Message);
-        if (msg.IsFailure)
-            return Result.Failure<ProcessMessageResponse, Error>(msg.Error);
+        if (!MessageContent.TryParse(request.Message, provider: null, out var msg))
+            return Result.Failure<ProcessMessageResponse, Error>(
+                Error.Validation("Message content is invalid.", "CHAT.MESSAGE.INVALID"));
 
-        var cmd = new StartConversationCommand(Message: msg.Value);
-        var result = await _mediator.Send(cmd, ct); // Result<ChatMessageResponse, Error>
-
-        if (result.IsFailure)
-            return Result.Failure<ProcessMessageResponse, Error>(result.Error);
-
-        var r = result.Value;
-        var response = new ProcessMessageResponse(
-            ConversationId: r.ConversationId,
-            UserMessageId: r.UserMessageId,
-            AssistantMessageId: r.AssistantMessageId,
-            AssistantMessage: r.AssistantMessage);
-
-        return Result.Success<ProcessMessageResponse, Error>(response);
+        var cmd = new StartConversationCommand(Message: msg);
+        // Handlers already return Result<ProcessMessageResponse, Error>
+        return await _mediator.Send(cmd, ct);
     }
 
     private async Task<Result<ProcessMessageResponse, Error>> AppendToExistingConversationAsync(
@@ -82,28 +70,14 @@ public sealed class ChatCommandDispatcher : IChatCommandDispatcher
                 Error.Validation("The provided conversation ID is invalid.", "INVALID_CONVERSATION_ID"));
         }
 
+        if (!MessageContent.TryParse(request.Message, provider: null, out var msg))
+            return Result.Failure<ProcessMessageResponse, Error>(
+                Error.Validation("Message content is invalid.", "CHAT.MESSAGE.INVALID"));
+
         var conversationId = new ConversationId(guid);
+        var cmd = new AppendUserMessageCommand(ConversationId: conversationId, Content: msg);
 
-        var msg = MessageContent.Create(request.Message);
-        if (msg.IsFailure)
-            return Result.Failure<ProcessMessageResponse, Error>(msg.Error);
-
-        var cmd = new AppendUserMessageCommand(
-            ConversationId: conversationId,
-            Content: msg.Value);
-
-        var result = await _mediator.Send(cmd, ct); // Result<ChatMessageResponse, Error>
-
-        if (result.IsFailure)
-            return Result.Failure<ProcessMessageResponse, Error>(result.Error);
-
-        var r = result.Value;
-        var response = new ProcessMessageResponse(
-            ConversationId: r.ConversationId,
-            UserMessageId: r.UserMessageId,
-            AssistantMessageId: r.AssistantMessageId,
-            AssistantMessage: r.AssistantMessage);
-
-        return Result.Success<ProcessMessageResponse, Error>(response);
+        // Handlers already return Result<ProcessMessageResponse, Error>
+        return await _mediator.Send(cmd, ct);
     }
 }

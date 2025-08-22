@@ -2,10 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using BuildingBlocks.Core.Diagnostics;
-using BuildingBlocks.Core.Functional;
-using BuildingBlocks.Core.Functional.Exceptions;
-using BuildingBlocks.Web.Extensions;
+
 
 namespace BuildingBlocks.Web.Middleware;
 

@@ -1,6 +1,4 @@
-using Axon.Api.Contracts.Chat;
 using Axon.Modules.Chat.Application.Common;
-using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Services;

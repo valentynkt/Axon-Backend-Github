@@ -1,14 +1,12 @@
-// /Axon.Api.Contracts/Chat/ProcessMessageRequest.cs
+// /Modules/Chat/Application/Common/ProcessMessageRequest.cs
 #nullable enable
-using System.ComponentModel.DataAnnotations;
 
-namespace Axon.Api.Contracts.Chat;
+namespace Axon.Modules.Chat.Application.Common;
 
 /// <summary>
-/// Unified request for sending a chat message.
+/// Unified request for sending a chat message from the application layer.
 /// - When <see cref="ConversationId"/> is <c>null</c>, a new conversation is started.
-/// - When <see cref="ConversationId"/> has a value, the message is appended to that conversation.
-/// The domain layer (VOs/rules) performs authoritative validation.
+/// - When <see cref="ConversationId"/> has a value, the message is appended.
 /// </summary>
 public sealed record ProcessMessageRequest
 {
@@ -20,6 +18,5 @@ public sealed record ProcessMessageRequest
     /// <summary>
     /// User message to process. Must be non-empty after trimming.
     /// </summary>
-    [Required(AllowEmptyStrings = false, ErrorMessage = "Message is required.")]
     public string Message { get; init; } = string.Empty;
 }

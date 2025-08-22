@@ -146,7 +146,7 @@ public sealed class OpenAiMcpClient : IAiClient
             if (cfg.Headers is { Count: > 0 })
                 tool["headers"] = cfg.Headers;
 
-            if (cfg.AllowedTools is { Count: > 0 })
+            if (cfg.AllowedTools is { Length: > 0 })
                 tool["allowed_tools"] = cfg.AllowedTools;
 
             tools.Add(tool);
@@ -154,10 +154,7 @@ public sealed class OpenAiMcpClient : IAiClient
 
         return tools.ToArray();
     }
-
-    /// <summary>
-    /// Parses OpenAI Responses API JSON into a validated, domain-typed <see cref="AiResponse"/>.
-    /// </summary>
+    
     private static Result<AiResponse, Error> ParseResponse(string body)
     {
         try
@@ -165,7 +162,7 @@ public sealed class OpenAiMcpClient : IAiClient
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
-            // id
+            // id (must exist for current response)
             var responseId = root.TryGetProperty("id", out var idEl)
                 ? idEl.GetString()
                 : null;
@@ -173,7 +170,7 @@ public sealed class OpenAiMcpClient : IAiClient
             if (string.IsNullOrWhiteSpace(responseId))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            // Prefer top-level "output_text" when present
+            // Prefer top-level "output_text"; else fallback to output[].content[].text
             string? contentStr = null;
             if (root.TryGetProperty("output_text", out var ot) && ot.ValueKind == JsonValueKind.String)
             {
@@ -181,7 +178,6 @@ public sealed class OpenAiMcpClient : IAiClient
             }
             else
             {
-                // Fallback: output[].content[].text (message items)
                 contentStr = ExtractTextFromOutputArray(root);
             }
 
@@ -192,13 +188,12 @@ public sealed class OpenAiMcpClient : IAiClient
             if (!MessageContent.TryParse(contentStr, provider: null, out var contentVo))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            var responseIdVoResult = AiResponseId(responseId);
-            if (responseIdVoResult.IsFailure)
-                return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+            // NOTE: AiResponseId has no Create(); use ctor
+            var responseIdVo = new AiResponseId(responseId);
 
             var ai = new AiResponse(
                 Content: contentVo,
-                ResponseId: responseIdVoResult.Value,
+                ResponseId: responseIdVo,
                 ToolExecutions: null);
 
             return Result.Success<AiResponse, Error>(ai);
@@ -208,7 +203,6 @@ public sealed class OpenAiMcpClient : IAiClient
             return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
         }
     }
-
     private static string? ExtractTextFromOutputArray(JsonElement root)
     {
         if (!root.TryGetProperty("output", out var output) || output.ValueKind != JsonValueKind.Array)

@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Errors;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -6,7 +7,7 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 
 
-public sealed class ConversationRepository : EfWriteRepository<ChatErrors.Conversation, ConversationId>, IConversationRepository
+public sealed class ConversationRepository : EfWriteRepository<Conversation, ConversationId>, IConversationRepository
 {
     private readonly IWriteUnitOfWork _unitOfWork;
 

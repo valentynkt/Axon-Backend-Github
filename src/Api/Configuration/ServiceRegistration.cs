@@ -59,8 +59,8 @@ public static class ServiceRegistration
         
         // Add Chat-specific services
         services.AddScoped<IChatCommandDispatcher, ChatCommandDispatcher>();
-        services.AddScoped<IRequestMapper<Axon.Api.Contracts.Chat.ProcessMessageRequest, Axon.Api.Contracts.Chat.ProcessMessageResponse>, ProcessMessageRequestMapper>();
-        services.AddScoped<IResponseMapper<Axon.Api.Contracts.Chat.ProcessMessageResponse, Axon.Api.Contracts.Chat.ProcessMessageResponse>, ProcessMessageResponseMapper>();
+        services.AddScoped<IRequestMapper<Axon.Api.Contracts.Chat.ChatTurnRequestDto, Axon.Api.Contracts.Chat.ProcessMessageResponse>, ChatTurnRequestMapper>();
+        services.AddScoped<IResponseMapper<Axon.Api.Contracts.Chat.ProcessMessageResponse, Axon.Api.Contracts.Chat.ProcessMessageResponse>, ChatTurnResponseMapper>();
         
         // Add Chat module services - manually add what we need for POC
         services.AddChatApplicationServices(configuration);

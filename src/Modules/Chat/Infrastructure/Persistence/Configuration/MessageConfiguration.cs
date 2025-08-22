@@ -1,13 +1,12 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Configuration;
 
-using Axon.Modules.Chat.Domain.Entities;
-using Axon.Modules.Chat.Domain.ValueObjects;
-;
-using BuildingBlocks.Primitives.Ids;
+using Domain.Entities;
+using Domain.ValueObjects;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

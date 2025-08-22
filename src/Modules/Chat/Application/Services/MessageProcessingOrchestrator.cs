@@ -99,7 +99,7 @@ public sealed class MessageProcessingOrchestrator : IMessageProcessingOrchestrat
                 ConversationId: conversation.Id,
                 UserMessageId: userMessageId,
                 AssistantMessageId: assistantMessage.Id,
-                AssistantMessage: aiResult.AssistantContent.Value);
+                AssistantMessage: aiResult.AssistantContent);
 
             overall.Stop();
             _telemetry?.TrackMessageProcessed(conversation.Id.Value, overall.Elapsed, success: true);

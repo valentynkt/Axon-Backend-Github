@@ -40,20 +40,7 @@ builder.Services.AddApiVersioning(options =>
     options.DefaultApiVersion = new ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
-})
-.AddOData(options => options.AddRouteComponents("odata/v1"));
-
-// Configure OData with EDM model
-builder.Services
-    .AddControllers()
-    .AddOData(options => options
-        .Select()
-        .Filter()
-        .OrderBy()
-        .SetMaxTop(100)
-        .Count()
-        .SkipToken() // Enable server-driven paging with $skiptoken
-        .AddRouteComponents("odata/v1", GetEdmModel()));
+});
 
 var app = builder.Build();
 
@@ -81,20 +68,3 @@ app.MapGet("/", () => "OK");
 app.MapGet("/health", () => "OK");
 
 app.Run();
-
-// EDM Model Builder
-static IEdmModel GetEdmModel()
-{
-    var builder = new ODataConventionModelBuilder();
-    
-    // Register entity sets with page size for server-driven paging
-    var conversations = builder.EntitySet<ConversationReadModel>("Conversations");
-    conversations.EntityType.HasKey(c => c.Id);
-    conversations.EntityType.Page(50, 100); // Default page size 50, max 100
-    
-    var messages = builder.EntitySet<MessageReadModel>("Messages");
-    messages.EntityType.HasKey(m => m.Id);
-    messages.EntityType.Page(50, 100); // Default page size 50, max 100
-    
-    return builder.GetEdmModel();
-}

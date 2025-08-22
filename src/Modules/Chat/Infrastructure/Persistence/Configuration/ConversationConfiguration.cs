@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Errors;
 using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
@@ -6,9 +7,9 @@ using Axon.Modules.Chat.Domain.Entities;
 
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Configuration;
-public sealed class ConversationConfiguration : IEntityTypeConfiguration<ChatErrors.Conversation>
+public sealed class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 {
-    public void Configure(EntityTypeBuilder<ChatErrors.Conversation> builder)
+    public void Configure(EntityTypeBuilder<Conversation> builder)
     {
         builder.ToTable("conversations");
 
