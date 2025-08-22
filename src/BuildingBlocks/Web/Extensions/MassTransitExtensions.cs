@@ -1,5 +1,6 @@
 using System.Reflection;
 using BuildingBlocks.Application.Events.Publishing;
+using BuildingBlocks.Application.Exceptions;
 using BuildingBlocks.Infrastructure.Events;
 using BuildingBlocks.Infrastructure.Messaging.MassTransit;
 using MassTransit;

@@ -1,7 +1,8 @@
-using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Mappers;
 using CSharpFunctionalExtensions;
+using FastEndpoints;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Web.Endpoints.Base;
@@ -19,25 +20,26 @@ public abstract class BaseCommandEndpoint<TRequest, TResponse, TCommand, TComman
     where TCommand : notnull
 {
     protected IMediator Mediator { get; }
-    protected IRequestMapper<TRequest, TCommand> RequestMapper { get; }
-    protected IResponseMapper<TCommandResult, TResponse> ResponseMapper { get; }
+    protected IMapperFactory MapperFactory { get; }
 
     protected BaseCommandEndpoint(
-        ILogger logger,
         IMediator mediator,
-        IRequestMapper<TRequest, TCommand> requestMapper,
-        IResponseMapper<TCommandResult, TResponse> responseMapper) 
+        ILogger logger,
+        IMapperFactory mapperFactory) 
         : base(logger)
     {
         Mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
-        RequestMapper = requestMapper ?? throw new ArgumentNullException(nameof(requestMapper));
-        ResponseMapper = responseMapper ?? throw new ArgumentNullException(nameof(responseMapper));
+        MapperFactory = mapperFactory ?? throw new ArgumentNullException(nameof(mapperFactory));
     }
 
     protected override async Task<Result<TResponse, Error>> ExecuteAsync(TRequest request, CancellationToken cancellationToken)
     {
+        // Get mappers from factory
+        var requestMapper = MapperFactory.GetRequestMapper<TRequest, TCommand>();
+        var responseMapper = MapperFactory.GetResponseMapper<TCommandResult, TResponse>();
+
         // Map HTTP request to domain command
-        var commandResult = await RequestMapper.MapAsync(request, cancellationToken);
+        var commandResult = await requestMapper.MapAsync(request, cancellationToken);
         if (commandResult.IsFailure)
             return Result.Failure<TResponse, Error>(commandResult.Error);
 
@@ -49,10 +51,38 @@ public abstract class BaseCommandEndpoint<TRequest, TResponse, TCommand, TComman
                 return Result.Failure<TResponse, Error>(typedResult.Error);
 
             // Map domain result to HTTP response
-            var responseResult = await ResponseMapper.MapAsync(typedResult.Value, cancellationToken);
+            var responseResult = await responseMapper.MapAsync(typedResult.Value, cancellationToken);
             return responseResult;
         }
 
         throw new InvalidOperationException($"Command {typeof(TCommand).Name} must return Result<{typeof(TCommandResult).Name}, Error>");
     }
+
+    public override void Configure()
+    {
+        // Default configuration for command endpoints
+        Post(GetRoute());
+        
+        // Common command configurations
+        Options(x => x.WithTags(GetTags()));
+        
+        var summary = GetSummary();
+        if (summary is not null)
+            Summary(summary);
+    }
+
+    /// <summary>
+    /// Override to specify the route for this command endpoint
+    /// </summary>
+    protected abstract string GetRoute();
+
+    /// <summary>
+    /// Override to specify tags for OpenAPI grouping
+    /// </summary>
+    protected virtual string[] GetTags() => [];
+
+    /// <summary>
+    /// Override to provide endpoint summary for OpenAPI
+    /// </summary>
+    protected virtual Action<EndpointSummary>? GetSummary() => null;
 }

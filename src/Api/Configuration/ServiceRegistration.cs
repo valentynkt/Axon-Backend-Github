@@ -1,16 +1,10 @@
 // using Axon.Api.Common.ErrorHandling;  // Not needed for POC
-using Axon.Api.Mappers;
-using Axon.Modules.Chat.Application.Services;
-using Axon.Modules.Chat.Infrastructure.Configuration;
-// using Axon.Modules.Chat.Infrastructure.Extensions;  // Not needed for POC
-using BuildingBlocks.Application.Configuration;
-using BuildingBlocks.Web.Builders;
-using BuildingBlocks.Web.Mappers;
+using Axon.Api.Modules;
+using Axon.BuildingBlocks.Web.Configuration;
 using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
-using FastEndpoints.Swagger;
-using FluentValidation;
-using MediatR;
+using Mapster;
+using MapsterMapper;
 using System.Reflection;
 
 namespace Axon.Api.Configuration;
@@ -25,46 +19,56 @@ public static class ServiceRegistration
     /// </summary>
     /// <param name="services">Service collection</param>
     /// <param name="configuration">Application configuration</param>
+    /// <param name="environment">Host environment</param>
     /// <returns>Service collection for chaining</returns>
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        // Add controllers (MVC)
+        // Add core framework services
         services.AddControllers();
-        
-        // Add FastEndpoints
         services.AddFastEndpoints();
         
-        // Add API documentation using BuildingBlocks OpenAPI
+        // Add API documentation
         services.AddEndpointsApiExplorer();
         services.AddAspnetOpenApi();
         
-        // Add MediatR
-        services.AddMediatR(config =>
-        {
-            config.RegisterServicesFromAssembly(typeof(Modules.Chat.Application.Commands.StartConversation.StartConversationCommand).Assembly);
-        });
+        // Note: MediatR, pipeline behaviors, and validators are registered by individual modules
+        // This ensures proper assembly scanning and avoids duplication
         
-        // Register pipeline behaviors
-        services.AddPipelineBehaviors(configuration, environment);
+        // Configure Mapster
+        MapsterConfig.Configure();
+        services.AddMapster();
         
-        // Add FluentValidation
-        services.AddValidatorsFromAssembly(
-            typeof(Modules.Chat.Application.Commands.StartConversation.StartConversationValidator).Assembly);
-        
-        // Add BuildingBlocks Web services
-        services.AddScoped<IEndpointResponseBuilder, EndpointResponseBuilder>();
-        
-        // Add Chat-specific services
-        services.AddScoped<IChatCommandDispatcher, ChatCommandDispatcher>();
-        services.AddScoped<IRequestMapper<Axon.Api.Contracts.Chat.ChatTurnRequestDto, Axon.Api.Contracts.Chat.ProcessMessageResponse>, ChatTurnRequestMapper>();
-        services.AddScoped<IResponseMapper<Axon.Api.Contracts.Chat.ProcessMessageResponse, Axon.Api.Contracts.Chat.ProcessMessageResponse>, ChatTurnResponseMapper>();
-        
-        // Add Chat module services - manually add what we need for POC
-        services.AddChatApplicationServices(configuration);
+        // Register API modules
+        RegisterApiModules(services, configuration, environment);
         
         return services;
+    }
+
+    private static void RegisterApiModules(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        // Discover and register all modules implementing IApiModule
+        var modules = DiscoverApiModules();
+        
+        foreach (var module in modules)
+        {
+            module.ConfigureServices(services, configuration, environment);
+        }
+    }
+
+    private static IEnumerable<IApiModule> DiscoverApiModules()
+    {
+        var modules = new List<IApiModule>();
+        
+        // For now, manually register modules
+        // In the future, this could use reflection to auto-discover
+        modules.Add(new ChatApiModule());
+        
+        return modules;
     }
 }

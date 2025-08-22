@@ -27,15 +27,15 @@ public readonly partial struct MessageContent
     private static string NormalizeInput(string input) => input.Trim();
 
     // Vogen passes the normalized input here
-    private static Validation Validate(string input)
+    private static Vogen.Validation Validate(string input)
     {
         if (string.IsNullOrWhiteSpace(input))
-            return Validation.Invalid("Message content cannot be empty or whitespace.");
+            return Vogen.Validation.Invalid("Message content cannot be empty or whitespace.");
 
         if (input.Length > MaxLength)
-            return Validation.Invalid($"Message content cannot exceed {MaxLength} characters. Current length: {input.Length}.");
+            return Vogen.Validation.Invalid($"Message content cannot exceed {MaxLength} characters. Current length: {input.Length}.");
 
-        return Validation.Ok;
+        return Vogen.Validation.Ok;
     }
 
     /// <summary>Preview (no ellipsis; hard cutoff).</summary>

@@ -1,5 +1,4 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
-
 using BuildingBlocks.Web.ProblemDetails;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Http;
@@ -70,7 +69,7 @@ public static class FastEndpointsErrorExtensions
     /// <returns>Task representing the async operation</returns>
     public static async Task HandleResultAsync<T>(
         this HttpContext httpContext,
-        Result<T> result,
+        Result<T, Error> result,
         int successStatusCode = StatusCodes.Status200OK,
         CancellationToken cancellationToken = default)
     {
@@ -95,7 +94,7 @@ public static class FastEndpointsErrorExtensions
     /// <returns>Task representing the async operation</returns>
     public static async Task HandleResultAsync(
         this HttpContext httpContext,
-        Result result,
+        UnitResult<Error> result,
         int successStatusCode = StatusCodes.Status200OK,
         CancellationToken cancellationToken = default)
     {
@@ -120,7 +119,7 @@ public static class FastEndpointsErrorExtensions
     /// <returns>Task representing the async operation</returns>
     public static async Task HandleCreatedResultAsync<T>(
         this HttpContext httpContext,
-        Result<T> result,
+        Result<T, Error> result,
         string location,
         CancellationToken cancellationToken = default)
     {
@@ -145,7 +144,7 @@ public static class FastEndpointsErrorExtensions
     /// <returns>Task representing the async operation</returns>
     public static async Task HandleNoContentResultAsync(
         this HttpContext httpContext,
-        Result result,
+        UnitResult<Error> result,
         CancellationToken cancellationToken = default)
     {
         if (result.IsSuccess)

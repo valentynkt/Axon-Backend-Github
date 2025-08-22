@@ -1,4 +1,3 @@
-using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Extensions;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;

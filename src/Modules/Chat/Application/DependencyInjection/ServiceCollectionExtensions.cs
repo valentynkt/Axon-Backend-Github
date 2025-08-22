@@ -40,8 +40,12 @@ public static class ServiceCollectionExtensions
         // Register Chat-specific services
         services.AddSingleton(TimeProvider.System);
         
+        // Register command dispatcher (moved from API layer for proper architecture)
+        services.AddScoped<IChatCommandDispatcher, ChatCommandDispatcher>();
+        
         // Register idempotency key providers
         services.AddTransient<IIdempotencyKeyProvider<AppendUserMessageCommand>, ChatIdempotencyKeyProvider>();
+        services.AddTransient<IIdempotencyKeyProvider<StartConversationCommand>, ChatIdempotencyKeyProvider>();
         
         // Register extracted chat services
         services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();

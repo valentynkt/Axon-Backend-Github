@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 
 namespace Axon.Modules.Chat.Infrastructure.Configuration;
 
@@ -27,7 +28,7 @@ public static class ServiceRegistration
     /// <param name="services">Service collection</param>
     /// <param name="configuration">Application configuration</param>
     /// <returns>Service collection for chaining</returns>
-    public static IServiceCollection AddChatApplicationServices(
+    public static IServiceCollection AddChatInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -76,17 +77,20 @@ public static class ServiceRegistration
             return new EfUnitOfWork<ChatDbContext, ChatModule>(context);
         });
         
-        // Register TimeProvider
-        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        // TimeProvider is registered in Application layer
         
         // Register CurrentUserService
         services.AddScoped<ICurrentUserService, DefaultCurrentUserService>();
         
+        // Register Telemetry service
+        services.AddScoped<Application.Abstractions.Telemetry.IAppTelemetry, AppTelemetryService>();
+        
         // Register simple POC implementation for Direct MCP
-        services.AddHttpClient<Application.Abstractions.AI.IAiClient, OpenAiMcpClient>(client =>
+        services.AddHttpClient<Application.Abstractions.AI.IAiClient, OpenAiMcpClient>((serviceProvider, client) =>
         {
+            var openAiOptions = serviceProvider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
             client.BaseAddress = new Uri("https://api.openai.com/");
-            client.Timeout = TimeSpan.FromSeconds(60); // Longer timeout for POC testing
+            client.Timeout = TimeSpan.FromSeconds(openAiOptions.TimeoutSeconds);
         });
         
         

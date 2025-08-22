@@ -2,8 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Axon.Api.Configuration;
-using Axon.Modules.Chat.ReadModels;
-using BuildingBlocks.Core.Abstractions.Time;
 using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -25,13 +23,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     
     // StronglyTypedId converters - one per ID type
-    options.SerializerOptions.Converters.Add(new BuildingBlocks.Primitives.Ids.ConversationId.SystemTextJsonConverter());
-    options.SerializerOptions.Converters.Add(new BuildingBlocks.Primitives.Ids.MessageId.SystemTextJsonConverter());
-    options.SerializerOptions.Converters.Add(new BuildingBlocks.Primitives.Ids.UserId.SystemTextJsonConverter());
-    options.SerializerOptions.Converters.Add(new BuildingBlocks.Primitives.Ids.AiResponseId.SystemTextJsonConverter());
+    options.SerializerOptions.Converters.Add(new AiResponseId.AiResponseIdSystemTextJsonConverter());
+    options.SerializerOptions.Converters.Add(new MessageId.MessageIdSystemTextJsonConverter());
+    options.SerializerOptions.Converters.Add(new UserId.UserIdSystemTextJsonConverter());
+    options.SerializerOptions.Converters.Add(new AiResponseId.AiResponseIdSystemTextJsonConverter());
     
     // Vogen VO converters  
-    options.SerializerOptions.Converters.Add(new Axon.BuildingBlocks.Core.Primitives.ValueObjects.MessageContent.SystemTextJsonConverter());
+    options.SerializerOptions.Converters.Add(new MessageContent.MessageContentSystemTextJsonConverter());
 });
 
 // Add API versioning and OData

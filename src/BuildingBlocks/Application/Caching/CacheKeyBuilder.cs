@@ -97,7 +97,7 @@ public static class CacheKeyBuilder
     /// <summary>
     /// Creates a filtered object excluding volatile properties and [CacheKeyIgnore] marked properties
     /// </summary>
-    private static object CreateFilteredObject<TRequest>(TRequest request)
+    private static Dictionary<string, object?> CreateFilteredObject<TRequest>(TRequest request)
     {
         var requestType = typeof(TRequest);
         var properties = requestType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
