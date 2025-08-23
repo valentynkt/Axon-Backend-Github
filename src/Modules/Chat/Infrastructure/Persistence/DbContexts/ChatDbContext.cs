@@ -3,6 +3,7 @@ using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +27,7 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
         // No need to duplicate schema configuration
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ChatDbContext).Assembly);
+        modelBuilder.ToSnakeCaseTables();
     }
 }
 

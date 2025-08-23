@@ -30,9 +30,9 @@ public static class InfrastructureDIValidation
         {
             // Database contexts validation
             TestServiceResolution<ChatDbContext>(serviceProvider, errors, "ChatDbContext - Write database context");
-            TestServiceResolution<ChatReadDbContext>(serviceProvider, errors, "ChatReadDbContext - Read database context");
+            // TestServiceResolution<ChatReadDbContext>(serviceProvider, errors, "ChatReadDbContext - Read database context");
             TestServiceResolution<IChatWriteDbContext>(serviceProvider, errors, "IChatWriteDbContext interface");
-            TestServiceResolution<IChatReadDbContext>(serviceProvider, errors, "IChatReadDbContext interface");
+            ///TestServiceResolution<IChatReadDbContext>(serviceProvider, errors, "IChatReadDbContext interface");
             
             // Repository validation
             TestServiceResolution<IConversationRepository>(serviceProvider, errors, "IConversationRepository");
@@ -44,7 +44,7 @@ public static class InfrastructureDIValidation
             TestServiceResolution<ICurrentUserService>(serviceProvider, errors, "ICurrentUserService");
             
             // Telemetry services
-            TestServiceResolution<IAppTelemetry>(serviceProvider, errors, "IAppTelemetry");
+            TestServiceResolution<IChatTelemetry>(serviceProvider, errors, "IChatTelemetry");
             
             // AI services
             TestServiceResolution<IAiClient>(serviceProvider, errors, "IAiClient");

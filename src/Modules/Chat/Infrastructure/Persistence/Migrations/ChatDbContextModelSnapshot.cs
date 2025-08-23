@@ -8,7 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
     partial class ChatDbContextModelSnapshot : ModelSnapshot

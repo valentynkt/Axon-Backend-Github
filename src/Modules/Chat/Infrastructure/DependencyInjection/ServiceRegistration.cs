@@ -60,17 +60,17 @@ public static class ServiceRegistration
         });
         
         // Read DbContext
-        services.AddDbContext<ChatReadDbContext>(options =>
-        {
-            options.UseNpgsql(connectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            });
-        });
-        
+        //services.AddDbContext<ChatReadDbContext>(options =>
+        //{
+        //    options.UseNpgsql(connectionString, npgsqlOptions =>
+        //    {
+        //        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+        //    });
+        //});
+        //
         // Register Repository and DbContext interfaces
         services.AddScoped<IConversationRepository, ConversationRepository>();
-        services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
+        //services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
         services.AddScoped<IChatWriteDbContext>(provider => provider.GetRequiredService<ChatDbContext>());
         
         // Register UnitOfWork using the EfUnitOfWork wrapper with correct module type
@@ -85,8 +85,8 @@ public static class ServiceRegistration
         // Register CurrentUserService
         services.AddScoped<ICurrentUserService, DefaultCurrentUserService>();
         
-        // Register Telemetry service
-        services.AddScoped<IAppTelemetry, AppTelemetryService>();
+        // Register Chat Telemetry service
+        services.AddScoped<IChatTelemetry, ChatTelemetry>();
         
         // Register simple POC implementation for Direct MCP
         services.AddHttpClient<IAiClient, OpenAiMcpClient>((serviceProvider, client) =>

@@ -55,6 +55,10 @@ public static class MapsterConfiguration
         // Scan for IRegister implementations
         config.Scan(assemblies);
         
+        // CRITICAL: Apply custom configuration to global settings so AdaptSafely() works at runtime
+        // Scan the assemblies directly into global settings as well
+        TypeAdapterConfig.GlobalSettings.Scan(assemblies);
+        
         // Log registered profiles for diagnostics
         var profileTypes = assemblies
             .SelectMany(a => a.GetTypes())

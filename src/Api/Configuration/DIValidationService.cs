@@ -22,8 +22,7 @@ public static class DIValidationService
         try
         {
             // Validate BuildingBlocks layer (foundation services)
-            var buildingBlocksErrors = BuildingBlocksDIValidation.ValidateBuildingBlocksServices(serviceProvider);
-            errors.AddRange(buildingBlocksErrors);
+            BuildingBlocksDIValidation.ValidateBuildingBlocksServices(serviceProvider);
             
             // Validate Chat Application layer services
             var applicationErrors = ApplicationDIValidation.ValidateApplicationServices(serviceProvider);
@@ -53,7 +52,7 @@ public static class DIValidationService
         try
         {
             // Test API-specific services that aren't covered by other layers
-            TestServiceResolution<Microsoft.AspNetCore.Http.IHttpContextAccessor>(serviceProvider, errors, "IHttpContextAccessor - HTTP context access");
+            TestServiceResolution<IHttpContextAccessor>(serviceProvider, errors, "IHttpContextAccessor - HTTP context access");
             
             // Health check services
             TestServiceResolution<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService>(serviceProvider, errors, "HealthCheckService - Health monitoring");

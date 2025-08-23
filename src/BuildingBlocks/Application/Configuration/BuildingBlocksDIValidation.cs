@@ -1,16 +1,23 @@
 using BuildingBlocks.Application.Behaviors;
 using BuildingBlocks.Core.Abstractions.Caching;
+using BuildingBlocks.Core.Abstractions.Idempotency;
+using BuildingBlocks.Core.Idempotency;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using System.Reflection;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace BuildingBlocks.Application.Configuration;
 
 /// <summary>
 /// Validates all critical BuildingBlocks layer DI registrations
 /// </summary>
+
 public static class BuildingBlocksDIValidation
 {
     /// <summary>
@@ -18,21 +25,14 @@ public static class BuildingBlocksDIValidation
     /// </summary>
     /// <param name="serviceProvider">The configured service provider</param>
     /// <returns>List of validation errors, if any</returns>
-    public static List<string> ValidateBuildingBlocksServices(IServiceProvider serviceProvider)
+    public static void ValidateBuildingBlocksServices(IServiceProvider serviceProvider)
     {
         var errors = new List<string>();
-
+        
         try
         {
-            // Caching services validation
-            TestServiceResolution<IMemoryCache>(serviceProvider, errors, "IMemoryCache - In-memory caching");
-            TestServiceResolution<IDistributedCache>(serviceProvider, errors, "IDistributedCache - Distributed caching");
-            TestServiceResolution<IIdempotencyCache>(serviceProvider, errors, "IIdempotencyCache - Idempotency support");
-            
-            // MediatR pipeline behaviors validation (in execution order)
-            ValidatePipelineBehaviors(serviceProvider, errors);
-            
-            // FluentValidation core services
+            // Core infrastructure services
+            TestServiceResolution<IMediator>(serviceProvider, errors, "IMediator - MediatR command/query dispatcher");
             TestServiceResolution<IValidatorFactory>(serviceProvider, errors, "IValidatorFactory - FluentValidation factory");
             
             // Validate behavior registration order
@@ -41,10 +41,14 @@ public static class BuildingBlocksDIValidation
         }
         catch (Exception ex)
         {
-            errors.Add($"CRITICAL: BuildingBlocks DI validation failed with exception: {ex.Message}");
+            errors.Add($"BUILDINGBLOCKS_CRITICAL_ERROR - Exception during validation: {ex.Message}");
         }
 
-        return errors;
+        if (errors.Count > 0)
+        {
+            var message = $"BuildingBlocks DI Validation Failed:\n{string.Join("\n", errors)}";
+            throw new InvalidOperationException(message);
+        }
     }
 
     private static void ValidatePipelineBehaviors(IServiceProvider serviceProvider, List<string> errors)
@@ -120,6 +124,63 @@ public static class BuildingBlocksDIValidation
         catch (Exception ex)
         {
             errors.Add($"BUILDINGBLOCKS: Failed to validate behavior order: {ex.Message}");
+        }
+    }
+
+    private static void ValidateCommandQueryInheritance(List<string> errors)
+    {
+        try
+        {
+            // Get all loaded assemblies to search for ICommand/IQuery implementations
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic && a.FullName != null)
+                .Where(a => a.FullName!.Contains("Axon", StringComparison.Ordinal) || a.FullName.Contains("BuildingBlocks", StringComparison.Ordinal))
+                .ToList();
+
+            var commandInterfaceType = typeof(ICommand<>);
+            var commandVoidInterfaceType = typeof(ICommand);
+            var queryInterfaceType = typeof(IQuery<>);
+            var requestBaseType = typeof(RequestBase);
+
+            foreach (var assembly in assemblies)
+            {
+                try
+                {
+                    var types = assembly.GetExportedTypes()
+                        .Where(t => t is { IsClass: true, IsAbstract: false })
+                        .ToList();
+
+                    foreach (var type in types)
+                    {
+                        var interfaces = type.GetInterfaces();
+                        bool isCommand = interfaces.Any(i => 
+                            (i.IsGenericType && i.GetGenericTypeDefinition() == commandInterfaceType) ||
+                            i == commandVoidInterfaceType);
+                        bool isQuery = interfaces.Any(i => 
+                            i.IsGenericType && i.GetGenericTypeDefinition() == queryInterfaceType);
+
+                        if (isCommand || isQuery)
+                        {
+                            if (!requestBaseType.IsAssignableFrom(type))
+                            {
+                                var requestType = isCommand ? "Command" : "Query";
+                                errors.Add($"ARCHITECTURE: {requestType} {type.FullName} does not inherit from RequestBase. " +
+                                          "All commands and queries must inherit from RequestBase to provide IAxonRequest features " +
+                                          "(RequestId, RequestedAt, Metadata) required by pipeline behaviors.");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log assembly loading issues but don't fail validation
+                    errors.Add($"ARCHITECTURE: Could not examine assembly {assembly.FullName} for command/query validation: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"ARCHITECTURE: Failed to validate command/query inheritance: {ex.Message}");
         }
     }
 

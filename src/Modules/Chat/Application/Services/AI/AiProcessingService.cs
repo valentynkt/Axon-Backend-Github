@@ -22,12 +22,12 @@ public sealed class AiProcessingService : IAiProcessingService
 {
     private readonly IAiClient _aiClient;
     private readonly ILogger<AiProcessingService> _logger;
-    private readonly IAppTelemetry? _telemetry;
+    private readonly IChatTelemetry? _telemetry;
 
     public AiProcessingService(
         IAiClient aiClient,
         ILogger<AiProcessingService> logger,
-        IAppTelemetry? telemetry = null)
+        IChatTelemetry? telemetry = null)
     {
         _aiClient = aiClient ?? throw new ArgumentNullException(nameof(aiClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -56,7 +56,7 @@ public sealed class AiProcessingService : IAiProcessingService
             var aiResult = await _aiClient.ProcessMessageAsync(aiRequest, cancellationToken);
             aiTimer.Stop();
 
-            _telemetry?.TrackAiClientRequest("responses.mcp", aiTimer.Elapsed, aiResult.IsSuccess);
+            _telemetry?.TrackAiRequest("responses.mcp", aiTimer.Elapsed, aiResult.IsSuccess);
 
             if (aiResult.IsFailure)
             {

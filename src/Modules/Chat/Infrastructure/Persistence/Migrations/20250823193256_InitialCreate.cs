@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration

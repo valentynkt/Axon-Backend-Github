@@ -27,7 +27,7 @@ public sealed class MessageProcessingOrchestrator : IMessageProcessingOrchestrat
     private readonly IAiProcessingService _aiProcessingService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<MessageProcessingOrchestrator> _logger;
-    private readonly IAppTelemetry? _telemetry;
+    private readonly IChatTelemetry? _telemetry;
 
     public MessageProcessingOrchestrator(
         IConversationRepository repository,
@@ -35,7 +35,7 @@ public sealed class MessageProcessingOrchestrator : IMessageProcessingOrchestrat
         IAiProcessingService aiProcessingService,
         TimeProvider timeProvider,
         ILogger<MessageProcessingOrchestrator> logger,
-        IAppTelemetry? telemetry = null)
+        IChatTelemetry? telemetry = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _mcpResolutionService = mcpResolutionService ?? throw new ArgumentNullException(nameof(mcpResolutionService));

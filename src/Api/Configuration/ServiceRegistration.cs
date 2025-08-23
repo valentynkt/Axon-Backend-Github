@@ -4,6 +4,11 @@ using Axon.Api.Modules;
 using Axon.BuildingBlocks.Web.Configuration;
 using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
+using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using System.Reflection;
 
 namespace Axon.Api.Configuration;
@@ -11,6 +16,7 @@ namespace Axon.Api.Configuration;
 /// <summary>
 /// Service registration for API layer
 /// </summary>
+
 public static class ServiceRegistration
 {
     /// <summary>
@@ -32,6 +38,49 @@ public static class ServiceRegistration
         // Add API documentation
         services.AddEndpointsApiExplorer();
         services.AddAspnetOpenApi();
+        
+        // CRITICAL FIX: Add comprehensive OpenTelemetry observability
+        services.AddOpenTelemetry()
+            .WithTracing(builder =>
+            {
+                builder
+                    .AddSource("Axon.Application") // Our custom ActivitySource
+                    .AddAspNetCoreInstrumentation(options =>
+                    {
+                        options.RecordException = true;
+                        options.EnrichWithHttpRequest = (activity, request) =>
+                        {
+                            activity.SetTag("http.request.body.size", request.ContentLength);
+                        };
+                        options.EnrichWithHttpResponse = (activity, response) =>
+                        {
+                            activity.SetTag("http.response.body.size", response.ContentLength);
+                        };
+                    })
+                    .AddHttpClientInstrumentation()
+                    .AddConsoleExporter(options =>
+                    {
+                        options.Targets = OpenTelemetry.Exporter.ConsoleExporterOutputTargets.Console;
+                    });
+            })
+            .WithMetrics(builder =>
+            {
+                builder
+                    .AddMeter("Axon.Application") // Our custom Meter
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddConsoleExporter(options =>
+                    {
+                        options.Targets = OpenTelemetry.Exporter.ConsoleExporterOutputTargets.Console;
+                    });
+            })
+            .WithLogging(builder =>
+            {
+                builder.AddConsoleExporter(options =>
+                {
+                    options.Targets = OpenTelemetry.Exporter.ConsoleExporterOutputTargets.Console;
+                });
+            });
         
         // CRITICAL FIX: Add comprehensive health checks for production monitoring
         services.AddHealthChecks()

@@ -15,6 +15,10 @@ namespace BuildingBlocks.Application.Behaviors;
 /// <summary>
 /// Polly-first retry for idempotent queries returning Result&lt;T,Error&gt; (opt-in via [Retryable]).
 /// No custom options; we translate the attribute directly to Polly's RetryStrategyOptions.
+/// 
+/// ARCHITECTURAL NOTE: While this behavior accepts any IQuery&lt;TValue&gt; for MediatR compatibility,
+/// all IQuery implementations should inherit from RequestBase to provide IAxonRequest features
+/// (RequestId, RequestedAt, Metadata) for proper observability integration.
 /// </summary>
 public sealed class QueryRetryBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>

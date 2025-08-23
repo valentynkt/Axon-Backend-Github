@@ -18,10 +18,15 @@ namespace BuildingBlocks.Application.Behaviors;
 /// - Creates/uses an Activity (W3C TraceContext)
 /// - Emits low-cardinality tags and OTel metrics
 /// - Logs success/failure with duration; warns on slow requests
+/// 
+/// ARCHITECTURAL NOTE: While this behavior accepts any IRequest&lt;Result&lt;TValue, Error&gt;&gt; for MediatR compatibility,
+/// it expects requests to implement IAxonRequest (RequestId, RequestedAt, Metadata) for full observability features.
+/// All ICommand/IQuery implementations should inherit from RequestBase which provides these features.
+/// Architectural validation at startup ensures this requirement is met.
 /// </summary>
 public sealed class ObservabilityBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>
-    where TRequest : IAxonRequest
+    where TRequest : IRequest<Result<TValue, Error>>
 {
 
     private readonly ILogger<ObservabilityBehavior<TRequest, TValue>> _logger;
@@ -50,16 +55,28 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
         using var activity = Instrumentation.ActivitySource.StartActivity($"Application.{category}.{name}", ActivityKind.Internal);
         activity?.SetTag("axon.request.type", name);
         activity?.SetTag("axon.request.category", category);
-        activity?.SetTag("axon.request.id", request.RequestId);
-        activity?.SetTag("axon.request.at", request.RequestedAt);
+        
+        // Only add Axon-specific tags if the request implements IAxonRequest
+        if (request is IAxonRequest axonRequest)
+        {
+            activity?.SetTag("axon.request.id", axonRequest.RequestId);
+            activity?.SetTag("axon.request.at", axonRequest.RequestedAt);
+        }
 
-        using var scope = _logger.BeginScope(new Dictionary<string, object?>
+        var scopeData = new Dictionary<string, object?>
         {
             ["request.type"]     = name,
             ["request.category"] = category,
-            ["trace.id"]         = (activity ?? Activity.Current)?.TraceId.ToString(),
-            ["request.id"]       = request.RequestId
-        });
+            ["trace.id"]         = (activity ?? Activity.Current)?.TraceId.ToString()
+        };
+        
+        // Add request ID only if available
+        if (request is IAxonRequest axonReq)
+        {
+            scopeData["request.id"] = axonReq.RequestId;
+        }
+        
+        using var scope = _logger.BeginScope(scopeData);
 
         try
         {

@@ -9,10 +9,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
-    [Migration("20250823142943_InitialCreate")]
+    [Migration("20250823193256_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

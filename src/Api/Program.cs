@@ -6,12 +6,27 @@ using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.OData;
+using Microsoft.Extensions.Logging.Console;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
 using BuildingBlocks.Primitives.Ids;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure structured logging with correlation IDs
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(options =>
+{
+    options.FormatterName = "simple";
+});
+
+// Configure logging to include structured data
+builder.Services.Configure<ConsoleFormatterOptions>(options =>
+{
+    options.IncludeScopes = true;
+    options.TimestampFormat = "HH:mm:ss.fff ";
+});
 
 // Add services to the container
 builder.Services.AddApplicationServices(builder.Configuration, builder.Environment);
@@ -37,6 +52,11 @@ builder.Services.AddApiVersioning(options =>
     options.DefaultApiVersion = new ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
+})
+.AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
 });
 
 var app = builder.Build();
@@ -68,7 +88,7 @@ if (app.Environment.IsDevelopment())
 
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Local")
 {
     app.UseAspnetOpenApi();
 }

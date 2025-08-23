@@ -16,6 +16,10 @@ namespace BuildingBlocks.Application.Behaviors;
 /// Handles command idempotency by caching responses.
 /// Only processes commands that implement IIdempotentCommand.
 /// By default caches only successes; failures cached only when CacheFailures = true.
+/// 
+/// ARCHITECTURAL NOTE: While this behavior accepts any IRequest&lt;TResponse&gt; for MediatR compatibility,
+/// it works with IIdempotentCommand implementations which should inherit from RequestBase to provide
+/// IAxonRequest features (RequestId, RequestedAt, Metadata) for proper observability integration.
 /// </summary>
 public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>

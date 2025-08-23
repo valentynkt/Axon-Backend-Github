@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
+using System;
+using System.Linq;
 
 namespace BuildingBlocks.Web.OpenApi
 {
@@ -26,6 +30,9 @@ namespace BuildingBlocks.Web.OpenApi
 
         public static IApplicationBuilder UseAspnetOpenApi(this WebApplication app)
         {
+            var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("OpenApi");
+            
             app.MapOpenApi();
 
             app.UseSwaggerUI(
@@ -48,6 +55,20 @@ namespace BuildingBlocks.Web.OpenApi
                 {
                     redocOptions.WithOpenApiRoutePattern("/openapi/{documentName}.json");
                 });
+
+            // Log API documentation URLs
+            var urls = app.Urls.FirstOrDefault() ?? "https://localhost:7204";
+            if (urls.Contains(';'))
+            {
+                // If multiple URLs, prefer HTTPS
+                var urlList = urls.Split(';');
+                urls = urlList.FirstOrDefault(u => u.StartsWith("https", StringComparison.OrdinalIgnoreCase)) ?? urlList.First();
+            }
+            
+            logger.LogInformation("📚 API Documentation:");
+            logger.LogInformation("  🔹 Swagger UI:    {Url}/swagger", urls);
+            logger.LogInformation("  🔹 Scalar UI:     {Url}/scalar/v1", urls);
+            logger.LogInformation("  🔹 OpenAPI Spec:  {Url}/openapi/v1.json", urls);
 
             return app;
         }

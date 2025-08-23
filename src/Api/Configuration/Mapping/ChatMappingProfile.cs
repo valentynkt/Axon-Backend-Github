@@ -31,12 +31,15 @@ public sealed class ChatMappingProfile : IRegister, IChatMappingProfile
     private static void ConfigureResponseMappings(TypeAdapterConfig config)
     {
         // ProcessMessageResponse -> ChatTurnResponseDto
+        // Using MapWith to handle strongly-typed IDs more reliably
         config.NewConfig<ProcessMessageResponse, ChatTurnResponseDto>()
-            .Map(dest => dest.ConversationId, src => src.ConversationId.Value)
-            .Map(dest => dest.UserMessageId, src => src.UserMessageId.Value)
-            .Map(dest => dest.AssistantMessageId, src => src.AssistantMessageId.Value)
-            .Map(dest => dest.AssistantMessage, src => src.AssistantMessage.ToString()!)
-            .Map(dest => dest.Timestamp, src => DateTimeOffset.UtcNow)
-            .IgnoreNonMapped(true);
+            .MapWith(src => new ChatTurnResponseDto
+            {
+                ConversationId = src.ConversationId.Value,
+                UserMessageId = src.UserMessageId.Value,
+                AssistantMessageId = src.AssistantMessageId.Value,
+                AssistantMessage = src.AssistantMessage.Value,
+                Timestamp = DateTimeOffset.UtcNow
+            });
     }
 }

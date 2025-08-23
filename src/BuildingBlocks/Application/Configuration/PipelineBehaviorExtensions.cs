@@ -2,6 +2,8 @@
 #nullable enable
 using System;
 using System.Reflection;
+using BuildingBlocks.Core.Abstractions.Idempotency;
+using BuildingBlocks.Core.Idempotency;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,7 +48,12 @@ public static class PipelineBehaviorExtensions
 
         services.AddValidatorsFromAssemblies(assembliesToScan, includeInternalTypes: true);
 
-        // 2) MediatR pipeline (outer → inner)
+        // 2) Register IdempotencyBehavior dependencies
+        services.Configure<IdempotencyOptions>(options => { }); // Use default configuration
+        services.AddHttpContextAccessor(); // For HTTP header-based idempotency keys
+        services.AddSingleton<IdempotencyKeyResolver>();
+
+        // 3) MediatR pipeline (outer → inner)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
