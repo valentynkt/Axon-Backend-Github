@@ -146,8 +146,8 @@ Modules/ModuleName/
 
 ## Testing
 
-- Use **xUnit** for all tests
-- **FluentAssertions** for readable test assertions  
+- Use **NUnit** for all tests (modern testing standard)
+- **Shouldly** for fluent, readable test assertions  
 - **Testcontainers** for integration tests with real databases
 - **NSubstitute** for mocking dependencies
 

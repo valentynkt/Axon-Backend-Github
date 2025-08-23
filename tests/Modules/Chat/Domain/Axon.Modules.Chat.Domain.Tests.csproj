@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Temporarily disable problematic code analysis rules -->
+    <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Main domain project under test -->
+    <ProjectReference Include="..\..\..\..\src\Modules\Chat\Domain\Axon.Modules.Chat.Domain.csproj" />
+    <!-- BuildingBlocks for shared testing utilities and patterns -->
+    <ProjectReference Include="..\..\..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Testing Framework - NUnit as specified in requirements -->
+    <PackageReference Include="NUnit" Version="4.3.1" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.5.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    
+    <!-- Assertions - Shouldly for fluent, readable assertions -->
+    <PackageReference Include="Shouldly" Version="4.4.0" />
+    
+    <!-- Mocking - NSubstitute as preferred mocking framework -->
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="NSubstitute.Analyzers.CSharp" Version="1.0.17">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    
+    <!-- Test Data Generation - Bogus for realistic test data -->
+    <PackageReference Include="Bogus" Version="35.6.3" />
+    <PackageReference Include="AutoBogus" Version="2.13.1" />
+    
+    <!-- Microsoft Test SDK -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    
+    <!-- Additional Testing Utilities -->
+    <PackageReference Include="Microsoft.Extensions.Time.Testing" Version="9.5.0" />
+  </ItemGroup>
+
+</Project>
