@@ -1,4 +1,5 @@
-using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Contracts.AI;
+using Axon.Modules.Chat.Application.Contracts.Authentication;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Application.Services.Idempotency;
@@ -11,6 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Reflection;
 using Axon.Modules.Chat.Application.Commands.StartConversation;
+using Axon.Modules.Chat.Application.Contracts.Dispatching;
+using Axon.Modules.Chat.Application.Services.Dispatching;
+using Axon.Modules.Chat.Application.Services.Orchestration;
 using Polly.Utilities;
 
 namespace Axon.Modules.Chat.Application.DependencyInjection;

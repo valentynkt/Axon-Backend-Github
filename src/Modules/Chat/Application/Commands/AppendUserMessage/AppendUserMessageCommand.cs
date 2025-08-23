@@ -1,7 +1,7 @@
 // /Users/valentynkit/Repos/Axon-Backend/src/Modules/Chat/Application/Commands/AppendUserMessage/AppendUserMessageCommand.cs
 #nullable enable
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
-using Axon.Modules.Chat.Application.Common;
+using Axon.Modules.Chat.Application.DTOs.Responses;
 using BuildingBlocks.Core.Abstractions.CQRS;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using BuildingBlocks.Primitives.Ids;

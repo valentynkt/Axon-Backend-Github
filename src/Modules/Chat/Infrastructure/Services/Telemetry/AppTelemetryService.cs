@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Axon.Modules.Chat.Application.Abstractions.Telemetry;
+using Axon.Modules.Chat.Application.Contracts.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Infrastructure.Services.Telemetry;

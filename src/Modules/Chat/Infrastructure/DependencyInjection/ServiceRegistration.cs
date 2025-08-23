@@ -1,25 +1,20 @@
-using BuildingBlocks.Application;
-using Axon.Modules.Chat.Application.Abstractions;
-using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
-using Axon.Modules.Chat.Application.Persistence;
-using Axon.Modules.Chat.Application.Services;
-
+using Axon.Modules.Chat.Application.Contracts.Telemetry;
 using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI;
 using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Chat.Infrastructure.Services.Identity;
 using Axon.Modules.Chat.Infrastructure.Services.Telemetry;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -91,10 +86,10 @@ public static class ServiceRegistration
         services.AddScoped<ICurrentUserService, DefaultCurrentUserService>();
         
         // Register Telemetry service
-        services.AddScoped<Application.Abstractions.Telemetry.IAppTelemetry, AppTelemetryService>();
+        services.AddScoped<IAppTelemetry, AppTelemetryService>();
         
         // Register simple POC implementation for Direct MCP
-        services.AddHttpClient<Application.Abstractions.AI.IAiClient, OpenAiMcpClient>((serviceProvider, client) =>
+        services.AddHttpClient<IAiClient, OpenAiMcpClient>((serviceProvider, client) =>
         {
             var openAiOptions = serviceProvider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
             client.BaseAddress = new Uri("https://api.openai.com/");

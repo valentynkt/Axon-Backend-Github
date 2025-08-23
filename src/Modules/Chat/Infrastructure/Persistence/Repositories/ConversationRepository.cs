@@ -1,6 +1,5 @@
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using Axon.Modules.Chat.Domain.Errors;
-using Axon.Modules.Chat.Application.Abstractions.Persistence;
+using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Write;

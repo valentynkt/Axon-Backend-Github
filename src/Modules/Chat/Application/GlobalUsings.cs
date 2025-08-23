@@ -9,4 +9,4 @@ global using BuildingBlocks.Core.Diagnostics.Errors;
 global using BuildingBlocks.Core.Abstractions.CQRS;
 global using Axon.Modules.Chat.Domain.ValueObjects;
 global using BuildingBlocks.Core.Abstractions.Authentication;
-global using Axon.Modules.Chat.Application.Abstractions.Persistence;
+global using Axon.Modules.Chat.Application.Contracts.Persistence;

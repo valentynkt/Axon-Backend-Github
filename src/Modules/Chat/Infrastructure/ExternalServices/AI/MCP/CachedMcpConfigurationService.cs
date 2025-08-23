@@ -1,6 +1,4 @@
-using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Contracts.AI;
-using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.DTOs.Configurations;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;

@@ -1,6 +1,8 @@
-using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Contracts.AI;
+using Axon.Modules.Chat.Application.Contracts.Authentication;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using Axon.Modules.Chat.Application.Commands.StartConversation;
+using Axon.Modules.Chat.Application.Contracts.Dispatching;
 using Axon.Modules.Chat.Application.Services;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using FluentValidation;

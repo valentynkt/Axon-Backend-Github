@@ -1,0 +1,12 @@
+namespace Axon.Modules.Chat.Application.DTOs.Configurations;
+
+/// <summary>
+/// MCP server configuration for direct tool access
+/// </summary>
+public sealed record McpServerConfig(
+    string ServerUrl,
+    string ServerLabel,
+    Dictionary<string, string>? Headers = null,
+    string[]? AllowedTools = null,
+    bool RequireApproval = false,
+    int TimeoutSeconds = 30);

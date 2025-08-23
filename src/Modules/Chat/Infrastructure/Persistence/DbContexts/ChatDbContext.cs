@@ -1,12 +1,9 @@
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
-using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
-using Axon.Modules.Chat.Application.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;

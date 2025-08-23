@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects; // MessageContent (Vogen)
-using Axon.Modules.Chat.Application.Abstractions.AI;
 using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.DTOs.Configurations;

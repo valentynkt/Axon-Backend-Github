@@ -1,7 +1,5 @@
-using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
-using Axon.Modules.Chat.Application.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Entities;
 using BuildingBlocks.Infrastructure.Persistence.Read;
