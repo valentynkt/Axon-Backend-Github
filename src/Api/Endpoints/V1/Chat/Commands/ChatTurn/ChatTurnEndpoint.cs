@@ -1,6 +1,7 @@
 using Axon.Api.Contracts.V1.Chat;
 using Axon.Modules.Chat.Application.Common;
 using Axon.Modules.Chat.Application.Services;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Endpoints.Base;
 using CSharpFunctionalExtensions;
 using Mapster;

@@ -1,4 +1,3 @@
-using BuildingBlocks.Web.Mappers;
 using CSharpFunctionalExtensions;
 using FastEndpoints;
 using MediatR;
@@ -20,42 +19,26 @@ public abstract class BaseCommandEndpoint<TRequest, TResponse, TCommand, TComman
     where TCommand : notnull
 {
     protected IMediator Mediator { get; }
-    protected IMapperFactory MapperFactory { get; }
 
     protected BaseCommandEndpoint(
         IMediator mediator,
-        ILogger logger,
-        IMapperFactory mapperFactory) 
+        ILogger logger) 
         : base(logger)
     {
         Mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
-        MapperFactory = mapperFactory ?? throw new ArgumentNullException(nameof(mapperFactory));
     }
 
     protected override async Task<Result<TResponse, Error>> ExecuteAsync(TRequest request, CancellationToken cancellationToken)
     {
-        // Get mappers from factory
-        var requestMapper = MapperFactory.GetRequestMapper<TRequest, TCommand>();
-        var responseMapper = MapperFactory.GetResponseMapper<TCommandResult, TResponse>();
-
-        // Map HTTP request to domain command
-        var commandResult = await requestMapper.MapAsync(request, cancellationToken);
-        if (commandResult.IsFailure)
-            return Result.Failure<TResponse, Error>(commandResult.Error);
-
-        // Execute the command via MediatR
-        var result = await Mediator.Send(commandResult.Value, cancellationToken);
-        if (result is Result<TCommandResult, Error> typedResult)
-        {
-            if (typedResult.IsFailure)
-                return Result.Failure<TResponse, Error>(typedResult.Error);
-
-            // Map domain result to HTTP response
-            var responseResult = await responseMapper.MapAsync(typedResult.Value, cancellationToken);
-            return responseResult;
-        }
-
-        throw new InvalidOperationException($"Command {typeof(TCommand).Name} must return Result<{typeof(TCommandResult).Name}, Error>");
+        // Note: This base class is provided for future use.
+        // When using it, override this method to:
+        // 1. Map request to command using Mapster: var command = request.Adapt<TCommand>();
+        // 2. Execute command via MediatR
+        // 3. Map result to response using Mapster
+        
+        throw new NotImplementedException(
+            "BaseCommandEndpoint.ExecuteAsync must be overridden. " +
+            "Use Mapster's .Adapt<T>() for mapping between request/command and result/response.");
     }
 
     public override void Configure()

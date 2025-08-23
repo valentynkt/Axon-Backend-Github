@@ -1,4 +1,3 @@
-using BuildingBlocks.Web.Mappers;
 using CSharpFunctionalExtensions;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -14,11 +13,8 @@ namespace BuildingBlocks.Web.Endpoints.Base;
 public abstract class BaseQueryEndpoint<TRequest, TResponse> : BaseResultEndpoint<TRequest, TResponse>
     where TRequest : notnull
 {
-    protected IMapperFactory MapperFactory { get; }
-
-    protected BaseQueryEndpoint(ILogger logger, IMapperFactory mapperFactory) : base(logger)
+    protected BaseQueryEndpoint(ILogger logger) : base(logger)
     {
-        MapperFactory = mapperFactory ?? throw new ArgumentNullException(nameof(mapperFactory));
     }
 
     /// <summary>

@@ -19,9 +19,6 @@ public static class IntegrationServiceRegistration
         this IServiceCollection services,
         IConfiguration _)
     {
-       // services.AddScoped<IMessageValidator, MessageValidator>();
-       // services.AddScoped<IRequestBuilder, RequestBuilder>();
-       // services.AddScoped<IResponseMapper, ResponseMapper>();
        // 
        // services.AddScoped<IMessageCache, MessageCache>();
        // services.AddMemoryCache();

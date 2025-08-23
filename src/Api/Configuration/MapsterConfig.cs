@@ -3,6 +3,7 @@ using Axon.Modules.Chat.Application.Commands.ProcessMessage;
 using Axon.Modules.Chat.Application.Commands.ProcessMessage.Dtos;
 using Axon.Api.Contracts.V1.Chat;
 using Axon.BuildingBlocks.Core.Functional.Results;
+using Axon.Modules.Chat.Application.Common;
 
 namespace Axon.Api.Configuration;
 

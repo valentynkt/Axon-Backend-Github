@@ -20,9 +20,6 @@ public static class DependencyValidation
  //    var warnings = new List<string>();
 
  //    // Validate SRP decomposition services
- //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageValidator>(services, errors, "srp-decomposition-specialist");
- //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IRequestBuilder>(services, errors, "srp-decomposition-specialist");
- //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IResponseMapper>(services, errors, "srp-decomposition-specialist");
 ///
  //    //// Validate performance optimization services
  //    //ValidateServiceExists<Axon.Modules.Chat.Application.Contracts.IMessageCache>(services, errors, "performance-optimizer");

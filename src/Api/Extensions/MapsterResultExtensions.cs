@@ -1,6 +1,7 @@
 using Mapster;
 using Axon.BuildingBlocks.Core.Functional.Results;
 using Axon.BuildingBlocks.Core.Functional.Errors;
+using CSharpFunctionalExtensions;
 
 namespace Axon.Api.Extensions;
 
