@@ -33,6 +33,45 @@ public static class ServiceRegistration
         services.AddEndpointsApiExplorer();
         services.AddAspnetOpenApi();
         
+        // CRITICAL FIX: Add comprehensive health checks for production monitoring
+        services.AddHealthChecks()
+            .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("API is responsive"), ["live"])
+            .AddCheck("memory", () => 
+            {
+                var allocatedMemory = GC.GetTotalMemory(false);
+                var maxMemory = 1024L * 1024L * 1024L; // 1GB threshold
+                var status = allocatedMemory < maxMemory 
+                    ? Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy 
+                    : Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded;
+                return new Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult(
+                    status, 
+                    $"Allocated memory: {allocatedMemory / (1024 * 1024)} MB");
+            }, ["ready"]);
+        
+        // CRITICAL FIX: Add CORS configuration for frontend integration
+        services.AddCors(options =>
+        {
+            options.AddPolicy("DefaultCorsPolicy", policy =>
+            {
+                if (environment.IsDevelopment())
+                {
+                    // Development: Allow all origins for local development
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                }
+                else
+                {
+                    // Production: Restrict to known frontend domains
+                    // TODO: Configure actual frontend URLs from configuration
+                    policy.WithOrigins("https://app.axon.ai", "https://admin.axon.ai")
+                          .AllowAnyMethod()
+                          .AllowAnyHeader()
+                          .AllowCredentials();
+                }
+            });
+        });
+        
         // Note: MediatR, pipeline behaviors, and validators are registered by individual modules
         // This ensures proper assembly scanning and avoids duplication
         
@@ -59,7 +98,7 @@ public static class ServiceRegistration
         }
     }
 
-    private static IEnumerable<IApiModule> DiscoverApiModules()
+    private static List<IApiModule> DiscoverApiModules()
     {
         var modules = new List<IApiModule>();
         

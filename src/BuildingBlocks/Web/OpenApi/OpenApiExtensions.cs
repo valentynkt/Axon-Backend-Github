@@ -17,7 +17,7 @@ namespace BuildingBlocks.Web.OpenApi
                     description,
                     options =>
                     {
-                        options.AddDocumentTransformer<SecuritySchemeDocumentTransformer>();
+                        // TODO: Add security document transformer when needed
                     });
             }
 

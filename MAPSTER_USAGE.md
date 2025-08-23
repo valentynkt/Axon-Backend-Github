@@ -13,11 +13,12 @@ We've replaced our custom mapper infrastructure with **Mapster**, a high-perform
 - `BaseMapper` base class
 - Individual mapper classes for each mapping
 
-### After (Simple and Clean)
-- Direct use of Mapster's `.Adapt<T>()` extension method
-- Centralized configuration in `MapsterConfig.cs`
-- No need for individual mapper classes
-- Built-in DI support with `services.AddMapster()`
+### After (Clean and Powerful)
+- **Mapping profiles** with `IRegister` pattern for organized configuration
+- **BaseMappedEndpoint** with fluent mapping operations
+- **Enhanced Result pattern integration** with safety extensions
+- **Automatic validation** of mapping configurations
+- **Centralized configuration** with profile auto-discovery
 
 ## Basic Usage
 
@@ -31,77 +32,119 @@ var command = requestDto.Adapt<ProcessMessageRequest>();
 var responseDto = domainResult.Adapt<ChatTurnResponseDto>();
 ```
 
-### Mapping with Result Pattern
+### Enhanced Result Pattern Integration
 
-Use our extension methods for Result pattern integration:
+Use our improved extension methods for safer mapping:
 
 ```csharp
-// Safe mapping with error handling
-var result = source.AdaptToResult<DestinationType>();
+// Safe mapping with detailed error handling
+var result = source.AdaptSafely<DestinationType>();
 if (result.IsFailure)
     return Result.Failure<TResponse, Error>(result.Error);
 
 // With null validation
 var result = source.AdaptWithValidation<DestinationType>();
+
+// Chain mappings with Result pattern
+var result = source.AdaptChain<Source, Intermediate, Destination>();
+
+// Map collections safely
+var results = sources.AdaptMany<Source, Destination>();
 ```
 
 ## Configuration
 
-### Global Configuration
+### Profile-Based Configuration
 
-Global settings are configured in `MapsterConfig.cs`:
+Create organized mapping profiles using the `IRegister` pattern:
 
 ```csharp
-public static void Configure()
+public sealed class ChatMappingProfile : IRegister, IChatMappingProfile
 {
-    // Global settings
-    TypeAdapterConfig.GlobalSettings.Default
-        .NameMatchingStrategy(NameMatchingStrategy.Flexible)
-        .PreserveReference(true);
+    public string ProfileName => "ChatAPI";
+
+    public void Register(TypeAdapterConfig config)
+    {
+        // Configure request mappings
+        config.NewConfig<ChatTurnRequestDto, ProcessMessageRequest>()
+            .Map(dest => dest.ConversationId, src => src.ConversationId)
+            .Map(dest => dest.Message, src => src.Message)
+            .IgnoreNonMapped(true);
+
+        // Configure response mappings with StrongId handling
+        config.NewConfig<ProcessMessageResponse, ChatTurnResponseDto>()
+            .Map(dest => dest.ConversationId, src => src.ConversationId.Value)
+            .Map(dest => dest.UserMessageId, src => src.UserMessageId.Value)
+            .Map(dest => dest.AssistantMessageId, src => src.AssistantMessageId.Value)
+            .Map(dest => dest.AssistantMessage, src => src.AssistantMessage.ToString()!)
+            .Map(dest => dest.Timestamp, src => DateTimeOffset.UtcNow);
+    }
 }
 ```
 
-### Type-Specific Mappings
+### Service Registration with Validation
 
-Configure specific type mappings for complex scenarios:
+Register Mapster with automatic profile discovery and validation:
 
 ```csharp
-// Map StrongIds (extract the value)
-TypeAdapterConfig<ProcessMessageResponse, ChatTurnResponseDto>
-    .NewConfig()
-    .Map(dest => dest.ConversationId, src => src.ConversationId.Value)
-    .Map(dest => dest.UserMessageId, src => src.UserMessageId.Value)
-    .Map(dest => dest.AssistantMessageId, src => src.AssistantMessageId.Value);
-
-// Map Value Objects
-TypeAdapterConfig<Source, Dest>
-    .NewConfig()
-    .Map(dest => dest.Message, src => src.MessageContent.ToString());
+// In Program.cs or ServiceRegistration.cs
+services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
 ```
+
+This automatically:
+- Discovers all `IRegister` implementations
+- Validates mapping configurations at startup
+- Registers all necessary services
 
 ## Common Scenarios
 
-### 1. Mapping in Endpoints
+### 1. Simple Endpoints with BaseMappedEndpoint
+
+Use the new `BaseMappedEndpoint` for ultra-clean endpoint implementations:
 
 ```csharp
-public sealed class ChatTurnEndpoint : BaseResultEndpoint<ChatTurnRequestDto, ChatTurnResponseDto>
+public sealed class ChatTurnEndpoint : BaseMappedEndpoint<ChatTurnRequestDto, ChatTurnResponseDto>
 {
+    private readonly IChatCommandDispatcher _dispatcher;
+
+    public ChatTurnEndpoint(IChatCommandDispatcher dispatcher, ILogger<ChatTurnEndpoint> logger) 
+        : base(logger)
+    {
+        _dispatcher = dispatcher;
+    }
+
     protected override async Task<Result<ChatTurnResponseDto, Error>> ExecuteAsync(
         ChatTurnRequestDto request,
         CancellationToken ct)
     {
-        // Map request to command
-        var command = request.Adapt<ProcessMessageRequest>();
-
-        // Execute business logic
-        var result = await _dispatcher.ProcessMessageAsync(command, ct);
-        if (result.IsFailure)
-            return Result.Failure<ChatTurnResponseDto, Error>(result.Error);
-
-        // Map result to response
-        var response = result.Value.Adapt<ChatTurnResponseDto>();
-        return Result.Success<ChatTurnResponseDto, Error>(response);
+        // One-liner: Map → Execute → Map with full error handling
+        return await MapExecuteMap<ProcessMessageRequest, ProcessMessageResponse>(
+            request,
+            (command, cancellationToken) => _dispatcher.ProcessMessageAsync(command, cancellationToken),
+            ct);
     }
+}
+```
+
+### 2. Manual Control with Helper Methods
+
+If you need more control, use the individual helper methods:
+
+```csharp
+protected override async Task<Result<ChatTurnResponseDto, Error>> ExecuteAsync(
+    ChatTurnRequestDto request,
+    CancellationToken ct)
+{
+    // Step-by-step with error handling
+    var commandResult = MapRequest<ProcessMessageRequest>(request);
+    if (commandResult.IsFailure)
+        return Result.Failure<ChatTurnResponseDto, Error>(commandResult.Error);
+
+    var businessResult = await _dispatcher.ProcessMessageAsync(commandResult.Value, ct);
+    if (businessResult.IsFailure)
+        return Result.Failure<ChatTurnResponseDto, Error>(businessResult.Error);
+
+    return MapResponse<ProcessMessageResponse>(businessResult.Value);
 }
 ```
 

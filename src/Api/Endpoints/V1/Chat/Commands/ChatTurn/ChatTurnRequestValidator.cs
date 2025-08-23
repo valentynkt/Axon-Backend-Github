@@ -1,6 +1,6 @@
 using Axon.Api.Contracts.V1.Chat;
 using Axon.BuildingBlocks.Core.Constants;
-using Axon.BuildingBlocks.Validation;
+using BuildingBlocks.Application.Validation;
 using FastEndpoints;
 using FluentValidation;
 

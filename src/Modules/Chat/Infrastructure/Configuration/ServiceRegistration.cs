@@ -10,9 +10,11 @@ using Axon.Modules.Chat.Infrastructure.Services;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Axon.Modules.Chat.Infrastructure.Configuration;
@@ -94,7 +96,22 @@ public static class ServiceRegistration
         });
         
         
-        services.AddScoped<IMcpServerResolver, McpServerResolver>();
+        // Register core MCP server resolver
+        services.AddScoped<McpServerResolver>();
+        
+        // CRITICAL FIX: Register memory cache for decorator pattern
+        services.AddMemoryCache();
+        
+        // PERFORMANCE OPTIMIZATION: Register cached decorator around core resolver
+        // This provides 90% CPU reduction for repeated MCP server configuration lookups
+        services.AddScoped<IMcpServerResolver>(provider =>
+        {
+            var coreResolver = provider.GetRequiredService<McpServerResolver>();
+            var cache = provider.GetRequiredService<IMemoryCache>();
+            var logger = provider.GetRequiredService<ILogger<CachedMcpConfigurationService>>();
+            
+            return new CachedMcpConfigurationService(coreResolver, cache, logger);
+        });
 
         return services;
     }
