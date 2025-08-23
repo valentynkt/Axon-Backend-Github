@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Reflection;
+using Axon.Modules.Chat.Application.Commands.StartConversation;
 using Polly.Utilities;
 
 namespace Axon.Modules.Chat.Application.DependencyInjection;

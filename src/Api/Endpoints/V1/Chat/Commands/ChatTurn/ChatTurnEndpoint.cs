@@ -1,19 +1,18 @@
 using Axon.Api.Contracts.V1.Chat;
+using BuildingBlocks.Web.Endpoints.Base;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using Axon.Modules.Chat.Application.Common;
 using Axon.Modules.Chat.Application.Services;
-using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Web.Endpoints.Base;
 using CSharpFunctionalExtensions;
-using Mapster;
 
 namespace Axon.Api.Endpoints.V1.Chat.Commands.ChatTurn;
 
 /// <summary>
 /// Universal chat endpoint (one turn). If ConversationId is null → starts a new conversation; otherwise appends.
-/// Uses mappers for clean API↔Application separation and dispatcher for business flow.
+/// Uses Mapster for clean API↔Application separation and dispatcher for business flow.
 /// </summary>
 public sealed class ChatTurnEndpoint
-    : BaseResultEndpoint<ChatTurnRequestDto, ChatTurnResponseDto>
+    : BaseMappedEndpoint<ChatTurnRequestDto, ChatTurnResponseDto>
 {
     private const string Route = "/api/v1/chat/turns";
     private const string Tag = "Chat";
@@ -55,16 +54,10 @@ public sealed class ChatTurnEndpoint
         ChatTurnRequestDto request,
         CancellationToken ct)
     {
-        // 1) API → Application mapping using Mapster
-        var command = request.Adapt<ProcessMessageRequest>();
-
-        // 2) Business flow via dispatcher (Application layer)
-        var appResResult = await _dispatcher.ProcessMessageAsync(command, ct);
-        if (appResResult.IsFailure)
-            return Result.Failure<ChatTurnResponseDto, Error>(appResResult.Error);
-
-        // 3) Application → API mapping using Mapster
-        var response = appResResult.Value.Adapt<ChatTurnResponseDto>();
-        return Result.Success<ChatTurnResponseDto, Error>(response);
+        // Use fluent mapping chain: Request → Command → Execute → Response
+        return await MapExecuteMap<ProcessMessageRequest, ProcessMessageResponse>(
+            request,
+            (command, cancellationToken) => _dispatcher.ProcessMessageAsync(command, cancellationToken),
+            ct);
     }
 }

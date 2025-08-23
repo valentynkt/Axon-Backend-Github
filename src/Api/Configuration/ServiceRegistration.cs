@@ -1,10 +1,9 @@
 // using Axon.Api.Common.ErrorHandling;  // Not needed for POC
+using Axon.Api.Configuration.Mapping;
 using Axon.Api.Modules;
 using Axon.BuildingBlocks.Web.Configuration;
 using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
-using Mapster;
-using MapsterMapper;
 using System.Reflection;
 
 namespace Axon.Api.Configuration;
@@ -37,9 +36,8 @@ public static class ServiceRegistration
         // Note: MediatR, pipeline behaviors, and validators are registered by individual modules
         // This ensures proper assembly scanning and avoids duplication
         
-        // Configure Mapster
-        MapsterConfig.Configure();
-        services.AddMapster();
+        // Configure Mapster with profiles and validation
+        services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
         
         // Register API modules
         RegisterApiModules(services, configuration, environment);

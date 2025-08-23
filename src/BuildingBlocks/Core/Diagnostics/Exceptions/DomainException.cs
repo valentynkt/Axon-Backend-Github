@@ -1,5 +1,6 @@
 using System.Runtime.Serialization;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Web.ProblemDetails;
 
 namespace BuildingBlocks.Core.Diagnostics.Exceptions;
 

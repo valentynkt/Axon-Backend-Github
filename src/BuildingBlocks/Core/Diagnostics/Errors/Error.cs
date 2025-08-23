@@ -11,6 +11,8 @@ using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 
+using BuildingBlocks.Web.ProblemDetails;
+
 namespace BuildingBlocks.Core.Diagnostics.Errors;
 
 /// <summary>
@@ -41,8 +43,7 @@ public sealed record Error
 
     /// <summary>Whether the error is likely transient (good candidate for retry).</summary>
     public bool IsTransient =>
-        Type is ErrorType.Timeout or ErrorType.Network or ErrorType.External or ErrorType.Unavailable 
-            or ErrorType.ExternalService or ErrorType.System;
+        Type is ErrorType.Timeout or ErrorType.Network or ErrorType.External or ErrorType.Unavailable;
 
     /// <summary>Whether retrying is recommended (transient and not user-caused).</summary>
     public bool IsRetryable => IsTransient && Severity <= ErrorSeverity.Error;
@@ -66,7 +67,6 @@ public sealed record Error
         { ErrorType.Forbidden, ErrorSeverity.Warning },
         { ErrorType.RateLimit, ErrorSeverity.Warning },
         { ErrorType.Cancelled, ErrorSeverity.Info },
-        { ErrorType.Cancellation, ErrorSeverity.Info },
 
         { ErrorType.Internal, ErrorSeverity.Critical },
         { ErrorType.Configuration, ErrorSeverity.Critical },
@@ -75,11 +75,6 @@ public sealed record Error
         { ErrorType.Timeout, ErrorSeverity.Warning },
         { ErrorType.Unavailable, ErrorSeverity.Error },
         { ErrorType.Persistence, ErrorSeverity.Critical },
-
-        // Additional types for compatibility
-        { ErrorType.InternalError, ErrorSeverity.Critical },
-        { ErrorType.ExternalService, ErrorSeverity.Error },
-        { ErrorType.System, ErrorSeverity.Critical },
 
         { ErrorType.Aggregate, ErrorSeverity.Error },
         { ErrorType.Security, ErrorSeverity.Fatal }
@@ -239,24 +234,6 @@ public sealed record Error
 
     #endregion
 
-    #region Factory: Compatibility Aliases
-
-    /// <summary>Alias for Error.Internal() for backward compatibility.</summary>
-    public static Error InternalError(string message, string code = "INTERNAL_ERROR",
-        Exception? exception = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.InternalError, innerException: exception, metadata: metadata);
-
-    /// <summary>Alias for Error.External() for backward compatibility.</summary>
-    public static Error ExternalService(string message, string code = "EXTERNAL_SERVICE_ERROR",
-        Exception? exception = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.ExternalService, innerException: exception, metadata: metadata);
-
-    /// <summary>System-level error factory method.</summary>
-    public static Error System(string message, string code = "SYSTEM_ERROR",
-        Exception? exception = null, IReadOnlyDictionary<string, object>? metadata = null) =>
-        new(code, message, ErrorType.System, innerException: exception, metadata: metadata);
-
-    #endregion
 
     #region Factory: Aggregate
 
@@ -435,41 +412,6 @@ public sealed record Error
 
     #region Conversions
 
-    /// <summary>HTTP status as enum.</summary>
-    public HttpStatusCode ToHttpStatus() => Type switch
-    {
-        ErrorType.Validation        => HttpStatusCode.BadRequest,          // 400
-        ErrorType.Serialization     => HttpStatusCode.BadRequest,          // 400
-        ErrorType.Unauthorized      => HttpStatusCode.Unauthorized,        // 401
-        ErrorType.Forbidden         => HttpStatusCode.Forbidden,           // 403
-        ErrorType.NotFound          => HttpStatusCode.NotFound,            // 404
-        ErrorType.Conflict          => HttpStatusCode.Conflict,            // 409
-        ErrorType.Concurrency       => HttpStatusCode.Conflict,            // or 412 depending on API policy
-        ErrorType.PreconditionFailed=> HttpStatusCode.PreconditionFailed,  // 412
-        ErrorType.BusinessRule      => (HttpStatusCode)422,                // Unprocessable Entity
-        ErrorType.Aggregate         => (HttpStatusCode)422,
-        ErrorType.RateLimit         => (HttpStatusCode)429,
-        ErrorType.Configuration     => HttpStatusCode.InternalServerError, // 500
-        ErrorType.Internal          => HttpStatusCode.InternalServerError, // 500
-        ErrorType.External          => HttpStatusCode.BadGateway,          // 502
-        ErrorType.Network           => HttpStatusCode.BadGateway,          // 502
-        ErrorType.Unavailable       => HttpStatusCode.ServiceUnavailable,  // 503
-        ErrorType.Timeout           => HttpStatusCode.GatewayTimeout,      // 504
-        ErrorType.Persistence       => (HttpStatusCode)507,                // Insufficient Storage
-        ErrorType.Security          => HttpStatusCode.Forbidden,           // 403
-        ErrorType.Cancelled         => (HttpStatusCode)499,                // Client Closed Request (non-standard)
-        ErrorType.Cancellation      => (HttpStatusCode)499,                // Client Closed Request (non-standard)
-        
-        // Compatibility aliases
-        ErrorType.InternalError      => HttpStatusCode.InternalServerError, // 500
-        ErrorType.ExternalService    => HttpStatusCode.BadGateway,          // 502
-        ErrorType.System             => HttpStatusCode.InternalServerError, // 500
-        
-        _                           => HttpStatusCode.InternalServerError
-    };
-
-    /// <summary>HTTP status as int (back-compat).</summary>
-    public int ToHttpStatusCode() => (int)ToHttpStatus();
 
     /// <summary>Structured payload for logging/analytics.</summary>
     public Dictionary<string, object> ToLogData()
@@ -481,7 +423,7 @@ public sealed record Error
             ["ErrorType"] = Type.ToString(),
             ["ErrorSeverity"] = Severity.ToString(),
             ["OccurredAt"] = OccurredAt,
-            ["HttpStatusCode"] = ToHttpStatusCode()
+            ["HttpStatusCode"] = this.ToHttpStatusCode()
         };
         if (!string.IsNullOrWhiteSpace(CorrelationId)) data["CorrelationId"] = CorrelationId;
         if (!string.IsNullOrWhiteSpace(Source)) data["Source"] = Source;
@@ -513,7 +455,7 @@ public sealed record Error
     /// </summary>
     public Problem ToProblem(string? instance = null, string? type = null, string? title = null)
     {
-        var status = ToHttpStatusCode();
+        var status = this.ToHttpStatusCode();
         var problem = new Problem
         {
             Type = type ?? $"https://httpstatuses.com/{status}",
@@ -571,25 +513,4 @@ public sealed record Error
 
     #endregion
 
-    #region DTOs
-
-    /// <summary>
-    /// Minimal RFC 7807 ProblemDetails-like DTO (no ASP.NET dependency).
-    /// </summary>
-    public sealed class Problem
-    {
-        public string? Type { get; init; }
-        public string? Title { get; init; }
-        public int Status { get; init; }
-        public string? Detail { get; init; }
-        public string? Instance { get; init; }
-
-        /// <summary>W3C trace id == correlation id.</summary>
-        public string? TraceId { get; init; }
-
-        /// <summary>Additional fields (code, severity, metadata, causes, etc.).</summary>
-        public Dictionary<string, object> Extensions { get; } = new();
-    }
-
-    #endregion
 }
