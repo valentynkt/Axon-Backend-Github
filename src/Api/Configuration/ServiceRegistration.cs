@@ -57,29 +57,36 @@ public static class ServiceRegistration
                             activity.SetTag("http.response.body.size", response.ContentLength);
                         };
                     })
-                    .AddHttpClientInstrumentation()
-                    .AddConsoleExporter(options =>
+                    .AddHttpClientInstrumentation();
+
+                // Only export traces to console in development for debugging
+                if (environment.IsDevelopment())
+                {
+                    builder.AddConsoleExporter(options =>
                     {
                         options.Targets = OpenTelemetry.Exporter.ConsoleExporterOutputTargets.Console;
                     });
+                }
             })
             .WithMetrics(builder =>
             {
                 builder
-                    .AddMeter("Axon.Application") // Our custom Meter
-                    .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddConsoleExporter(options =>
+                    .AddMeter("Axon.Application") // Our custom Meter only
+                    .AddView("http.server.request.duration", new ExplicitBucketHistogramConfiguration
                     {
-                        options.Targets = OpenTelemetry.Exporter.ConsoleExporterOutputTargets.Console;
-                    });
-            })
-            .WithLogging(builder =>
-            {
-                builder.AddConsoleExporter(options =>
+                        Boundaries = new double[] { 0.1, 0.5, 1.0, 2.5, 5.0, 10.0 }
+                    })
+                    .AddView("*", MetricStreamConfiguration.Drop); // Drop all other noisy metrics
+                
+                // Only add infrastructure metrics in production with proper exporters
+                if (!environment.IsDevelopment())
                 {
-                    options.Targets = OpenTelemetry.Exporter.ConsoleExporterOutputTargets.Console;
-                });
+                    builder
+                        .AddAspNetCoreInstrumentation()
+                        .AddHttpClientInstrumentation();
+                }
+                
+                // Never export metrics to console - too noisy
             });
         
         // CRITICAL FIX: Add comprehensive health checks for production monitoring

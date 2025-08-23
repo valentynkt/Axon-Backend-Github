@@ -13,6 +13,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 
@@ -27,23 +28,29 @@ public sealed class AppendUserMessageHandler
     private readonly IUserAuthenticationService _authenticationService;
     private readonly IMessageProcessingOrchestrator _messageOrchestrator;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<AppendUserMessageHandler> _logger;
 
     public AppendUserMessageHandler(
         IConversationRepository repository,
         IUserAuthenticationService authenticationService,
         IMessageProcessingOrchestrator messageOrchestrator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<AppendUserMessageHandler> logger)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
         _messageOrchestrator = messageOrchestrator ?? throw new ArgumentNullException(nameof(messageOrchestrator));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<Result<ProcessMessageResponse, Error>> Handle(
         AppendUserMessageCommand command,
         CancellationToken cancellationToken)
     {
+        _logger.LogDebug("Processing append user message command for conversation {ConversationId}",
+            command.ConversationId.Value);
+
         // Authenticate user using CFE chaining
         return await _authenticationService.GetAuthenticatedUserId()
             .Bind(async ownerId => await ValidateAndLoadConversation(command.ConversationId, ownerId, cancellationToken))
@@ -95,6 +102,10 @@ public sealed class AppendUserMessageHandler
         // Persist user message
         await _repository.UpdateAsync(conversation, cancellationToken);
         await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "User message {MessageId} appended to conversation {ConversationId}",
+            userMessageId.Value, conversation.Id.Value);
 
         // Delegate to orchestrator for AI processing and assistant response
         return await _messageOrchestrator.ProcessUserMessageAsync(
