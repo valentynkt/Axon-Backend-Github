@@ -6,7 +6,7 @@ using BuildingBlocks.Infrastructure.Persistence.Read;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence;
+namespace Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 
 public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatReadDbContext
 {

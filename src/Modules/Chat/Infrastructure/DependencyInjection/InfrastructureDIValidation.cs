@@ -2,8 +2,8 @@ using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.Abstractions.AI;
-using Axon.Modules.Chat.Infrastructure.Persistence;
-using Axon.Modules.Chat.Infrastructure.Services;
+using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -11,7 +11,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Axon.Modules.Chat.Infrastructure.Configuration;
+namespace Axon.Modules.Chat.Infrastructure.DependencyInjection;
 
 /// <summary>
 /// Validates all critical Chat Infrastructure layer DI registrations

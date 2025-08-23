@@ -1,6 +1,6 @@
 using Axon.BuildingBlocks.Web.Configuration;
 using Axon.Modules.Chat.Application.DependencyInjection;
-using Axon.Modules.Chat.Infrastructure.Configuration;
+using Axon.Modules.Chat.Infrastructure.DependencyInjection;
 
 namespace Axon.Api.Modules;
 

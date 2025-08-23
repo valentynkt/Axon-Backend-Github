@@ -3,7 +3,7 @@ using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence.Configuration;
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Configurations;
 
 using Domain.Entities;
 using Domain.ValueObjects;

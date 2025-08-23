@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Axon.Modules.Chat.Domain.Entities;
 
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence.Configuration;
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Configurations;
 public sealed class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 {
     public void Configure(EntityTypeBuilder<Conversation> builder)
@@ -57,6 +57,7 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
 
         // Ignore domain events in persistence
         builder.Ignore(c => c.DomainEvents);
+        builder.Ignore(c => c.Messages);
         builder.Ignore(c => c.MessagesOrdered);
         builder.Ignore(c => c.MessageCount);
         builder.Ignore(c => c.IsActive);

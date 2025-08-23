@@ -1,12 +1,12 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DTOs;
-using Axon.Modules.Chat.Infrastructure.Configuration;
+using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
  
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Axon.Modules.Chat.Infrastructure.Services;
+namespace Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 
 /// <summary>
 /// Service for resolving MCP server configurations from centralized settings

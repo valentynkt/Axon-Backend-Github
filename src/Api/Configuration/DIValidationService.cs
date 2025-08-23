@@ -1,7 +1,7 @@
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.DependencyInjection;
 using Axon.Modules.Chat.Application.Services;
-using Axon.Modules.Chat.Infrastructure.Configuration;
+using Axon.Modules.Chat.Infrastructure.DependencyInjection;
 using BuildingBlocks.Application.Configuration;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using Microsoft.Extensions.Caching.Memory;

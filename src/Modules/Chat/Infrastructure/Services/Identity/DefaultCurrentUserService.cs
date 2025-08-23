@@ -1,6 +1,6 @@
 using BuildingBlocks.Core.Abstractions.Authentication;
 
-namespace Axon.Modules.Chat.Infrastructure.Services;
+namespace Axon.Modules.Chat.Infrastructure.Services.Identity;
 
 /// <summary>
 /// Default implementation of ICurrentUserService for testing and development

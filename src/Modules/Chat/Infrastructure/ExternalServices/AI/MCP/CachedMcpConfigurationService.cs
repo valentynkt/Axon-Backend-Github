@@ -5,7 +5,7 @@ using Axon.Modules.Chat.Application.DTOs;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
-namespace Axon.Modules.Chat.Infrastructure.Services;
+namespace Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 
 /// <summary>
 /// High-performance cached MCP configuration service with 90% CPU reduction

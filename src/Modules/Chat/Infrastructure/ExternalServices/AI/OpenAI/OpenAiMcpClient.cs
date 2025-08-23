@@ -12,7 +12,7 @@ using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Axon.Modules.Chat.Infrastructure.Ai;
+namespace Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI;
 
 /// <summary>
 /// Minimal, production-lean client for OpenAI Responses API with optional MCP tools.

@@ -1,4 +1,4 @@
-namespace Axon.Modules.Chat.Infrastructure.Ai;
+namespace Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI;
 
 /// <summary>
 /// Configuration options for OpenAI client

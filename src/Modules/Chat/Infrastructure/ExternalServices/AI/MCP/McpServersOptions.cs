@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Axon.Modules.Chat.Infrastructure.Configuration;
+namespace Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 
 /// <summary>
 /// Configuration options for MCP servers collection

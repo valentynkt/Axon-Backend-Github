@@ -4,9 +4,12 @@ using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Persistence;
 using Axon.Modules.Chat.Application.Services;
 
-using Axon.Modules.Chat.Infrastructure.Ai;
-using Axon.Modules.Chat.Infrastructure.Persistence;
-using Axon.Modules.Chat.Infrastructure.Services;
+using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI;
+using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
+using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Chat.Infrastructure.Services.Identity;
+using Axon.Modules.Chat.Infrastructure.Services.Telemetry;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +20,7 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Axon.Modules.Chat.Infrastructure.Configuration;
+namespace Axon.Modules.Chat.Infrastructure.DependencyInjection;
 
 /// <summary>
 /// Service registration for Chat Infrastructure layer
