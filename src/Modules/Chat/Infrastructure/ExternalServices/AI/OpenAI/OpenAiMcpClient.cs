@@ -4,7 +4,11 @@ using System.Text;
 using System.Text.Json;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects; // MessageContent (Vogen)
 using Axon.Modules.Chat.Application.Abstractions.AI;
+using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.DTOs;
+using Axon.Modules.Chat.Application.DTOs.Configurations;
+using Axon.Modules.Chat.Application.DTOs.Requests;
+using Axon.Modules.Chat.Application.DTOs.Responses;
 using Axon.Modules.Chat.Domain.Errors;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;

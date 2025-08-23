@@ -1,6 +1,8 @@
 using Mapster;
 using Axon.Api.Contracts.V1.Chat;
 using Axon.Modules.Chat.Application.Common;
+using Axon.Modules.Chat.Application.DTOs.Requests;
+using Axon.Modules.Chat.Application.DTOs.Responses;
 
 namespace Axon.Api.Configuration.Mapping;
 

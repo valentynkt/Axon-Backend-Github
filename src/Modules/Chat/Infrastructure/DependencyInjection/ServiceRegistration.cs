@@ -1,6 +1,9 @@
 using BuildingBlocks.Application;
 using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
+using Axon.Modules.Chat.Application.Common.Models;
+using Axon.Modules.Chat.Application.Contracts.AI;
+using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.Persistence;
 using Axon.Modules.Chat.Application.Services;
 

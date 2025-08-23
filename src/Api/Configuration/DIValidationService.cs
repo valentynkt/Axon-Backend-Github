@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.DependencyInjection;
 using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Infrastructure.DependencyInjection;

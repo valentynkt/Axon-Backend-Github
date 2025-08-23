@@ -2,6 +2,8 @@ using Axon.Modules.Chat.Application.Abstractions;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Telemetry;
 using Axon.Modules.Chat.Application.Abstractions.AI;
+using Axon.Modules.Chat.Application.Contracts.AI;
+using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 using BuildingBlocks.Application;

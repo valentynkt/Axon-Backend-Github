@@ -1,5 +1,7 @@
 using Axon.Modules.Chat.Application.Abstractions;
+using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.DTOs;
+using Axon.Modules.Chat.Application.DTOs.Configurations;
 using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
  
 

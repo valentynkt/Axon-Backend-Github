@@ -2,6 +2,9 @@ using Axon.Api.Contracts.V1.Chat;
 using BuildingBlocks.Web.Endpoints.Base;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using Axon.Modules.Chat.Application.Common;
+using Axon.Modules.Chat.Application.Contracts.Dispatching;
+using Axon.Modules.Chat.Application.DTOs.Requests;
+using Axon.Modules.Chat.Application.DTOs.Responses;
 using Axon.Modules.Chat.Application.Services;
 using CSharpFunctionalExtensions;
 
