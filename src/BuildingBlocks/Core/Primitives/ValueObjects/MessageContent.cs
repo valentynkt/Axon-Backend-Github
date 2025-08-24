@@ -56,6 +56,15 @@ public readonly partial struct MessageContent
                 Error.Validation("Message content cannot be empty or whitespace.", "CHAT.MESSAGE.EMPTY"));
         }
 
+        var normalized = NormalizeInput(value);
+        
+        // Check length after normalization
+        if (normalized.Length > MaxLength)
+        {
+            return Result.Failure<MessageContent, Error>(
+                Error.Validation($"Message content cannot exceed {MaxLength} characters. Current length: {normalized.Length}.", "CHAT.MESSAGE.TOO_LONG"));
+        }
+
         // Use generated TryParse; provider null is fine
         return TryParse(value, provider: null, out var vo)
             ? Result.Success<MessageContent, Error>(vo)

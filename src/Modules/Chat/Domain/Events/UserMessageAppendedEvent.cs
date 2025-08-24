@@ -12,4 +12,4 @@ public sealed record UserMessageAppendedEvent(
     int Sequence,
     string ContentPreview,
     DateTimeOffset CreatedAt
-) : DomainEvent;
+) : DomainEvent(CreatedAt.UtcDateTime);

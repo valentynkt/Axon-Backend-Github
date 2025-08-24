@@ -6,7 +6,7 @@ using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
-internal sealed class ConversationsCreatedBetweenForOwnerSpec : Specification<Conversation>
+public sealed class ConversationsCreatedBetweenForOwnerSpec : Specification<Conversation>
 {
     public ConversationsCreatedBetweenForOwnerSpec(UserId ownerId, DateTimeOffset fromUtc, DateTimeOffset toUtc)
     {

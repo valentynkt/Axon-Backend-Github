@@ -27,13 +27,21 @@ internal sealed class TitleProvidedMustBeValidRule : BusinessRule
         if (_title is null)
             return false;
 
-        // Empty string title is allowed on Start (will become null in domain)
-        if (string.IsNullOrEmpty(_title))
+        // Empty/whitespace title is allowed on Start (will become null in domain)
+        if (string.IsNullOrWhiteSpace(_title))
             return false;
 
-        // If title is provided, it must be valid according to VO rules
-        var result = ConversationTitle.Create(_title);
-        return result.IsFailure;
+        // If title is provided and not empty/whitespace, it must be valid according to VO rules
+        try
+        {
+            var result = ConversationTitle.Create(_title);
+            return result.IsFailure;
+        }
+        catch (Exception)
+        {
+            // If ConversationTitle.Create throws an exception, treat as invalid
+            return true;
+        }
     }
 
     public override ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 

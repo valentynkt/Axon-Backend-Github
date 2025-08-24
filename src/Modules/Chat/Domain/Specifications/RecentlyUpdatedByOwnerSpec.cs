@@ -7,7 +7,7 @@ using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
-internal sealed class RecentlyUpdatedByOwnerSpec : Specification<Conversation>
+public sealed class RecentlyUpdatedByOwnerSpec : Specification<Conversation>
 {
     public RecentlyUpdatedByOwnerSpec(UserId ownerId, DateTimeOffset sinceUtc)
     {

@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Domain.Tests.Common;
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Domain.Tests.Builders;
@@ -12,9 +13,11 @@ public class ConversationBuilder
 {
     private UserId _ownerId = TestConstants.Users.DefaultOwnerId;
     private string? _title = TestConstants.Conversations.DefaultTitle;
-    private readonly List<(MessageRole role, string content, AiResponseId? aiResponseId)> _messages = new();
+    private readonly List<(MessageRole role, string content, AiResponseId? aiResponseId)> _messages = [];
+    private readonly List<string> _expectedDomainEvents = [];
+    private ConversationStatus _expectedStatus = ConversationStatus.Active;
     private DateTimeOffset _creationTime = TestConstants.DateTimes.DefaultTestTime;
-    private TimeProvider? _timeProvider;
+    private FakeTimeProvider? _timeProvider;
     private bool _shouldComplete;
 
     /// <summary>
@@ -74,7 +77,7 @@ public class ConversationBuilder
     /// <summary>
     /// Sets a custom TimeProvider for the conversation creation.
     /// </summary>
-    public ConversationBuilder WithTimeProvider(TimeProvider timeProvider)
+    public ConversationBuilder WithTimeProvider(FakeTimeProvider timeProvider)
     {
         _timeProvider = timeProvider;
         return this;
@@ -87,6 +90,7 @@ public class ConversationBuilder
     public ConversationBuilder WithUserMessage(string content = TestConstants.Messages.DefaultUserMessage)
     {
         _messages.Add((MessageRole.User, content, null));
+        _expectedDomainEvents.Add(nameof(UserMessageAppendedEvent));
         return this;
     }
 
@@ -98,8 +102,10 @@ public class ConversationBuilder
         string content = TestConstants.Messages.DefaultAssistantMessage,
         AiResponseId? aiResponseId = null)
     {
-        var responseId = aiResponseId ?? TestConstants.AiResponses.DefaultAiResponseId;
+        // Generate unique AI response ID if none provided
+        var responseId = aiResponseId ?? new AiResponseId($"ai-response-{Guid.NewGuid()}");
         _messages.Add((MessageRole.Assistant, content, responseId));
+        _expectedDomainEvents.Add(nameof(AssistantMessageAppendedEvent));
         return this;
     }
 
@@ -117,7 +123,7 @@ public class ConversationBuilder
             }
             else
             {
-                var aiResponseId = AiResponseId.From($"ai-response-{i + 1}");
+                var aiResponseId = new AiResponseId($"ai-response-{i + 1}");
                 WithAssistantMessage($"Assistant response {i + 1}", aiResponseId);
             }
         }
@@ -129,17 +135,20 @@ public class ConversationBuilder
     /// </summary>
     public ConversationBuilder WithMaximumMessages()
     {
-        // Add messages close to the limit for testing
-        for (int i = 0; i < 100; i++) // Use smaller number for performance
+        // Create a conversation that has reached its maximum capacity
+        // We need exactly 10,000 messages to trigger the "at capacity" rule
+        const int maxMessages = 10_000;
+        
+        for (int i = 0; i < maxMessages; i++)
         {
             if (i % 2 == 0)
             {
-                WithUserMessage($"User message {i + 1}");
+                WithUserMessage($"User {i + 1}");
             }
             else
             {
-                var aiResponseId = AiResponseId.From($"ai-response-{i + 1}");
-                WithAssistantMessage($"Assistant response {i + 1}", aiResponseId);
+                var aiResponseId = new AiResponseId($"ai-{i + 1}");
+                WithAssistantMessage($"Assistant {i + 1}", aiResponseId);
             }
         }
         return this;
@@ -151,6 +160,8 @@ public class ConversationBuilder
     public ConversationBuilder ThatShouldBeCompleted()
     {
         _shouldComplete = true;
+        _expectedStatus = ConversationStatus.Completed;
+        _expectedDomainEvents.Add(nameof(ConversationCompletedEvent));
         return this;
     }
 
@@ -176,6 +187,10 @@ public class ConversationBuilder
     public Result<Conversation, Error> BuildResult()
     {
         var timeProvider = _timeProvider ?? CreateTestTimeProvider();
+        
+        // Track expected domain events
+        if (!_expectedDomainEvents.Contains(nameof(ConversationStartedEvent)))
+            _expectedDomainEvents.Add(nameof(ConversationStartedEvent));
 
         // Create the conversation
         var conversationResult = Conversation.StartNewConversation(_ownerId, _title, timeProvider);
@@ -197,7 +212,7 @@ public class ConversationBuilder
 
             Result<Message, Error> messageResult = role.IsUser 
                 ? conversation.AppendUserMessageToConversation(messageContentResult.Value, timeProvider)
-                : conversation.AppendAssistantResponseToConversation(messageContentResult.Value, aiResponseId!, timeProvider);
+                : conversation.AppendAssistantResponseToConversation(messageContentResult.Value, aiResponseId ?? TestConstants.AiResponses.DefaultAiResponseId, timeProvider);
 
             if (messageResult.IsFailure)
             {
@@ -221,8 +236,58 @@ public class ConversationBuilder
     /// <summary>
     /// Creates a test TimeProvider that returns the specified creation time.
     /// </summary>
-    private TimeProvider CreateTestTimeProvider()
+    private FakeTimeProvider CreateTestTimeProvider()
     {
         return new FakeTimeProvider(_creationTime);
+    }
+
+    /// <summary>
+    /// Gets the expected domain events that should be raised during conversation building.
+    /// Useful for testing domain event publishing.
+    /// </summary>
+    public IReadOnlyList<string> GetExpectedDomainEvents() => _expectedDomainEvents.AsReadOnly();
+
+    /// <summary>
+    /// Gets the expected final status of the conversation.
+    /// </summary>
+    public ConversationStatus GetExpectedStatus() => _expectedStatus;
+
+    /// <summary>
+    /// Creates a conversation for testing business rule violations.
+    /// </summary>
+    public ConversationBuilder ForBusinessRuleTesting()
+    {
+        // Configure for common business rule testing scenarios
+        return this.WithTitle(null).WithOwner(TestConstants.Users.DefaultOwnerId);
+    }
+
+    /// <summary>
+    /// Creates a conversation that violates the message limit rule.
+    /// </summary>
+    public ConversationBuilder ThatViolatesMessageLimit()
+    {
+        // Add more messages than allowed (testing edge case)
+        for (int i = 0; i < TestConstants.Limits.MaxConversationMessages + 1; i++)
+        {
+            if (i % 2 == 0)
+            {
+                WithUserMessage($"Message {i + 1}");
+            }
+            else
+            {
+                var aiId = new AiResponseId($"ai-response-{i + 1}");
+                WithAssistantMessage($"Response {i + 1}", aiId);
+            }
+        }
+        return this;
+    }
+
+    /// <summary>
+    /// Creates a conversation for testing error scenarios.
+    /// </summary>
+    public ConversationBuilder WithInvalidData()
+    {
+        return this.WithOwner(new UserId(Guid.Empty))
+                  .WithTitle(TestConstants.EdgeCases.OneOverMaxTitle);
     }
 }

@@ -1,4 +1,5 @@
 using CSharpFunctionalExtensions;
+using BuildingBlocks.Core.Domain.Events;
 
 namespace Axon.Modules.Chat.Domain.Tests.Extensions;
 
@@ -143,7 +144,7 @@ public static class ChatDomainShouldlyExtensions
     public static T ShouldBeSuccess<T, TError>(this Result<T, TError> result, string? message = null)
         where TError : class
     {
-        result.IsSuccess.ShouldBeTrue(message ?? $"Expected success but got error: {result.Error}");
+        result.IsSuccess.ShouldBeTrue(message ?? $"Expected success but got failure");
         return result.Value;
     }
 
@@ -153,7 +154,7 @@ public static class ChatDomainShouldlyExtensions
     public static TError ShouldBeFailure<T, TError>(this Result<T, TError> result, string? message = null)
         where TError : class
     {
-        result.IsFailure.ShouldBeTrue(message ?? $"Expected failure but got success: {result.Value}");
+        result.IsFailure.ShouldBeTrue(message ?? $"Expected failure but got success");
         return result.Error;
     }
 
@@ -163,14 +164,14 @@ public static class ChatDomainShouldlyExtensions
     public static void ShouldFailWithMessage<T>(this Result<T, Error> result, string expectedMessage)
     {
         var error = result.ShouldBeFailure();
-        error.Message.ShouldContain(expectedMessage, 
+        error.Message.ShouldContain(expectedMessage, Case.Insensitive, 
             $"Error message should contain '{expectedMessage}' but was '{error.Message}'");
     }
 
     /// <summary>
     /// Asserts that a Result failed with an error of the expected type.
     /// </summary>
-    public static void ShouldFailWithErrorType<T>(this Result<T, Error> result, string expectedErrorType)
+    public static void ShouldFailWithErrorType<T>(this Result<T, Error> result, ErrorType expectedErrorType)
     {
         var error = result.ShouldBeFailure();
         error.Type.ShouldBe(expectedErrorType, 

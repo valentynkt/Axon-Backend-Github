@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Domain.Events;
+
 namespace Axon.Modules.Chat.Domain.Tests.Common;
 
 /// <summary>
@@ -14,7 +16,7 @@ public static class DomainEventTestHelpers
         TAggregate aggregate, 
         Action<TAggregate> operation)
         where TAggregate : AggregateRoot<TId>
-        where TId : struct
+        where TId : notnull
     {
         // Clear existing events
         aggregate.ClearDomainEvents();
@@ -35,9 +37,9 @@ public static class DomainEventTestHelpers
         Action<TAggregate> operation,
         params Type[] expectedEventTypes)
         where TAggregate : AggregateRoot<TId>
-        where TId : struct
+        where TId : notnull
     {
-        var events = CaptureEventsFrom(aggregate, operation);
+        var events = CaptureEventsFrom<TAggregate, TId>(aggregate, operation);
         
         events.Count.ShouldBe(expectedEventTypes.Length, 
             $"Expected {expectedEventTypes.Length} events but found {events.Count}");
@@ -57,12 +59,12 @@ public static class DomainEventTestHelpers
     public static void VerifyEventProperties<TEvent>(
         TEvent domainEvent,
         Action<TEvent> propertyVerification)
-        where TEvent : IDomainEvent
+        where TEvent : class, IDomainEvent
     {
         // Verify basic event structure
         domainEvent.ShouldNotBeNull("Domain event should not be null");
-        domainEvent.Id.ShouldNotBe(Guid.Empty, "Domain event should have a valid ID");
-        domainEvent.OccurredOn.ShouldNotBe(default(DateTimeOffset), "Domain event should have a valid timestamp");
+        domainEvent.EventId.ShouldNotBe(Guid.Empty, "Domain event should have a valid ID");
+        domainEvent.OccurredAt.ShouldNotBe(default(DateTime), "Domain event should have a valid timestamp");
         
         // Verify custom properties
         propertyVerification(domainEvent);
@@ -73,7 +75,7 @@ public static class DomainEventTestHelpers
     /// </summary>
     public static void VerifyEventSequence(
         List<IDomainEvent> events,
-        DateTimeOffset expectedStartTime,
+        DateTime expectedStartTime,
         TimeSpan? maxDuration = null)
     {
         events.ShouldNotBeEmpty("Event sequence should not be empty");
@@ -81,7 +83,7 @@ public static class DomainEventTestHelpers
         // Verify events are in chronological order
         for (int i = 1; i < events.Count; i++)
         {
-            events[i].OccurredOn.ShouldBeGreaterThanOrEqualTo(events[i - 1].OccurredOn,
+            events[i].OccurredAt.ShouldBeGreaterThanOrEqualTo(events[i - 1].OccurredAt,
                 $"Event {i} should occur at or after event {i - 1}");
         }
 
@@ -89,12 +91,12 @@ public static class DomainEventTestHelpers
         var firstEvent = events.First();
         var lastEvent = events.Last();
 
-        firstEvent.OccurredOn.ShouldBeGreaterThanOrEqualTo(expectedStartTime,
+        firstEvent.OccurredAt.ShouldBeGreaterThanOrEqualTo(expectedStartTime,
             "First event should occur at or after expected start time");
 
         if (maxDuration.HasValue)
         {
-            var actualDuration = lastEvent.OccurredOn - firstEvent.OccurredOn;
+            var actualDuration = lastEvent.OccurredAt - firstEvent.OccurredAt;
             actualDuration.ShouldBeLessThanOrEqualTo(maxDuration.Value,
                 $"Event sequence duration should not exceed {maxDuration.Value}");
         }
@@ -104,7 +106,7 @@ public static class DomainEventTestHelpers
     /// Filters events by type and returns strongly typed collection.
     /// </summary>
     public static List<TEvent> FilterEventsByType<TEvent>(IEnumerable<IDomainEvent> events)
-        where TEvent : IDomainEvent
+        where TEvent : class, IDomainEvent
     {
         return events.OfType<TEvent>().ToList();
     }
@@ -115,7 +117,7 @@ public static class DomainEventTestHelpers
     public static void VerifyUniqueEventIds(IEnumerable<IDomainEvent> events)
     {
         var eventList = events.ToList();
-        var uniqueIds = eventList.Select(e => e.Id).Distinct().Count();
+        var uniqueIds = eventList.Select<IDomainEvent, Guid>(e => e.EventId).Distinct().Count();
         
         uniqueIds.ShouldBe(eventList.Count, 
             "All events in the sequence should have unique IDs");

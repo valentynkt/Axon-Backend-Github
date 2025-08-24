@@ -5,7 +5,7 @@ using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
-internal sealed class ConversationsWithMinimumMessagesSpec : Specification<Conversation>
+public sealed class ConversationsWithMinimumMessagesSpec : Specification<Conversation>
 {
     public ConversationsWithMinimumMessagesSpec(int minCount)
     {

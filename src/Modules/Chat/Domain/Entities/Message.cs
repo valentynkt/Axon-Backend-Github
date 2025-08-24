@@ -44,7 +44,7 @@ public sealed class Message : AuditableDeletableEntity<MessageId>
     /// <summary>
     /// Assistant messages MUST have an AI response id.
     /// </summary>
-    internal static Message CreateAssistantMessage(
+    public static Message CreateAssistantMessage(
         ConversationId conversationId,
         MessageContent content,
         int sequence,
@@ -60,7 +60,7 @@ public sealed class Message : AuditableDeletableEntity<MessageId>
     /// <summary>
     /// User messages MUST NOT have an AI response id.
     /// </summary>
-    internal static Message CreateUserMessage(
+    public static Message CreateUserMessage(
         ConversationId conversationId,
         MessageContent content,
         int sequence)

@@ -1,3 +1,5 @@
+using BuildingBlocks.Core.Domain.Events;
+
 namespace Axon.Modules.Chat.Domain.Tests.Common;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Tests.Common;
 /// <typeparam name="TId">The strongly-typed ID of the aggregate</typeparam>
 public abstract class AggregateTestBase<TAggregate, TId> : DomainTestBase
     where TAggregate : AggregateRoot<TId>
-    where TId : struct
+    where TId : class
 {
     /// <summary>
     /// Asserts that the aggregate has raised the expected number of domain events.
@@ -24,7 +26,7 @@ public abstract class AggregateTestBase<TAggregate, TId> : DomainTestBase
     /// Returns the first event of that type for further assertions.
     /// </summary>
     protected TEvent AssertDomainEventRaised<TEvent>(TAggregate aggregate) 
-        where TEvent : IDomainEvent
+        where TEvent : class, IDomainEvent
     {
         var domainEvent = aggregate.DomainEvents.OfType<TEvent>().FirstOrDefault();
         domainEvent.ShouldNotBeNull($"Expected domain event of type {typeof(TEvent).Name} but none was found");

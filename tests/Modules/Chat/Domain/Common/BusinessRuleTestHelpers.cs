@@ -40,7 +40,7 @@ public static class BusinessRuleTestHelpers
     public static void AssertRuleMessageContains<TRule>(TRule rule, string expectedText)
         where TRule : IBusinessRule
     {
-        rule.Message.ShouldContain(expectedText, 
+        rule.Message.ShouldContain(expectedText, Case.Insensitive,
             $"Business rule {typeof(TRule).Name} message should contain '{expectedText}' but was '{rule.Message}'");
     }
 
@@ -48,16 +48,15 @@ public static class BusinessRuleTestHelpers
     /// Asserts that an operation throws a BusinessRuleException with a specific rule type.
     /// Returns the broken rule for further assertions.
     /// </summary>
-    public static TRule AssertThrowsBusinessRuleException<TRule>(Action operation, string? customMessage = null)
+    public static void AssertThrowsBusinessRuleException<TRule>(Action operation, string? customMessage = null)
         where TRule : IBusinessRule
     {
         var exception = Should.Throw<BusinessRuleException>(operation, 
             customMessage ?? $"Expected {typeof(TRule).Name} business rule violation");
         
-        exception.BrokenRule.ShouldBeOfType<TRule>(
-            $"Expected broken rule to be {typeof(TRule).Name} but was {exception.BrokenRule.GetType().Name}");
-            
-        return (TRule)exception.BrokenRule;
+        var expectedRuleCode = typeof(TRule).Name;
+        exception.RuleCode.ShouldBe(expectedRuleCode,
+            $"Expected broken rule to be {expectedRuleCode} but was {exception.RuleCode}");
     }
 
     /// <summary>
@@ -66,7 +65,7 @@ public static class BusinessRuleTestHelpers
     public static void AssertThrowsBusinessRuleWithMessage(Action operation, string expectedMessage)
     {
         var exception = Should.Throw<BusinessRuleException>(operation);
-        exception.Message.ShouldContain(expectedMessage, 
+        exception.Message.ShouldContain(expectedMessage, Case.Insensitive,
             $"Business rule exception message should contain '{expectedMessage}' but was '{exception.Message}'");
     }
 

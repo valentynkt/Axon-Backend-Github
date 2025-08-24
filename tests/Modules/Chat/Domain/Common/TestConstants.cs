@@ -1,8 +1,11 @@
+using Axon.BuildingBlocks.Core.Constants;
+
 namespace Axon.Modules.Chat.Domain.Tests.Common;
 
 /// <summary>
 /// Centralized constants for Chat Domain tests.
 /// Provides reusable test data, limits, and configuration values.
+/// Synchronized with actual domain constants from ChatPrimitiveConstants.
 /// </summary>
 public static class TestConstants
 {
@@ -28,8 +31,9 @@ public static class TestConstants
         public const string DefaultTitle = "Test Conversation";
         public const string AlternativeTitle = "Another Test Conversation";
         public const string LongTitle = "This is a very long conversation title that approaches the maximum limit";
-        public const string MaxLengthTitle = "This is exactly 120 characters long title that reaches the maximum allowed length for conversation titles in our system.";
-        public const string TooLongTitle = "This is exactly 121 characters long title that exceeds the maximum allowed length for conversation titles in our system!";
+        // These should be exactly the right lengths based on actual domain constants
+        public static readonly string MaxLengthTitle = new('a', Limits.MaxConversationTitleLength);
+        public static readonly string TooLongTitle = new('a', Limits.MaxConversationTitleLength + 1);
         
         public static readonly string EmptyTitle = string.Empty;
         public static readonly string WhitespaceTitle = "   ";
@@ -60,9 +64,9 @@ public static class TestConstants
     /// </summary>
     public static class AiResponses
     {
-        public static readonly AiResponseId DefaultAiResponseId = AiResponseId.From("ai-response-123");
-        public static readonly AiResponseId AlternativeAiResponseId = AiResponseId.From("ai-response-456");
-        public static readonly AiResponseId ThirdAiResponseId = AiResponseId.From("ai-response-789");
+        public static readonly AiResponseId DefaultAiResponseId = new AiResponseId("ai-response-123");
+        public static readonly AiResponseId AlternativeAiResponseId = new AiResponseId("ai-response-456");
+        public static readonly AiResponseId ThirdAiResponseId = new AiResponseId("ai-response-789");
         
         public const string DefaultAiResponseIdString = "ai-response-123";
         public const string AlternativeAiResponseIdString = "ai-response-456";
@@ -70,28 +74,39 @@ public static class TestConstants
     }
 
     /// <summary>
-    /// Test limits and constraints
+    /// Test limits and constraints - synchronized with actual domain constants
     /// </summary>
     public static class Limits
     {
-        public const int MaxConversationMessages = 10_000;
-        public const int MaxMessageContentLength = 16_000;
-        public const int MaxConversationTitleLength = 120;
-        public const int ContentPreviewLength = 100;
+        public const int MaxConversationMessages = ChatPrimitiveConstants.ConversationDefault.MaxMessages;
+        public const int MaxMessageContentLength = ChatPrimitiveConstants.MessageContentDefault.MaxLength;
+        public const int MaxMessageLength = ChatPrimitiveConstants.MessageContentDefault.MaxLength; // Alias for compatibility
+        public const int MaxConversationTitleLength = ChatPrimitiveConstants.ConversationTitleDefault.MaxLength;
+        public const int ContentPreviewLength = ChatPrimitiveConstants.ConversationDefault.ContentPreviewLength;
+        public const int MinAiResponseIdLength = ChatPrimitiveConstants.AiResponseIdDefault.MinLength;
+        public const int MaxAiResponseIdLength = ChatPrimitiveConstants.AiResponseIdDefault.MaxLength;
     }
 
     /// <summary>
-    /// Test scenarios for edge cases
+    /// Test scenarios for edge cases - precise boundary testing
     /// </summary>
     public static class EdgeCases
     {
-        public static readonly string OneBelowMaxTitle = new('a', TestConstants.Limits.MaxConversationTitleLength - 1);
-        public static readonly string ExactMaxTitle = new('a', TestConstants.Limits.MaxConversationTitleLength);
-        public static readonly string OneOverMaxTitle = new('a', TestConstants.Limits.MaxConversationTitleLength + 1);
+        // Title edge cases
+        public static readonly string OneBelowMaxTitle = new('a', Limits.MaxConversationTitleLength - 1);
+        public static readonly string ExactMaxTitle = new('a', Limits.MaxConversationTitleLength);
+        public static readonly string OneOverMaxTitle = new('a', Limits.MaxConversationTitleLength + 1);
         
-        public static readonly string OneBelowMaxMessage = new('a', TestConstants.Limits.MaxMessageContentLength - 1);
-        public static readonly string ExactMaxMessage = new('a', TestConstants.Limits.MaxMessageContentLength);
-        public static readonly string OneOverMaxMessage = new('a', TestConstants.Limits.MaxMessageContentLength + 1);
+        // Message content edge cases  
+        public static readonly string OneBelowMaxMessage = new('a', Limits.MaxMessageContentLength - 1);
+        public static readonly string ExactMaxMessage = new('a', Limits.MaxMessageContentLength);
+        public static readonly string OneOverMaxMessage = new('a', Limits.MaxMessageContentLength + 1);
+        
+        // AI Response ID edge cases
+        public static readonly string MinAiResponseId = new('x', Limits.MinAiResponseIdLength);
+        public static readonly string MaxAiResponseId = new('y', Limits.MaxAiResponseIdLength);
+        public static readonly string TooLongAiResponseId = new('z', Limits.MaxAiResponseIdLength + 1);
+        public static readonly string EmptyAiResponseId = string.Empty;
     }
 
     /// <summary>
@@ -102,5 +117,56 @@ public static class TestConstants
         public static readonly DateTimeOffset DefaultTestTime = new(2024, 1, 15, 10, 30, 0, TimeSpan.Zero);
         public static readonly DateTimeOffset AlternativeTestTime = new(2024, 2, 20, 14, 45, 0, TimeSpan.Zero);
         public static readonly DateTimeOffset FutureTestTime = new(2024, 12, 31, 23, 59, 59, TimeSpan.Zero);
+        public static readonly DateTimeOffset PastTestTime = new(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// Error codes and messages for testing error scenarios
+    /// </summary>
+    public static class ErrorCodes
+    {
+        public const string ChatRoleInvalid = "CHAT.ROLE.INVALID";
+        public const string ChatMessageEmpty = "CHAT.MESSAGE.EMPTY";
+        public const string ChatMessageInvalid = "CHAT.MESSAGE.INVALID";
+        public const string ChatConversationTitleRequired = "CHAT.CONVERSATION.TITLE.REQUIRED";
+        public const string ChatConversationTitleInvalid = "CHAT.CONVERSATION.TITLE.INVALID";
+    }
+
+    /// <summary>
+    /// Common error messages for testing
+    /// </summary>
+    public static class ErrorMessages
+    {
+        public const string InvalidMessageRole = "Invalid message role (allowed: user, assistant).";
+        public const string EmptyMessageContent = "Message content cannot be empty or whitespace.";
+        public const string TitleCannotBeEmpty = "Title cannot be empty.";
+        public const string ConversationMustBeActive = "Conversation must be active to accept new messages.";
+        public const string UserMustFollowAssistant = "User message must follow assistant message (turn-taking rule).";
+        public const string AssistantMustFollowUser = "Assistant message must follow user message (turn-taking rule).";
+    }
+
+    /// <summary>
+    /// Specifications test data
+    /// </summary>
+    public static class Specifications
+    {
+        public const string SearchTerm = "test";
+        public const string TitleContains = "conversation";
+        public const int MinimumMessages = 5;
+        public static readonly DateTimeOffset CreatedAfter = new(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public static readonly DateTimeOffset CreatedBefore = new(2024, 12, 31, 23, 59, 59, TimeSpan.Zero);
+        public static readonly DateTimeOffset UpdatedSince = new(2024, 6, 1, 0, 0, 0, TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// Business rule test scenarios
+    /// </summary>
+    public static class BusinessRules
+    {
+        public const int ValidSequence = 1;
+        public const int InvalidSequence = 0;
+        public const int ValidMessageCount = 1;
+        public const int MaxValidMessageCount = Limits.MaxConversationMessages;
+        public const int ExceededMessageCount = Limits.MaxConversationMessages + 1;
     }
 }

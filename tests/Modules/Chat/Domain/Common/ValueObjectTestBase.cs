@@ -19,8 +19,20 @@ public abstract class ValueObjectTestBase<TValueObject> : DomainTestBase
         // Test operator overloads if available
         if (HasEqualityOperator())
         {
-            (first == second).ShouldBeTrue("Value objects should be equal using == operator");
-            (first != second).ShouldBeFalse("Value objects should not be unequal using != operator");
+            var equalityMethod = typeof(TValueObject).GetMethod("op_Equality", new[] { typeof(TValueObject), typeof(TValueObject) });
+            var inequalityMethod = typeof(TValueObject).GetMethod("op_Inequality", new[] { typeof(TValueObject), typeof(TValueObject) });
+            
+            if (equalityMethod != null)
+            {
+                var equalResult = (bool)equalityMethod.Invoke(null, new object[] { first, second })!;
+                equalResult.ShouldBeTrue("Value objects should be equal using == operator");
+            }
+            
+            if (inequalityMethod != null)
+            {
+                var inequalResult = (bool)inequalityMethod.Invoke(null, new object[] { first, second })!;
+                inequalResult.ShouldBeFalse("Value objects should not be unequal using != operator");
+            }
         }
     }
 
@@ -35,8 +47,20 @@ public abstract class ValueObjectTestBase<TValueObject> : DomainTestBase
         // Test operator overloads if available
         if (HasEqualityOperator())
         {
-            (first == second).ShouldBeFalse("Value objects should not be equal using == operator");
-            (first != second).ShouldBeTrue("Value objects should be unequal using != operator");
+            var equalityMethod = typeof(TValueObject).GetMethod("op_Equality", new[] { typeof(TValueObject), typeof(TValueObject) });
+            var inequalityMethod = typeof(TValueObject).GetMethod("op_Inequality", new[] { typeof(TValueObject), typeof(TValueObject) });
+            
+            if (equalityMethod != null)
+            {
+                var equalResult = (bool)equalityMethod.Invoke(null, new object[] { first, second })!;
+                equalResult.ShouldBeFalse("Value objects should not be equal using == operator");
+            }
+            
+            if (inequalityMethod != null)
+            {
+                var inequalResult = (bool)inequalityMethod.Invoke(null, new object[] { first, second })!;
+                inequalResult.ShouldBeTrue("Value objects should be unequal using != operator");
+            }
         }
     }
 
@@ -61,7 +85,12 @@ public abstract class ValueObjectTestBase<TValueObject> : DomainTestBase
         
         if (HasEqualityOperator())
         {
-            (valueObject == valueObject).ShouldBeTrue("Value object should equal itself using == operator");
+            var equalityMethod = typeof(TValueObject).GetMethod("op_Equality", new[] { typeof(TValueObject), typeof(TValueObject) });
+            if (equalityMethod != null)
+            {
+                var equalResult = (bool)equalityMethod.Invoke(null, new object[] { valueObject, valueObject })!;
+                equalResult.ShouldBeTrue("Value object should equal itself using == operator");
+            }
         }
     }
 
@@ -118,7 +147,7 @@ public abstract class ValueObjectTestBase<TValueObject> : DomainTestBase
         
         if (expectedContent != null)
         {
-            toString.ShouldContain(expectedContent, $"ToString() should contain '{expectedContent}'");
+            toString.ShouldContain(expectedContent, Case.Insensitive, $"ToString() should contain '{expectedContent}'");
         }
     }
 

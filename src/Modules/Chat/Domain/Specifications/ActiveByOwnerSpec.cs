@@ -7,7 +7,7 @@ using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
-internal sealed class ActiveByOwnerSpec : Specification<Conversation>
+public sealed class ActiveByOwnerSpec : Specification<Conversation>
 {
     public ActiveByOwnerSpec(UserId ownerId)
     {

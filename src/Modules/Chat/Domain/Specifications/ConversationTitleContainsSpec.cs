@@ -5,7 +5,7 @@ using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
-internal sealed class ConversationTitleContainsSpec : Specification<Conversation>
+public sealed class ConversationTitleContainsSpec : Specification<Conversation>
 {
     public ConversationTitleContainsSpec(string? term)
     {

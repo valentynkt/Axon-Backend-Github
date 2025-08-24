@@ -10,4 +10,4 @@ public sealed record ConversationTitleUpdatedEvent(
     ConversationId ConversationId,
     string Title,
     DateTimeOffset UpdatedAt
-) : DomainEvent;
+) : DomainEvent(UpdatedAt.UtcDateTime);

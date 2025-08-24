@@ -15,6 +15,7 @@ using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using MediatR;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
@@ -184,11 +185,17 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             if (titleResult.IsFailure)
                 return Result.Failure<Unit, Error>(titleResult.Error);
 
-            var now = timeProvider.GetUtcNow();
-            Title = titleResult.Value.Value;
-            MarkUpdated();
+            var newTitle = titleResult.Value.Value;
+            
+            // Only update and raise event if title actually changed
+            if (Title != newTitle)
+            {
+                var now = timeProvider.GetUtcNow();
+                Title = newTitle;
+                MarkUpdated();
 
-            RaiseDomainEvent(new ConversationTitleUpdatedEvent(Id, Title, now));
+                RaiseDomainEvent(new ConversationTitleUpdatedEvent(Id, Title, now));
+            }
 
             return Result.Success<Unit, Error>(Unit.Value);
         }

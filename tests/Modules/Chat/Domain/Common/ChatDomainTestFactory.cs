@@ -1,256 +1,275 @@
+using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Domain.Tests.Builders;
 using Axon.Modules.Chat.Domain.Tests.TestDoubles;
+using BuildingBlocks.Core.Domain.Events;
 
 namespace Axon.Modules.Chat.Domain.Tests.Common;
 
 /// <summary>
 /// Central factory for creating test objects in the Chat Domain.
-/// Provides a single entry point for all test data creation with consistent defaults.
-/// Combines builders, test doubles, and generators for comprehensive test scenarios.
+/// Provides consistent creation patterns and reduces test duplication.
 /// </summary>
 public static class ChatDomainTestFactory
 {
     /// <summary>
-    /// Creates conversation-related test objects and scenarios.
+    /// Factory methods for creating test conversation objects.
     /// </summary>
     public static class Conversations
     {
         /// <summary>
-        /// Creates a simple, valid conversation with default settings.
+        /// Creates a standard conversation for general testing.
         /// </summary>
-        public static Conversation CreateValid()
-        {
-            return ConversationBuilder.New().Build();
-        }
-
-        /// <summary>
-        /// Creates a conversation with realistic generated data.
-        /// </summary>
-        public static Conversation CreateWithGeneratedData()
+        public static Conversation CreateStandard()
         {
             return ConversationBuilder.New()
-                .WithOwner(UserId.New())
-                .WithTitle(TestDataGenerator.GenerateConversationTitle())
+                .WithTitle("Standard Test Conversation")
+                .WithUserMessage("This is a test user message")
                 .Build();
         }
 
         /// <summary>
-        /// Creates a conversation with multiple messages for testing complex scenarios.
+        /// Creates a conversation with multiple messages for interaction testing.
         /// </summary>
-        public static Conversation CreateWithMessages(int messageCount = 4)
+        public static Conversation CreateWithMultipleMessages(int messageCount = 4)
         {
             return ConversationBuilder.New()
+                .WithTitle("Multi-Message Conversation")
                 .WithAlternatingMessages(messageCount)
                 .Build();
         }
 
         /// <summary>
-        /// Creates a completed conversation for testing final states.
+        /// Creates a conversation with specific owner for ownership testing.
+        /// </summary>
+        public static Conversation CreateWithOwner(UserId ownerId)
+        {
+            return ConversationBuilder.New()
+                .WithOwner(ownerId)
+                .WithTitle("Owner-Specific Conversation")
+                .WithUserMessage("Message from specific owner")
+                .Build();
+        }
+
+        /// <summary>
+        /// Creates a completed conversation for status testing.
         /// </summary>
         public static Conversation CreateCompleted()
         {
             return ConversationBuilder.New()
-                .WithAlternatingMessages(2)
+                .WithTitle("Completed Test Conversation")
+                .WithUserMessage("Final user message")
                 .ThatShouldBeCompleted()
                 .Build();
         }
 
         /// <summary>
-        /// Creates a conversation without a title (default title scenario).
+        /// Creates a conversation with edge case title length.
         /// </summary>
-        public static Conversation CreateWithoutTitle()
+        public static Conversation CreateWithLongTitle()
         {
-            return ConversationBuilder.Minimal().Build();
+            var longTitle = new string('A', TestConstants.Limits.MaxConversationMessages);
+            return ConversationBuilder.New()
+                .WithTitle(longTitle)
+                .WithUserMessage("Message with very long conversation title")
+                .Build();
         }
 
         /// <summary>
-        /// Creates multiple conversations for batch testing scenarios.
+        /// Creates a conversation at the maximum message limit.
         /// </summary>
-        public static List<Conversation> CreateBatch(int count)
+        public static Conversation CreateAtMessageLimit()
+        {
+            return ConversationBuilder.New()
+                .WithTitle("Max Messages Conversation")
+                .WithAlternatingMessages(TestConstants.Limits.MaxConversationMessages)
+                .Build();
+        }
+
+        /// <summary>
+        /// Creates a conversation with specific creation time.
+        /// </summary>
+        public static Conversation CreateWithSpecificTime(DateTimeOffset creationTime)
+        {
+            return ConversationBuilder.New()
+                .WithTitle("Time-Specific Conversation")
+                .AtTime(creationTime)
+                .WithUserMessage("Message created at specific time")
+                .Build();
+        }
+
+        /// <summary>
+        /// Creates a conversation with the minimum valid data.
+        /// </summary>
+        public static Conversation CreateMinimal()
+        {
+            return ConversationBuilder.New()
+                .WithTitle("Min")
+                .WithUserMessage("Hi")
+                .Build();
+        }
+
+        /// <summary>
+        /// Creates multiple conversations for bulk testing scenarios.
+        /// </summary>
+        public static List<Conversation> CreateMultiple(int count = 3)
         {
             return Enumerable.Range(0, count)
-                .Select(_ => CreateWithGeneratedData())
+                .Select(i => ConversationBuilder.New()
+                    .WithTitle($"Conversation {i + 1}")
+                    .WithUserMessage($"Message for conversation {i + 1}")
+                    .Build())
                 .ToList();
         }
-    }
 
-    /// <summary>
-    /// Creates message-related test objects.
-    /// </summary>
-    public static class Messages
-    {
         /// <summary>
-        /// Creates a valid user message.
+        /// Creates conversations with different owners for multi-tenant scenarios.
         /// </summary>
-        public static Message CreateUserMessage()
+        public static Dictionary<UserId, Conversation> CreateForDifferentOwners(int ownerCount = 3)
         {
-            return MessageBuilder.NewUserMessage().Build();
+            return Enumerable.Range(0, ownerCount)
+                .ToDictionary(
+                    i => UserId.New(),
+                    i => ConversationBuilder.New()
+                        .WithTitle($"Conversation for Owner {i + 1}")
+                        .WithUserMessage($"Message from owner {i + 1}")
+                        .Build());
         }
 
         /// <summary>
-        /// Creates a valid assistant message.
+        /// Creates a conversation with Unicode content for internationalization testing.
         /// </summary>
-        public static Message CreateAssistantMessage()
+        public static Conversation CreateWithUnicodeContent()
         {
-            return MessageBuilder.NewAssistantMessage().Build();
+            return ConversationBuilder.New()
+                .WithTitle("🌍 International Test - 测试 - тест - テスト")
+                .WithUserMessage("Hello! 你好! Привет! こんにちは! 🚀✨")
+                .Build();
         }
 
         /// <summary>
-        /// Creates a sequence of alternating user and assistant messages.
+        /// Creates a conversation for performance testing with generated data.
         /// </summary>
-        public static List<Message> CreateAlternatingSequence(int count)
+        public static Conversation CreateWithGeneratedData()
         {
-            var conversationId = ConversationId.New();
-            var messages = new List<Message>();
-
-            for (int i = 0; i < count; i++)
-            {
-                var sequence = i + 1;
-                if (i % 2 == 0)
-                {
-                    var message = MessageBuilder.NewUserMessage()
-                        .InConversation(conversationId)
-                        .WithSequence(sequence)
-                        .WithContent($"User message {sequence}")
-                        .Build();
-                    messages.Add(message);
-                }
-                else
-                {
-                    var aiResponseId = AiResponseId.From($"ai-response-{sequence}");
-                    var message = MessageBuilder.NewAssistantMessage()
-                        .InConversation(conversationId)
-                        .WithSequence(sequence)
-                        .WithContent($"Assistant message {sequence}")
-                        .WithAiResponseId(aiResponseId)
-                        .Build();
-                    messages.Add(message);
-                }
-            }
-
-            return messages;
-        }
-    }
-
-    /// <summary>
-    /// Creates value objects for testing.
-    /// </summary>
-    public static class ValueObjects
-    {
-        /// <summary>
-        /// Creates valid conversation titles.
-        /// </summary>
-        public static ConversationTitle CreateTitle(string? value = null)
-        {
-            return ConversationTitle.From(value ?? TestConstants.Conversations.DefaultTitle);
+            return ConversationBuilder.New()
+                .WithTitle(TestDataGenerator.GenerateConversationTitle())
+                .WithUserMessage(TestDataGenerator.GenerateUserMessage())
+                .Build();
         }
 
         /// <summary>
-        /// Creates valid message content.
+        /// Creates conversations for testing time-based queries.
         /// </summary>
-        public static MessageContent CreateContent(string? value = null)
+        public static List<Conversation> CreateWithTimeDistribution(int count = 5)
         {
-            return MessageContent.From(value ?? TestConstants.Messages.DefaultUserMessage);
+            var baseTime = TestConstants.DateTimes.DefaultTestTime;
+            return Enumerable.Range(0, count)
+                .Select(i => ConversationBuilder.New()
+                    .WithTitle($"Time-distributed Conversation {i + 1}")
+                    .AtTime(baseTime.AddHours(i))
+                    .WithUserMessage($"Message at {baseTime.AddHours(i):HH:mm}")
+                    .Build())
+                .ToList();
         }
 
         /// <summary>
-        /// Creates user message role.
+        /// Creates conversations with varying message counts for testing message-based queries.
         /// </summary>
-        public static MessageRole CreateUserRole()
+        public static List<Conversation> CreateWithVaryingMessageCounts()
         {
-            return MessageRole.User;
+            return new List<Conversation>([
+                ConversationBuilder.New().WithTitle("Single Message").WithUserMessage("Only message").Build(),
+                ConversationBuilder.New().WithTitle("Few Messages").WithAlternatingMessages(3).Build(),
+                ConversationBuilder.New().WithTitle("Many Messages").WithAlternatingMessages(8).Build(),
+                ConversationBuilder.New().WithTitle("Max Messages").WithAlternatingMessages(TestConstants.Limits.MaxConversationMessages).Build()
+            ]);
         }
 
         /// <summary>
-        /// Creates assistant message role.
+        /// Creates a conversation specifically for domain event testing.
         /// </summary>
-        public static MessageRole CreateAssistantRole()
-        {
-            return MessageRole.Assistant;
-        }
-    }
-
-    /// <summary>
-    /// Creates strongly-typed IDs for testing.
-    /// </summary>
-    public static class Ids
-    {
-        public static ConversationId CreateConversationId() => ConversationId.New();
-        public static MessageId CreateMessageId() => MessageId.New();
-        public static UserId CreateUserId() => UserId.New();
-        public static AiResponseId CreateAiResponseId() => AiResponseId.From(TestDataGenerator.GenerateAiResponseId());
-
-        /// <summary>
-        /// Creates related IDs for testing relationships.
-        /// </summary>
-        public static (ConversationId conversationId, MessageId messageId, UserId userId) CreateRelatedIds()
-        {
-            return (ConversationId.New(), MessageId.New(), UserId.New());
-        }
-    }
-
-    /// <summary>
-    /// Creates test scenarios for comprehensive testing.
-    /// </summary>
-    public static class Scenarios
-    {
-        /// <summary>
-        /// Creates a complete conversation scenario with full lifecycle.
-        /// </summary>
-        public static (Conversation conversation, List<IDomainEvent> events) CreateCompleteConversationScenario()
+        public static Conversation CreateForEventTesting()
         {
             var timeProvider = new FakeTimeProvider();
             var conversation = ConversationBuilder.New()
                 .WithTimeProvider(timeProvider)
                 .WithAlternatingMessages(4)
-                .ThatShouldBeCompleted()
                 .Build();
-
-            var events = conversation.DomainEvents.ToList();
-            return (conversation, events);
-        }
-
-        /// <summary>
-        /// Creates an edge case scenario with boundary conditions.
-        /// </summary>
-        public static Conversation CreateEdgeCaseScenario()
-        {
-            return ConversationBuilder.New()
-                .WithTitle(TestConstants.EdgeCases.ExactMaxTitle)
-                .WithUserMessage(TestConstants.EdgeCases.ExactMaxMessage)
-                .Build();
-        }
-
-        /// <summary>
-        /// Creates a scenario for testing business rule violations.
-        /// </summary>
-        public static class Violations
-        {
-            public static Action CreateTitleTooLongScenario()
-            {
-                return () => ConversationBuilder.New()
-                    .WithTooLongTitle()
-                    .Build();
-            }
-
-            public static Action CreateMessageTooLongScenario()
-            {
-                return () => ConversationBuilder.New()
-                    .WithUserMessage(TestConstants.EdgeCases.OneOverMaxMessage)
-                    .Build();
-            }
-
-            public static Action CreateInvalidOwnerScenario()
-            {
-                return () => ConversationBuilder.Invalid().Build();
-            }
+            
+            // Clear initial creation events for focused event testing
+            conversation.ClearDomainEvents();
+            return conversation;
         }
     }
 
     /// <summary>
-    /// Creates test doubles and mocks.
+    /// Factory methods for creating test message objects.
     /// </summary>
-    public static class TestDoubles
+    public static class Messages
+    {
+        /// <summary>
+        /// Creates a standard user message for testing.
+        /// </summary>
+        public static Message CreateUserMessage()
+        {
+            return MessageBuilder.NewUserMessage()
+                .WithContent("Standard test user message")
+                .Build();
+        }
+
+        /// <summary>
+        /// Creates a standard assistant message for testing.
+        /// </summary>
+        public static Message CreateAssistantMessage()
+        {
+            return MessageBuilder.NewAssistantMessage()
+                .WithContent("Standard test assistant response")
+                .Build();
+        }
+
+        /// <summary>
+        /// Creates messages with edge case content lengths.
+        /// </summary>
+        public static List<Message> CreateEdgeCaseLengths()
+        {
+            return new List<Message>
+            {
+                MessageBuilder.NewUserMessage().WithContent("Hi").Build(),
+                MessageBuilder.NewUserMessage().WithContent(new string('A', TestConstants.Limits.MaxMessageContentLength)).Build(),
+                MessageBuilder.NewAssistantMessage().WithContent("OK").Build(),
+                MessageBuilder.NewAssistantMessage().WithContent(new string('B', TestConstants.Limits.MaxMessageContentLength)).Build()
+            };
+        }
+
+        /// <summary>
+        /// Creates a sequence of alternating messages for conversation testing.
+        /// </summary>
+        public static List<Message> CreateAlternatingSequence(int count = 4)
+        {
+            var messages = new List<Message>();
+            for (int i = 0; i < count; i++)
+            {
+                if (i % 2 == 0)
+                {
+                    messages.Add(MessageBuilder.NewUserMessage()
+                        .WithContent($"User message {(i / 2) + 1}")
+                        .Build());
+                }
+                else
+                {
+                    messages.Add(MessageBuilder.NewAssistantMessage()
+                        .WithContent($"Assistant response {((i - 1) / 2) + 1}")
+                        .Build());
+                }
+            }
+            return messages;
+        }
+    }
+
+    /// <summary>
+    /// Factory methods for creating test time providers and time-related objects.
+    /// </summary>
+    public static class TimeProviders
     {
         /// <summary>
         /// Creates a FakeTimeProvider with default test time.
@@ -273,55 +292,57 @@ public static class ChatDomainTestFactory
         /// </summary>
         public static FakeTimeProvider CreateAdvancingTimeProvider(TimeSpan interval)
         {
-            return FakeTimeProvider.WithAutoAdvance(interval);
+            var provider = new FakeTimeProvider();
+            provider.AutoAdvanceAmount = interval;
+            return provider;
         }
+    }
+}
+
+/// <summary>
+/// Extension methods and utilities for test collections.
+/// </summary>
+public static class Collections
+{
+    /// <summary>
+    /// Creates a large number of conversations for performance testing.
+    /// </summary>
+    public static List<Conversation> CreateLargeConversationSet(int count = 1000)
+    {
+        return Enumerable.Range(0, count)
+            .Select(_ => ChatDomainTestFactory.Conversations.CreateWithGeneratedData())
+            .ToList();
     }
 
     /// <summary>
-    /// Creates collections of test data for performance and load testing.
+    /// Creates conversations with different owners for multi-tenant testing.
     /// </summary>
-    public static class Collections
+    public static Dictionary<UserId, List<Conversation>> CreateMultiOwnerConversations(
+        int ownerCount = 5, 
+        int conversationsPerOwner = 3)
     {
-        /// <summary>
-        /// Creates a large number of conversations for performance testing.
-        /// </summary>
-        public static List<Conversation> CreateLargeConversationSet(int count = 1000)
+        var result = new Dictionary<UserId, List<Conversation>>();
+
+        for (int i = 0; i < ownerCount; i++)
         {
-            return Enumerable.Range(0, count)
-                .Select(_ => Conversations.CreateWithGeneratedData())
+            var owner = UserId.New();
+            var conversations = Enumerable.Range(0, conversationsPerOwner)
+                .Select(_ => ConversationBuilder.New()
+                    .WithOwner(owner)
+                    .WithGeneratedData()
+                    .Build())
                 .ToList();
+
+            result[owner] = conversations;
         }
 
-        /// <summary>
-        /// Creates conversations with different owners for multi-tenant testing.
-        /// </summary>
-        public static Dictionary<UserId, List<Conversation>> CreateMultiOwnerConversations(
-            int ownerCount = 5, 
-            int conversationsPerOwner = 3)
-        {
-            var result = new Dictionary<UserId, List<Conversation>>();
+        return result;
+    }
 
-            for (int i = 0; i < ownerCount; i++)
-            {
-                var owner = UserId.New();
-                var conversations = Enumerable.Range(0, conversationsPerOwner)
-                    .Select(_ => ConversationBuilder.New()
-                        .WithOwner(owner)
-                        .WithGeneratedData()
-                        .Build())
-                    .ToList();
-
-                result[owner] = conversations;
-            }
-
-            return result;
-        }
-
-        private static ConversationBuilder WithGeneratedData(this ConversationBuilder builder)
-        {
-            return builder
-                .WithTitle(TestDataGenerator.GenerateConversationTitle())
-                .WithAlternatingMessages(new Random().Next(2, 8));
-        }
+    private static ConversationBuilder WithGeneratedData(this ConversationBuilder builder)
+    {
+        return builder
+            .WithTitle(TestDataGenerator.GenerateConversationTitle())
+            .WithAlternatingMessages(new Random().Next(2, 8));
     }
 }

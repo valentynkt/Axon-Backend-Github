@@ -34,7 +34,7 @@ public static class TestDataGenerator
     /// </summary>
     public static string GenerateLongMessageContent()
     {
-        return _faker.Lorem.Paragraphs(paragraphCount: 10, separator: "\n\n")
+        return _faker.Lorem.Paragraphs( 10, separator: "\n\n")
             .Truncate(TestConstants.Limits.MaxMessageContentLength - 10); // Leave some buffer
     }
 
@@ -76,33 +76,33 @@ public static class TestDataGenerator
     /// Generates alternating user and assistant messages for realistic conversations.
     /// </summary>
     public static IEnumerable<(MessageRole role, string content, AiResponseId? aiResponseId)> GenerateConversationFlow(int messageCount)
+{
+    for (int i = 0; i < messageCount; i++)
     {
-        for (int i = 0; i < messageCount; i++)
-        {
-            bool isUser = i % 2 == 0;
-            var role = isUser ? MessageRole.User : MessageRole.Assistant;
-            var content = isUser 
-                ? GenerateUserMessage() 
-                : GenerateAssistantMessage();
-            var aiResponseId = isUser ? null : AiResponseId.From(GenerateAiResponseId());
+        bool isUser = i % 2 == 0;
+        var role = isUser ? MessageRole.User : MessageRole.Assistant;
+        var content = isUser 
+            ? GenerateUserMessage() 
+            : GenerateAssistantMessage();
+        var aiResponseId = isUser ? (AiResponseId?)null : new AiResponseId(GenerateAiResponseId());
 
-            yield return (role, content, aiResponseId);
-        }
+        yield return (role, content, aiResponseId);
     }
+}
 
     /// <summary>
     /// Generates a realistic user message (questions, requests, statements).
     /// </summary>
-    private static string GenerateUserMessage()
+    public static string GenerateUserMessage()
     {
-        var templates = new[]
+        var templates = new Func<string>[]
         {
             () => _faker.Lorem.Sentence() + "?",
-            () => "Can you help me with " + _faker.Lorem.Words(3).JoinWith(" ") + "?",
+            () => "Can you help me with " + string.Join(" ", _faker.Lorem.Words(num: 3)) + "?",
             () => "I need to " + _faker.Lorem.Sentence().ToLowerInvariant().TrimEnd('.'),
             () => _faker.Lorem.Sentence(),
-            () => "What is " + _faker.Lorem.Words(2).JoinWith(" ") + "?",
-            () => "How do I " + _faker.Lorem.Words(3).JoinWith(" ") + "?"
+            () => "What is " + string.Join(" ", _faker.Lorem.Words(num: 2)) + "?",
+            () => "How do I " + string.Join(" ", _faker.Lorem.Words(num: 3)) + "?"
         };
 
         return _faker.Random.ArrayElement(templates)()
@@ -112,9 +112,9 @@ public static class TestDataGenerator
     /// <summary>
     /// Generates a realistic assistant response (helpful, informative).
     /// </summary>
-    private static string GenerateAssistantMessage()
+    public static string GenerateAssistantMessage()
     {
-        var templates = new[]
+        var templates = new Func<string>[]
         {
             () => "I can help you with that. " + _faker.Lorem.Sentence(),
             () => "Here's what you need to know: " + _faker.Lorem.Paragraph(),
@@ -143,13 +143,5 @@ internal static class StringExtensions
             return value;
 
         return value[..maxLength];
-    }
-
-    /// <summary>
-    /// Joins an enumerable of strings with the specified separator.
-    /// </summary>
-    public static string JoinWith(this IEnumerable<string> values, string separator)
-    {
-        return string.Join(separator, values);
     }
 }

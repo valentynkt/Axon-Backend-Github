@@ -44,7 +44,7 @@ public static class StrongIdTestHelpers
     public static List<AiResponseId> CreateAiResponseIds(int count)
     {
         return Enumerable.Range(0, count)
-            .Select(i => AiResponseId.From($"ai-response-{i:D6}-{Guid.NewGuid():N}"))
+            .Select(i => new AiResponseId($"ai-response-{i:D6}-{Guid.NewGuid():N}"))
             .ToList();
     }
 
@@ -81,7 +81,7 @@ public static class StrongIdTestHelpers
     /// </summary>
     public static AiResponseId CreateDeterministicAiResponseId(int seed = 1)
     {
-        return AiResponseId.From($"ai-response-test-{seed:D6}");
+        return new AiResponseId($"ai-response-test-{seed:D6}");
     }
 
     /// <summary>
@@ -151,20 +151,20 @@ public static class StrongIdTestHelpers
     {
         public static AiResponseId CreateWithPrefix(string prefix = "test")
         {
-            return AiResponseId.From($"{prefix}-{Guid.NewGuid():N}");
+            return new AiResponseId($"{prefix}-{Guid.NewGuid():N}");
         }
         
         public static List<AiResponseId> CreateSequence(int count, string prefix = "seq")
         {
             return Enumerable.Range(1, count)
-                .Select(i => AiResponseId.From($"{prefix}-{i:D4}"))
+                .Select(i => new AiResponseId($"{prefix}-{i:D4}"))
                 .ToList();
         }
         
         public static AiResponseId CreateForMessage(MessageId messageId)
         {
             // Create an AI response ID that's related to a specific message
-            return AiResponseId.From($"msg-{messageId.Value:N}");
+            return new AiResponseId($"msg-{messageId.Value:N}");
         }
     }
 }

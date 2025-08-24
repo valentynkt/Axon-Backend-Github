@@ -5,7 +5,7 @@ using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
-internal sealed class ConversationsCreatedBetweenSpec : Specification<Conversation>
+public sealed class ConversationsCreatedBetweenSpec : Specification<Conversation>
 {
     public ConversationsCreatedBetweenSpec(DateTimeOffset fromUtc, DateTimeOffset toUtc)
     {

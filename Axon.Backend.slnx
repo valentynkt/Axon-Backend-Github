@@ -22,4 +22,10 @@
   <Folder Name="/src/Modules/Chat/Infrastructure/">
     <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Modules/" />
+  <Folder Name="/tests/Modules/Chat/" />
+  <Folder Name="/tests/Modules/Chat/Domain/">
+    <Project Path="tests/Modules/Chat/Domain/Axon.Modules.Chat.Domain.Tests.csproj" />
+  </Folder>
 </Solution>
