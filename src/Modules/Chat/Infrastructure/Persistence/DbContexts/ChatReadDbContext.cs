@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using BuildingBlocks.Infrastructure.Persistence.Read;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,32 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatRead
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)
     {
-        
+        // Essential indexes for GetConversations query performance
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => new { c.OwnerId, c.UpdatedAt, c.Id })
+            .HasDatabaseName("ix_conversations_owner_updated_at_id")
+            .HasFilter("\"Status\" != 'Deleted'");
+
+        // Title search index for filtering by conversation title
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => c.Title)
+            .HasDatabaseName("ix_conversations_title_search")
+            .HasFilter("\"Title\" IS NOT NULL AND \"Status\" != 'Deleted'");
+
+        // Covering index for common list queries to avoid key lookups
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => new { c.OwnerId, c.UpdatedAt })
+            .HasDatabaseName("ix_conversations_list_covering")
+            .IncludeProperties(c => new { c.Id, c.Title, c.CreatedAt, c.LastAiResponseId })
+            .HasFilter("\"Status\" != 'Deleted'");
+
+        // CreatedAt index for sorting by creation time
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => new { c.OwnerId, c.CreatedAt, c.Id })
+            .HasDatabaseName("ix_conversations_owner_created_at_id")
+            .HasFilter("\"Status\" != 'Deleted'");
+
+        // Call base implementation for standard timestamp indexes
+        base.ConfigureReadModelOptimizations(modelBuilder);
     }
 }

@@ -1,0 +1,16 @@
+using Axon.Modules.Chat.Application.Common.Pagination;
+using Axon.Modules.Chat.Application.Common.Sorting;
+
+namespace Axon.Modules.Chat.Application.Queries.GetConversations;
+
+/// <summary>
+/// Query to retrieve a paginated list of conversations for the authenticated user.
+/// Supports sorting and optional title filtering.
+/// </summary>
+public sealed record GetConversationsQuery(
+    int PageNumber = 1,
+    int PageSize = Page.DefaultSize,
+    ConversationSortBy SortBy = ConversationSortBy.UpdatedAt,
+    SortDirection SortDirection = SortDirection.Desc,
+    string? TitleContains = null
+) : RequestBase, IQuery<Paged<ConversationListItem>>;

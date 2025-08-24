@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.AI;
+using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.Contracts.Telemetry;
 using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI;
@@ -60,17 +61,18 @@ public static class ServiceRegistration
         });
         
         // Read DbContext
-        //services.AddDbContext<ChatReadDbContext>(options =>
-        //{
-        //    options.UseNpgsql(connectionString, npgsqlOptions =>
-        //    {
-        //        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-        //    });
-        //});
-        //
+        services.AddDbContext<ChatReadDbContext>(options =>
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            });
+        });
+        
         // Register Repository and DbContext interfaces
         services.AddScoped<IConversationRepository, ConversationRepository>();
-        //services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
+        services.AddScoped<IConversationReadRepository, ConversationReadRepository>();
+        services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
         services.AddScoped<IChatWriteDbContext>(provider => provider.GetRequiredService<ChatDbContext>());
         
         // Register UnitOfWork using the EfUnitOfWork wrapper with correct module type

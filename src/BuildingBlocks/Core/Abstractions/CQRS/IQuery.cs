@@ -11,3 +11,14 @@ namespace BuildingBlocks.Core.Abstractions.CQRS;
 /// </summary>
 public interface IQuery<TResponse> : IAxonRequest, IRequest<Result<TResponse, Error>>
     where TResponse : notnull { }
+
+/// <summary>
+/// Handler for processing queries that return Results with error handling.
+/// </summary>
+/// <typeparam name="TQuery">The query type to handle</typeparam>
+/// <typeparam name="TResponse">The response type to return</typeparam>
+public interface IQueryHandler<in TQuery, TResponse> : IRequestHandler<TQuery, Result<TResponse, Error>>
+    where TQuery : IQuery<TResponse>
+    where TResponse : notnull
+{
+}

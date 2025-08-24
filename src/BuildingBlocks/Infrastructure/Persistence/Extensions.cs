@@ -96,6 +96,7 @@ public static class Extensions
         services.AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>));
         services.AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>));
         services.AddScoped(typeof(IWriteRepository<>), typeof(EfWriteRepository<>));
+        services.AddScoped(typeof(ISpecificationReadRepository<>), typeof(EfSpecificationReadRepository<>));
         services.AddScoped<ISeedManager, SeedManager>();
 
         return services;
@@ -118,6 +119,7 @@ public static class Extensions
         .AddScoped(typeof(IWriteRepository<,>), typeof(EfWriteRepository<,>))
         .AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>))
         .AddScoped(typeof(IWriteRepository<>), typeof(EfWriteRepository<>))
+        .AddScoped(typeof(ISpecificationReadRepository<>), typeof(EfSpecificationReadRepository<>))
         .AddScoped<ISeedManager, SeedManager>();
     }
 
