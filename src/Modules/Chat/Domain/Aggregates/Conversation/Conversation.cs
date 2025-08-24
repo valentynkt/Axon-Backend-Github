@@ -103,6 +103,23 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     }
 
     /// <summary>
+    /// Validates that a ConversationId is valid (not empty).
+    /// </summary>
+    public static Result<Unit, Error> ValidateConversationId(ConversationId conversationId)
+    {
+        try
+        {
+            CheckRule(new ConversationIdMustBeValidRule(conversationId));
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Result.Failure<Unit, Error>(
+                Error.Validation(ex.Message, ex.Error.Code));
+        }
+    }
+
+    /// <summary>
     /// Appends a user message to the conversation.
     /// </summary>
     public Result<Message, Error> AppendUserMessageToConversation(
@@ -233,6 +250,24 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 
     /// <summary>Checks if the conversation belongs to a specific user.</summary>
     public bool BelongsTo(UserId userId) => OwnerId == userId;
+
+    /// <summary>
+    /// Validates that the conversation can be accessed by the specified user.
+    /// Returns a Result to maintain consistency with other domain operations.
+    /// </summary>
+    public Result<Unit, Error> ValidateAccess(UserId userId)
+    {
+        try
+        {
+            CheckRule(new ConversationMustBelongToOwnerRule(this, userId));
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Result.Failure<Unit, Error>(
+                Error.Forbidden(ex.Message, ex.Error.Code));
+        }
+    }
 
     // ---------- Internals ----------
 

@@ -12,6 +12,7 @@ using Axon.Modules.Chat.Application.DTOs.Responses;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
+using Axon.Modules.Chat.Domain.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
@@ -123,7 +124,7 @@ public sealed class MessageProcessingOrchestrator : IMessageProcessingOrchestrat
             _telemetry?.TrackMessageProcessed(conversation.Id.Value, overall.Elapsed, success: false);
 
             return Result.Failure<ProcessMessageResponse, Error>(
-                Error.Internal("An unexpected error occurred during message processing. Please retry.", "CHAT.MESSAGE_PROCESSING.UNEXPECTED_ERROR"));
+                Error.Internal(ChatDomainErrors.Processing.UnexpectedErrorMessage, ChatDomainErrors.Processing.UnexpectedErrorCode));
         }
     }
 }

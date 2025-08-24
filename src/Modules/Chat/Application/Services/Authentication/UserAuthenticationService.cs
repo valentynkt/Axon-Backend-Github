@@ -1,6 +1,7 @@
 using System;
 using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.Contracts.Authentication;
+using Axon.Modules.Chat.Domain.Services;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
@@ -22,18 +23,8 @@ public sealed class UserAuthenticationService : IUserAuthenticationService
 
     public Result<UserId, Error> GetAuthenticatedUserId()
     {
-        if (!_currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(_currentUser.UserId))
-        {
-            return Result.Failure<UserId, Error>(
-                Error.Unauthorized("User must be authenticated to perform chat operations.", "CHAT.AUTH.UNAUTHENTICATED"));
-        }
-
-        if (!Guid.TryParse(_currentUser.UserId, out var ownerGuid))
-        {
-            return Result.Failure<UserId, Error>(
-                Error.Validation("Invalid current user id.", "CHAT.AUTH.INVALID_USERID"));
-        }
-
-        return Result.Success<UserId, Error>(new UserId(ownerGuid));
+        return UserAuthenticationDomainService.ValidateAndCreateUserId(
+            _currentUser.IsAuthenticated, 
+            _currentUser.UserId);
     }
 }

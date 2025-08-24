@@ -9,6 +9,8 @@ using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Errors;
 
 namespace Axon.Modules.Chat.Application.Services.Dispatching;
 
@@ -44,7 +46,7 @@ public sealed class ChatCommandDispatcher : IChatCommandDispatcher
         {
             _logger.LogError(ex, "Unexpected error dispatching chat command");
             return Result.Failure<ProcessMessageResponse, Error>(
-                Error.Internal("An unexpected error occurred while processing the message.", "CHAT_DISPATCH_ERROR"));
+                Error.Internal(ChatDomainErrors.Dispatch.UnexpectedErrorMessage, ChatDomainErrors.Dispatch.UnexpectedErrorCode));
         }
     }
 
@@ -52,12 +54,13 @@ public sealed class ChatCommandDispatcher : IChatCommandDispatcher
         ProcessMessageRequest request,
         CancellationToken ct)
     {
+        // Try to parse MessageContent - let domain handle validation details
         if (!MessageContent.TryParse(request.Message, provider: null, out var msg))
             return Result.Failure<ProcessMessageResponse, Error>(
-                Error.Validation("Message content is invalid.", "CHAT.MESSAGE.INVALID"));
+                Error.Validation(ChatDomainErrors.Message.InvalidContentMessage, ChatDomainErrors.Message.InvalidContentCode));
 
         var cmd = new StartConversationCommand(Message: msg);
-        // Handlers already return Result<ProcessMessageResponse, Error>
+        // Handlers will perform all domain validation
         return await _mediator.Send(cmd, ct);
     }
 
@@ -65,21 +68,21 @@ public sealed class ChatCommandDispatcher : IChatCommandDispatcher
         ProcessMessageRequest request,
         CancellationToken ct)
     {
-        var guid = request.ConversationId!.Value;
-        if (guid == Guid.Empty)
-        {
-            return Result.Failure<ProcessMessageResponse, Error>(
-                Error.Validation("The provided conversation ID is invalid.", "INVALID_CONVERSATION_ID"));
-        }
+        var conversationId = new ConversationId(request.ConversationId!.Value);
+        
+        // Use domain rule for ConversationId validation
+        var idValidationResult = Conversation.ValidateConversationId(conversationId);
+        if (idValidationResult.IsFailure)
+            return Result.Failure<ProcessMessageResponse, Error>(idValidationResult.Error);
 
+        // Try to parse MessageContent - let domain handle validation details
         if (!MessageContent.TryParse(request.Message, provider: null, out var msg))
             return Result.Failure<ProcessMessageResponse, Error>(
-                Error.Validation("Message content is invalid.", "CHAT.MESSAGE.INVALID"));
+                Error.Validation(ChatDomainErrors.Message.InvalidContentMessage, ChatDomainErrors.Message.InvalidContentCode));
 
-        var conversationId = new ConversationId(guid);
         var cmd = new AppendUserMessageCommand(ConversationId: conversationId, Content: msg);
 
-        // Handlers already return Result<ProcessMessageResponse, Error>
+        // Handlers will perform all domain validation
         return await _mediator.Send(cmd, ct);
     }
 }

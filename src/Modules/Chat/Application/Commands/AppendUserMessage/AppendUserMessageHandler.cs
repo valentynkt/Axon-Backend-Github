@@ -9,7 +9,10 @@ using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.DTOs.Responses;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Rules;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
+using BuildingBlocks.Core.Domain.Rules;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using MediatR;
@@ -62,27 +65,29 @@ public sealed class AppendUserMessageHandler
         UserId ownerId,
         CancellationToken cancellationToken)
     {
-        // Validate conversation id
-        if (conversationId.Value == Guid.Empty)
-        {
-            return Result.Failure<Conversation, Error>(
-                Error.Validation("ConversationId cannot be empty.", "CHAT.ID.EMPTY"));
-        }
+        // Use domain rule for ConversationId validation
+        var idValidationResult = Conversation.ValidateConversationId(conversationId);
+        if (idValidationResult.IsFailure)
+            return Result.Failure<Conversation, Error>(idValidationResult.Error);
 
         // Load conversation
         var conversation = await _repository.GetByIdAsync(conversationId, cancellationToken);
-        if (conversation is null)
+        
+        // Use domain rule for conversation existence check
+        try
+        {
+            CheckRule(new ConversationMustExistRule(conversation, conversationId));
+        }
+        catch (BusinessRuleException ex)
         {
             return Result.Failure<Conversation, Error>(
-                Error.NotFound($"Conversation {conversationId.Value} not found.", "CHAT.CONVERSATION.NOT_FOUND"));
+                Error.NotFound(ex.Message, ex.Error.Code));
         }
 
-        // Validate ownership
-        if (!conversation.BelongsTo(ownerId))
-        {
-            return Result.Failure<Conversation, Error>(
-                Error.Forbidden("Conversation does not belong to the current user.", "CHAT.CONVERSATION.ACCESS_DENIED"));
-        }
+        // Use domain rule for ownership validation
+        var accessValidationResult = conversation!.ValidateAccess(ownerId);
+        if (accessValidationResult.IsFailure)
+            return Result.Failure<Conversation, Error>(accessValidationResult.Error);
 
         return Result.Success<Conversation, Error>(conversation);
     }
@@ -110,5 +115,14 @@ public sealed class AppendUserMessageHandler
         // Delegate to orchestrator for AI processing and assistant response
         return await _messageOrchestrator.ProcessUserMessageAsync(
             conversation, userMessage, userMessageId, cancellationToken);
+    }
+
+    
+#pragma warning disable CA1859 // Change type of parameter for improved performance
+    private static void CheckRule(IBusinessRule rule)
+#pragma warning restore CA1859
+    {
+        if (rule.IsBroken())
+            throw new BusinessRuleException(rule);
     }
 }

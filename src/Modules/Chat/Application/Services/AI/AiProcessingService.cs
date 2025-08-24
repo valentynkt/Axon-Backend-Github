@@ -10,6 +10,7 @@ using Axon.Modules.Chat.Application.DTOs.Configurations;
 using Axon.Modules.Chat.Application.DTOs.Requests;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
+using Axon.Modules.Chat.Domain.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
@@ -65,7 +66,7 @@ public sealed class AiProcessingService : IAiProcessingService
                     conversationId.Value, aiResult.Error.Code);
 
                 return Result.Failure<AiProcessingResult, Error>(
-                    Error.Internal("AI processing failed. Please retry.", "CHAT.AI.PROCESSING_FAILED"));
+                    Error.Internal(ChatDomainErrors.AiProcessing.ProcessingFailedMessage, ChatDomainErrors.AiProcessing.ProcessingFailedCode));
             }
 
             var aiResponse = aiResult.Value;
@@ -92,7 +93,7 @@ public sealed class AiProcessingService : IAiProcessingService
                 conversationId.Value);
 
             return Result.Failure<AiProcessingResult, Error>(
-                Error.Internal("An unexpected error occurred during AI processing. Please retry.", "CHAT.AI.UNEXPECTED_ERROR"));
+                Error.Internal(ChatDomainErrors.AiProcessing.UnexpectedErrorMessage, ChatDomainErrors.AiProcessing.UnexpectedErrorCode));
         }
     }
 }
