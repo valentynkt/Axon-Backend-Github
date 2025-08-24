@@ -14,7 +14,7 @@ internal sealed class MessageContentWithinLimitsRule : BusinessRule
     private readonly string? _content;
 
     public MessageContentWithinLimitsRule(string? content)
-        : base("Message content is invalid.", "CHAT.MESSAGE.CONTENT.INVALID")
+        : base(code: "CHAT.MESSAGE.CONTENT.INVALID", message: "Message content is invalid.")
     {
         _content = content;
     }

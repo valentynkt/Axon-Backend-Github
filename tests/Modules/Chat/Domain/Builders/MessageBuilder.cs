@@ -35,6 +35,33 @@ public class MessageBuilder
         .WithAiResponseId(TestConstants.AiResponses.DefaultAiResponseId);
 
     /// <summary>
+    /// Creates a new MessageBuilder instance (for fluent API compatibility).
+    /// </summary>
+    public static MessageBuilder New() => new MessageBuilder();
+
+    /// <summary>
+    /// Configures this builder as a user message.
+    /// </summary>
+    public MessageBuilder AsUserMessage()
+    {
+        _role = MessageRole.User;
+        _content = TestConstants.Messages.DefaultUserMessage;
+        _aiResponseId = null; // User messages don't have AI response IDs
+        return this;
+    }
+
+    /// <summary>
+    /// Configures this builder as an assistant message.
+    /// </summary>
+    public MessageBuilder AsAssistantMessage()
+    {
+        _role = MessageRole.Assistant;
+        _content = TestConstants.Messages.DefaultAssistantMessage;
+        _aiResponseId = TestConstants.AiResponses.DefaultAiResponseId; // Set default AI response ID
+        return this;
+    }
+
+    /// <summary>
     /// Sets the conversation ID this message belongs to.
     /// </summary>
     public MessageBuilder InConversation(ConversationId conversationId)

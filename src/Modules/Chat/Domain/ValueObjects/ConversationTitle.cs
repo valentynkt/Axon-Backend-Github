@@ -61,7 +61,7 @@ public readonly partial struct ConversationTitle
             var vo = From(value);
             return Result.Success<ConversationTitle, Error>(vo);
         }
-        catch (ValidationException vex)
+        catch (ValueObjectValidationException vex)
         {
             return Result.Failure<ConversationTitle, Error>(
                 Error.Validation(vex.Message, "CHAT.CONVERSATION.TITLE.INVALID"));
