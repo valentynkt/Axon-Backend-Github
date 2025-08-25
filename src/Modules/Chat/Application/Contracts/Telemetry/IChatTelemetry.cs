@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Axon.Modules.Chat.Application.Contracts.Telemetry;
 
 /// <summary>
@@ -5,6 +7,11 @@ namespace Axon.Modules.Chat.Application.Contracts.Telemetry;
 /// </summary>
 public interface IChatTelemetry
 {
+    /// <summary>
+    /// Start a new activity for distributed tracing and performance monitoring.
+    /// </summary>
+    Activity? StartActivity(string name);
+    
     /// <summary>
     /// Track AI client request metrics including duration and success rate.
     /// </summary>

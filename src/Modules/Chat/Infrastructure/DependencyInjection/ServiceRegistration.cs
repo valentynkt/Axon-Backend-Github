@@ -60,18 +60,32 @@ public static class ServiceRegistration
             });
         });
         
-        // Read DbContext
+        // Read DbContext with read-specific optimizations
         services.AddDbContext<ChatReadDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+                npgsqlOptions.CommandTimeout(30); // 30-second timeout for read operations
+            });
+            
+            // Read-specific EF Core optimizations
+            options.EnableServiceProviderCaching(true);
+            options.EnableSensitiveDataLogging(false); // Security: disable in production
+            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+            
+            // Performance optimizations for read scenarios
+            options.ConfigureWarnings(warnings =>
+            {
+                warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.DetachedLazyLoadingWarning);
+                warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning);
             });
         });
         
         // Register Repository and DbContext interfaces
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IConversationReadRepository, ConversationReadRepository>();
+        services.AddScoped<IMessageReadRepository, MessageReadRepository>();
         services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
         services.AddScoped<IChatWriteDbContext>(provider => provider.GetRequiredService<ChatDbContext>());
         

@@ -10,7 +10,11 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatReadDbContext
 {
     public ChatReadDbContext(DbContextOptions<ChatReadDbContext> options, ILogger<ChatReadDbContext>? logger = null) 
-        : base(options, logger) { }
+        : base(options, logger) 
+    {
+        // Additional read-specific optimizations
+        Database.SetCommandTimeout(TimeSpan.FromSeconds(30)); // 30-second timeout for read operations
+    }
 
     public override string ModuleName => "chat";
     
@@ -20,21 +24,18 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatRead
         // Essential indexes for GetConversations query performance
         modelBuilder.Entity<Conversation>()
             .HasIndex(c => new { c.OwnerId, c.UpdatedAt, c.Id })
-            .HasDatabaseName("ix_conversations_owner_updated_at_id")
-            .HasFilter("\"Status\" != 'Deleted'");
+            .HasDatabaseName("ix_conversations_owner_updated_at_id");
 
         // Title search index for filtering by conversation title
         modelBuilder.Entity<Conversation>()
             .HasIndex(c => c.Title)
             .HasDatabaseName("ix_conversations_title_search")
-            .HasFilter("\"Title\" IS NOT NULL AND \"Status\" != 'Deleted'");
+            .HasFilter("\"Title\" IS NOT NULL");
 
-        // Covering index for common list queries to avoid key lookups
+        // Additional composite index for different sorting scenarios
         modelBuilder.Entity<Conversation>()
-            .HasIndex(c => new { c.OwnerId, c.UpdatedAt })
-            .HasDatabaseName("ix_conversations_list_covering")
-            .IncludeProperties(c => new { c.Id, c.Title, c.CreatedAt, c.LastAiResponseId })
-            .HasFilter("\"Status\" != 'Deleted'");
+            .HasIndex(c => new { c.OwnerId, c.Status, c.UpdatedAt })
+            .HasDatabaseName("ix_conversations_owner_status_updated");
 
         // CreatedAt index for sorting by creation time
         modelBuilder.Entity<Conversation>()

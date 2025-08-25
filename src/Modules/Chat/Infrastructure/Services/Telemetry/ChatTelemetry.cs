@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Axon.Modules.Chat.Application.Contracts.Telemetry;
 
@@ -9,6 +10,7 @@ namespace Axon.Modules.Chat.Infrastructure.Services.Telemetry;
 /// </summary>
 public sealed class ChatTelemetry : IChatTelemetry
 {
+    private static readonly ActivitySource ActivitySource = new("Axon.Chat", "1.0");
     private static readonly Meter Meter = new("Axon.Chat", "1.0");
     
     // AI Request metrics
@@ -22,6 +24,11 @@ public sealed class ChatTelemetry : IChatTelemetry
         Meter.CreateCounter<long>("chat.messages_processed_total");
     private static readonly Histogram<double> MessageProcessingDurationMs = 
         Meter.CreateHistogram<double>("chat.message_processing_duration_ms");
+
+    public Activity? StartActivity(string name)
+    {
+        return ActivitySource.StartActivity(name);
+    }
 
     public void TrackAiRequest(string requestType, TimeSpan duration, bool success)
     {

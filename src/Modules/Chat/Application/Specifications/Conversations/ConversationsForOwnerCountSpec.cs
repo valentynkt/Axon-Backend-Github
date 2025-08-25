@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using BuildingBlocks.Primitives.Ids;
+using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Chat.Application.Specifications.Conversations;
 
@@ -19,11 +20,39 @@ public sealed class ConversationsForOwnerCountSpec : Specification<Conversation>
         // Apply owner filter - only conversations owned by the specified user
         Query.Where(c => c.OwnerId == ownerId);
 
-        // Apply title filter if provided (case-insensitive contains)
+        // Apply text search filter if provided (same logic as ConversationsForOwnerSpec for consistency)
         if (!string.IsNullOrWhiteSpace(titleContains))
         {
-            var titleFilter = titleContains.Trim().ToLower();
-            Query.Where(c => c.Title != null && c.Title.ToLower().Contains(titleFilter));
+            var searchTerm = titleContains.Trim();
+            
+            // Try PostgreSQL full-text search first for better relevance and performance
+            // Falls back to LIKE search if full-text search is not available
+            if (IsFullTextSearchEnabled())
+            {
+                // Use PostgreSQL full-text search with ranking for better results
+                var normalizedSearchTerm = searchTerm.Replace(" ", " & ", StringComparison.Ordinal);
+                Query.Where(c => c.Title != null && 
+                               EF.Functions.ToTsVector("english", c.Title)
+                                   .Matches(EF.Functions.PlainToTsQuery("english", normalizedSearchTerm)));
+            }
+            else
+            {
+                // Fallback to case-insensitive LIKE search
+                var titleFilter = searchTerm.ToLower();
+                Query.Where(c => c.Title != null && 
+                               EF.Functions.Like(c.Title.ToLower(), $"%{titleFilter}%"));
+            }
         }
+    }
+
+    /// <summary>
+    /// Determines if PostgreSQL full-text search is available and enabled.
+    /// This is a simple heuristic - in production, you might want to check actual database capabilities.
+    /// </summary>
+    private static bool IsFullTextSearchEnabled()
+    {
+        // For now, assume full-text search is available in PostgreSQL environments
+        // In a real scenario, you might want to check the database provider or configuration
+        return true; // PostgreSQL with full-text search capabilities
     }
 }

@@ -24,14 +24,14 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
         GetConversationsForOwnerCompiled = EF.CompileAsyncQuery(
             (ChatReadDbContext context, UserId ownerId, int skip, int take) =>
                 context.Set<Conversation>()
-                    .Where(c => c.OwnerId == ownerId && c.Status != ConversationStatus.Deleted)
+                    .Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active)
                     .OrderByDescending(c => c.UpdatedAt)
                     .ThenByDescending(c => c.Id)
                     .Skip(skip)
                     .Take(take)
                     .Select(c => new ConversationListItem(
                         c.Id.Value,
-                        c.Title != null ? c.Title.Value : string.Empty,
+                        c.Title ?? string.Empty,
                         c.CreatedAt.DateTime,
                         c.UpdatedAt.HasValue ? c.UpdatedAt.Value.DateTime : c.CreatedAt.DateTime,
                         c.LastAiResponseId.HasValue ? c.LastAiResponseId.Value.Value : null))
@@ -44,7 +44,7 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
         CountConversationsForOwnerCompiled = EF.CompileAsyncQuery(
             (ChatReadDbContext context, UserId ownerId) =>
                 context.Set<Conversation>()
-                    .Where(c => c.OwnerId == ownerId && c.Status != ConversationStatus.Deleted)
+                    .Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active)
                     .Count());
 
     /// <summary>
@@ -55,9 +55,9 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
             (ChatReadDbContext context, UserId ownerId, string titleLower) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId && 
-                               c.Status != ConversationStatus.Deleted &&
+                               c.Status == ConversationStatus.Active &&
                                c.Title != null && 
-                               EF.Functions.Like(c.Title.Value.ToLower(), $"%{titleLower}%"))
+                               EF.Functions.Like(c.Title.ToLower(), $"%{titleLower}%"))
                     .Count());
 
     public ConversationReadRepository(ChatReadDbContext dbContext) : base(dbContext)

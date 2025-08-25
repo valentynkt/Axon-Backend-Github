@@ -47,5 +47,8 @@ public static class ChatErrors
         
         public static Error InvalidState => 
             Error.PreconditionFailed("The conversation is in an invalid state for this operation", "Chat.Conversation.InvalidState");
+        
+        public static Error AccessDenied(Guid conversationId) => 
+            Error.Forbidden($"Access denied to conversation {conversationId}", "Chat.Conversation.AccessDenied");
     }
 }
