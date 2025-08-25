@@ -90,7 +90,8 @@ if (app.Environment.IsDevelopment())
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Local")
 {
-    app.UseAspnetOpenApi();
+    app.UseAspnetOpenApi(); // Built-in OpenAPI for Scalar
+    app.UseSwaggerGen(); // FastEndpoints Swagger generation
 }
 
 app.UseHttpsRedirection();

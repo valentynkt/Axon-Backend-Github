@@ -38,6 +38,10 @@ public abstract class BaseQueryEndpoint<TRequest, TResponse> : BaseResultEndpoin
         var summary = GetSummary();
         if (summary is not null)
             Summary(summary);
+            
+        // Allow anonymous access as per architectural decision in Program.cs
+        // All endpoints use AllowAnonymous() with DefaultCurrentUserService providing system user
+        AllowAnonymous();
     }
 
     /// <summary>

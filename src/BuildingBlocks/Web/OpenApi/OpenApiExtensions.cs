@@ -49,11 +49,14 @@ namespace BuildingBlocks.Web.OpenApi
                     }
                 });
 
-            // Add scalar ui
+            // Add scalar ui - use FastEndpoints OpenAPI document
             app.MapScalarApiReference(
-                redocOptions =>
+                options =>
                 {
-                    redocOptions.WithOpenApiRoutePattern("/openapi/{documentName}.json");
+                    options
+                        .WithTitle("Axon API")
+                        .WithOpenApiRoutePattern("/swagger/{documentName}/swagger.json")
+                        .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
                 });
 
             // Log API documentation URLs
@@ -68,7 +71,7 @@ namespace BuildingBlocks.Web.OpenApi
             logger.LogInformation("📚 API Documentation:");
             logger.LogInformation("  🔹 Swagger UI:    {Url}/swagger", urls);
             logger.LogInformation("  🔹 Scalar UI:     {Url}/scalar/v1", urls);
-            logger.LogInformation("  🔹 OpenAPI Spec:  {Url}/openapi/v1.json", urls);
+            logger.LogInformation("  🔹 FastEndpoints: {Url}/swagger/v1/swagger.json", urls);
 
             return app;
         }

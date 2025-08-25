@@ -4,6 +4,7 @@ using Axon.Api.Modules;
 using Axon.BuildingBlocks.Web.Configuration;
 using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
+using FastEndpoints.Swagger;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -33,11 +34,21 @@ public static class ServiceRegistration
     {
         // Add core framework services
         services.AddControllers();
-        services.AddFastEndpoints();
+        services.AddFastEndpoints()
+                .SwaggerDocument(o =>
+                {
+                    o.DocumentSettings = s =>
+                    {
+                        s.Title = "Axon API";
+                        s.Version = "v1";
+                        s.Description = "Axon Backend API - Modular Monolith with Clean Architecture";
+                    };
+                    // Disable auto-tagging from route segments - use manual tags only
+                    o.AutoTagPathSegmentIndex = 0;
+                });
         
         // Add API documentation
         services.AddEndpointsApiExplorer();
-        services.AddAspnetOpenApi();
         
         // CRITICAL FIX: Add comprehensive OpenTelemetry observability
         services.AddOpenTelemetry()
