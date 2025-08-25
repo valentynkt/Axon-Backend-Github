@@ -2,7 +2,6 @@ using Axon.Modules.Chat.Application.DTOs.Responses;
 using Axon.Modules.Chat.Application.Queries.GetConversations;
 using Axon.Modules.Chat.Application.Tests.Builders;
 using Axon.Modules.Chat.Application.Tests.Common;
-using BuildingBlocks.Core.Abstractions.Paging;
 using NUnit.Framework;
 
 namespace Axon.Modules.Chat.Application.Tests.Queries.GetConversations;

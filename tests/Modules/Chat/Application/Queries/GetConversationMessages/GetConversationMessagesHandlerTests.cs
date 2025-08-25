@@ -11,7 +11,7 @@ using Axon.Modules.Chat.Application.Queries.GetConversationMessages;
 using Axon.Modules.Chat.Application.Tests.Builders;
 using Axon.Modules.Chat.Application.Tests.Common;
 using Axon.Modules.Chat.Application.Tests.Extensions;
-using BuildingBlocks.Core.Abstractions.Paging;
+using Axon.Modules.Chat.Domain.Tests.Extensions;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
