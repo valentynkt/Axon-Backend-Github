@@ -93,8 +93,7 @@ public sealed class ChatMappingProfile : IRegister, IChatMappingProfile
             .Map(dest => dest.Role, src => src.Role)
             .Map(dest => dest.Content, src => src.Content)
             .Map(dest => dest.CreatedAtUtc, src => src.CreatedAtUtc)
-            .Map(dest => dest.Sequence, src => src.Sequence)
-            .Map(dest => dest.AiResponseId, src => src.AiResponseId);
+            .Map(dest => dest.Sequence, src => src.Sequence);
 
         // Paged<ConversationMessageItem> -> GetConversationMessagesResponseDto
         config.NewConfig<Paged<ConversationMessageItem>, GetConversationMessagesResponseDto>()

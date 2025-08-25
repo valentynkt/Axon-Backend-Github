@@ -28,4 +28,7 @@
   <Folder Name="/tests/Modules/Chat/Domain/">
     <Project Path="tests/Modules/Chat/Domain/Axon.Modules.Chat.Domain.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Modules/Chat/Application/">
+    <Project Path="tests/Modules/Chat/Application/Axon.Modules.Chat.Application.Tests.csproj" />
+  </Folder>
 </Solution>

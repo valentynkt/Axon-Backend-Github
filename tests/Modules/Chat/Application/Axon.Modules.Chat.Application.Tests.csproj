@@ -4,27 +4,60 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Temporarily disable problematic code analysis rules -->
+    <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="NUnit" Version="4.2.2" />
-    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
-    <PackageReference Include="NUnit.Analyzers" Version="4.3.0" />
-    <PackageReference Include="coverlet.collector" Version="6.0.2" />
-    <PackageReference Include="Shouldly" Version="4.2.1" />
-    <PackageReference Include="NSubstitute" Version="5.1.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
-    <PackageReference Include="Testcontainers.PostgreSql" Version="3.10.0" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <!-- Main application projects under test -->
     <ProjectReference Include="..\..\..\..\src\Modules\Chat\Application\Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="..\..\..\..\src\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\..\src\Modules\Chat\Domain\Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="..\Domain\Axon.Modules.Chat.Domain.Tests.csproj" />
+    <!-- BuildingBlocks for shared testing utilities -->
+    <ProjectReference Include="..\..\..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Testing Framework - NUnit as specified in requirements -->
+    <PackageReference Include="NUnit" Version="4.3.1" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.5.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    
+    <!-- Assertions - Shouldly for fluent, readable assertions -->
+    <PackageReference Include="Shouldly" Version="4.3.0" />
+    
+    <!-- Mocking - NSubstitute as preferred mocking framework -->
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="NSubstitute.Analyzers.CSharp" Version="1.0.17">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    
+    <!-- Microsoft Test SDK -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    
+    <!-- Time Provider for Testing -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.0.0" />
+    
+    <!-- Entity Framework for Integration Tests -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.8" />
+    
+    <!-- Testcontainers for Integration Tests -->
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.6.0" />
+    
+    <!-- Coverage Collection -->
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
 </Project>
