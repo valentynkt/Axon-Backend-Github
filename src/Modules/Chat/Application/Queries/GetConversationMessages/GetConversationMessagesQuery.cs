@@ -13,4 +13,4 @@ public sealed record GetConversationMessagesQuery(
     int PageNumber = 1,
     int PageSize = Page.DefaultSize,
     bool IncludeDeleted = false
-) : RequestBase, IQuery<Paged<ConversationMessageItem>>;
+) : RequestBase, IQuery<Paged<ConversationMessageItem>>, IAuthenticatedRequest, IPaginatedRequest;

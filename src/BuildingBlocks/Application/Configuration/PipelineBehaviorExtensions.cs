@@ -1,14 +1,15 @@
-// /BuildingBlocks/Application/Behaviors/PipelineBehaviorExtensions.cs
+// /BuildingBlocks/Application/Configuration/PipelineBehaviorExtensions.cs
 #nullable enable
 using System;
 using System.Reflection;
+using BuildingBlocks.Application.Behaviors;
 using BuildingBlocks.Core.Abstractions.Idempotency;
 using BuildingBlocks.Core.Idempotency;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BuildingBlocks.Application.Behaviors;
+namespace BuildingBlocks.Application.Configuration;
 
 /// <summary>
 /// Registers all Application pipeline behaviors in the correct execution order
@@ -16,12 +17,14 @@ namespace BuildingBlocks.Application.Behaviors;
 /// 
 /// Execution order:
 /// 1) ObservabilityBehavior        – tracing/metrics/logging
-/// 2) RequestValidationBehavior    – FluentValidation (fail-fast)
-/// 3) QueryCachingBehavior         – L1/L2 read-through cache (queries only)
-/// 4) QueryRetryBehavior           – Polly-native retry (queries w/ [Retryable])
-/// 5) IdempotencyBehavior          – success-only cache for commands
-/// 6) UnitOfWorkBehavior           – transactional commit on success (commands)
-/// 7) Handler
+/// 2) AuthenticationBehavior       – user authentication (IAuthenticatedRequest only)
+/// 3) PaginationBehavior           – pagination parameter validation (IPaginatedRequest only)
+/// 4) RequestValidationBehavior    – FluentValidation (fail-fast)
+/// 5) QueryCachingBehavior         – L1/L2 read-through cache (queries only)
+/// 6) QueryRetryBehavior           – Polly-native retry (queries w/ [Retryable])
+/// 7) IdempotencyBehavior          – success-only cache for commands
+/// 8) UnitOfWorkBehavior           – transactional commit on success (commands)
+/// 9) Handler
 /// 
 /// Notes:
 /// - Registration order matters in MediatR; earlier is outermost.
@@ -55,6 +58,8 @@ public static class PipelineBehaviorExtensions
 
         // 3) MediatR pipeline (outer → inner)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(AuthenticationBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PaginationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryCachingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(QueryRetryBehavior<,>));

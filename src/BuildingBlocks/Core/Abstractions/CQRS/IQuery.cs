@@ -13,6 +13,24 @@ public interface IQuery<TResponse> : IAxonRequest, IRequest<Result<TResponse, Er
     where TResponse : notnull { }
 
 /// <summary>
+/// Marker interface for requests that require user authentication.
+/// Used by AuthenticationBehavior to automatically handle user authentication.
+/// </summary>
+public interface IAuthenticatedRequest
+{
+}
+
+/// <summary>
+/// Marker interface for requests that include pagination parameters.
+/// Used by PaginationBehavior to automatically validate pagination.
+/// </summary>
+public interface IPaginatedRequest
+{
+    int PageNumber { get; }
+    int PageSize { get; }
+}
+
+/// <summary>
 /// Handler for processing queries that return Results with error handling.
 /// </summary>
 /// <typeparam name="TQuery">The query type to handle</typeparam>

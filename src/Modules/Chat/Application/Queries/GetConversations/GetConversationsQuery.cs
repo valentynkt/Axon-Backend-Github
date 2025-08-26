@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Application.Common.Pagination;
 using Axon.Modules.Chat.Application.Common.Sorting;
+using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversations;
 
@@ -13,4 +14,4 @@ public sealed record GetConversationsQuery(
     ConversationSortBy SortBy = ConversationSortBy.UpdatedAt,
     SortDirection SortDirection = SortDirection.Desc,
     string? TitleContains = null
-) : RequestBase, IQuery<Paged<ConversationListItem>>;
+) : RequestBase, IQuery<Paged<ConversationListItem>>, IAuthenticatedRequest, IPaginatedRequest;
