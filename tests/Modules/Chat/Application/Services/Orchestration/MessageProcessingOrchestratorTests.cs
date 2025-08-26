@@ -17,5 +17,6 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
         // Assert
         // TODO: Verify orchestration completes successfully
         Assert.Pass("Test placeholder - implement actual test logic");
+        return Task.CompletedTask;
     }
 }

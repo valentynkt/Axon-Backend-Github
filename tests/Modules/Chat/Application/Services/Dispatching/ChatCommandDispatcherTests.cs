@@ -17,5 +17,6 @@ public class ChatCommandDispatcherTests : ApplicationTestBase
         // Assert
         // TODO: Verify command is dispatched correctly
         Assert.Pass("Test placeholder - implement actual test logic");
+        return Task.CompletedTask;
     }
 }

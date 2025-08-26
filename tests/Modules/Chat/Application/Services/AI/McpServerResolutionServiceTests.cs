@@ -17,5 +17,6 @@ public class McpServerResolutionServiceTests : ApplicationTestBase
         // Assert
         // TODO: Verify servers are resolved correctly
         Assert.Pass("Test placeholder - implement actual test logic");
+        return Task.CompletedTask;
     }
 }

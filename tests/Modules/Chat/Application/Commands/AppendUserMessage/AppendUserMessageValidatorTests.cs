@@ -25,7 +25,7 @@ public class AppendUserMessageValidatorTests : ApplicationTestBase
     #region Valid Command Tests
 
     [TestCaseSource(nameof(GetValidCommandScenarios))]
-    public async Task Validate_WithValidCommands_ShouldReturnValid(AppendUserMessageCommand command, string scenarioName)
+    public async Task Validate_WithValidCommands_ShouldReturnValid(AppendUserMessageCommand command, string _)
     {
         // Act
         var result = await _validator.TestValidateAsync(command);
@@ -55,7 +55,7 @@ public class AppendUserMessageValidatorTests : ApplicationTestBase
     #region Content Validation Tests
 
     [Test]
-    public async Task Validate_WithNullContent_ShouldHaveValidationError()
+    public Task Validate_WithNullContent_ShouldHaveValidationError()
     {
         // Arrange - MessageContent cannot be null due to its value object constraints
         // This test validates that the validator handles the structural validation correctly
@@ -64,13 +64,14 @@ public class AppendUserMessageValidatorTests : ApplicationTestBase
         // Note: This test would be performed at the domain level when creating MessageContent
         // The validator focuses on structural validation rather than content validation
         Assert.Pass("MessageContent type safety prevents null values - validation occurs at domain level");
+        return Task.CompletedTask;
     }
 
     [TestCaseSource(nameof(GetInvalidContentScenarios))]
     public async Task Validate_WithInvalidContent_ShouldHaveValidationErrors(
         AppendUserMessageCommand command, 
         string expectedErrorMessage,
-        string scenarioName)
+        string _)
     {
         // Act
         var result = await _validator.TestValidateAsync(command);
@@ -215,11 +216,13 @@ public class AppendUserMessageValidatorTests : ApplicationTestBase
         var command = CommandTestDataBuilder.AppendUserMessage().WithValidData().Build();
         var maxExecutionTime = TimeSpan.FromMilliseconds(50);
 
-        // Act & Assert
-        var result = await Should.CompleteIn(
-            () => _validator.TestValidateAsync(command),
-            maxExecutionTime);
+        // Act
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var result = await _validator.TestValidateAsync(command);
+        stopwatch.Stop();
 
+        // Assert
+        stopwatch.Elapsed.ShouldBeLessThan(maxExecutionTime);
         result.ShouldNotHaveAnyValidationErrors();
     }
 
@@ -235,13 +238,14 @@ public class AppendUserMessageValidatorTests : ApplicationTestBase
 
         var maxExecutionTime = TimeSpan.FromMilliseconds(500);
 
-        // Act & Assert
-        var results = await Should.CompleteIn(async () =>
-        {
-            var validationTasks = commands.Select(cmd => _validator.TestValidateAsync(cmd));
-            return await Task.WhenAll(validationTasks);
-        }, maxExecutionTime);
+        // Act
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var validationTasks = commands.Select(cmd => _validator.TestValidateAsync(cmd));
+        var results = await Task.WhenAll(validationTasks);
+        stopwatch.Stop();
 
+        // Assert
+        stopwatch.Elapsed.ShouldBeLessThan(maxExecutionTime);
         results.ShouldAllBe(result => result.IsValid);
     }
 

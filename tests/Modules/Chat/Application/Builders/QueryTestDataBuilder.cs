@@ -115,7 +115,7 @@ public class GetConversationMessagesQueryBuilder
     private Guid _conversationId = Guid.NewGuid();
     private int _pageNumber = 1;
     private int _pageSize = 20;
-    private bool _includeDeleted = false;
+    private bool _includeDeleted;
 
     public GetConversationMessagesQueryBuilder WithConversationId(Guid conversationId)
     {

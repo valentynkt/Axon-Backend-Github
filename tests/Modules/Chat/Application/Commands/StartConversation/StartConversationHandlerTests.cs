@@ -48,6 +48,13 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         _mockLogger = Substitute.For<ILogger<StartConversationHandler>>();
     }
 
+    [TearDown]
+    public new void TearDown()
+    {
+        if (_mockRepository is IDisposable disposableRepository)
+            disposableRepository.Dispose();
+    }
+
     protected override StartConversationCommand CreateValidCommand()
     {
         return CommandTestDataBuilder.StartConversation()
@@ -67,7 +74,7 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
     [TestCaseSource(nameof(GetValidCommandScenarios))]
     public async Task Handle_WithValidCommand_ShouldReturnSuccessWithProcessMessageResponse(
         StartConversationCommand command, 
-        string scenarioName)
+        string _)
     {
         // Arrange
         var userId = UserId.New();
@@ -94,7 +101,7 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         // Assert
         result.ShouldBeSuccess();
         result.Value.ShouldNotBeNull();
-        result.Value.AssistantMessage.ShouldNotBeNull();
+        result.Value.AssistantMessage.Value.ShouldNotBeNullOrEmpty();
         
         await _mockRepository.Received(1).AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>());
         await _mockRepository.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
@@ -195,7 +202,7 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         var result = await ExecuteCommand(command);
 
         // Assert
-        result.ShouldFailWithErrorType(ErrorType.Failure);
+        result.ShouldFailWithErrorType(ErrorType.Internal);
         result.Error.Code.ShouldBe("AI_PROCESSING_ERROR");
         
         // Conversation should still be persisted before orchestrator is called

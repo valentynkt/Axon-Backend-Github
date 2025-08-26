@@ -48,6 +48,13 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         _mockLogger = Substitute.For<ILogger<AppendUserMessageHandler>>();
     }
 
+    [TearDown]
+    public new void TearDown()
+    {
+        if (_mockRepository is IDisposable disposableRepository)
+            disposableRepository.Dispose();
+    }
+
     protected override AppendUserMessageCommand CreateValidCommand()
     {
         return CommandTestDataBuilder.AppendUserMessage()
@@ -67,7 +74,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     [TestCaseSource(nameof(GetValidCommandScenarios))]
     public async Task Handle_WithValidCommand_ShouldReturnSuccessWithProcessMessageResponse(
         AppendUserMessageCommand command, 
-        string scenarioName)
+        string _)
     {
         // Arrange
         var userId = UserId.New();
@@ -128,7 +135,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     public async Task Handle_WithConversationValidationFailures_ShouldReturnAppropriateError(
         Conversation? conversation,
         Error expectedError,
-        string scenarioName)
+        string _)
     {
         // Arrange
         var command = CreateValidCommand();
@@ -157,7 +164,6 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         // Arrange
         var command = CreateValidCommand();
         var userId = UserId.New();
-        var domainError = Error.BusinessRule("Message cannot be appended", "DOMAIN_RULE_VIOLATION");
 
         _mockAuthService.GetAuthenticatedUserId()
             .Returns(Result.Success<UserId, Error>(userId));
@@ -226,7 +232,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         var result = await ExecuteCommand(command);
 
         // Assert
-        result.ShouldFailWithErrorType(ErrorType.Failure);
+        result.ShouldFailWithErrorType(ErrorType.Internal);
         result.Error.Code.ShouldBe("AI_PROCESSING_ERROR");
         
         await _mockRepository.Received(1).UpdateAsync(conversation, Arg.Any<CancellationToken>());
@@ -293,6 +299,6 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         result.ConversationId.ShouldBe(command.ConversationId);
         result.UserMessageId.ShouldNotBe(default);
         result.AssistantMessageId.ShouldNotBe(default);
-        result.AssistantMessage.ShouldNotBeNull();
+        result.AssistantMessage.Value.ShouldNotBeNullOrEmpty();
     }
 }

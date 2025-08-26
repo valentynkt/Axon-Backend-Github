@@ -17,5 +17,6 @@ public class UserAuthenticationServiceTests : ApplicationTestBase
         // Assert
         // TODO: Verify user is returned correctly
         Assert.Pass("Test placeholder - implement actual test logic");
+        return Task.CompletedTask;
     }
 }

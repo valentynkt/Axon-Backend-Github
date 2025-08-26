@@ -43,7 +43,7 @@ public class GetConversationMessagesValidatorTests : ApplicationTestBase
     [TestCaseSource(nameof(GetValidQueryScenarios))]
     public void Validate_WithValidQueryVariations_ShouldNotHaveValidationErrors(
         GetConversationMessagesQuery query,
-        string scenarioName)
+        string _)
     {
         // Act
         var result = _validator.TestValidate(query);
