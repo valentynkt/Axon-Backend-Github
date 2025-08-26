@@ -15,7 +15,6 @@ public abstract class ApplicationTestBase : DomainTestBase
     /// <summary>
     /// Common application services that are frequently mocked
     /// </summary>
-    protected IUserAuthenticationService MockAuthService { get; private set; } = null!;
     protected ICurrentUserService MockCurrentUserService { get; private set; } = null!;
     protected IChatTelemetry MockTelemetry { get; private set; } = null!;
     protected ILogger MockLogger { get; private set; } = null!;
@@ -50,15 +49,12 @@ public abstract class ApplicationTestBase : DomainTestBase
     /// </summary>
     protected virtual void SetupCommonMocks()
     {
-        MockAuthService = Substitute.For<IUserAuthenticationService>();
         MockCurrentUserService = Substitute.For<ICurrentUserService>();
         MockTelemetry = Substitute.For<IChatTelemetry>();
         MockLogger = Substitute.For<ILogger>();
 
         // Configure default behaviors
         var testUserId = CreateUserId();
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(testUserId));
         
         MockCurrentUserService.UserId.Returns(testUserId.Value.ToString());
 

@@ -1,5 +1,4 @@
 using Axon.Modules.Chat.Application.Contracts.AI;
-using Axon.Modules.Chat.Application.Contracts.Authentication;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using Axon.Modules.Chat.Application.Commands.StartConversation;
 using Axon.Modules.Chat.Application.Contracts.Dispatching;
@@ -29,7 +28,6 @@ public static class ApplicationDIValidation
         {
             // Core application services
             TestServiceResolution<IChatCommandDispatcher>(serviceProvider, errors, "IChatCommandDispatcher");
-            TestServiceResolution<IUserAuthenticationService>(serviceProvider, errors, "IUserAuthenticationService");
             TestServiceResolution<IMcpServerResolutionService>(serviceProvider, errors, "IMcpServerResolutionService");
             TestServiceResolution<IAiProcessingService>(serviceProvider, errors, "IAiProcessingService");
             TestServiceResolution<IMessageProcessingOrchestrator>(serviceProvider, errors, "IMessageProcessingOrchestrator");

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Ardalis.Specification;
-using Axon.Modules.Chat.Application.Contracts.Authentication;
+
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Application.DTOs.Responses;

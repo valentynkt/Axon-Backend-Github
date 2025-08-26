@@ -15,7 +15,6 @@ global using Axon.Modules.Chat.Application.Commands.StartConversation;
 global using Axon.Modules.Chat.Application.Queries.GetConversations;
 global using Axon.Modules.Chat.Application.Common.Pagination;
 global using Axon.Modules.Chat.Application.Common.Sorting;
-global using Axon.Modules.Chat.Application.Contracts.Authentication;
 global using Axon.Modules.Chat.Application.Contracts.Telemetry;
 global using Axon.Modules.Chat.Application.Abstractions.Persistence;
 global using Axon.Modules.Chat.Application.Contracts.Persistence;

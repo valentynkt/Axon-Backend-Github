@@ -1,5 +1,4 @@
 using Axon.Modules.Chat.Application.Contracts.AI;
-using Axon.Modules.Chat.Application.Contracts.Authentication;
 using Axon.Modules.Chat.Application.Commands.AppendUserMessage;
 using Axon.Modules.Chat.Application.Services;
 using Axon.Modules.Chat.Application.Services.Idempotency;
@@ -53,7 +52,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IIdempotencyKeyProvider<StartConversationCommand>, ChatIdempotencyKeyProvider>();
         
         // Register extracted chat services
-        services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();
         services.AddScoped<IMcpServerResolutionService, McpServerResolutionService>();
         services.AddScoped<IAiProcessingService, AiProcessingService>();
         services.AddScoped<IMessageProcessingOrchestrator, MessageProcessingOrchestrator>();
