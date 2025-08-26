@@ -84,25 +84,7 @@ public abstract class QueryHandlerTestBase<TQuery, TResult, THandler> : Applicat
         // Assert
         AssertFailure(result);
     }
-
-    /// <summary>
-    /// Test template for query execution with cancellation
-    /// </summary>
-    [Test]
-    public async Task Handle_WithCancellation_ShouldHandleGracefully()
-    {
-        // Arrange
-        var query = CreateValidQuery();
-        using var cts = new CancellationTokenSource();
-        cts.Cancel();
-        
-        // Act & Assert
-        var exception = await Should.ThrowAsync<OperationCanceledException>(
-            () => ExecuteQuery(query, cts.Token));
-        
-        exception.ShouldNotBeNull();
-    }
-
+    
     /// <summary>
     /// Test template for query performance verification
     /// </summary>

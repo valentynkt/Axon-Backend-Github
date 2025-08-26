@@ -178,8 +178,9 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         string _)
     {
         // Arrange
-        _currentQuery = query; // Set current query for pagination simulation
         SetupQueryTestData();
+        _currentQuery = query; // Set current query for pagination simulation AFTER SetupQueryTestData
+        
         var startIndex = (query.PageNumber - 1) * query.PageSize;
         var expectedItemsOnPage = Math.Max(0, Math.Min(query.PageSize, _testMessages.Count - startIndex));
 
@@ -312,25 +313,16 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     }
 
     #endregion
-
-    // Hide base class cancellation test since it doesn't work with our handler's pattern
-    [Test, Ignore("Base class cancellation test is not compatible with authentication service pattern")]
-    public new async Task Handle_WithCancellation_ShouldHandleGracefully()
-    {
-        // This test is ignored because the authentication service doesn't accept cancellation tokens
-        // The handler will complete normally even with a cancelled token since cancellation
-        // is not checked until repository calls, which may not be reached
-        await Task.CompletedTask;
-    }
+    
 
     [Test]
     public async Task Handle_WithLargeMessageSet_ShouldCompleteWithinTimeLimit()
     {
         // Arrange
         var query = CreateValidQuery();
-        _currentQuery = query; // Set current query for pagination simulation
         _testMessages = CreateLargeMessageSet(1000);
         SetupQueryTestData();
+        _currentQuery = query; // Set current query for pagination simulation AFTER SetupQueryTestData
 
         // Act
         var result = await ExecuteQuery(query);
