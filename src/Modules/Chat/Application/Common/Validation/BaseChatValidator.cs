@@ -28,11 +28,13 @@ public abstract class BasePaginatedChatValidator<T> : BaseChatValidator<T>
     {
         RuleFor(x => x.PageNumber)
             .GreaterThan(0)
+            .WithMessage("Page number must be 1 or greater.")
             .LessThanOrEqualTo(10000)
             .WithMessage("Page number must be between 1 and 10,000.");
 
         RuleFor(x => x.PageSize)
             .GreaterThan(0)
+            .WithMessage("Page size must be between 1 and 100.")
             .LessThanOrEqualTo(100)
             .WithMessage("Page size must be between 1 and 100.");
     }

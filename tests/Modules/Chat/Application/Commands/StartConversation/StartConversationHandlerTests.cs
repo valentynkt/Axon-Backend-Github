@@ -42,17 +42,7 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
             .WithMessage("Not used")
             .Build();
     }
-
-    /// <summary>
-    /// Skip invalid command test - not applicable since StartConversationCommand uses only validated value objects
-    /// </summary>
-    [Test]
-    [Ignore("StartConversationCommand uses validated value objects that prevent invalid instances")]
-    public override async Task Handle_WithInvalidCommand_ShouldReturnFailure()
-    {
-        await Task.CompletedTask;
-    }
-
+    
 
     #region Critical Path Tests
 

@@ -19,7 +19,7 @@ Axon AI requires a robust, scalable authentication system that supports modern w
 - **Wallet-First Experience**: Pure wallet-based authentication optimized for crypto trading workflows  
 - **Enterprise Ready**: JWT-based authentication with RS256 security, comprehensive user/wallet APIs, and real-time webhooks
 - **Zero Authentication Infrastructure**: Complete delegation to Dynamic.xyz with local data mirroring for performance
-- **Scalability**: Proven infrastructure handling millions of authentication requests with 99.9% uptime
+- **Scalability**: Proven infrastructure handling millions of authentication requests with enterprise SLAs
 
 ### 1.3 Investment Justification
 
@@ -40,7 +40,7 @@ Dynamic.xyz integration eliminates the need to build custom authentication infra
 - **Security**: JWT signing, JWKS key rotation, webhook signature generation
 
 #### 2.1.2 Axon Backend Implements (Backend-Only)
-- **JWT Validation**: Dynamic.xyz JWT verification using JWKS endpoints
+- **JWT Validation**: Dynamic.xyz JWT verification using `https://app.dynamic.xyz/api/v0/sdk/{environmentId}/.well-known/jwks`
 - **Data Mirroring**: Local PostgreSQL storage of user/wallet data for query performance
 - **Webhook Processing**: Real-time sync of user/wallet changes from Dynamic.xyz
 - **User Context**: Implementation of `ICurrentUserService` using JWT claims
@@ -62,7 +62,7 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 - **Personalized AI Interactions**: Context-aware conversations based on user identity and wallet history
 - **Secure Trading Operations**: Protected execution of high-value financial transactions
-- **Compliance Requirements**: KYC/AML compliance and audit trail capabilities
+- **Compliance Requirements**: Data privacy compliance and audit trail capabilities
 - **Partner Integration**: White-label authentication for B2B partners and integrated applications
 
 ### 3.2 Current State
@@ -77,7 +77,7 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 - **Wallet-Only Authentication**: Pure Dynamic.xyz JWT-based authentication flow
 - **Local Data Mirroring**: Real-time synchronization of user and wallet data from Dynamic.xyz APIs
-- **Stateless Architecture**: No custom session management - rely on Dynamic.xyz JWT tokens
+- **JWT-First Architecture**: Primary reliance on Dynamic.xyz JWT tokens with optional Axon session capability
 - **Performance Optimization**: Local database queries for user/wallet lookups with Dynamic.xyz as source of truth
 - **Webhook-Driven Updates**: Real-time data synchronization via Dynamic.xyz webhooks
 
@@ -87,19 +87,19 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 4.1 Core Authentication Flows
 
-#### 3.1.1 Wallet-Only Authentication
+#### 4.1.1 Wallet-Only Authentication
 - **Requirement**: Users authenticate exclusively through wallet connections managed by Dynamic.xyz
 - **Supported Providers**: Phantom, Solflare, Backpack, MetaMask, WalletConnect, and 30+ providers via Dynamic.xyz
 - **Flow**: Frontend uses Dynamic.xyz SDK → User connects wallet → Backend receives Dynamic.xyz JWT → Validates JWT via JWKS
 - **Multi-Wallet Support**: Users can connect multiple wallets per account as managed by Dynamic.xyz
 
-#### 3.1.2 JWT Token Validation
-- **Requirement**: Backend validates Dynamic.xyz JWTs using RS256 and JWKS endpoints
+#### 4.1.2 JWT Token Validation
+- **Requirement**: Backend validates Dynamic.xyz JWTs using RS256 and `https://app.dynamic.xyz/api/v0/sdk/{environmentId}/.well-known/jwks`
 - **Implementation**: JWKS caching with automatic key rotation support
-- **Token Claims**: Extract user ID, wallet addresses, and permissions from Dynamic.xyz JWT
+- **Token Claims**: Trust user identity (`sub`) and proof of ownership; fetch wallets via API; don't rely on JWT for app permissions
 - **No Custom Sessions**: Direct use of Dynamic.xyz JWTs - no additional session layer needed
 
-#### 3.1.3 Data Mirroring Strategy
+#### 4.1.3 Data Mirroring Strategy
 - **Requirement**: Mirror essential user and wallet data locally for performance
 - **Source of Truth**: Dynamic.xyz APIs remain authoritative for all user data
 - **Local Storage**: PostgreSQL entities for users, wallets, and authentication events
@@ -107,14 +107,14 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 4.2 User Data Management
 
-#### 3.2.1 Dynamic.xyz API Integration
+#### 4.2.1 Dynamic.xyz API Integration
 - **Requirement**: Fetch user data from Dynamic.xyz APIs using Management API tokens
 - **User Endpoints**: `GET /environments/{environmentId}/users/{userId}` for profile data
 - **Wallet Endpoints**: `GET /environments/{environmentId}/users/{userId}/wallets` for wallet data
-- **Rate Limiting**: Respect Dynamic.xyz API limits (1000 requests/hour) with proper caching
+- **Rate Limiting**: Dynamic enforces rate limits (HTTP 429) and offers SLAs per plan
 - **Error Handling**: Robust handling of Dynamic.xyz API failures with fallback to cached data
 
-#### 3.2.2 Local Data Mirroring
+#### 4.2.2 Local Data Mirroring
 - **Requirement**: Mirror essential Dynamic.xyz data in local PostgreSQL for query performance
 - **User Data**: Dynamic user ID, email, metadata, creation/update timestamps
 - **Wallet Data**: Wallet ID, address, chain, provider, properties, connection timestamps
@@ -123,14 +123,14 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 4.3 Webhook Integration
 
-#### 3.3.1 Real-Time Event Processing
+#### 4.3.1 Real-Time Event Processing
 - **Requirement**: Process Dynamic.xyz webhooks for immediate data synchronization
-- **Event Types**: User created, user updated, wallet linked, wallet unlinked, user deleted
+- **Event Types**: `user.created`, `user.updated`, `user.deleted`, `wallet.linked`, `wallet.unlinked`
 - **Webhook Security**: Signature verification using Dynamic.xyz webhook secrets
 - **Processing**: Immediate API calls to fetch updated user/wallet data and mirror locally
 - **Reliability**: Webhook acknowledgment within 30 seconds with retry handling
 
-#### 3.3.2 Fallback Synchronization
+#### 4.3.2 Fallback Synchronization
 - **Requirement**: Backup sync mechanism for webhook failures or missed events
 - **Schedule**: Periodic reconciliation every 6 hours for active users
 - **Detection**: Identify users with stale data based on last sync timestamps
@@ -143,14 +143,14 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 5.1 Authentication Endpoints
 
-#### 4.1.1 JWT Validation Endpoint
-- **Requirement**: `POST /auth/validate` - Validate Dynamic.xyz JWT and return user context
+#### 5.1.1 JWT Validation Endpoint
+- **Requirement**: `POST /auth/exchange` - Exchange Dynamic.xyz JWT for Axon session context
 - **Input**: Dynamic.xyz JWT token from frontend
 - **Processing**: JWKS validation, user data sync, local user lookup
-- **Output**: Axon user ID, wallet addresses, permissions for backend operations
+- **Output**: Axon user context with locally-mirrored wallet data (not from JWT)
 - **Caching**: Cache JWKS keys and user lookups for performance
 
-#### 4.1.2 User Context Endpoints
+#### 5.1.2 User Context Endpoints
 - **Requirement**: `GET /auth/me` - Return current user profile with wallet data
 - **Data Source**: Local mirrored data with fallback to Dynamic.xyz API
 - **Response**: User profile, connected wallets, last activity, metadata
@@ -158,7 +158,7 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 5.2 Webhook Processing
 
-#### 4.2.1 Dynamic.xyz Webhook Receiver
+#### 5.2.1 Dynamic.xyz Webhook Receiver
 - **Requirement**: `POST /webhooks/dynamic` - Process Dynamic.xyz lifecycle events
 - **Security**: Signature validation using Dynamic.xyz webhook secrets
 - **Processing**: Immediate user/wallet data refresh from Dynamic.xyz APIs
@@ -171,14 +171,14 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 6.1 Backend Architecture Integration
 
-#### 5.1.1 Identity Module Structure
+#### 6.1.1 Identity Module Structure
 - **New Module**: `src/Modules/Identity/` following Axon Clean Architecture patterns
 - **Domain Layer**: User and Wallet aggregates, authentication domain services
 - **Application Layer**: JWT validation handlers, user sync commands/queries
 - **Infrastructure Layer**: Dynamic.xyz API clients, JWKS services, webhook processors
 - **Database**: Entity Framework Core with PostgreSQL for user/wallet mirroring
 
-#### 5.1.2 Existing System Integration
+#### 6.1.2 Existing System Integration
 - **Authentication Pipeline**: Implement `ICurrentUserService` using Dynamic.xyz JWT claims
 - **Behavior Integration**: Update `AuthenticationBehavior` to validate Dynamic.xyz JWTs
 - **CQRS Integration**: User lookup queries and wallet sync commands via MediatR
@@ -186,7 +186,7 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 6.2 Dynamic.xyz API Integration
 
-#### 5.2.1 Management API Client
+#### 6.2.1 Management API Client
 - **Base URL**: `https://app.dynamic.xyz/api/v0`
 - **Authentication**: Bearer token using Dynamic.xyz Management API token
 - **Endpoints**: User management, wallet retrieval, environment configuration
@@ -199,13 +199,13 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 7.1 Authentication Security
 
-#### 6.1.1 JWT Security
-- **Algorithm**: RS256 signature verification using Dynamic.xyz JWKS endpoints
+#### 7.1.1 JWT Security
+- **Algorithm**: RS256 signature verification using `https://app.dynamic.xyz/api/v0/sdk/{environmentId}/.well-known/jwks`
 - **Validation**: Comprehensive JWT validation (signature, issuer, expiration, audience)
 - **Key Management**: JWKS caching with automatic key rotation and 6-hour refresh cycles
 - **No Token Storage**: Validate Dynamic.xyz JWTs on each request - no server-side token storage
 
-#### 6.1.2 API Security
+#### 7.1.2 API Security
 - **Management API Tokens**: Secure storage of Dynamic.xyz Management API tokens for server-to-server calls
 - **Environment Isolation**: Separate Dynamic.xyz environments and tokens for dev/staging/production
 - **Rate Limiting**: Respect Dynamic.xyz API limits with exponential backoff and caching
@@ -237,7 +237,7 @@ User:
 - Id (Axon UserId, Primary Key)
 - DynamicUserId (Dynamic.xyz user ID, Unique)
 - Email (from Dynamic.xyz user.email)
-- FirstName, LastName (from Dynamic.xyz user profile)
+- DisplayName (from Dynamic.xyz user profile if provided, minimal PII)
 - Username (from Dynamic.xyz user.username)
 - CreatedAt, UpdatedAt (Axon timestamps)
 - DynamicCreatedAt, DynamicUpdatedAt (Dynamic.xyz timestamps)
@@ -260,25 +260,25 @@ Wallet:
 - ConnectedAt, LastSyncedAt (Axon sync timestamps)
 ```
 
-### 8.2 Session Management Decision: No Custom Sessions
+### 8.2 Session Management Strategy: JWT-First with Optional Sessions
 
-#### 8.2.1 Why No Custom Session Management?
-- **Dynamic.xyz Handles Sessions**: Dynamic.xyz JWTs contain all necessary session information
-- **JWT Self-Contained**: Tokens include user ID, permissions, expiration - no additional session data needed
-- **Stateless Architecture**: Each request validates JWT independently, enabling horizontal scaling
-- **Reduced Complexity**: No session storage, cleanup, or synchronization across multiple backend instances
-- **Dynamic.xyz Reliability**: Proven session management with automatic refresh and security features
+#### 8.2.1 JWT-First Approach with Optional Enhancement
+- **Dynamic.xyz Handles Core Sessions**: Dynamic.xyz JWTs contain all necessary session information
+- **JWT Self-Contained**: Tokens include user ID, expiration - no additional session data required for basic auth
+- **Optional Axon Sessions**: Backend can create optional sessions for complex features requiring server-side state
+- **Reduced Base Complexity**: Core authentication requires no session storage or synchronization
+- **Dynamic.xyz Reliability**: Proven JWT management with automatic refresh and security features
 
 #### 8.2.2 JWT-Only Authentication Flow
 - **Frontend**: Uses Dynamic.xyz SDK to obtain JWT tokens after wallet authentication
-- **Backend**: Validates Dynamic.xyz JWT on each API request using JWKS endpoints
+- **Backend**: Validates Dynamic.xyz JWT on each API request using `https://app.dynamic.xyz/api/v0/sdk/{environmentId}/.well-known/jwks`
 - **User Context**: Extracts user ID from JWT `sub` claim for `ICurrentUserService` implementation
 - **Token Expiration**: Dynamic.xyz handles token lifecycle - backend respects JWT expiration times
 
 ### 8.3 Data Synchronization Requirements
 
 #### 8.3.1 Webhook-Driven Sync
-- **Trigger**: Dynamic.xyz webhooks for user.created, user.updated, wallet.linked, wallet.unlinked
+- **Trigger**: Dynamic.xyz webhooks for `user.created`, `user.updated`, `user.deleted`, `wallet.linked`, `wallet.unlinked`
 - **Processing**: Immediate API calls to Dynamic.xyz to fetch latest user/wallet data
 - **Upsert Strategy**: Update existing records or create new ones based on Dynamic user/wallet IDs
 - **Audit Trail**: Log all sync operations with timestamps and source (webhook vs. periodic)
@@ -301,11 +301,11 @@ Wallet:
 - **Data Minimization**: Collect and retain only necessary user data
 - **Consent Management**: Clear consent flows for data collection and processing
 
-#### 8.1.2 Financial Compliance
-- **KYC Readiness**: User identity verification capabilities for regulatory requirements
-- **AML Support**: Transaction monitoring hooks for suspicious activity detection
+#### 8.1.2 Security Compliance
 - **Audit Trail**: Comprehensive logging for regulatory examination
 - **Data Residency**: Configurable data storage location for jurisdictional requirements
+- **Access Control**: Role-based access and permission management
+- **Security Monitoring**: Authentication event logging and anomaly detection
 
 ### 9.2 Risk Management
 
@@ -316,7 +316,7 @@ Wallet:
 - **Wallet Compromise**: Wallet verification and suspicious activity monitoring
 
 #### 8.2.2 Operational Risks  
-- **Service Availability**: 99.9% uptime SLA with failover capabilities
+- **Service Availability**: Enterprise-grade availability per Dynamic.xyz SLA terms
 - **Data Loss**: Automated backups with disaster recovery procedures
 - **Vendor Lock-in**: API abstraction layer for potential provider migration
 - **Scalability**: Auto-scaling capabilities for authentication traffic spikes
@@ -360,10 +360,10 @@ Wallet:
 ### 11.1 Technical Assumptions
 
 #### 10.1.1 Dynamic.xyz Service Assumptions
-- **Service Availability**: Dynamic.xyz APIs and JWKS endpoints maintain 99.9% uptime
+- **Service Availability**: Dynamic.xyz APIs and JWKS endpoint maintain enterprise availability per SLA
 - **Webhook Reliability**: Dynamic.xyz webhooks delivered with at-least-once semantics
 - **API Stability**: Dynamic.xyz Management API endpoints remain backward compatible
-- **Rate Limits**: Current API rate limits (1000 req/hour) sufficient for expected user volume
+- **Rate Limits**: Dynamic.xyz API rate limits sufficient for expected user volume per plan
 
 #### 10.1.2 Development Environment
 - **.NET 10 Compatibility**: Dynamic.xyz JWT validation works with .NET JWT libraries

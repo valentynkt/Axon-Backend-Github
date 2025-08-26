@@ -36,7 +36,13 @@ public sealed class GetConversationMessagesHandler : BaseChatQueryHandler<GetCon
     {
         // Authentication and pagination validation handled by pipeline behaviors
         var userId = GetAuthenticatedUserId();
-        var page = Page.Sanitize(request.PageNumber, request.PageSize).Value;
+        var pageResult = Page.Sanitize(request.PageNumber, request.PageSize);
+        if (pageResult.IsFailure)
+        {
+            return Result.Failure<Paged<ConversationMessageItem>, Error>(pageResult.Error);
+        }
+        
+        var page = pageResult.Value;
         var conversationId = new ConversationId(request.ConversationId);
 
         // Verify conversation ownership

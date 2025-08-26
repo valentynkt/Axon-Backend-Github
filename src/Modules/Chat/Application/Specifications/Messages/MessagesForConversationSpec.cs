@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Common.Pagination;
 using Axon.Modules.Chat.Application.Queries.GetConversationMessages;
 using Axon.Modules.Chat.Domain.Entities;
 using BuildingBlocks.Primitives.Ids;

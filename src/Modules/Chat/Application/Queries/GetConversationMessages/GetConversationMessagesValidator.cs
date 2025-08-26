@@ -12,7 +12,7 @@ public sealed class GetConversationMessagesValidator : BasePaginatedChatValidato
     public GetConversationMessagesValidator()
     {
         RuleFor(x => x.ConversationId)
-            .NotEmpty()
+            .NotEqual(Guid.Empty)
             .WithMessage("Conversation ID is required.");
     }
 }
