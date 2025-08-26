@@ -213,13 +213,13 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 7.2 Data Security
 
-#### 6.2.1 Data Protection
+#### 7.2.1 Data Protection
 - **PII Handling**: Minimal PII storage with explicit consent
 - **Wallet Data**: Public wallet addresses only, no private key storage
 - **Encryption**: Encryption at rest for sensitive user data
 - **Compliance**: GDPR and CCPA compliance for user data handling
 
-#### 6.2.2 Request Security
+#### 7.2.2 Request Security
 - **Stateless Authentication**: Each request validates Dynamic.xyz JWT independently
 - **User Isolation**: JWT claims determine user context with no cross-user data access
 - **CORS Protection**: Strict CORS policies for frontend-backend communication
@@ -231,7 +231,7 @@ Axon AI aims to provide intelligent, chat-driven trading experiences for Solana 
 
 ### 8.1 Local Data Mirroring Model
 
-#### 7.1.1 User Entity (Mirrored from Dynamic.xyz)
+#### 8.1.1 User Entity (Mirrored from Dynamic.xyz)
 ```
 User:
 - Id (Axon UserId, Primary Key)
@@ -245,7 +245,7 @@ User:
 - Metadata (JSON - Dynamic.xyz user.metadata)
 ```
 
-#### 7.1.2 Wallet Entity (Mirrored from Dynamic.xyz)
+#### 8.1.2 Wallet Entity (Mirrored from Dynamic.xyz)
 ```
 Wallet:
 - Id (Axon WalletId, Primary Key)
@@ -295,13 +295,13 @@ Wallet:
 
 ### 9.1 Regulatory Compliance
 
-#### 8.1.1 Data Privacy Compliance
+#### 9.1.1 Data Privacy Compliance
 - **GDPR Compliance**: Right to access, rectify, delete, and port user data
 - **CCPA Compliance**: California privacy rights for user data
 - **Data Minimization**: Collect and retain only necessary user data
 - **Consent Management**: Clear consent flows for data collection and processing
 
-#### 8.1.2 Security Compliance
+#### 9.1.2 Security Compliance
 - **Audit Trail**: Comprehensive logging for regulatory examination
 - **Data Residency**: Configurable data storage location for jurisdictional requirements
 - **Access Control**: Role-based access and permission management
@@ -309,13 +309,13 @@ Wallet:
 
 ### 9.2 Risk Management
 
-#### 8.2.1 Security Risks
+#### 9.2.1 Security Risks
 - **Account Takeover**: Multi-factor authentication and anomaly detection
 - **Session Hijacking**: Secure session management with device fingerprinting
 - **API Abuse**: Rate limiting and abuse detection for authentication endpoints
 - **Wallet Compromise**: Wallet verification and suspicious activity monitoring
 
-#### 8.2.2 Operational Risks  
+#### 9.2.2 Operational Risks  
 - **Service Availability**: Enterprise-grade availability per Dynamic.xyz SLA terms
 - **Data Loss**: Automated backups with disaster recovery procedures
 - **Vendor Lock-in**: API abstraction layer for potential provider migration
@@ -327,13 +327,13 @@ Wallet:
 
 ### 10.1 Backend Performance Metrics
 
-#### 9.1.1 API Performance
+#### 10.1.1 API Performance
 - **JWT Validation Latency**: 95th percentile JWT validation time <50ms
 - **Dynamic.xyz API Response Time**: API call response times to Dynamic.xyz
 - **Local Data Query Performance**: User/wallet lookups from local database <20ms
 - **Webhook Processing Time**: Time to process and sync webhook events <30s
 
-#### 9.1.2 Integration Reliability
+#### 10.1.2 Integration Reliability
 - **JWT Validation Success Rate**: Successful JWT validations / total attempts
 - **Dynamic.xyz API Success Rate**: Successful API calls to Dynamic.xyz
 - **Webhook Processing Success**: Successfully processed webhooks / total received
@@ -341,13 +341,13 @@ Wallet:
 
 ### 10.2 Data Synchronization Metrics
 
-#### 9.2.1 Sync Performance
+#### 10.2.1 Sync Performance
 - **Webhook Latency**: Time from Dynamic.xyz event to local data update
 - **Batch Sync Duration**: Time to complete periodic user data reconciliation
 - **Data Freshness**: Average age of user/wallet data compared to Dynamic.xyz
 - **Sync Error Rate**: Failed synchronization attempts / total sync operations
 
-#### 9.2.2 System Health Metrics
+#### 10.2.2 System Health Metrics
 - **Database Performance**: PostgreSQL query response times for user/wallet data
 - **JWKS Cache Hit Rate**: Percentage of JWT validations using cached keys
 - **Dynamic.xyz API Rate Limit Usage**: API call consumption vs. rate limits
@@ -359,13 +359,13 @@ Wallet:
 
 ### 11.1 Technical Assumptions
 
-#### 10.1.1 Dynamic.xyz Service Assumptions
+#### 11.1.1 Dynamic.xyz Service Assumptions
 - **Service Availability**: Dynamic.xyz APIs and JWKS endpoint maintain enterprise availability per SLA
 - **Webhook Reliability**: Dynamic.xyz webhooks delivered with at-least-once semantics
 - **API Stability**: Dynamic.xyz Management API endpoints remain backward compatible
 - **Rate Limits**: Dynamic.xyz API rate limits sufficient for expected user volume per plan
 
-#### 10.1.2 Development Environment
+#### 11.1.2 Development Environment
 - **.NET 10 Compatibility**: Dynamic.xyz JWT validation works with .NET JWT libraries
 - **PostgreSQL Performance**: Database handles user/wallet data with <20ms query times
 - **JSON Compatibility**: System.Text.Json handles Dynamic.xyz API response formats
@@ -373,13 +373,13 @@ Wallet:
 
 ### 11.2 Business Dependencies
 
-#### 10.2.1 Dynamic.xyz Requirements
+#### 11.2.1 Dynamic.xyz Requirements
 - **Environment Setup**: Dynamic.xyz environments configured for dev/staging/production
 - **Management API Access**: API tokens provisioned with user and wallet read permissions
 - **Webhook Configuration**: Webhook endpoints configured for user and wallet lifecycle events
 - **Rate Limit Allocation**: API rate limits sized for expected user authentication volume
 
-#### 10.2.2 Internal Dependencies
+#### 11.2.2 Internal Dependencies
 - **Database Schema**: PostgreSQL schema designed for user/wallet mirroring with proper indexing
 - **Frontend Integration**: Frontend team implements Dynamic.xyz SDK for wallet authentication
 - **DevOps Infrastructure**: Monitoring and alerting for Dynamic.xyz API health and webhook processing
@@ -387,17 +387,17 @@ Wallet:
 
 ### 11.3 External Dependencies
 
-#### 10.3.1 Wallet Providers
+#### 11.3.1 Wallet Providers
 - **Wallet Availability**: Continued availability of supported wallet providers
 - **Provider APIs**: Stability of wallet provider connection APIs
 - **Standard Compliance**: Wallet providers adhering to authentication standards
 - **Mobile Support**: Mobile wallet application compatibility
 
-#### 10.3.2 Blockchain Infrastructure
-- **Network Availability**: Solana and Ethereum network availability
-- **RPC Providers**: Reliable blockchain RPC provider access
-- **Gas Costs**: Reasonable transaction costs for wallet verification
-- **Network Upgrades**: Compatibility with blockchain network upgrades
+#### 11.3.2 Technology Infrastructure  
+- **Internet Connectivity**: Stable network connectivity for API calls
+- **DNS Resolution**: Reliable DNS for Dynamic.xyz endpoint resolution
+- **TLS/HTTPS Support**: Modern TLS support for secure communications
+- **JSON Processing**: Efficient JSON parsing for API responses
 
 ---
 
