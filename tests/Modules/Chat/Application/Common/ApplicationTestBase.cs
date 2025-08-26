@@ -84,7 +84,9 @@ public abstract class ApplicationTestBase : DomainTestBase
     /// </summary>
     protected static T AssertSuccess<T>(Result<T, Error> result, string? customMessage = null)
     {
-        var message = customMessage ?? $"Expected successful result but got error: {result.Error?.Message ?? "Unknown error"}";
+        var message = customMessage ?? 
+            (result.IsFailure ? $"Expected successful result but got error: {result.Error.Message}" 
+                              : "Expected successful result");
         result.IsSuccess.ShouldBeTrue(message);
         return result.Value;
     }
@@ -94,7 +96,9 @@ public abstract class ApplicationTestBase : DomainTestBase
     /// </summary>
     protected static Error AssertFailure<T>(Result<T, Error> result, string? customMessage = null)
     {
-        var message = customMessage ?? $"Expected failure but got success with value: {result.Value}";
+        var message = customMessage ?? 
+            (result.IsSuccess ? $"Expected failure but got success with value: {result.Value}" 
+                              : "Expected failure");
         result.IsFailure.ShouldBeTrue(message);
         return result.Error;
     }

@@ -2,6 +2,7 @@ global using NUnit.Framework;
 global using Shouldly;
 global using NSubstitute;
 global using System;
+global using System.Linq;
 global using System.Linq.Expressions;
 global using System.Threading.Tasks;
 global using Microsoft.Extensions.DependencyInjection;
