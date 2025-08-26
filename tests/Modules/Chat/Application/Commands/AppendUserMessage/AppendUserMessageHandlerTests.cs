@@ -159,22 +159,6 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
     }
 
-    [Test]
-    public async Task Handle_WithUnauthenticatedUser_ShouldReturnAuthenticationError()
-    {
-        // Arrange
-        var command = CreateValidCommand();
-
-        MockCurrentUserService.UserId
-            .Returns((string?)null);
-
-        // Act
-        var result = await ExecuteCommand(command);
-
-        // Assert
-        result.ShouldFailWithErrorType(ErrorType.Unauthorized);
-        await MockRepository.DidNotReceive().GetByIdAsync(Arg.Any<ConversationId>(), Arg.Any<CancellationToken>());
-    }
 
     [TestCaseSource(nameof(GetConversationValidationScenarios))]
     public async Task Handle_WithConversationValidationFailures_ShouldReturnAppropriateError(

@@ -218,9 +218,10 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
 
     /// <summary>
     /// Test template for invalid command handling
+    /// Override in derived classes if invalid command scenarios don't apply
     /// </summary>
     [Test]
-    public async Task Handle_WithInvalidCommand_ShouldReturnFailure()
+    public virtual async Task Handle_WithInvalidCommand_ShouldReturnFailure()
     {
         // Arrange
         var command = CreateInvalidCommand();

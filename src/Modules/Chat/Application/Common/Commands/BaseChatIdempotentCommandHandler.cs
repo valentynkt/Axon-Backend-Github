@@ -130,11 +130,8 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
 
         var conversation = conversationResult.Value;
 
-        // Persist the new conversation
+        // Persist the new conversation (don't save yet - will be saved after message processing)
         await Repository.AddAsync(conversation, cancellationToken);
-        var saveResult = await SaveChangesAsync(cancellationToken);
-        if (saveResult.IsFailure)
-            return Result.Failure<Conversation, Error>(saveResult.Error);
 
         _logger.LogInformation("New conversation {ConversationId} created for user {UserId}",
             conversation.Id.Value, ownerId.Value);
