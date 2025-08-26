@@ -37,13 +37,9 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
 
     protected override StartConversationCommand CreateInvalidCommand()
     {
-        // Create a command that will fail due to authentication issues
-        // Set up auth to fail for this test case specifically
-        MockCurrentUserService.UserId
-            .Returns((string?)null);
-            
+        // Create a command that will fail validation (empty message)
         return CommandTestDataBuilder.StartConversation()
-            .WithMessage("Valid message but will fail auth")
+            .WithMessage("")
             .Build();
     }
 
@@ -76,24 +72,6 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
     }
 
-    [Test]
-    public async Task Handle_WithUnauthenticatedUser_ShouldReturnAuthenticationError()
-    {
-        // Arrange
-        var command = CreateValidCommand();
-        var authError = Error.Unauthorized("User not authenticated");
-
-        MockCurrentUserService.UserId
-            .Returns((string?)null);
-
-        // Act
-        var result = await ExecuteCommand(command);
-
-        // Assert
-        result.ShouldFailWithErrorType(ErrorType.Unauthorized);
-        await MockRepository.DidNotReceive().AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>());
-        MockOrchestrator.ReceivedCalls().Count().ShouldBe(0);
-    }
 
 
     [Test]

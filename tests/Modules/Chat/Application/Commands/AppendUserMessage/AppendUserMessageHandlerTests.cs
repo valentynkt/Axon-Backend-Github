@@ -164,7 +164,6 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     {
         // Arrange
         var command = CreateValidCommand();
-        var authError = Error.Unauthorized("User not authenticated");
 
         MockCurrentUserService.UserId
             .Returns((string?)null);
@@ -198,8 +197,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         {
             // For Forbidden test, override authentication to use a different user
             var differentUserId = CreateUserId();
-            MockCurrentUserService.GetAuthenticatedUserId()
-                .Returns(Result.Success<UserId, Error>(differentUserId));
+            MockCurrentUserService.UserId
+                .Returns(differentUserId.Value.ToString());
             
             // Use the base helper method which will create a conversation with DefaultUserId
             // This will cause a mismatch with the differentUserId we set above

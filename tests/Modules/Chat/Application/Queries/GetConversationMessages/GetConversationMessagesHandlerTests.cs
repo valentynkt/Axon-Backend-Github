@@ -202,7 +202,6 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     {
         // Arrange
         var query = CreateValidQuery();
-        var authError = Error.Unauthorized("User not authenticated", "Chat.Auth.Unauthenticated");
 
         MockCurrentUserService.UserId
             .Returns((string?)null);

@@ -157,7 +157,7 @@ public abstract class ApplicationTestBase : DomainTestBase
     /// </summary>
     protected void AssertAuthenticationCalled()
     {
-        MockCurrentUserService.Received(1).UserId;
+        var _ = MockCurrentUserService.Received(1).UserId;
     }
 
     /// <summary>
