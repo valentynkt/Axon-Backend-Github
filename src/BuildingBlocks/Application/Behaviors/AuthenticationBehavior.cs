@@ -40,7 +40,7 @@ public sealed class AuthenticationBehavior<TRequest, TResponse> : IPipelineBehav
         if (string.IsNullOrEmpty(_currentUserService.UserId))
         {
             return Result.Failure<TResponse, Error>(
-                Error.Unauthorized("AUTH_001", "User must be authenticated to access this resource."));
+                Error.Unauthorized("User must be authenticated to access this resource.", "Chat.Auth.Unauthenticated"));
         }
 
         // User is authenticated, proceed with the request

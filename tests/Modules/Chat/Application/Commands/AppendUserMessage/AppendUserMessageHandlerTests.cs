@@ -13,8 +13,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     protected override AppendUserMessageHandler CreateHandler()
     {
         return new AppendUserMessageHandler(
+            MockCurrentUserService,
             MockRepository,
-            MockAuthService,
             MockOrchestrator,
             MockTimeProvider,
             MockHandlerLogger);
@@ -105,8 +105,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-1"))
             .Build();
         
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         SetupRepositoryGetById(command.ConversationId, conversation);
         SetupOrchestratorSuccess(command.ConversationId);
         
@@ -135,8 +135,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-1"))
             .Build();
         
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         SetupRepositoryGetById(command.ConversationId, conversation);
         SetupOrchestratorSuccess(command.ConversationId, "Assistant response to your message");
 
@@ -166,8 +166,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         var command = CreateValidCommand();
         var authError = Error.Unauthorized("User not authenticated");
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Failure<UserId, Error>(authError));
+        MockCurrentUserService.UserId
+            .Returns((string?)null);
 
         // Act
         var result = await ExecuteCommand(command);
@@ -198,7 +198,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         {
             // For Forbidden test, override authentication to use a different user
             var differentUserId = CreateUserId();
-            MockAuthService.GetAuthenticatedUserId()
+            MockCurrentUserService.GetAuthenticatedUserId()
                 .Returns(Result.Success<UserId, Error>(differentUserId));
             
             // Use the base helper method which will create a conversation with DefaultUserId
@@ -223,8 +223,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         var command = CreateValidCommand();
         var userId = CreateUserId();
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
 
         // Create a conversation in a completed state to trigger domain rule violation
         var completedConversation = ConversationBuilder.New()
@@ -266,8 +266,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .Build();
         var orchestratorError = Error.Failure("AI processing failed", "AI_PROCESSING_ERROR");
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         SetupRepositoryGetById(command.ConversationId, conversation);
         SetupOrchestratorFailure(orchestratorError);
 
@@ -295,8 +295,8 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-repo-failure"))
             .Build();
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         SetupRepositoryGetById(command.ConversationId, conversation);
         MockRepository.UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<Conversation>(new InvalidOperationException("Database connection failed")));

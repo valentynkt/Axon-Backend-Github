@@ -12,8 +12,8 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
     protected override StartConversationHandler CreateHandler()
     {
         return new StartConversationHandler(
+            MockCurrentUserService,
             MockRepository,
-            MockAuthService,
             MockOrchestrator,
             MockTimeProvider,
             MockHandlerLogger);
@@ -39,8 +39,8 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
     {
         // Create a command that will fail due to authentication issues
         // Set up auth to fail for this test case specifically
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Failure<UserId, Error>(Error.Unauthorized("Authentication required")));
+        MockCurrentUserService.UserId
+            .Returns((string?)null);
             
         return CommandTestDataBuilder.StartConversation()
             .WithMessage("Valid message but will fail auth")
@@ -58,8 +58,8 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         var userId = CreateUserId();
         var conversationId = ConversationId.New();
         
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         SetupOrchestratorSuccess(conversationId, "Assistant response to your message");
 
         // Act
@@ -83,8 +83,8 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         var command = CreateValidCommand();
         var authError = Error.Unauthorized("User not authenticated");
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Failure<UserId, Error>(authError));
+        MockCurrentUserService.UserId
+            .Returns((string?)null);
 
         // Act
         var result = await ExecuteCommand(command);
@@ -104,8 +104,8 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         var userId = CreateUserId();
         var orchestratorError = Error.Failure("AI processing failed", "AI_PROCESSING_ERROR");
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         SetupOrchestratorFailure(orchestratorError);
 
         // Act
@@ -128,8 +128,8 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         var command = CreateValidCommand();
         var userId = CreateUserId();
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userId));
+        MockCurrentUserService.UserId
+            .Returns(userId.Value.ToString());
         MockRepository.AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<Conversation>(new InvalidOperationException("Database connection failed")));
 

@@ -79,8 +79,8 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     protected void SetupDefaultAuthentication(UserId? userId = null)
     {
         var userIdToUse = userId ?? DefaultUserId;
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(userIdToUse));
+        MockCurrentUserService.UserId
+            .Returns(userIdToUse.Value.ToString());
     }
 
     /// <summary>

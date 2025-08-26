@@ -63,8 +63,8 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         ConfigureDefaultMocks();
         
         // Override authentication to use our test user
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(_testUserId));
+        MockCurrentUserService.UserId
+            .Returns(_testUserId.Value.ToString());
     }
     
     /// <summary>
@@ -204,8 +204,8 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         var query = CreateValidQuery();
         var authError = Error.Unauthorized("User not authenticated", "Chat.Auth.Unauthenticated");
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Failure<UserId, Error>(authError));
+        MockCurrentUserService.UserId
+            .Returns((string?)null);
 
         // Act
         var result = await ExecuteQuery(query);
@@ -250,8 +250,8 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         string _)
     {
         // Arrange
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(_testUserId));
+        MockCurrentUserService.UserId
+            .Returns(_testUserId.Value.ToString());
 
         // Act
         var result = await ExecuteQuery(query);

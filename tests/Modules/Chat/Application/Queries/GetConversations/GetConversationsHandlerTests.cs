@@ -57,8 +57,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         ConfigureDefaultMocks();
         
         // Override authentication to use our test user
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(_testUserId));
+        MockCurrentUserService.UserId
+            .Returns(_testUserId.Value.ToString());
     }
     
     /// <summary>
@@ -81,8 +81,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     {
         // Configure auth service to throw OperationCanceledException for cancellation tests
         // This simulates the scenario where cancellation is properly handled
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns<Result<UserId, Error>>(_ => throw new OperationCanceledException());
+        MockCurrentUserService.UserId
+            .Returns<string?>(_ => throw new OperationCanceledException());
     }
     
     /// <summary>
@@ -240,8 +240,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         var query = CreateValidQuery();
         var authError = Error.Unauthorized("User not authenticated", "Chat.Auth.Unauthenticated");
 
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Failure<UserId, Error>(authError));
+        MockCurrentUserService.UserId
+            .Returns((string?)null);
 
         // Act
         var result = await ExecuteQuery(query);
@@ -258,8 +258,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         string _)
     {
         // Arrange
-        MockAuthService.GetAuthenticatedUserId()
-            .Returns(Result.Success<UserId, Error>(_testUserId));
+        MockCurrentUserService.UserId
+            .Returns(_testUserId.Value.ToString());
 
         // Act
         var result = await ExecuteQuery(query);
