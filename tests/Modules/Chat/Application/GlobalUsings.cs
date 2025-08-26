@@ -22,6 +22,7 @@ global using Axon.Modules.Chat.Application.Contracts.Persistence;
 global using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 
 global using BuildingBlocks.Core.Diagnostics.Errors;
+global using BuildingBlocks.Core.Abstractions.Authentication;
 global using BuildingBlocks.Primitives.Ids;
 global using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 global using BuildingBlocks.Application;

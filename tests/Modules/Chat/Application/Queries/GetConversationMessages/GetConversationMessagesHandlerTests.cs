@@ -44,11 +44,9 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     protected override GetConversationMessagesHandler CreateHandler()
     {
         return new GetConversationMessagesHandler(
-            MockAuthService,
             _mockConversationRepository,
             _mockMessageRepository,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationMessagesHandler>>());
+            MockCurrentUserService);
     }
 
     protected override void ConfigureHandlerDependencies()
@@ -233,11 +231,9 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
 
         // Create handler with fresh mocks
         var testHandler = new GetConversationMessagesHandler(
-            MockAuthService,
             mockConversationRepo,
             mockMessageRepo,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationMessagesHandler>>());
+            MockCurrentUserService);
 
         // Act
         var result = await testHandler.Handle(query, CancellationToken.None);
@@ -294,11 +290,9 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
 
         // Create handler with fresh mocks
         var testHandler = new GetConversationMessagesHandler(
-            MockAuthService,
             mockConversationRepo,
             mockMessageRepo,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationMessagesHandler>>());
+            MockCurrentUserService);
 
         // Act
         var result = await testHandler.Handle(query, CancellationToken.None);

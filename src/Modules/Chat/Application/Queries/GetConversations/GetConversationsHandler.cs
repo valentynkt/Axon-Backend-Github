@@ -15,7 +15,7 @@ namespace Axon.Modules.Chat.Application.Queries.GetConversations;
 /// Handler for retrieving paginated conversations for the authenticated user.
 /// Authentication, validation, telemetry, and error handling are managed by pipeline behaviors.
 /// </summary>
-public sealed class GetConversationsHandler : BaseChatQueryHandler, IQueryHandler<GetConversationsQuery, Paged<ConversationListItem>>
+public sealed class GetConversationsHandler : BaseChatQueryHandler<GetConversationsQuery, Paged<ConversationListItem>>
 {
     private readonly IConversationReadRepository _conversationReadRepository;
 
@@ -27,7 +27,7 @@ public sealed class GetConversationsHandler : BaseChatQueryHandler, IQueryHandle
         _conversationReadRepository = conversationReadRepository;
     }
 
-    public async Task<Result<Paged<ConversationListItem>, Error>> Handle(
+    public override async Task<Result<Paged<ConversationListItem>, Error>> Handle(
         GetConversationsQuery request,
         CancellationToken cancellationToken)
     {

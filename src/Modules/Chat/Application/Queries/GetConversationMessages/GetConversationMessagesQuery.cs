@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Application.Common.Pagination;
+using Axon.Modules.Chat.Application.Common.Queries;
 using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace Axon.Modules.Chat.Application.Queries.GetConversationMessages;
@@ -13,4 +14,4 @@ public sealed record GetConversationMessagesQuery(
     int PageNumber = 1,
     int PageSize = Page.DefaultSize,
     bool IncludeDeleted = false
-) : RequestBase, IQuery<Paged<ConversationMessageItem>>, IAuthenticatedRequest, IPaginatedRequest;
+) : ChatBaseQuery<Paged<ConversationMessageItem>>, IPaginatedRequest;

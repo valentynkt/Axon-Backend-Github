@@ -1,16 +1,20 @@
-// /Modules/Chat/Application/Common/Queries/BaseChatQueryHandler.cs
-#nullable enable
 using BuildingBlocks.Core.Abstractions.Authentication;
+using BuildingBlocks.Core.Abstractions.CQRS;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
+using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Chat.Application.Common.Queries;
 
 /// <summary>
-/// Base class for Chat query handlers providing common functionality.
-/// Encapsulates authentication-related operations and user ID extraction.
-/// Pipeline behaviors handle the actual authentication validation.
+/// Base class for all Chat module query handlers.
+/// Provides common functionality and implements IQueryHandler interface for type safety.
 /// </summary>
-public abstract class BaseChatQueryHandler
+/// <typeparam name="TQuery">The query type that inherits from ChatBaseQuery</typeparam>
+/// <typeparam name="TResponse">The response type the query handler returns</typeparam>
+public abstract class BaseChatQueryHandler<TQuery, TResponse> : IQueryHandler<TQuery, TResponse>
+    where TQuery : ChatBaseQuery<TResponse>
+    where TResponse : notnull
 {
     private readonly ICurrentUserService _currentUserService;
 
@@ -30,4 +34,12 @@ public abstract class BaseChatQueryHandler
         var userIdString = _currentUserService.UserId!;
         return new UserId(Guid.Parse(userIdString));
     }
+
+    /// <summary>
+    /// Handles the query execution. Must be implemented by derived classes.
+    /// </summary>
+    /// <param name="request">The query request</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Result containing the response or error</returns>
+    public abstract Task<Result<TResponse, Error>> Handle(TQuery request, CancellationToken cancellationToken);
 }

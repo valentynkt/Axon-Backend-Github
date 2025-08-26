@@ -41,10 +41,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     protected override GetConversationsHandler CreateHandler()
     {
         return new GetConversationsHandler(
-            MockAuthService,
             _mockConversationRepository,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationsHandler>>());
+            MockCurrentUserService);
     }
 
     protected override void ConfigureHandlerDependencies()
@@ -295,10 +293,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
 
         // Create handler with fresh mocks
         var testHandler = new GetConversationsHandler(
-            MockAuthService,
             mockConversationRepo,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationsHandler>>());
+            MockCurrentUserService);
 
         // Act
         var result = await testHandler.Handle(query, CancellationToken.None);
@@ -336,10 +332,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
 
         // Create handler with fresh mocks
         var testHandler = new GetConversationsHandler(
-            MockAuthService,
             mockConversationRepo,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationsHandler>>());
+            MockCurrentUserService);
 
         // Act
         var result = await testHandler.Handle(query, CancellationToken.None);
@@ -368,10 +362,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
 
         // Create handler with fresh mocks
         var testHandler = new GetConversationsHandler(
-            MockAuthService,
             mockConversationRepo,
-            MockTelemetry,
-            Substitute.For<ILogger<GetConversationsHandler>>());
+            MockCurrentUserService);
 
         // Act
         var result = await testHandler.Handle(query, CancellationToken.None);

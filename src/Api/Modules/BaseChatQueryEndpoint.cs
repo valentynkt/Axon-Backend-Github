@@ -1,11 +1,10 @@
-using MediatR;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Contracts;
 using BuildingBlocks.Web.Endpoints.Base;
 using CSharpFunctionalExtensions;
-using Microsoft.Extensions.Logging;
+using MediatR;
 
-namespace BuildingBlocks.Web.Endpoints.Base;
+namespace Axon.Api.Modules;
 
 /// <summary>
 /// Base class for chat query endpoints that provides pagination, mapping, and standardized chat configuration
