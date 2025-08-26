@@ -17,25 +17,20 @@ public sealed class MessagesForConversationSpec : PagedSpecification<Message, Co
         bool includeDeleted = false)
         : base(page)
     {
-        // Filter by conversation
-        ConfigureQuery()
+        // Build the complete query in a single chain like ConversationsForOwnerSpec
+        var query = ConfigureQuery()
             .Where(m => m.ConversationId == conversationId);
 
-        // Filter deleted messages if not requested
+        // Apply deleted filter conditionally
         if (!includeDeleted)
         {
-            ConfigureQuery()
-                .Where(m => !m.IsDeleted);
+            query = query.Where(m => !m.IsDeleted);
         }
 
-        // Order chronologically by sequence (ascending for natural flow)
-        // Use MessageId as tie-breaker for deterministic pagination
-        ConfigureQuery()
-            .OrderBy(m => m.Sequence)
-            .ThenBy(m => m.Id.Value);
-
-        // Project to ConversationMessageItem for optimized data transfer
-        ConfigureQuery()
+        // Apply ordering and projection in the same chain
+        query
+            .OrderBy(m => m.CreatedAt)
+            .ThenBy(m => m.Id)
             .Select(m => new ConversationMessageItem(
                 m.Id.Value,
                 m.Role.Value, // Convert MessageRole value object to string
@@ -43,6 +38,5 @@ public sealed class MessagesForConversationSpec : PagedSpecification<Message, Co
                 m.CreatedAt.DateTime,
                 m.Sequence
             ));
-
     }
 }

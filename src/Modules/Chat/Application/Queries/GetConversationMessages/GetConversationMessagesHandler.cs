@@ -110,14 +110,10 @@ public sealed class GetConversationMessagesHandler : IQueryHandler<GetConversati
             // Step 5: Execute queries with performance tracking
             var queryStopwatch = Stopwatch.StartNew();
             
-            var messagesTask = _messageReadRepository.ListAsync(dataSpec, cancellationToken);
-            var totalCountTask = _messageReadRepository.CountAsync(countSpec, cancellationToken);
-
-            await Task.WhenAll(messagesTask, totalCountTask);
+            var messages = await _messageReadRepository.ListAsync(dataSpec, cancellationToken);
+            var totalCount = await _messageReadRepository.CountAsync(countSpec, cancellationToken);
+            
             queryStopwatch.Stop();
-
-            var messages = await messagesTask;
-            var totalCount = await totalCountTask;
 
             // Step 6: Create paginated result
             var result = Paged.Create(messages, page, totalCount);

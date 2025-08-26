@@ -15,7 +15,7 @@ public sealed class ChatApiModule : IApiModule
     public void ConfigureServices(
         IServiceCollection services, 
         IConfiguration configuration,
-        IHostEnvironment environment)
+        IHostEnvironment _)
     {
         // Register Chat Application layer services (handlers, validators, orchestration)
         services.AddChatApplication();

@@ -86,17 +86,13 @@ public sealed class GetConversationsHandler : IQueryHandler<GetConversationsQuer
                 userId,
                 request.TitleContains);
 
-            // Step 4: Execute queries with performance tracking
+            // Step 4: Execute queries with performance tracking (sequentially to avoid DbContext threading issues)
             var queryStopwatch = Stopwatch.StartNew();
             
-            var conversationsTask = _conversationReadRepository.ListAsync(dataSpec, cancellationToken);
-            var totalCountTask = _conversationReadRepository.CountAsync(countSpec, cancellationToken);
-
-            await Task.WhenAll(conversationsTask, totalCountTask);
+            var conversations = await _conversationReadRepository.ListAsync(dataSpec, cancellationToken);
+            var totalCount = await _conversationReadRepository.CountAsync(countSpec, cancellationToken);
+            
             queryStopwatch.Stop();
-
-            var conversations = await conversationsTask;
-            var totalCount = await totalCountTask;
 
             // Step 5: Create paginated result
             var result = Paged.Create(conversations, page, totalCount);
