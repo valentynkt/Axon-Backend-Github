@@ -6,8 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ardalis.Specification;
 
-using Axon.Modules.Chat.Application.Contracts.Persistence;
-using Axon.Modules.Chat.Domain.Entities;
+using Axon.Modules.Chat.Application.Abstractions.Persistence;
+using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Application.Queries.GetConversations;
 using Axon.Modules.Chat.Application.Tests.Builders;
 using Axon.Modules.Chat.Application.Tests.Common;
@@ -287,8 +287,8 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         var mockConversationRepo = Substitute.For<IConversationReadRepository>();
         
         // Set up repository to throw exception
-        mockConversationRepo.ListAsync(default!, default)
-            .ThrowsAsyncForAnyArgs(new InvalidOperationException("Database connection failed"));
+        mockConversationRepo.ListAsync(Arg.Any<ISpecification<Conversation, ConversationListItem>>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("Database connection failed"));
 
         // Create handler with fresh mocks
         var testHandler = new GetConversationsHandler(

@@ -258,18 +258,7 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
             result.Error.Message.ShouldContain("page size", Case.Insensitive);
         }
     }
-
-    [Test]
-    [Ignore("Exception handling is implemented in handler but test setup is complex - exception handling works as verified by try-catch block")]
-    public async Task Handle_WithRepositoryException_ShouldReturnInternalError()
-    {
-        // This test verifies that repository exceptions are handled properly
-        // The handler now has try-catch that converts exceptions to proper error results
-        // Test is ignored due to complex mock setup requirements
-        await Task.CompletedTask;
-    }
-
-    #endregion
+    
     
 
     [Test]
@@ -292,6 +281,8 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         _currentQuery = null;
     }
 
+    #endregion
+    
     #region Test Data Creation
 
     private static List<ConversationMessageItem> CreateTestMessages()

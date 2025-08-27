@@ -32,32 +32,55 @@ public sealed class GetConversationsHandler : BaseChatQueryHandler<GetConversati
         CancellationToken cancellationToken)
     {
         // Authentication and pagination validation handled by pipeline behaviors
-        var userId = GetAuthenticatedUserId();
-        var page = Page.Sanitize(request.PageNumber, request.PageSize).Value;
+        try 
+        {
+            var userId = GetAuthenticatedUserId();
+            
+            var pageResult = Page.Sanitize(request.PageNumber, request.PageSize);
+            if (pageResult.IsFailure)
+                return Result.Failure<Paged<ConversationListItem>, Error>(pageResult.Error);
+            
+            var page = pageResult.Value;
 
-        // Build specifications using fluent builders
-        var dataSpec = ConversationSpecs.ForOwner(
-            userId, 
-            page, 
-            request.SortBy, 
-            request.SortDirection, 
-            request.TitleContains);
+            // Build specifications using fluent builders
+            var dataSpec = ConversationSpecs.ForOwner(
+                userId, 
+                page, 
+                request.SortBy, 
+                request.SortDirection, 
+                request.TitleContains);
 
-        // For count, we need to create a simpler specification without pagination and projections
-        var conversationsForOwnerSpec = new ConversationsForOwnerSpec(
-            userId, 
-            new Page(1, int.MaxValue), // Large page size for counting
-            request.SortBy, 
-            request.SortDirection, 
-            request.TitleContains);
+            // For count, we need to create a simpler specification without pagination and projections
+            var conversationsForOwnerSpec = new ConversationsForOwnerSpec(
+                userId, 
+                new Page(1, int.MaxValue), // Large page size for counting
+                request.SortBy, 
+                request.SortDirection, 
+                request.TitleContains);
 
-        // Execute queries
-        var conversations = await _conversationReadRepository.ListAsync(dataSpec, cancellationToken);
-        var totalCount = await _conversationReadRepository.CountAsync(conversationsForOwnerSpec, cancellationToken);
+            // Execute queries
+            try
+            {
+                var conversations = await _conversationReadRepository.ListAsync(dataSpec, cancellationToken);
+                var totalCount = await _conversationReadRepository.CountAsync(conversationsForOwnerSpec, cancellationToken);
 
-        // Create result
-        var result = Paged.Create(conversations, page, totalCount);
-        return Result.Success<Paged<ConversationListItem>, Error>(result);
+                // Create result
+                var result = Paged.Create(conversations, page, totalCount);
+                return Result.Success<Paged<ConversationListItem>, Error>(result);
+            }
+            catch (Exception ex)
+            {
+                // Handle repository failures
+                return Result.Failure<Paged<ConversationListItem>, Error>(
+                    Error.Internal($"Failed to list conversations: {ex.Message}", "Chat.Conversations.ListFailed", ex));
+            }
+        }
+        catch (ArgumentNullException)
+        {
+            // Handle unauthenticated user
+            return Result.Failure<Paged<ConversationListItem>, Error>(
+                Error.Unauthorized("User must be authenticated to access conversations", "Chat.Auth.Unauthenticated"));
+        }
     }
 
 }
