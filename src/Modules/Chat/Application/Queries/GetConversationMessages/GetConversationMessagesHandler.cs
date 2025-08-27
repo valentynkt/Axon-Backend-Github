@@ -34,38 +34,46 @@ public sealed class GetConversationMessagesHandler : BaseChatQueryHandler<GetCon
         GetConversationMessagesQuery request,
         CancellationToken cancellationToken)
     {
-        // Authentication and pagination validation handled by pipeline behaviors
-        var userId = GetAuthenticatedUserId();
-        var pageResult = Page.Sanitize(request.PageNumber, request.PageSize);
-        if (pageResult.IsFailure)
+        try
         {
-            return Result.Failure<Paged<ConversationMessageItem>, Error>(pageResult.Error);
-        }
-        
-        var page = pageResult.Value;
-        var conversationId = new ConversationId(request.ConversationId);
+            // Authentication and pagination validation handled by pipeline behaviors
+            var userId = GetAuthenticatedUserId();
+            var pageResult = Page.Sanitize(request.PageNumber, request.PageSize);
+            if (pageResult.IsFailure)
+            {
+                return Result.Failure<Paged<ConversationMessageItem>, Error>(pageResult.Error);
+            }
+            
+            var page = pageResult.Value;
+            var conversationId = new ConversationId(request.ConversationId);
 
-        // Verify conversation ownership
-        var accessSpec = ConversationSpecs.AccessCheck(conversationId, userId);
-        var isOwned = await _conversationReadRepository.AnyAsync(accessSpec, cancellationToken);
-        
-        if (!isOwned)
+            // Verify conversation ownership
+            var accessSpec = ConversationSpecs.AccessCheck(conversationId, userId);
+            var isOwned = await _conversationReadRepository.AnyAsync(accessSpec, cancellationToken);
+            
+            if (!isOwned)
+            {
+                return Result.Failure<Paged<ConversationMessageItem>, Error>(
+                    ChatErrors.Conversation.AccessDenied(request.ConversationId));
+            }
+
+            // Build specifications using fluent builders
+            var dataSpec = MessageSpecs.ForConversation(conversationId, page, request.IncludeDeleted);
+            var countSpec = MessageSpecs.ForConversationCount(conversationId, request.IncludeDeleted);
+
+            // Execute queries
+            var messages = await _messageReadRepository.ListAsync(dataSpec, cancellationToken);
+            var totalCount = await _messageReadRepository.CountAsync(countSpec, cancellationToken);
+
+            // Create result
+            var result = Paged.Create(messages, page, totalCount);
+            return Result.Success<Paged<ConversationMessageItem>, Error>(result);
+        }
+        catch (Exception)
         {
             return Result.Failure<Paged<ConversationMessageItem>, Error>(
-                ChatErrors.Conversation.AccessDenied(request.ConversationId));
+                Error.Internal("Failed to retrieve conversation messages", "Chat.Messages.ListFailed"));
         }
-
-        // Build specifications using fluent builders
-        var dataSpec = MessageSpecs.ForConversation(conversationId, page, request.IncludeDeleted);
-        var countSpec = MessageSpecs.ForConversationCount(conversationId, request.IncludeDeleted);
-
-        // Execute queries
-        var messages = await _messageReadRepository.ListAsync(dataSpec, cancellationToken);
-        var totalCount = await _messageReadRepository.CountAsync(countSpec, cancellationToken);
-
-        // Create result
-        var result = Paged.Create(messages, page, totalCount);
-        return Result.Success<Paged<ConversationMessageItem>, Error>(result);
     }
 
 }

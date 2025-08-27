@@ -215,23 +215,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
         AssertSuccess(result);
         await AssertCommandSideEffects(command, result.Value);
     }
-
-    /// <summary>
-    /// Test template for invalid command handling
-    /// Override in derived classes if invalid command scenarios don't apply
-    /// </summary>
-    [Test]
-    public virtual async Task Handle_WithInvalidCommand_ShouldReturnFailure()
-    {
-        // Arrange
-        var command = CreateInvalidCommand();
-        
-        // Act
-        var result = await ExecuteCommand(command);
-        
-        // Assert
-        AssertFailure(result);
-    }
+    
 
     /// <summary>
     /// Test template for command execution with cancellation

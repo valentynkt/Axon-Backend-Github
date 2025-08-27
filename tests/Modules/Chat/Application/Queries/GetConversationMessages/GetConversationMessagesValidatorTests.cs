@@ -232,7 +232,7 @@ public class GetConversationMessagesValidatorTests : ApplicationTestBase
     #region Multiple Validation Errors Tests
 
     [Test]
-    public void Validate_WithMultipleInvalidFields_ShouldHaveMultipleValidationErrors()
+    public void Validate_WithMultipleInvalidFields_ShouldReturnFirstValidationError()
     {
         // Arrange
         var query = QueryTestDataBuilder.GetConversationMessages()
@@ -244,10 +244,13 @@ public class GetConversationMessagesValidatorTests : ApplicationTestBase
         // Act
         var result = _validator.TestValidate(query);
 
-        // Assert
-        result.ShouldHaveValidationErrorFor(x => x.ConversationId);
-        result.ShouldHaveValidationErrorFor(x => x.PageNumber);
-        result.ShouldHaveValidationErrorFor(x => x.PageSize);
+        // Assert - Due to CascadeMode.Stop, only the first validation error is returned
+        result.ShouldHaveValidationErrorFor(x => x.PageNumber)
+            .WithErrorMessage("Page number must be 1 or greater.");
+        
+        // Other fields should not have validation errors due to cascade mode stopping
+        result.ShouldNotHaveValidationErrorFor(x => x.ConversationId);
+        result.ShouldNotHaveValidationErrorFor(x => x.PageSize);
     }
 
     #endregion
