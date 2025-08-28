@@ -1,160 +1,126 @@
-# CLAUDE.md
+# Axon Backend - Agent-Delegated Development
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**Token-efficient Claude.MD that delegates all work to specialized Axon agents for optimal development workflow.**
 
-## Build Commands
+## 🚀 MANDATORY: Agent-First Protocol
+
+**ALL work must be delegated to specialized agents:**
+
+| Task Type | Delegate To | When |
+|-----------|-------------|-------|
+| Stories/Epics | `@axon-story-orchestrator` | Any story management |
+| Research/Architecture | `@axon-research-architect` | Before implementation |
+| Implementation | `@axon-implementation-specialist` | After research approval |
+| Quality/Testing | `@axon-quality-guardian` | Implementation complete |
+
+### Primary Workflow
+```bash
+# Standard story workflow - delegate immediately  
+@axon-story-orchestrator implement-story {story-id}
+@axon-research-architect research-solutions {requirement}
+@axon-implementation-specialist implement-feature {feature}
+@axon-quality-guardian validate-requirements {story-id}
+```
+
+## 📚 Documentation Index
+
+### Primary Documentation Locations
+```
+Docs/
+├── architecture/          # Architecture standards, source tree, tech stack
+├── business/             # BRD, features, market research, prompts
+├── libraries/            # Implementation guides for all dependencies
+│   ├── FastEndpoints/    # API endpoint patterns
+│   ├── FluentValidation/ # Request validation
+│   ├── MediatR/         # CQRS implementation
+│   ├── NUnit/           # Testing framework
+│   └── [20+ more]/      # Full library documentation
+└── stories/             # Story templates and implementations
+```
+
+### Quick Reference
+- **Coding Standards**: `Docs/architecture/coding-standards.md`
+- **Tech Stack Details**: `Docs/architecture/tech-stack.md`  
+- **Library Guides**: `Docs/libraries/{library}/IMPLEMENTATION_GUIDE.md`
+- **Story Template**: `Docs/stories/story-template.md`
+
+## 🔧 Essential Commands
 
 ```bash
-# Build entire solution (warnings treated as errors in Release)
-dotnet build
-
-# Run API locally  
-dotnet run --project src/Api
-
-# Run all tests
-dotnet test
-
-# Clean and rebuild
-dotnet clean && dotnet build
-
-# Release build with analyzers enabled
-dotnet build --configuration Release
+# Development workflow
+dotnet build                           # Build with warnings as errors
+dotnet run --project src/Api          # Run API locally
+dotnet test                           # Run all tests
+dotnet build --configuration Release  # Release build with analyzers
 ```
 
-## Architecture Overview
+## 🏗️ Architecture Summary
 
-**Axon Backend** is a **Modular Monolith** using Clean Architecture + DDD + CQRS patterns, built on .NET 10 preview.
+**Modular Monolith**: Clean Architecture + DDD + CQRS + .NET 10
 
-### Key Architectural Patterns
+### Core Patterns
+- **Clean Architecture**: Domain → Application → Infrastructure → API
+- **CQRS**: MediatR commands/queries  
+- **Result Pattern**: `Result<T, Error>` error handling
+- **Strong IDs**: Type-safe `StrongId<T>`
+- **Modern C#**: File-scoped namespaces, records, nullable enabled
 
-- **Clean Architecture**: Domain → Application → Infrastructure → API layers
-- **CQRS**: Commands modify state, Queries read data (using MediatR)
-- **Result Pattern**: `Result<T>` for error handling instead of exceptions
-- **Functional Programming**: Immutable records, Result/Option monads
-- **Strong IDs**: Type-safe identifiers using `StrongId<T>`
-- **Rich Domain Models**: Aggregates, Entities, Value Objects following DDD
+### Key Technologies
+- **.NET 10 Preview** + **FastEndpoints** + **MediatR** + **FluentValidation**
+- **EF Core 9** + **PostgreSQL** + **OpenTelemetry**
+- **NUnit** + **Shouldly** + **Testcontainers**
 
-### Project Structure
+## 💡 Development Standards (Quick Reference)
 
-```
-src/
-├── Api/                    # HTTP host, FastEndpoints, composition root
-│   ├── Endpoints/          # Feature-based minimal API endpoints
-│   ├── Contracts/          # Request/response DTOs
-│   └── Program.cs          # Entry point with DI container
-├── BuildingBlocks/         # Shared technical infrastructure
-│   ├── Core/              # Domain primitives, CQRS, functional types
-│   ├── Application/       # MediatR behaviors, validation
-│   ├── Infrastructure/    # Persistence, caching, resilience
-│   ├── Validation/        # FluentValidation integration
-│   └── Web/              # HTTP concerns, problem details
-└── Modules/               # Business modules (bounded contexts)
-    └── Identity/          # Example module with Clean Architecture
-```
-
-### Core Building Blocks
-
-- **Result Pattern**: `Result<T>`, `Validation<T>` for functional error handling
-- **Strong IDs**: Type-safe identifiers - `UserId`, `OrderId`, etc.
-- **Domain Events**: `IDomainEvent` for domain event publishing
-- **Aggregates**: Rich domain models with business logic encapsulation
-- **CQRS Abstractions**: `ICommand`, `IQuery`, `ICommandHandler`, `IQueryHandler`
-- **Pagination**: `PagedResult<T>`, `IPageQuery` for consistent paging
-
-## Technology Stack
-
-- **.NET 10.0** (preview 5.25277.114) - Latest C# features required
-- **FastEndpoints** - Minimal API alternative to controllers  
-- **MediatR** - CQRS command/query dispatch
-- **FluentValidation** - Request validation
-- **Entity Framework Core 9.0** - ORM with PostgreSQL
-- **System.Text.Json** - API serialization with custom converters
-- **OpenTelemetry** - Observability and monitoring
-- **xUnit** - Testing framework
-
-### JSON Serialization Configuration
-
-Both generators decorate types with a concrete `[JsonConverter]`, so you do not need to register custom converters globally.
-
-For standard API JSON settings (camelCase, enums as strings, etc.):
-
+### Modern C# (MANDATORY)
 ```csharp
-// During web host setup
-builder.Services.ConfigureHttpJsonOptions(o =>
-{
-    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    // No need to add converters for your IDs/VOs; attributes handle it per type.
-});
+// File-scoped namespaces
+namespace Axon.Modules.Chat;
+
+// Records for DTOs  
+public record UserRequest(string Name, string Email);
+
+// Target-typed new
+List<string> items = new();
+
+// Result pattern
+public Result<User, Error> CreateUser(string email) => 
+    string.IsNullOrEmpty(email) 
+        ? Result<User>.Failure(Error.Validation("Email required"))
+        : Result<User>.Success(new User(email));
 ```
 
-This keeps your pipeline clean and avoids reflection-based "catch-all" converters.
+### Quality Gates
+- **90%+ test coverage** + **Architecture compliance** + **No warnings**
 
-## Development Guidelines
+## ⚡ Agent Delegation Rules
 
-### Modern C# Requirements (MANDATORY)
+**DO NOT implement directly - Always delegate:**
 
-- **File-scoped namespaces**: `namespace Axon.Modules.Chat;`
-- **Records for DTOs**: `public record UserRequest(string Name, string Email);`
-- **Target-typed new**: `List<string> items = new();`
-- **Nullable reference types** enabled - handle nulls explicitly
-- **Primary constructors** where appropriate
-
-### Error Handling Pattern
-
-```csharp
-// Domain layer - return Result<T>
-public Result<User> CreateUser(string email)
-{
-    if (string.IsNullOrEmpty(email))
-        return Result<User>.Failure(Error.Validation("Email required"));
-        
-    return Result<User>.Success(new User(email));
-}
-
-// Application layer - handle Results
-public async Task<Result<UserResponse>> Handle(CreateUserCommand command)
-{
-    var userResult = User.Create(command.Email);
-    if (userResult.IsFailure)
-        return Result<UserResponse>.Failure(userResult.Error);
-        
-    await repository.Add(userResult.Value);
-    return Result<UserResponse>.Success(new UserResponse(userResult.Value.Id));
-}
+```yaml
+Delegation_Matrix:
+  Research_Questions: "@axon-research-architect research-solutions {topic}"
+  Story_Implementation: "@axon-story-orchestrator implement-story {id}"
+  Code_Changes: "@axon-implementation-specialist implement-feature {name}"
+  Quality_Validation: "@axon-quality-guardian validate-requirements {story}"
+  
+Quick_Tasks_Only:
+  - File reading/analysis
+  - Simple questions about existing code
+  - Command execution for builds/tests
 ```
 
-### Module Structure (Clean Architecture)
+### Preferred Libraries (Research-Validated)
+- **Auth**: Microsoft.AspNetCore.Identity + JWT Bearer
+- **Validation**: FluentValidation (already integrated)
+- **Caching**: Microsoft.Extensions.Caching.Memory/Redis
+- **HTTP**: HttpClientFactory + Refit
+- **Testing**: NUnit + Shouldly + Testcontainers + NSubstitute
 
-Each module follows Clean Architecture:
-```
-Modules/ModuleName/
-├── Domain/           # Aggregates, entities, value objects, domain events
-├── Application/      # Commands, queries, handlers, validators
-└── Infrastructure/   # Repositories, external service adapters
-```
+### Critical Files
+- `Directory.Build.props` - Build configuration
+- `src/BuildingBlocks/Core/` - Core patterns (Result, StrongId)
+- `src/Api/Program.cs` - Startup configuration
 
-## Important Notes
-
-- **Warnings as Errors**: Enabled in Release mode - maintain clean code
-- **AOT Analysis**: Enabled for libraries to ensure compatibility
-- **Deterministic Builds**: Required for reproducible builds
-- **XML Documentation**: Generated for all libraries automatically
-- **Solution Format**: Uses `.slnx` (newer Visual Studio solution format)
-- **Strong ID Pattern**: All entity IDs must be strongly-typed using `StrongId<T>`
-- **No Shared Kernel**: Business logic stays within module boundaries
-
-## Testing
-
-- Use **NUnit** for all tests (modern testing standard)
-- **Shouldly** for fluent, readable test assertions  
-- **Testcontainers** for integration tests with real databases
-- **NSubstitute** for mocking dependencies
-
-## Key Files to Understand
-
-- `Directory.Build.props` - Global MSBuild configuration and analyzer rules
-- `global.json` - .NET SDK version pinning (preview required)
-- `src/BuildingBlocks/Core/Functional/Results/Result.cs` - Result pattern implementation
-- `src/BuildingBlocks/Core/Domain/Primitives/StrongId.cs` - Strong ID implementation
-- `src/Api/Program.cs` - Application startup and DI configuration
+---
+**⚠️ DELEGATION MANDATE: All non-trivial work must be delegated to specialized Axon agents. This Claude.MD serves as a routing table, not an implementation guide.**
