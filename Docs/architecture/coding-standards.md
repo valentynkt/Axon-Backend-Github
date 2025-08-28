@@ -4,7 +4,7 @@
 
 - **Clean Architecture**: Domain → Application → Infrastructure → API layers
 - **Research-First Development**: NEVER implement without ADR validation
-- **Result Pattern**: Use `Result<T>` for error handling, avoid exceptions
+- **Result Pattern**: Use `Result<T, Error>` for error handling, avoid exceptions
 - **Strong Typing**: All entity IDs use `StrongId<T>` pattern
 
 ## Modern C# Requirements
@@ -17,13 +17,13 @@
 
 ### Error Handling
 ```csharp
-// ✅ Correct: Return Result<T>
-public Result<User> CreateUser(string email)
+// ✅ Correct: Return Result<T, Error>
+public Result<User, Error> CreateUser(string email)
 {
     if (string.IsNullOrEmpty(email))
-        return Result<User>.Failure(Error.Validation("Email required"));
+        return Result.Failure<User, Error>(Error.Validation("Email required"));
         
-    return Result<User>.Success(new User(email));
+    return Result.Success<User, Error>(new User(email));
 }
 
 // ❌ Incorrect: Throw exceptions for business logic
@@ -35,8 +35,8 @@ public User CreateUser(string email)
 ```
 
 ### CQRS Implementation
-- Commands: Modify state, return `Result<T>`
-- Queries: Read data, return `Result<TResponse>`
+- Commands: Modify state, return `Result<T, Error>`
+- Queries: Read data, return `Result<TResponse, Error>`
 - All handlers implement `ICommandHandler<T>` or `IQueryHandler<T>`
 
 ## Architecture Patterns
@@ -54,6 +54,24 @@ Modules/ModuleName/
 public record UserId(Guid Value) : StrongId<Guid>(Value);
 public record User(UserId Id, string Email);
 ```
+
+## Error Handling Standards
+
+### Error Type Usage
+Use specific Error factory methods for different scenarios:
+- `Error.Validation()` - Input validation failures
+- `Error.BusinessRule()` - Domain rule violations  
+- `Error.NotFound()` - Resource not found
+- `Error.Conflict()` - Concurrency/duplicate conflicts
+- `Error.Internal()` - System failures
+- `Error.External()` - Third-party service failures
+
+### Result Pattern Implementation
+- Uses **CSharpFunctionalExtensions** library
+- All business operations return `Result<T, Error>`
+- Never throw exceptions for business logic
+- Use `Result.Success<T, Error>(value)` for success
+- Use `Result.Failure<T, Error>(error)` for failures
 
 ## Quality Standards
 

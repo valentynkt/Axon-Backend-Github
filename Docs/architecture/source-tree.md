@@ -29,8 +29,8 @@ src/
 ├── BuildingBlocks/              # Shared technical infrastructure
 │   ├── Core/                    # Domain primitives, CQRS abstractions
 │   │   ├── Domain/              # Base domain types
-│   │   ├── Functional/          # Result<T>, Option<T> monads
-│   │   └── Cqrs/                # Command/query interfaces
+│   │   ├── Diagnostics/         # Error handling, exceptions
+│   │   └── Abstractions/        # CQRS interfaces, contracts
 │   ├── Application/             # MediatR behaviors, validation
 │   ├── Infrastructure/          # Persistence, caching, resilience
 │   ├── Validation/              # FluentValidation integration
@@ -81,8 +81,8 @@ For understanding architectural concerns:
 
 ### Shared Abstractions
 - `src/BuildingBlocks/Core/Domain/` - Base domain types
-- `src/BuildingBlocks/Core/Functional/` - Result/Option patterns
-- `src/BuildingBlocks/Core/Cqrs/` - CQRS interfaces
+- `src/BuildingBlocks/Core/Diagnostics/Errors/` - Error handling types
+- `src/BuildingBlocks/Core/Abstractions/CQRS/` - CQRS interfaces
 
 ### Business Modules
 - Each module is self-contained

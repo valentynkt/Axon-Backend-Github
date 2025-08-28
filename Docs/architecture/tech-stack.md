@@ -48,9 +48,13 @@
 - **Refit** - REST client generation
 - **Problem Details** - Standardized error responses
 
+## Functional Programming
+- **CSharpFunctionalExtensions** - Result<T, Error> pattern for error handling
+- **CSharpFunctionalExtensions.HttpResults** - ASP.NET Core Result integration
+
 ## Architecture Libraries
-- **BuildingBlocks.Core** - Functional primitives, Result<T>
-- **BuildingBlocks.Application** - MediatR behaviors
-- **BuildingBlocks.Infrastructure** - Persistence, caching
+- **BuildingBlocks.Core** - Error types, CQRS abstractions, domain primitives
+- **BuildingBlocks.Application** - MediatR behaviors, validation pipeline
+- **BuildingBlocks.Infrastructure** - Persistence, caching, external services
 - **BuildingBlocks.Validation** - FluentValidation integration
-- **BuildingBlocks.Web** - HTTP concerns, problem details
+- **BuildingBlocks.Web** - HTTP concerns, problem details, Result endpoints
