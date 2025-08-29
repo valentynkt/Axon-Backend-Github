@@ -1,0 +1,56 @@
+schema: 1
+story: "1.4"
+story_title: "Implement Dynamic.xyz Webhook API Contract"
+gate: CONCERNS
+status_reason: "Webhook endpoint with good event validation but requires signature verification and proper async processing infrastructure"
+reviewer: "Quinn (Test Architect)"
+updated: "2025-08-28T19:48:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "SEC-003"
+    severity: high
+    finding: "X-Dynamic-Signature header required but no validation in S1 - potential security vulnerability"
+    suggested_action: "Ensure S2 implements proper webhook signature validation"
+  - id: "ASYNC-001"
+    severity: medium
+    finding: "202 Accepted response indicates async processing but no background job infrastructure specified"
+    suggested_action: "Define background processing strategy for webhook events in S3+"
+  - id: "VALID-001"
+    severity: medium
+    finding: "Event type whitelist good but needs validation against actual Dynamic.xyz webhook documentation"
+    suggested_action: "Validate event type list against Dynamic.xyz webhook specification"
+
+quality_score: 70
+
+evidence:
+  tests_reviewed: 7
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: "Missing webhook signature validation - critical for production"
+  performance:
+    status: PASS
+    notes: "Async processing pattern with 202 response appropriate"
+  reliability:
+    status: CONCERNS
+    notes: "No retry or failure handling strategy for webhook processing"
+  maintainability:
+    status: PASS
+    notes: "Clean webhook DTO structure with proper validation"
+
+recommendations:
+  immediate:
+    - action: "Document S2 webhook signature validation requirements"
+      refs: ["docs/security/webhook-signature-validation.md"]
+    - action: "Plan background processing infrastructure for webhook events"
+      refs: ["src/Api/Endpoints/V1/Webhooks/Dynamic/ProcessDynamicWebhookEndpoint.cs"]
+  future:
+    - action: "Validate event types against Dynamic.xyz documentation"
+      refs: ["src/Api/Endpoints/V1/Webhooks/Dynamic/ProcessDynamicWebhookRequestValidator.cs"]

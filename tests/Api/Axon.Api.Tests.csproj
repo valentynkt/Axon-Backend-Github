@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Temporarily disable problematic code analysis rules -->
+    <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062;NU1608;CA1869;CA2000;CA1852</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Main API project under test -->
+    <ProjectReference Include="..\..\src\Api\Axon.Api.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Testing Framework - NUnit -->
+    <PackageReference Include="NUnit" Version="4.3.1" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    
+    <!-- Assertions -->
+    <PackageReference Include="Shouldly" Version="4.3.0" />
+    
+    <!-- Mocking -->
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    
+    <!-- ASP.NET Core Testing -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.8" />
+    
+    <!-- Coverage Collection -->
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
