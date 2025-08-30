@@ -100,8 +100,8 @@ public static class ServiceRegistration
         
         // TimeProvider is registered in Application layer
         
-        // Register CurrentUserService
-        services.AddScoped<ICurrentUserService, DefaultCurrentUserService>();
+        // NOTE: ICurrentUserService is now registered by IdentityApiModule with HttpContextUserService
+        // This provides real user context from Dynamic.xyz authentication
         
         // Register Chat Telemetry service
         services.AddScoped<IChatTelemetry, ChatTelemetry>();

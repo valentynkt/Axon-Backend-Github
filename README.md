@@ -1,12 +1,24 @@
-# Introduction 
-TODO: Give a short introduction of your project. Let this section explain the objectives or the motivation behind this project. 
+# Axon Backend
+
+Axon AI - The Solana Co-Pilot backend service built with .NET 10, Clean Architecture, CQRS, and DDD patterns.
 
 # Getting Started
-TODO: Guide users through getting your code up and running on their own system. In this section you can talk about:
-1.	Installation process
-2.	Software dependencies
-3.	Latest releases
-4.	API references
+
+## Prerequisites
+- .NET 10 SDK (preview 5.25277.114)
+- PostgreSQL 15+
+- Docker (for integration tests)
+
+## Environment Variables
+The following environment variables are required for authentication:
+
+```bash
+# Dynamic.xyz Authentication
+DYNAMIC_API_KEY=your_dynamic_xyz_api_key
+
+# OpenAI (for chat features)
+OPENAI_API_KEY=your_openai_api_key
+```
 
 # Build and Test
 TODO: Describe and show how to build your code and run the tests. 

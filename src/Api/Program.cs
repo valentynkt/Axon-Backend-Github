@@ -99,10 +99,9 @@ app.UseHttpsRedirection();
 // CRITICAL FIX: Enable CORS before authentication/authorization
 app.UseCors("DefaultCorsPolicy");
 
-// ARCHITECTURAL DECISION: Authentication is disabled for MVP/POC phase
-// All endpoints use AllowAnonymous() with DefaultCurrentUserService providing system user
-// TODO: Enable authentication for production using JWT Bearer tokens
-// app.UseAuthentication();
+// Authentication enabled with Dynamic.xyz JWT validation
+// Endpoints can now use proper authentication instead of AllowAnonymous()
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Configure OData routing
@@ -150,5 +149,25 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 
 // Legacy health endpoint for backward compatibility
 app.MapHealthChecks("/health");
+
+// Dynamic.xyz specific health check endpoint
+app.MapHealthChecks("/health/dynamic-auth", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Name == "dynamic-auth",
+    AllowCachingResponses = false,
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var entry = report.Entries.FirstOrDefault();
+        var response = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            status = entry.Value.Status.ToString(),
+            description = entry.Value.Description,
+            duration = entry.Value.Duration.TotalMilliseconds,
+            data = entry.Value.Data
+        });
+        await context.Response.WriteAsync(response);
+    }
+});
 
 app.Run();

@@ -16,6 +16,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.8" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageReference Include="FastEndpoints" Version="7.0.1" />
     <PackageReference Include="FastEndpoints.Swagger" Version="7.0.1" />
@@ -28,6 +29,8 @@
     <ProjectReference Include="..\BuildingBlocks\BuildingBlocks.csproj" />
     <ProjectReference Include="..\Modules\Chat\Application\Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="..\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Identity\Application\Axon.Modules.Identity.Application.csproj" />
+    <ProjectReference Include="..\Modules\Identity\Infrastructure\Axon.Modules.Identity.Infrastructure.csproj" />
     <!-- Reference Primitives for shared Value Objects -->
     <!-- Reference ReadModels for OData DTOs -->
   </ItemGroup>

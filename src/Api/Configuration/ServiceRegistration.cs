@@ -5,11 +5,14 @@ using Axon.BuildingBlocks.Web.Configuration;
 using BuildingBlocks.Web.OpenApi;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+using Microsoft.Extensions.Options;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Polly;
+using Polly.Extensions.Http;
 using System.Reflection;
 
 namespace Axon.Api.Configuration;
@@ -113,7 +116,11 @@ public static class ServiceRegistration
                 return new Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult(
                     status, 
                     $"Allocated memory: {allocatedMemory / (1024 * 1024)} MB");
-            }, ["ready"]);
+            }, ["ready"])
+            .AddTypeActivatedCheck<Axon.Modules.Identity.Infrastructure.ExternalServices.Health.DynamicXyzHealthCheck>(
+                "dynamic-xyz-api",
+                null,
+                ["ready", "external"]);
         
         // CRITICAL FIX: Add CORS configuration for frontend integration
         services.AddCors(options =>
@@ -145,6 +152,8 @@ public static class ServiceRegistration
         // Configure Mapster with profiles and validation
         services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
         
+        // Note: Dynamic.xyz services are now registered by IdentityApiModule
+        
         // Register API modules
         RegisterApiModules(services, configuration, environment);
         
@@ -172,7 +181,22 @@ public static class ServiceRegistration
         // For now, manually register modules
         // In the future, this could use reflection to auto-discover
         modules.Add(new ChatApiModule());
+        modules.Add(new IdentityApiModule());
         
         return modules;
+    }
+    
+    private static Polly.Retry.AsyncRetryPolicy<HttpResponseMessage> GetRetryPolicy()
+    {
+        return HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .OrResult(msg => !msg.IsSuccessStatusCode)
+            .WaitAndRetryAsync(
+                3,
+                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), // 2, 4, 8 seconds
+                onRetry: (outcome, timespan, retryCount, context) =>
+                {
+                    // Log retry attempts if logger is available
+                });
     }
 }

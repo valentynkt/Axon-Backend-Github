@@ -22,6 +22,10 @@
   <Folder Name="/src/Modules/Chat/Infrastructure/">
     <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Identity/" />
+  <Folder Name="/src/Modules/Identity/Infrastructure/">
+    <Project Path="src/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Modules/" />
   <Folder Name="/tests/Modules/Chat/" />
@@ -30,5 +34,9 @@
   </Folder>
   <Folder Name="/tests/Modules/Chat/Application/">
     <Project Path="tests/Modules/Chat/Application/Axon.Modules.Chat.Application.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules/Identity/" />
+  <Folder Name="/tests/Modules/Identity/Infrastructure/">
+    <Project Path="tests/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>
