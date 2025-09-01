@@ -21,5 +21,5 @@ public class DynamicXyzOptions
     
     public HttpClientOptions HttpClient { get; set; } = new();
     
-    public string JwksUri => $"{BaseUrl.TrimEnd('/')}/environments/{EnvironmentId}/.well-known/jwks.json";
+    public string JwksUri => $"{BaseUrl.TrimEnd('/')}/sdk/{EnvironmentId}/.well-known/jwks.json";
 }

@@ -1,7 +1,10 @@
-using Axon.Api.Services.ExternalServices;
-using Axon.Api.Services.ExternalServices.Models;
+using Axon.Modules.Identity.Infrastructure.Services;
+using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.DependencyInjection;
+using BuildingBlocks.Core.Abstractions.Authentication;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 
 namespace Axon.Api.Tests.Endpoints.V1.Auth;
 
@@ -10,21 +13,25 @@ public class ExchangeTokenEndpointTests
 {
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
-    private DynamicAuthService _mockDynamicAuthService = null!;
+    private ICurrentUserService _mockCurrentUserService = null!;
 
     [SetUp]
     public void Setup()
     {
-        _mockDynamicAuthService = Substitute.For<DynamicAuthService>(Substitute.For<HttpClient>());
+        _mockCurrentUserService = Substitute.For<ICurrentUserService>();
         
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureServices(services =>
                 {
-                    // Replace DynamicAuthService with mock
-                    services.Remove(services.Single(d => d.ServiceType == typeof(DynamicAuthService)));
-                    services.AddSingleton(_mockDynamicAuthService);
+                    // Replace authentication with test authentication
+                    services.AddAuthentication("Test")
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
+                    
+                    // Replace ICurrentUserService with mock
+                    services.Remove(services.Single(d => d.ServiceType == typeof(ICurrentUserService)));
+                    services.AddSingleton(_mockCurrentUserService);
                 });
             });
 
@@ -39,96 +46,10 @@ public class ExchangeTokenEndpointTests
     }
 
     [Test]
-    public async Task HandleAsync_WhenNoAuthorizationHeader_Returns401()
-    {
-        // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    [Test]
-    public async Task HandleAsync_WhenEmptyAuthorizationHeader_Returns401()
+    public async Task HandleAsync_WhenAuthenticated_Returns200WithUserData()
     {
         // Arrange
-        _client.DefaultRequestHeaders.Authorization = 
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "");
-
-        // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    [Test]
-    public async Task HandleAsync_WhenInvalidToken_Returns401()
-    {
-        // Arrange
-        const string invalidToken = "invalid-jwt-token";
-        _client.DefaultRequestHeaders.Authorization = 
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", invalidToken);
-
-        _mockDynamicAuthService.ValidateTokenAsync(invalidToken)
-            .Returns(Result.Failure<DynamicUser>("Invalid token"));
-
-        // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    [Test]
-    public async Task HandleAsync_WhenDynamicServiceUnavailable_Returns503()
-    {
-        // Arrange
-        const string validToken = "valid-jwt-token";
-        _client.DefaultRequestHeaders.Authorization = 
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", validToken);
-
-        _mockDynamicAuthService.ValidateTokenAsync(validToken)
-            .Returns(Result.Failure<DynamicUser>("Dynamic.xyz unavailable"));
-
-        // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-    }
-
-    [Test]
-    public async Task HandleAsync_WhenValidToken_Returns200WithUserData()
-    {
-        // Arrange
-        const string validToken = "valid-jwt-token";
-        _client.DefaultRequestHeaders.Authorization = 
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", validToken);
-
-        var userId = Guid.NewGuid();
-        var walletId = Guid.NewGuid();
-        var dynamicUser = new DynamicUser
-        {
-            Id = userId,
-            Email = "test@example.com",
-            DisplayName = "Test User",
-            Wallets = new List<DynamicWallet>
-            {
-                new()
-                {
-                    Id = walletId,
-                    Address = "Sol1234567890",
-                    Chain = "solana",
-                    Provider = "phantom",
-                    WalletName = "My Wallet",
-                    ConnectedAt = DateTime.UtcNow
-                }
-            }
-        };
-
-        _mockDynamicAuthService.ValidateTokenAsync(validToken)
-            .Returns(Result.Success(dynamicUser));
+        _mockCurrentUserService.UserId.Returns("test-user-id");
 
         // Act
         var response = await _client.PostAsync("/api/v1/auth/exchange", null);
@@ -143,11 +64,25 @@ public class ExchangeTokenEndpointTests
         });
 
         exchangeResponse.ShouldNotBeNull();
-        exchangeResponse.UserId.ShouldBe(userId.ToString());
+        exchangeResponse.UserId.ShouldBe("test-user-id");
         exchangeResponse.Email.ShouldBe("test@example.com");
         exchangeResponse.Wallets.ShouldHaveSingleItem();
         exchangeResponse.Wallets[0].Address.ShouldBe("Sol1234567890");
         exchangeResponse.Wallets[0].Chain.ShouldBe("solana");
+        exchangeResponse.Wallets[0].Provider.ShouldBe("phantom");
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenUserIdMissing_Returns500()
+    {
+        // Arrange
+        _mockCurrentUserService.UserId.Returns((string?)null);
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
 
     private record ExchangeTokenResponse(
@@ -157,11 +92,40 @@ public class ExchangeTokenEndpointTests
     );
 
     private record WalletInfo(
-        Guid Id,
+        string Id,
         string Address,
         string Chain,
         string Provider,
         string? WalletName,
         DateTime? ConnectedAt
     );
+}
+
+/// <summary>
+/// Test authentication handler that always succeeds for testing
+/// </summary>
+public class TestAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+{
+    public TestAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger, UrlEncoder encoder) : base(options, logger, encoder)
+    {
+    }
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
+            new Claim(ClaimTypes.Email, "test@example.com"),
+            new Claim("environment_id", "test-env"),
+            new Claim("wallet:solana", "Sol1234567890"),
+            new Claim("wallet:provider:solana", "phantom")
+        };
+
+        var identity = new ClaimsIdentity(claims, "Test");
+        var principal = new ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, "Test");
+
+        return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
 }

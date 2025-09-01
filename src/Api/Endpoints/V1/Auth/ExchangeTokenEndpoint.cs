@@ -1,26 +1,28 @@
 using FastEndpoints;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Abstractions.Authentication;
+using System.Security.Claims;
 
 namespace Axon.Api.Endpoints.V1.Auth;
 
 public class ExchangeTokenEndpoint : Endpoint<EmptyRequest, ExchangeTokenResponse>
 {
-    private readonly IDynamicAuthService _dynamicAuth;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<ExchangeTokenEndpoint> _logger;
     
     public ExchangeTokenEndpoint(
-        IDynamicAuthService dynamicAuth,
+        ICurrentUserService currentUser,
         ILogger<ExchangeTokenEndpoint> logger)
     {
-        _dynamicAuth = dynamicAuth ?? throw new ArgumentNullException(nameof(dynamicAuth));
+        _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public override void Configure()
     {
         Post("/api/v1/auth/exchange");
-        AllowAnonymous();
+        AuthSchemes("DynamicXyz"); // Require Dynamic.xyz JWT authentication
         
         Summary(s =>
         {
@@ -34,56 +36,57 @@ public class ExchangeTokenEndpoint : Endpoint<EmptyRequest, ExchangeTokenRespons
         Tags("Authentication");
     }
 
-    public override async Task HandleAsync(EmptyRequest _, CancellationToken ct)
+    public override Task HandleAsync(EmptyRequest _, CancellationToken ct)
     {
-        var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
-        var token = authHeader?.Replace("Bearer ", "", StringComparison.Ordinal);
-            
-        if (string.IsNullOrEmpty(token))
+        // Authentication middleware has already validated the token
+        // Extract user information from the authenticated claims
+        var userId = _currentUser.UserId;
+        var email = User.FindFirstValue(ClaimTypes.Email) ?? string.Empty;
+        
+        if (string.IsNullOrEmpty(userId))
         {
-            _logger.LogWarning("Token exchange attempted without token");
-            HttpContext.Response.StatusCode = 401;
-            return;
+            _logger.LogError("User ID not found in authenticated claims");
+            ThrowError("User information not available", statusCode: 500);
         }
         
-        var result = await _dynamicAuth.ValidateTokenAsync(token, ct);
+        // Extract wallet information from claims
+        var wallets = ExtractWalletsFromClaims(User.Claims).ToList();
         
-        if (result.IsFailure)
-        {
-            _logger.LogWarning("Token validation failed: {ErrorCode}", result.Error.Code);
-            
-            var statusCode = result.Error.Type switch
-            {
-                ErrorType.Unavailable => 503,
-                ErrorType.Timeout => 503,
-                ErrorType.Network => 503,
-                _ => 401
-            };
-            
-            HttpContext.Response.StatusCode = statusCode;
-            return;
-        }
+        var response = new ExchangeTokenResponse(userId, email, wallets);
         
-        var response = MapToResponse(result.Value);
+        _logger.LogInformation("Token exchange successful for user {UserId}", userId);
         Response = response;
+        
+        return Task.CompletedTask;
     }
 
-    private static ExchangeTokenResponse MapToResponse(DynamicUserData user)
+    private static IEnumerable<WalletInfo> ExtractWalletsFromClaims(IEnumerable<Claim> claims)
     {
-        var wallets = user.Wallets.Select(w => new WalletInfo(
-            Guid.TryParse(w.Id, out var walletId) ? walletId : Guid.NewGuid(),
-            w.Address,
-            w.Chain,
-            w.Provider,
-            w.WalletName,
-            w.ConnectedAt
-        )).ToList();
+        // Group wallet claims by chain to reconstruct wallet information
+        var walletClaims = claims
+            .Where(c => c.Type.StartsWith("wallet:") || c.Type == "wallet")
+            .GroupBy(c => c.Type.Contains(':') ? c.Type.Split(':')[1] : "unknown")
+            .Where(g => g.Key != "unknown");
 
-        return new ExchangeTokenResponse(
-            user.UserId,
-            user.Email,
-            wallets
-        );
+        foreach (var chainGroup in walletClaims)
+        {
+            var chain = chainGroup.Key;
+            var address = chainGroup.FirstOrDefault(c => c.Type == $"wallet:{chain}")?.Value ?? 
+                         chainGroup.FirstOrDefault(c => c.Type == "wallet")?.Value;
+            var provider = chainGroup.FirstOrDefault(c => c.Type == $"wallet:provider:{chain}")?.Value;
+            
+            if (!string.IsNullOrEmpty(address))
+            {
+                yield return new WalletInfo(
+                    Id: Guid.NewGuid(),
+                    Address: address,
+                    Chain: chain,
+                    Provider: provider ?? "unknown",
+                    WalletName: null,
+                    ConnectedAt: null
+                );
+            }
+        }
     }
 }
 

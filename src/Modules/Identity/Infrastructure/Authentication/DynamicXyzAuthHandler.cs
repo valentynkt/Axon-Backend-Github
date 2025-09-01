@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Axon.Modules.Identity.Infrastructure.Services;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace Axon.Modules.Identity.Infrastructure.Authentication;
 
@@ -56,8 +57,22 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
             
             if (validationResult.IsFailure)
             {
-                Logger.LogWarning("Token validation failed: {Error}", validationResult.Error.Message);
-                return AuthenticateResult.Fail($"Token validation failed: {validationResult.Error.Message}");
+                Logger.LogError("Token validation failed: {ErrorCode} - {ErrorMessage}", 
+                    validationResult.Error.Code, validationResult.Error.Message);
+                
+                var failureMessage = validationResult.Error.Type switch
+                {
+                    ErrorType.Unauthorized when validationResult.Error.Code == "AUTH.TOKEN_EXPIRED" 
+                        => "Token has expired",
+                    ErrorType.Unauthorized when validationResult.Error.Code == "AUTH.INVALID_SIGNATURE" 
+                        => "Token signature is invalid",
+                    ErrorType.Unauthorized => "Token is invalid or expired",
+                    ErrorType.Unavailable => "Authentication service unavailable",
+                    ErrorType.Timeout => "Authentication timeout",
+                    _ => "Authentication failed"
+                };
+                
+                return AuthenticateResult.Fail(failureMessage);
             }
 
             var userData = validationResult.Value;
@@ -80,14 +95,20 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
             }
 
             // Add visit timestamps if available
-            if (userData.FirstVisit.HasValue)
+            if (userData.FirstVisitUtc.HasValue)
             {
-                claims.Add(new Claim("first_visit", userData.FirstVisit.Value.ToString("O")));
+                claims.Add(new Claim("first_visit", userData.FirstVisitUtc.Value.ToString("O")));
             }
             
-            if (userData.LastVisit.HasValue)
+            if (userData.LastVisitUtc.HasValue)
             {
-                claims.Add(new Claim("last_visit", userData.LastVisit.Value.ToString("O")));
+                claims.Add(new Claim("last_visit", userData.LastVisitUtc.Value.ToString("O")));
+            }
+
+            // Add session public key if available
+            if (!string.IsNullOrWhiteSpace(userData.SessionPublicKey))
+            {
+                claims.Add(new Claim("session_public_key", userData.SessionPublicKey));
             }
 
             // Create identity and principal

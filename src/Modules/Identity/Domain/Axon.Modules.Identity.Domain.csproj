@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <LangVersion>latest</LangVersion>
+        <IsPackable>false</IsPackable>
+        <AssemblyName>Axon.Modules.Identity.Domain</AssemblyName>
+        <RootNamespace>Axon.Modules.Identity.Domain</RootNamespace>
+        <!-- Temporarily disable problematic code analysis rules -->
+        <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Only reference BuildingBlocks for domain core functionality -->
+        <ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- InternalsVisibleTo for test assembly -->
+        <InternalsVisibleTo Include="Axon.Modules.Identity.Domain.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Ardalis.Specification" Version="9.3.0" />
+        <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.0.0" />
+    </ItemGroup>
+
+</Project>

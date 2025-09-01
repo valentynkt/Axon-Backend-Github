@@ -3,6 +3,7 @@ using Axon.Api.Configuration.Mapping;
 using Axon.Api.Modules;
 using Axon.BuildingBlocks.Web.Configuration;
 using BuildingBlocks.Web.OpenApi;
+using BuildingBlocks.Web.Extensions;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.Extensions.Options;
@@ -52,6 +53,9 @@ public static class ServiceRegistration
         
         // Add API documentation
         services.AddEndpointsApiExplorer();
+        
+        // Add ASP.NET Core OpenAPI services
+        services.AddAspnetOpenApi();
         
         // CRITICAL FIX: Add comprehensive OpenTelemetry observability
         services.AddOpenTelemetry()
@@ -123,28 +127,7 @@ public static class ServiceRegistration
                 ["ready", "external"]);
         
         // CRITICAL FIX: Add CORS configuration for frontend integration
-        services.AddCors(options =>
-        {
-            options.AddPolicy("DefaultCorsPolicy", policy =>
-            {
-                if (environment.IsDevelopment())
-                {
-                    // Development: Allow all origins for local development
-                    policy.AllowAnyOrigin()
-                          .AllowAnyMethod()
-                          .AllowAnyHeader();
-                }
-                else
-                {
-                    // Production: Restrict to known frontend domains
-                    // TODO: Configure actual frontend URLs from configuration
-                    policy.WithOrigins("https://app.axon.ai", "https://admin.axon.ai")
-                          .AllowAnyMethod()
-                          .AllowAnyHeader()
-                          .AllowCredentials();
-                }
-            });
-        });
+        services.AddCorsConfiguration(configuration, environment);
         
         // Note: MediatR, pipeline behaviors, and validators are registered by individual modules
         // This ensures proper assembly scanning and avoids duplication

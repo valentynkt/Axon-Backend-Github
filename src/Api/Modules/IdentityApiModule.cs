@@ -6,6 +6,8 @@ using BuildingBlocks.Core.Abstractions.Authentication;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using System.Reflection;
 
 namespace Axon.Api.Modules;
@@ -36,7 +38,19 @@ public sealed class IdentityApiModule : IApiModule
         services.AddDynamicXyzInfrastructure(configuration);
         
         // Register authentication services
-        services.AddScoped<IDynamicAuthService, DynamicAuthService>();
+        services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
+        
+        services.AddScoped<IDynamicAuthService, DynamicAuthService>(serviceProvider =>
+        {
+            var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+            var jwksHttpClient = httpClientFactory.CreateClient("JwksClient");
+            var cache = serviceProvider.GetRequiredService<IMemoryCache>();
+            var logger = serviceProvider.GetRequiredService<ILogger<DynamicAuthService>>();
+            var options = serviceProvider.GetRequiredService<IOptions<DynamicXyzOptions>>();
+            var normalizer = serviceProvider.GetRequiredService<IDynamicClaimNormalizer>();
+            
+            return new DynamicAuthService(jwksHttpClient, cache, logger, options, normalizer);
+        });
         
         // Register current user service
         services.AddHttpContextAccessor();

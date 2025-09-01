@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Axon.Api.Configuration;
 using BuildingBlocks.Web.OpenApi;
+using BuildingBlocks.Web.Configuration;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.OData;
@@ -11,6 +12,7 @@ using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
 using BuildingBlocks.Primitives.Ids;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
+using BuildingBlocks.Web.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -96,16 +98,20 @@ if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Local
 
 app.UseHttpsRedirection();
 
+// Global exception handling middleware (first in pipeline)
+app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+
 // CRITICAL FIX: Enable CORS before authentication/authorization
-app.UseCors("DefaultCorsPolicy");
+var corsOptions = app.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>();
+app.UseCors(corsOptions?.PolicyName ?? "DefaultPolicy");
+
+// Configure OData routing BEFORE authentication/authorization
+app.UseRouting();
 
 // Authentication enabled with Dynamic.xyz JWT validation
 // Endpoints can now use proper authentication instead of AllowAnonymous()
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Configure OData routing
-app.UseRouting();
 
 // Configure FastEndpoints (before MVC controllers)
 app.UseFastEndpoints();
