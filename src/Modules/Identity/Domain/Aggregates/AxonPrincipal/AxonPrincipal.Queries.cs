@@ -42,7 +42,7 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Finds wallet ownership by wallet ID.
     /// </summary>
-    public WalletOwnership? FindWalletOwnership(long walletId)
+    public WalletOwnership? FindWalletOwnership(WalletId walletId)
     {
         return _walletOwnerships.FirstOrDefault(w => 
             !w.IsDeleted && w.IsForWallet(walletId));
@@ -51,7 +51,7 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Finds wallet ownerships by multiple wallet IDs. More efficient than multiple single lookups.
     /// </summary>
-    public IReadOnlyCollection<WalletOwnership> FindWalletOwnerships(IEnumerable<long> walletIds)
+    public IReadOnlyCollection<WalletOwnership> FindWalletOwnerships(IEnumerable<WalletId> walletIds)
     {
         var walletIdSet = walletIds.ToHashSet();
         return _walletOwnerships
@@ -169,4 +169,23 @@ public sealed partial class AxonPrincipal
 
         return (activeWallets, activeCredentials, activeWallets > 0 || activeCredentials > 0);
     }
+
+    /// <summary>
+    /// Checks if this principal has a verified email hash.
+    /// Used for email-based identification and verification flows.
+    /// </summary>
+    public bool HasEmailHash() => PrimaryEmailHash.HasValue;
+
+    /// <summary>
+    /// Gets the email hash if available.
+    /// Used for privacy-preserving email lookups.
+    /// </summary>
+    public EmailHash? GetEmailHash() => PrimaryEmailHash;
+
+    /// <summary>
+    /// Checks if this principal matches the given email hash.
+    /// Used for email-based authentication and verification.
+    /// </summary>
+    public bool MatchesEmailHash(EmailHash emailHash) => 
+        PrimaryEmailHash.HasValue && PrimaryEmailHash.Value.Value == emailHash.Value;
 }

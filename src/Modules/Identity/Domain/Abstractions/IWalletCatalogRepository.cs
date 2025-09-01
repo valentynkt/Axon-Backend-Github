@@ -7,7 +7,7 @@ namespace Axon.Modules.Identity.Domain.Abstractions;
 /// Repository contract for interacting with the Wallet bounded context.
 /// Provides read-only access to global wallet catalog for Identity operations.
 /// </summary>
-public interface IWalletRepository
+public interface IWalletCatalogRepository
 {
     /// <summary>
     /// Retrieves a wallet by its chain and address combination.

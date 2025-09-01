@@ -9,7 +9,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>
 {
     public AxonId AxonId { get; private set; }
-    public long WalletId { get; private set; }
+    public WalletId WalletId { get; private set; }
     public ProofType ProofType { get; private set; }
     public AccessMode AccessMode { get; private set; }
     public OwnershipState State { get; private set; }
@@ -23,7 +23,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     private WalletOwnership(
         WalletOwnershipId id,
         AxonId axonId,
-        long walletId,
+        WalletId walletId,
         ProofType proofType,
         AccessMode accessMode,
         OwnershipState state,
@@ -43,16 +43,16 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
 
     internal static Result<WalletOwnership, Error> Create(
         AxonId axonId,
-        long walletId,
+        WalletId walletId,
         ProofType proofType,
         AccessMode? accessMode = null,
         OwnershipState? state = null,
         DateTimeOffset? firstLinkedAt = null,
         string? label = null)
     {
-        if (walletId <= 0)
+        if (walletId == WalletId.Empty)
             return Result.Failure<WalletOwnership, Error>(
-                Error.Validation("Wallet ID must be positive.", "IDENTITY.WALLET.ID.INVALID"));
+                Error.Validation("Wallet ID cannot be empty.", "IDENTITY.WALLET.ID.INVALID"));
 
         var id = new WalletOwnershipId(Guid.CreateVersion7());
         var effectiveAccessMode = accessMode ?? AccessMode.Default;
@@ -136,7 +136,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
 
     public bool BelongsTo(AxonId principalId) => AxonId == principalId;
 
-    public bool IsForWallet(long walletId) => WalletId == walletId;
+    public bool IsForWallet(WalletId walletId) => WalletId == walletId;
 
     public bool IsActive => !IsDeleted && State.IsVerified;
 

@@ -123,7 +123,7 @@ public sealed partial class AxonPrincipal
             ownership.SoftDelete();
 
             // Clear any chain defaults that point to this wallet
-            var chainsToUpdate = Profile.DefaultPerChain
+            var chainsToUpdate = Profile.DefaultPerChain.Value
                 .Where(kvp => kvp.Value == walletId)
                 .Select(kvp => kvp.Key)
                 .ToList();
@@ -275,5 +275,139 @@ public sealed partial class AxonPrincipal
             return Result.Failure<Unit, Error>(
                 Error.BusinessRule(ex.Message, ex.Error.Code));
         }
+    }
+
+    /// <summary>
+    /// Restores a soft-deleted principal to active status.
+    /// </summary>
+    public Result<Unit, Error> Restore(string? reason = null, TimeProvider? timeProvider = null)
+    {
+        if (!IsDeleted)
+            return Result.Success<Unit, Error>(Unit.Value); // Already active
+
+        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var now = effectiveTimeProvider.GetUtcNow();
+
+        base.Restore(); // Call base restore method
+
+        RaiseDomainEvent(new PrincipalRestoredEvent(Id, now, reason));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Revokes an identity credential, marking it as deleted.
+    /// </summary>
+    public Result<Unit, Error> RevokeCredential(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        string? reason = null,
+        TimeProvider? timeProvider = null)
+    {
+        var credential = FindCredential(providerType, issuer, subject);
+        if (credential is null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Credential.NotFound());
+
+        if (credential.IsDeleted)
+            return Result.Success<Unit, Error>(Unit.Value); // Already revoked
+
+        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var now = effectiveTimeProvider.GetUtcNow();
+
+        credential.SoftDelete();
+        MarkUpdated();
+
+        RaiseDomainEvent(new IdentityCredentialRevokedEvent(
+            Id, credential.Id, providerType.Value, issuer, subject,
+            credential.EnvironmentId, now, reason));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Updates the last seen timestamp for a credential.
+    /// </summary>
+    public Result<Unit, Error> UpdateCredentialLastSeen(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        TimeProvider? timeProvider = null)
+    {
+        var credential = FindCredential(providerType, issuer, subject);
+        if (credential is null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Credential.NotFound());
+
+        if (credential.IsDeleted)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Credential.NotFound());
+
+        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var now = effectiveTimeProvider.GetUtcNow();
+        var previousLastSeen = credential.LastSeenAt;
+
+        credential.UpdateLastSeen(now);
+        MarkUpdated();
+
+        // Only raise event if the timestamp actually changed
+        if (now > previousLastSeen)
+        {
+            RaiseDomainEvent(new CredentialLastSeenUpdatedEvent(
+                Id, credential.Id, providerType.Value, now, previousLastSeen));
+        }
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Verifies wallet ownership with proof validation.
+    /// </summary>
+    public Result<Unit, Error> VerifyWalletOwnership(
+        long walletId,
+        string? verificationMethod = null,
+        TimeProvider? timeProvider = null)
+    {
+        var ownership = FindWalletOwnership(walletId);
+        if (ownership is null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
+
+        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var now = effectiveTimeProvider.GetUtcNow();
+
+        var verifyResult = ownership.Verify(now);
+        if (verifyResult.IsFailure)
+            return verifyResult;
+
+        MarkUpdated();
+
+        RaiseDomainEvent(new WalletOwnershipVerifiedEvent(
+            Id, walletId, ownership.Id, ownership.ProofType.Value, now, verificationMethod));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Handles wallet ownership conflict by skipping the operation and raising an event.
+    /// Used when a wallet is already owned by another principal.
+    /// </summary>
+    public static void HandleWalletOwnershipConflict(
+        AxonId requestedByPrincipalId,
+        AxonId existingOwnerPrincipalId,
+        long walletId,
+        string conflictReason,
+        string? resolutionStrategy = null,
+        TimeProvider? timeProvider = null)
+    {
+        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+        var now = effectiveTimeProvider.GetUtcNow();
+
+        // This is a static method that creates and raises the event
+        // In a real implementation, this would be handled by a domain service
+        // For now, we provide this as a utility method
+        _ = new WalletOwnershipConflictSkippedEvent(
+            requestedByPrincipalId, existingOwnerPrincipalId, walletId,
+            conflictReason, now, resolutionStrategy);
+
+        // Note: This event would need to be raised through a domain service or event dispatcher
+        // as static methods can't directly raise domain events on aggregates
     }
 }

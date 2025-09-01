@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Axon.Modules.Identity.Domain.ValueObjects;
 
 namespace Axon.Modules.Identity.Domain.Entities;
@@ -18,38 +17,15 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
     public DateTimeOffset LastSeenAt { get; private set; }
     
     /// <summary>
-    /// Additional metadata stored as JSON (e.g., session_public_key, email_hash).
+    /// Structured metadata for additional credential information.
     /// </summary>
-    public string MetadataJson { get; private set; } = "{}";
-
-    private Dictionary<string, object>? _metadataCache;
-    private bool _metadataCacheInitialized;
-
-    public IReadOnlyDictionary<string, object> Metadata
-    {
-        get
-        {
-            if (!_metadataCacheInitialized)
-            {
-                try
-                {
-                    _metadataCache = JsonSerializer.Deserialize<Dictionary<string, object>>(MetadataJson) ?? new();
-                    _metadataCacheInitialized = true;
-                }
-                catch (JsonException)
-                {
-                    // If deserialization fails, use empty dictionary and reset JSON
-                    _metadataCache = new Dictionary<string, object>();
-                    MetadataJson = "{}";
-                    _metadataCacheInitialized = true;
-                }
-            }
-            return _metadataCache ?? new Dictionary<string, object>();
-        }
-    }
+    public CredentialMetadata Metadata { get; private set; }
 
     // EF Core parameterless constructor
-    private IdentityCredential() : base() { }
+    private IdentityCredential() : base() 
+    {
+        Metadata = CredentialMetadata.Empty;
+    }
 
     private IdentityCredential(
         IdentityCredentialId id,
@@ -59,7 +35,7 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         string subject,
         string? environmentId,
         DateTimeOffset verifiedAt,
-        Dictionary<string, object>? metadata = null) : base(id)
+        CredentialMetadata metadata) : base(id)
     {
         AxonId = axonId;
         ProviderType = providerType;
@@ -68,23 +44,7 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         EnvironmentId = environmentId;
         VerifiedAt = verifiedAt;
         LastSeenAt = verifiedAt;
-
-        if (metadata is not null)
-        {
-            try
-            {
-                _metadataCache = metadata;
-                MetadataJson = JsonSerializer.Serialize(metadata);
-                _metadataCacheInitialized = true;
-            }
-            catch (JsonException)
-            {
-                // If serialization fails, use empty metadata
-                _metadataCache = new Dictionary<string, object>();
-                MetadataJson = "{}";
-                _metadataCacheInitialized = true;
-            }
-        }
+        Metadata = metadata;
     }
 
     internal static Result<IdentityCredential, Error> Create(
@@ -116,13 +76,13 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
             return Result.Failure<IdentityCredential, Error>(
                 Error.Validation("Environment ID cannot exceed 50 characters.", "IDENTITY.CREDENTIAL.ENVIRONMENT_ID.TOO_LONG"));
 
-        if (metadata is not null && metadata.Count > 20)
-            return Result.Failure<IdentityCredential, Error>(
-                Error.Validation("Metadata cannot contain more than 20 entries.", "IDENTITY.CREDENTIAL.METADATA.TOO_MANY_ENTRIES"));
+        var metadataResult = CredentialMetadata.Create(metadata);
+        if (metadataResult.IsFailure)
+            return Result.Failure<IdentityCredential, Error>(metadataResult.Error);
 
         var id = new IdentityCredentialId(Guid.CreateVersion7());
         var credential = new IdentityCredential(
-            id, axonId, providerType, issuer, subject, environmentId, verifiedAt, metadata);
+            id, axonId, providerType, issuer, subject, environmentId, verifiedAt, metadataResult.Value);
 
         return Result.Success<IdentityCredential, Error>(credential);
     }
@@ -146,29 +106,22 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
 
     internal Result<Unit, Error> UpdateMetadata(Dictionary<string, object> newMetadata)
     {
-        try
-        {
-            _metadataCache = newMetadata;
-            MetadataJson = JsonSerializer.Serialize(newMetadata);
-            _metadataCacheInitialized = true;
-            return Result.Success<Unit, Error>(Unit.Value);
-        }
-        catch (JsonException ex)
-        {
-            return Result.Failure<Unit, Error>(
-                Error.Internal($"Failed to serialize credential metadata: {ex.Message}", "IDENTITY.CREDENTIAL.METADATA.SERIALIZATION.FAILED"));
-        }
+        var metadataResult = CredentialMetadata.Create(newMetadata);
+        if (metadataResult.IsFailure)
+            return Result.Failure<Unit, Error>(metadataResult.Error);
+
+        Metadata = metadataResult.Value;
+        return Result.Success<Unit, Error>(Unit.Value);
     }
 
     internal Result<Unit, Error> AddMetadata(string key, object value)
     {
-        if (string.IsNullOrWhiteSpace(key))
-            return Result.Failure<Unit, Error>(
-                Error.Validation("Metadata key cannot be empty.", "IDENTITY.CREDENTIAL.METADATA.KEY.EMPTY"));
+        var metadataResult = Metadata.WithMetadata(key, value);
+        if (metadataResult.IsFailure)
+            return Result.Failure<Unit, Error>(metadataResult.Error);
 
-        var metadata = Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-        metadata[key] = value;
-        return UpdateMetadata(metadata);
+        Metadata = metadataResult.Value;
+        return Result.Success<Unit, Error>(Unit.Value);
     }
 
     /// <summary>

@@ -1,12 +1,8 @@
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.Events;
-using Axon.Modules.Identity.Domain.Rules;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Domain.Entities.Base;
-using BuildingBlocks.Core.Domain.Events;
-using BuildingBlocks.Core.Domain.Rules;
-using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 
@@ -32,7 +28,7 @@ public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
     public bool IsService => Type.IsService;
 
     // EF Core parameterless constructor
-    private AxonPrincipal() : base() { }
+    private AxonPrincipal() { }
 
     private AxonPrincipal(
         AxonId id,
