@@ -7,10 +7,10 @@ namespace Axon.Modules.Identity.Domain.Rules;
 /// </summary>
 internal sealed class WalletMustNotBeOwnedByPrincipalRule : BusinessRule
 {
-    private readonly long _walletId;
+    private readonly WalletId _walletId;
     private readonly IEnumerable<WalletOwnership> _existingOwnerships;
 
-    public WalletMustNotBeOwnedByPrincipalRule(long walletId, IEnumerable<WalletOwnership> existingOwnerships)
+    public WalletMustNotBeOwnedByPrincipalRule(WalletId walletId, IEnumerable<WalletOwnership> existingOwnerships)
         : base(
             message: $"Wallet {walletId} is already owned by this principal.",
             code: "IDENTITY.WALLET.ALREADY_OWNED_BY_PRINCIPAL")

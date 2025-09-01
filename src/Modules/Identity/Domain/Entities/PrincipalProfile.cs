@@ -62,7 +62,7 @@ public sealed class PrincipalProfile : AxonEntity
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    internal Result<Unit, Error> SetDefaultWalletForChain(string chain, long walletId)
+    internal Result<Unit, Error> SetDefaultWalletForChain(string chain, WalletId walletId)
     {
         var result = DefaultPerChain.WithDefault(chain, walletId);
         if (result.IsFailure)
@@ -81,7 +81,7 @@ public sealed class PrincipalProfile : AxonEntity
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    internal long? GetDefaultWalletForChain(string chain)
+    internal WalletId? GetDefaultWalletForChain(string chain)
     {
         return DefaultPerChain.GetDefaultWalletForChain(chain);
     }
@@ -91,7 +91,7 @@ public sealed class PrincipalProfile : AxonEntity
         return DefaultPerChain.HasDefaultForChain(chain);
     }
 
-    internal Result<Unit, Error> InitializeDefaultForChainIfEmpty(string chain, long walletId)
+    internal Result<Unit, Error> InitializeDefaultForChainIfEmpty(string chain, WalletId walletId)
     {
         if (HasDefaultWalletForChain(chain))
             return Result.Success<Unit, Error>(Unit.Value);

@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record WalletOwnershipUnlinkedEvent(
     AxonId AxonId,
-    long WalletId,
+    WalletId WalletId,
     WalletOwnershipId OwnershipId,
     DateTimeOffset UnlinkedAt
 ) : DomainEvent;

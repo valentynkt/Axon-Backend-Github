@@ -58,7 +58,7 @@ public sealed partial class AxonPrincipal
     /// Enforces global single verified owner rule and capacity limits.
     /// </summary>
     public Result<WalletOwnership, Error> LinkWallet(
-        long walletId,
+        WalletId walletId,
         Chain chain,
         ProofType proofType,
         AccessMode? accessMode = null,
@@ -107,7 +107,7 @@ public sealed partial class AxonPrincipal
     /// Unlinks a wallet from this principal.
     /// Clears chain default if this was the default wallet.
     /// </summary>
-    public Result<Unit, Error> UnlinkWallet(long walletId, TimeProvider? timeProvider = null)
+    public Result<Unit, Error> UnlinkWallet(WalletId walletId, TimeProvider? timeProvider = null)
     {
         try
         {
@@ -153,7 +153,7 @@ public sealed partial class AxonPrincipal
     /// </summary>
     public Result<Unit, Error> SetDefaultWalletForChain(
         Chain chain, 
-        long walletId, 
+        WalletId walletId, 
         TimeProvider? timeProvider = null)
     {
         try
@@ -362,7 +362,7 @@ public sealed partial class AxonPrincipal
     /// Verifies wallet ownership with proof validation.
     /// </summary>
     public Result<Unit, Error> VerifyWalletOwnership(
-        long walletId,
+        WalletId walletId,
         string? verificationMethod = null,
         TimeProvider? timeProvider = null)
     {
@@ -392,7 +392,7 @@ public sealed partial class AxonPrincipal
     public static void HandleWalletOwnershipConflict(
         AxonId requestedByPrincipalId,
         AxonId existingOwnerPrincipalId,
-        long walletId,
+        WalletId walletId,
         string conflictReason,
         string? resolutionStrategy = null,
         TimeProvider? timeProvider = null)

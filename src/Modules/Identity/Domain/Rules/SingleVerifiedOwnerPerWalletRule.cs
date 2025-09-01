@@ -8,12 +8,12 @@ namespace Axon.Modules.Identity.Domain.Rules;
 /// </summary>
 internal sealed class SingleVerifiedOwnerPerWalletRule : BusinessRule
 {
-    private readonly long _walletId;
+    private readonly WalletId _walletId;
     private readonly AxonId _currentPrincipalId;
     private readonly IAxonPrincipalRepository _repository;
 
     public SingleVerifiedOwnerPerWalletRule(
-        long walletId,
+        WalletId walletId,
         AxonId currentPrincipalId,
         IAxonPrincipalRepository repository)
         : base(

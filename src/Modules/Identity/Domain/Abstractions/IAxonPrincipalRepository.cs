@@ -37,7 +37,7 @@ public interface IAxonPrincipalRepository : IWriteRepository<AxonPrincipal, Axon
     /// <param name="ct">Cancellation token</param>
     /// <returns>The principal that owns the wallet, null if not found</returns>
     Task<AxonPrincipal?> FindByWalletIdAsync(
-        long walletId,
+        WalletId walletId,
         CancellationToken ct = default);
 
     /// <summary>
@@ -48,7 +48,7 @@ public interface IAxonPrincipalRepository : IWriteRepository<AxonPrincipal, Axon
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if the wallet is owned by any principal</returns>
     Task<bool> IsWalletOwnedAsync(
-        long walletId,
+        WalletId walletId,
         CancellationToken ct = default);
 
     /// <summary>
@@ -73,8 +73,8 @@ public interface IAxonPrincipalRepository : IWriteRepository<AxonPrincipal, Axon
     /// <param name="walletIds">The wallet IDs to check</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Dictionary mapping wallet IDs to their owning principals</returns>
-    Task<Dictionary<long, AxonPrincipal>> FindWalletOwnersAsync(
-        IEnumerable<long> walletIds,
+    Task<Dictionary<WalletId, AxonPrincipal>> FindWalletOwnersAsync(
+        IEnumerable<WalletId> walletIds,
         CancellationToken ct = default);
 
     /// <summary>

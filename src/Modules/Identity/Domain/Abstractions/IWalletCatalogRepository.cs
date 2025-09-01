@@ -43,8 +43,8 @@ public interface IWalletCatalogRepository
     /// <param name="walletIds">The wallet IDs to retrieve</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Dictionary mapping wallet IDs to wallet objects</returns>
-    Task<Dictionary<long, Wallet>> GetByIdsAsync(
-        IEnumerable<long> walletIds,
+    Task<Dictionary<WalletId, Wallet>> GetByIdsAsync(
+        IEnumerable<WalletId> walletIds,
         CancellationToken ct = default);
 
     /// <summary>
@@ -54,7 +54,7 @@ public interface IWalletCatalogRepository
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if the wallet exists</returns>
     Task<bool> ExistsAsync(
-        long walletId,
+        WalletId walletId,
         CancellationToken ct = default);
 
     /// <summary>
@@ -66,7 +66,7 @@ public interface IWalletCatalogRepository
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if the update was successful</returns>
     Task<bool> UpdateLastSeenAsync(
-        long walletId,
+        WalletId walletId,
         DateTimeOffset lastSeenAt,
         CancellationToken ct = default);
 }
@@ -76,7 +76,7 @@ public interface IWalletCatalogRepository
 /// This is a read-only representation for Identity domain operations.
 /// </summary>
 public sealed record Wallet(
-    long WalletId,
+    WalletId WalletId,
     string Chain,
     string Address,
     DateTimeOffset FirstSeenAt,

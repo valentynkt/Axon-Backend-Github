@@ -44,7 +44,7 @@ public sealed class PrincipalWalletOwnershipSpec : Specification<WalletOwnership
 /// </summary>
 public sealed class SpecificWalletOwnershipSpec : Specification<WalletOwnership>
 {
-    public SpecificWalletOwnershipSpec(long walletId)
+    public SpecificWalletOwnershipSpec(WalletId walletId)
     {
         Query.Where(w => w.WalletId == walletId);
     }

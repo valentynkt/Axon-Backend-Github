@@ -8,7 +8,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 public sealed record WalletOwnershipConflictSkippedEvent(
     AxonId RequestedByPrincipalId,
     AxonId ExistingOwnerPrincipalId,
-    long WalletId,
+    WalletId WalletId,
     string ConflictReason,
     DateTimeOffset SkippedAt,
     string? ResolutionStrategy = null

@@ -115,7 +115,7 @@ public readonly partial struct Address
 
         // Check for valid base58 characters
         const string base58Chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-        if (!address.All(c => base58Chars.Contains(c)))
+        if (!address.All(c => base58Chars.Contains(c, StringComparison.Ordinal)))
             return Result.Failure<Unit, Error>(
                 Error.Validation("Solana address contains invalid base58 characters.", "WALLET.ADDRESS.SOLANA_INVALID_FORMAT"));
 

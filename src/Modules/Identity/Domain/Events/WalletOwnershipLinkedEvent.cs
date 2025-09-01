@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record WalletOwnershipLinkedEvent(
     AxonId AxonId,
-    long WalletId,
+    WalletId WalletId,
     WalletOwnershipId OwnershipId,
     string ProofType,
     string AccessMode,

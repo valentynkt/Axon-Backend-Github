@@ -9,13 +9,13 @@ namespace Axon.Modules.Identity.Domain.Rules;
 internal sealed class SingleDefaultPerChainRule : BusinessRule
 {
     private readonly string _chain;
-    private readonly long _newDefaultWalletId;
+    private readonly WalletId _newDefaultWalletId;
     private readonly PrincipalProfile _profile;
     private readonly IEnumerable<WalletOwnership> _walletOwnerships;
 
     public SingleDefaultPerChainRule(
         string chain,
-        long newDefaultWalletId,
+        WalletId newDefaultWalletId,
         PrincipalProfile profile,
         IEnumerable<WalletOwnership> walletOwnerships)
         : base(

@@ -105,7 +105,7 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
             throw new BusinessRuleException(rule);
     }
 
-    private static async Task CheckRuleAsync(IBusinessRule rule, CancellationToken ct = default)
+    private static async Task CheckRuleAsync(WalletMustNotExistRule rule, CancellationToken ct = default)
     {
         if (await rule.IsBrokenAsync(ct))
             throw new BusinessRuleException(rule);

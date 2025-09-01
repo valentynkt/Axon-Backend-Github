@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record WalletOwnershipVerifiedEvent(
     AxonId AxonId,
-    long WalletId,
+    WalletId WalletId,
     WalletOwnershipId OwnershipId,
     string ProofType,
     DateTimeOffset VerifiedAt,

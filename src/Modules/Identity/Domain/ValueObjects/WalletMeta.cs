@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text;
 
 namespace Axon.Modules.Identity.Domain.ValueObjects;
@@ -113,7 +114,7 @@ public sealed class WalletMeta
             if (typeof(T) == typeof(string))
                 return (T)(object)value.ToString()!;
 
-            return (T)Convert.ChangeType(value, typeof(T));
+            return (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
         }
         catch
         {

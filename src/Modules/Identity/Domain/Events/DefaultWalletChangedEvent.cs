@@ -6,7 +6,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 public sealed record DefaultWalletChangedEvent(
     AxonId AxonId,
     string Chain,
-    long NewWalletId,
-    long? PreviousWalletId,
+    WalletId NewWalletId,
+    WalletId? PreviousWalletId,
     DateTimeOffset ChangedAt
 ) : DomainEvent;

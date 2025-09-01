@@ -15,7 +15,7 @@ public sealed partial class Wallet
     /// Updates LastSeenAt timestamp reflecting external observation.
     /// Enforces W4 invariant - time monotonicity.
     /// </summary>
-    public Result<Unit, Error> TouchSeen(DateTimeOffset observedAt, TimeProvider? timeProvider = null)
+    public Result<Unit, Error> TouchSeen(DateTimeOffset observedAt)
     {
         try
         {
@@ -48,8 +48,7 @@ public sealed partial class Wallet
     /// Enforces W5 invariant - meta size and shape constraints.
     /// </summary>
     public Result<Unit, Error> UpdateMeta(
-        Dictionary<string, object> metaPatch, 
-        TimeProvider? timeProvider = null)
+        Dictionary<string, object> metaPatch)
     {
         try
         {
@@ -79,7 +78,7 @@ public sealed partial class Wallet
     /// Adds a tag to the wallet.
     /// Enforces W6 invariant - tag policy validation.
     /// </summary>
-    public Result<Unit, Error> AddTag(string tagValue, TimeProvider? timeProvider = null)
+    public Result<Unit, Error> AddTag(string tagValue)
     {
         try
         {
@@ -112,7 +111,7 @@ public sealed partial class Wallet
     /// Removes a tag from the wallet.
     /// Idempotent operation - no error if tag not present.
     /// </summary>
-    public Result<Unit, Error> RemoveTag(string tagValue, TimeProvider? timeProvider = null)
+    public Result<Unit, Error> RemoveTag(string tagValue)
     {
         try
         {
