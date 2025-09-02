@@ -1,3 +1,5 @@
+using Axon.Modules.Identity.Domain.ValueObjects;
+
 namespace Axon.Modules.Identity.Domain.Events;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record DefaultWalletChangedEvent(
     AxonId AxonId,
-    string Chain,
+    ChainId ChainId,
     WalletId NewWalletId,
     WalletId? PreviousWalletId,
     DateTimeOffset ChangedAt

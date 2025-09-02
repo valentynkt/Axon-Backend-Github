@@ -13,7 +13,7 @@ public sealed partial class AxonPrincipal
 {
     /// <summary>
     /// Links an identity credential to this principal.
-    /// Enforces uniqueness across all principals.
+    /// Enforces in-aggregate uniqueness; cross-principal uniqueness is handled by the application/domain service.
     /// </summary>
     public Result<IdentityCredential, Error> LinkIdentityCredential(
         ProviderType providerType,
@@ -55,11 +55,11 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Links a wallet to this principal with proof of ownership.
-    /// Enforces global single verified owner rule and capacity limits.
+    /// Enforces in-aggregate uniqueness; cross-principal uniqueness is handled by the application/domain service.
     /// </summary>
     public Result<WalletOwnership, Error> LinkWallet(
         WalletId walletId,
-        Chain chain,
+        ChainId chainId,
         ProofType proofType,
         AccessMode? accessMode = null,
         string? label = null,
@@ -75,7 +75,7 @@ public sealed partial class AxonPrincipal
             var now = effectiveTimeProvider.GetUtcNow();
 
             var ownershipResult = WalletOwnership.Create(
-                Id, walletId, proofType, accessMode, label: label, firstLinkedAt: now);
+                Id, walletId, chainId, proofType, accessMode, label: label, firstLinkedAt: now);
 
             if (ownershipResult.IsFailure)
                 return Result.Failure<WalletOwnership, Error>(ownershipResult.Error);
@@ -83,16 +83,19 @@ public sealed partial class AxonPrincipal
             var ownership = ownershipResult.Value;
             _walletOwnerships.Add(ownership);
 
-            // Initialize default for chain if this is the first wallet for this chain
-            var initResult = Profile.InitializeDefaultForChainIfEmpty(chain.Value, walletId);
-            if (initResult.IsFailure)
-                return Result.Failure<WalletOwnership, Error>(initResult.Error);
+            // If link creates a verified-signing ownership, set default (via aggregate command)
+            if (ownership.IsVerifiedSigning && !Profile.HasDefaultWalletForChain(chainId))
+            {
+                var setDefault = SetDefaultWalletForChain(chainId, walletId, timeProvider);
+                if (setDefault.IsFailure)
+                    return Result.Failure<WalletOwnership, Error>(setDefault.Error);
+            }
 
             MarkUpdated();
 
             RaiseDomainEvent(new WalletOwnershipLinkedEvent(
                 Id, walletId, ownership.Id, proofType.Value, 
-                accessMode?.Value ?? AccessMode.Default.Value, chain.Value, now));
+                accessMode?.Value ?? AccessMode.Default.Value, chainId, now));
 
             return Result.Success<WalletOwnership, Error>(ownership);
         }
@@ -149,10 +152,11 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Sets the default wallet for a specific chain.
+    /// Validates that the wallet belongs to the correct chain and is verified signing.
     /// Clears any previous default for the same chain.
     /// </summary>
     public Result<Unit, Error> SetDefaultWalletForChain(
-        Chain chain, 
+        ChainId chainId, 
         WalletId walletId, 
         TimeProvider? timeProvider = null)
     {
@@ -161,11 +165,24 @@ public sealed partial class AxonPrincipal
             CheckRule(new PrincipalMustBeActiveRule(this));
             CheckRule(new WalletMustBeOwnedByPrincipalRule(walletId, _walletOwnerships));
 
+            // Find the ownership to validate chain and signing status
+            var ownership = FindWalletOwnership(walletId);
+            if (ownership is null)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
+
+            // Validate chain matches ownership's chain (E5)
+            if (ownership.ChainId != chainId)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.ChainMismatch());
+
+            // Validate ownership is verified signing (E9)
+            if (!ownership.IsVerifiedSigning)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.WatchOnlyNotAllowedAsDefault());
+
             var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
             var now = effectiveTimeProvider.GetUtcNow();
 
-            var previousDefault = Profile.GetDefaultWalletForChain(chain.Value);
-            var setResult = Profile.SetDefaultWalletForChain(chain.Value, walletId);
+            var previousDefault = Profile.GetDefaultWalletForChain(chainId);
+            var setResult = Profile.SetDefaultWalletForChain(chainId, walletId);
 
             if (setResult.IsFailure)
                 return Result.Failure<Unit, Error>(setResult.Error);
@@ -173,7 +190,7 @@ public sealed partial class AxonPrincipal
             MarkUpdated();
 
             RaiseDomainEvent(new DefaultWalletChangedEvent(
-                Id, chain.Value, walletId, previousDefault, now));
+                Id, chainId, walletId, previousDefault, now));
 
             return Result.Success<Unit, Error>(Unit.Value);
         }
@@ -226,6 +243,7 @@ public sealed partial class AxonPrincipal
         try
         {
             CheckRule(new PrincipalMustBeActiveRule(this));
+            CheckRule(new ValidRiskTierRule(riskTier, Type));
 
             var updateResult = Profile.UpdateRiskTier(riskTier);
             if (updateResult.IsFailure)
@@ -251,15 +269,13 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Soft deletes the principal, marking it as inactive.
     /// Prevents further operations while preserving audit trail.
+    /// Enforces business rules to ensure safe deletion.
     /// </summary>
-    public Result<Unit, Error> SoftDelete(bool force = false, TimeProvider? timeProvider = null)
+    public Result<Unit, Error> SoftDelete(TimeProvider? timeProvider = null)
     {
         try
         {
-            if (!force)
-            {
-                CheckRule(new PrincipalCanBeDeletedRule(_walletOwnerships, _credentials));
-            }
+            CheckRule(new PrincipalCanBeDeletedRule(_walletOwnerships, _credentials));
 
             var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
             var now = effectiveTimeProvider.GetUtcNow();
@@ -382,32 +398,15 @@ public sealed partial class AxonPrincipal
         RaiseDomainEvent(new WalletOwnershipVerifiedEvent(
             Id, walletId, ownership.Id, ownership.ProofType.Value, now, verificationMethod));
 
+        // After verification, make it default if none exists on this chain and it's signing
+        if (ownership.IsVerifiedSigning && !Profile.HasDefaultWalletForChain(ownership.ChainId))
+        {
+            var setDefault = SetDefaultWalletForChain(ownership.ChainId, walletId, timeProvider);
+            if (setDefault.IsFailure)
+                return setDefault;
+        }
+
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    /// <summary>
-    /// Handles wallet ownership conflict by skipping the operation and raising an event.
-    /// Used when a wallet is already owned by another principal.
-    /// </summary>
-    public static void HandleWalletOwnershipConflict(
-        AxonId requestedByPrincipalId,
-        AxonId existingOwnerPrincipalId,
-        WalletId walletId,
-        string conflictReason,
-        string? resolutionStrategy = null,
-        TimeProvider? timeProvider = null)
-    {
-        var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
-        var now = effectiveTimeProvider.GetUtcNow();
-
-        // This is a static method that creates and raises the event
-        // In a real implementation, this would be handled by a domain service
-        // For now, we provide this as a utility method
-        _ = new WalletOwnershipConflictSkippedEvent(
-            requestedByPrincipalId, existingOwnerPrincipalId, walletId,
-            conflictReason, now, resolutionStrategy);
-
-        // Note: This event would need to be raised through a domain service or event dispatcher
-        // as static methods can't directly raise domain events on aggregates
-    }
 }

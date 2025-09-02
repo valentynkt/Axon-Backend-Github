@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Errors;
 using BuildingBlocks.Core.Domain.Rules;
 
 namespace Axon.Modules.Identity.Domain.Rules;
@@ -13,8 +14,8 @@ internal sealed class WalletMustBeActiveRule : BusinessRule
 
     public WalletMustBeActiveRule(Wallet wallet)
         : base(
-            message: "Wallet must be active (not deleted) to perform this operation.",
-            code: "WALLET.MUST_BE_ACTIVE")
+            message: WalletDomainErrors.Wallet.SoftDeleted().Message,
+            code: WalletDomainErrors.Wallet.SoftDeleted().Code)
     {
         _wallet = wallet;
     }

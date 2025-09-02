@@ -80,10 +80,10 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
-    /// Gets the count of active wallets (not deleted).
+    /// Gets the count of linked wallets (not deleted).
     /// Computed on demand to avoid performance issues.
     /// </summary>
-    public int GetActiveWalletCount()
+    public int GetLinkedWalletCount()
     {
         return _walletOwnerships.Count(w => !w.IsDeleted);
     }
@@ -99,13 +99,12 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Gets wallet ownerships for a specific chain.
-    /// Note: This would require chain metadata in WalletOwnership to be fully implemented.
     /// </summary>
-    public IReadOnlyCollection<WalletOwnership> GetWalletOwnershipsForChain(string chain)
+    public IReadOnlyCollection<WalletOwnership> GetWalletOwnershipsForChain(ChainId chainId)
     {
-        // TODO: Implement chain-specific filtering once WalletOwnership has chain metadata
-        _ = chain; // Acknowledge parameter to suppress warning
-        return GetActiveWalletOwnerships();
+        return _walletOwnerships
+            .Where(w => w.IsActive && w.IsForChain(chainId))
+            .ToList();
     }
 
     /// <summary>
@@ -127,9 +126,9 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Gets the default wallet for a specific chain.
     /// </summary>
-    public WalletOwnership? GetDefaultWalletForChain(string chain)
+    public WalletOwnership? GetDefaultWalletForChain(ChainId chainId)
     {
-        var walletId = Profile.GetDefaultWalletForChain(chain);
+        var walletId = Profile.GetDefaultWalletForChain(chainId);
         if (!walletId.HasValue)
             return null;
 

@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Domain.Rules;
 
@@ -14,8 +15,8 @@ internal sealed class MetaSizeLimitRule : BusinessRule
 
     public MetaSizeLimitRule(WalletMeta currentMeta, Dictionary<string, object>? additionalData = null)
         : base(
-            message: "Wallet metadata exceeds size or complexity limits.",
-            code: "WALLET.META_SIZE_LIMIT")
+            message: WalletDomainErrors.Meta.TooLargeMessage,
+            code: WalletDomainErrors.Meta.TooLargeCode)
     {
         _currentMeta = currentMeta;
         _additionalData = additionalData;

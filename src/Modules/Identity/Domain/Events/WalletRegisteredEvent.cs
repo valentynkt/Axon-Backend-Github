@@ -7,7 +7,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record WalletRegisteredEvent(
     WalletId WalletId,
-    string Chain,
-    string Address,
+    ChainId ChainId,
+    Address Address,
     DateTimeOffset FirstSeenAt
 ) : DomainEvent;

@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.ValueObjects;
 
 namespace Axon.Modules.Identity.Domain.Rules;
@@ -14,8 +15,8 @@ internal sealed class ValidRiskTierRule : BusinessRule
 
     public ValidRiskTierRule(RiskTier riskTier, PrincipalType principalType)
         : base(
-            message: $"Risk tier '{riskTier.Value}' is not valid for principal type '{principalType.Value}'.",
-            code: "IDENTITY.PROFILE.RISK_TIER.INVALID_FOR_PRINCIPAL_TYPE")
+            message: IdentityDomainErrors.Profile.RiskTierInvalidForPrincipal().Message,
+            code: IdentityDomainErrors.Profile.RiskTierInvalidForPrincipal().Code)
     {
         _riskTier = riskTier;
         _principalType = principalType;

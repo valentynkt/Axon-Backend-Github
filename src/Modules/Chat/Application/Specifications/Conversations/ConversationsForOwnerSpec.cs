@@ -1,7 +1,7 @@
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Common.Sorting;
 using Axon.Modules.Chat.Application.Queries.GetConversations;
-using Axon.Modules.Chat.Application.Specifications.Base;
+using BuildingBlocks.Application.Specifications;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using BuildingBlocks.Primitives.Ids;
 

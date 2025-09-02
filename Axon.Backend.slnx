@@ -23,6 +23,9 @@
     <Project Path="src/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Identity/" />
+  <Folder Name="/src/Modules/Identity/Application/">
+    <Project Path="src/Modules/Identity/Application/Axon.Modules.Identity.Application.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Identity/Domain/">
     <Project Path="src/Modules/Identity/Domain/Axon.Modules.Identity.Domain.csproj" />
   </Folder>

@@ -1,6 +1,6 @@
 // /Modules/Chat/Application/Common/Specifications/MessageSpecs.cs
 #nullable enable
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Queries.GetConversationMessages;
 using Axon.Modules.Chat.Application.Specifications.Messages;
 using Axon.Modules.Chat.Domain.Entities;

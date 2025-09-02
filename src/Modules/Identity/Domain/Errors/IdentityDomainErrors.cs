@@ -63,6 +63,9 @@ public static class IdentityDomainErrors
         
         public const string SubjectRequiredCode = "IDENTITY.CREDENTIAL.SUBJECT.REQUIRED";
         public const string SubjectRequiredMessage = "Subject is required.";
+        
+        public const string ProviderInvalidForContextCode = "IDENTITY.CREDENTIAL.PROVIDER.INVALID_FOR_CONTEXT";
+        public const string ProviderInvalidForContextMessage = "Provider type is not valid for this operation context.";
 
         // Error factory methods
         public static Error Duplicate() => Error.BusinessRule(DuplicateMessage, DuplicateCode);
@@ -72,6 +75,8 @@ public static class IdentityDomainErrors
         public static Error ProviderInvalid() => Error.Validation(ProviderInvalidMessage, ProviderInvalidCode);
         public static Error IssuerRequired() => Error.Validation(IssuerRequiredMessage, IssuerRequiredCode);
         public static Error SubjectRequired() => Error.Validation(SubjectRequiredMessage, SubjectRequiredCode);
+        public static Error ProviderInvalidForContext(string providerType, string context) => Error.BusinessRule(
+            $"Provider type '{providerType}' is not valid for operation '{context}'.", ProviderInvalidForContextCode);
     }
 
     /// <summary>
@@ -120,6 +125,12 @@ public static class IdentityDomainErrors
         
         public const string DefaultNotOwnedCode = "IDENTITY.WALLET.DEFAULT_NOT_OWNED";
         public const string DefaultNotOwnedMessage = "Cannot set default wallet that is not owned by principal.";
+        
+        public const string ChainMismatchCode = "IDENTITY.WALLET.CHAIN.MISMATCH";
+        public const string ChainMismatchMessage = "Wallet chain does not match requested chain.";
+        
+        public const string WatchOnlyNotAllowedAsDefaultCode = "IDENTITY.WALLET.WATCH_ONLY_VIOLATION";
+        public const string WatchOnlyNotAllowedAsDefaultMessage = "Only verified signing wallets can be set as default.";
 
         // Error factory methods
         public static Error AlreadyOwned() => Error.BusinessRule(AlreadyOwnedMessage, AlreadyOwnedCode);
@@ -136,6 +147,8 @@ public static class IdentityDomainErrors
         public static Error OwnershipRevoked() => Error.BusinessRule(OwnershipRevokedMessage, OwnershipRevokedCode);
         public static Error LabelTooLong() => Error.Validation(LabelTooLongMessage, LabelTooLongCode);
         public static Error DefaultNotOwned() => Error.BusinessRule(DefaultNotOwnedMessage, DefaultNotOwnedCode);
+        public static Error ChainMismatch() => Error.BusinessRule(ChainMismatchMessage, ChainMismatchCode);
+        public static Error WatchOnlyNotAllowedAsDefault() => Error.BusinessRule(WatchOnlyNotAllowedAsDefaultMessage, WatchOnlyNotAllowedAsDefaultCode);
     }
 
     /// <summary>
@@ -149,6 +162,9 @@ public static class IdentityDomainErrors
         public const string InvalidRiskTierCode = "IDENTITY.PROFILE.RISK_TIER.INVALID";
         public const string InvalidRiskTierMessage = "Invalid risk tier.";
         
+        public const string InvalidForPrincipalCode = "IDENTITY.PROFILE.RISK_TIER.INVALID_FOR_PRINCIPAL_TYPE";
+        public const string InvalidForPrincipalMessage = "Risk tier is not valid for this principal type.";
+        
         public const string ChainEmptyCode = "IDENTITY.PROFILE.CHAIN.EMPTY";
         public const string ChainEmptyMessage = "Chain cannot be empty.";
         
@@ -157,6 +173,14 @@ public static class IdentityDomainErrors
         
         public const string InvalidCode = "IDENTITY.PROFILE.INVALID";
         public const string InvalidMessage = "Profile is invalid.";
+
+        // Error factory methods
+        public static Error InvalidLanguage() => Error.Validation(InvalidLanguageMessage, InvalidLanguageCode);
+        public static Error InvalidRiskTier() => Error.Validation(InvalidRiskTierMessage, InvalidRiskTierCode);
+        public static Error RiskTierInvalidForPrincipal() => Error.BusinessRule(InvalidForPrincipalMessage, InvalidForPrincipalCode);
+        public static Error ChainEmpty() => Error.Validation(ChainEmptyMessage, ChainEmptyCode);
+        public static Error WalletIdInvalid() => Error.Validation(WalletIdInvalidMessage, WalletIdInvalidCode);
+        public static Error Invalid() => Error.Validation(InvalidMessage, InvalidCode);
     }
 
     /// <summary>

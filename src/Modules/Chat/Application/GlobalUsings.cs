@@ -12,6 +12,6 @@ global using BuildingBlocks.Core.Abstractions.Authentication;
 global using BuildingBlocks.Application;
 global using Ardalis.Specification;
 global using Axon.Modules.Chat.Application.Contracts.Persistence;
-global using Axon.Modules.Chat.Application.Common.Pagination;
-global using Axon.Modules.Chat.Application.Specifications.Base;
+global using BuildingBlocks.Application.Pagination;
+global using BuildingBlocks.Application.Specifications;
 global using CSharpFunctionalExtensions;

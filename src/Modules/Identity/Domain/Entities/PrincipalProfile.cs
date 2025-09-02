@@ -62,9 +62,9 @@ public sealed class PrincipalProfile : AxonEntity
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    internal Result<Unit, Error> SetDefaultWalletForChain(string chain, WalletId walletId)
+    internal Result<Unit, Error> SetDefaultWalletForChain(ChainId chainId, WalletId walletId)
     {
-        var result = DefaultPerChain.WithDefault(chain, walletId);
+        var result = DefaultPerChain.WithDefault(chainId, walletId);
         if (result.IsFailure)
             return Result.Failure<Unit, Error>(result.Error);
 
@@ -72,30 +72,43 @@ public sealed class PrincipalProfile : AxonEntity
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    internal Result<Unit, Error> ClearDefaultForChain(string chain)
+    internal Result<Unit, Error> ClearDefaultForChain(ChainId chainId)
     {
-        if (string.IsNullOrWhiteSpace(chain))
+        if (string.IsNullOrWhiteSpace(chainId.Value))
             return Result.Success<Unit, Error>(Unit.Value);
 
-        DefaultPerChain = DefaultPerChain.WithoutDefault(chain);
+        DefaultPerChain = DefaultPerChain.WithoutDefault(chainId);
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    internal WalletId? GetDefaultWalletForChain(string chain)
+    internal WalletId? GetDefaultWalletForChain(ChainId chainId)
     {
-        return DefaultPerChain.GetDefaultWalletForChain(chain);
+        return DefaultPerChain.GetDefaultWalletForChain(chainId);
     }
 
-    internal bool HasDefaultWalletForChain(string chain)
+    internal bool HasDefaultWalletForChain(ChainId chainId)
     {
-        return DefaultPerChain.HasDefaultForChain(chain);
+        return DefaultPerChain.HasDefaultForChain(chainId);
     }
 
-    internal Result<Unit, Error> InitializeDefaultForChainIfEmpty(string chain, WalletId walletId)
+    internal Result<Unit, Error> InitializeDefaultForChainIfEmpty(ChainId chainId, WalletId walletId)
     {
-        if (HasDefaultWalletForChain(chain))
+        if (HasDefaultWalletForChain(chainId))
             return Result.Success<Unit, Error>(Unit.Value);
 
-        return SetDefaultWalletForChain(chain, walletId);
+        return SetDefaultWalletForChain(chainId, walletId);
+    }
+
+    internal void ClearDefaultsReferencing(WalletId walletId)
+    {
+        var chains = DefaultPerChain.Value
+            .Where(kvp => kvp.Value == walletId)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var chainId in chains)
+        {
+            DefaultPerChain = DefaultPerChain.WithoutDefault(chainId);
+        }
     }
 }

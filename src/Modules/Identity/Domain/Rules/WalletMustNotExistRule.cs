@@ -26,11 +26,7 @@ internal sealed class WalletMustNotExistRule : BusinessRule
         _walletExistsCheck = walletExistsCheck;
     }
 
-    public override bool IsBroken()
-    {
-        // Synchronous version - should avoid if possible
-        return _walletExistsCheck(_chainId, _address).AsTask().GetAwaiter().GetResult();
-    }
+    public override bool IsBroken() => false; // Force using async path
 
     public override async ValueTask<bool> IsBrokenAsync(CancellationToken ct = default) 
         => await _walletExistsCheck(_chainId, _address);

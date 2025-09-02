@@ -1,6 +1,6 @@
 // /Modules/Chat/Application/Common/Specifications/ConversationSpecs.cs
 #nullable enable
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Common.Sorting;
 using Axon.Modules.Chat.Application.Queries.GetConversations;
 using Axon.Modules.Chat.Application.Specifications.Conversations;

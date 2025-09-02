@@ -8,11 +8,11 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
 /// </summary>
 public sealed class ChainDefaults : IEquatable<ChainDefaults>
 {
-    private readonly IReadOnlyDictionary<string, WalletId> _value;
+    private readonly IReadOnlyDictionary<ChainId, WalletId> _value;
 
-    public static readonly ChainDefaults Empty = new(ImmutableDictionary<string, WalletId>.Empty);
+    public static readonly ChainDefaults Empty = new(ImmutableDictionary<ChainId, WalletId>.Empty);
 
-    private ChainDefaults(IReadOnlyDictionary<string, WalletId> value)
+    private ChainDefaults(IReadOnlyDictionary<ChainId, WalletId> value)
     {
         _value = value;
     }
@@ -20,7 +20,7 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
     /// <summary>
     /// Creates ChainDefaults from a dictionary of chain-to-wallet mappings.
     /// </summary>
-    public static Result<ChainDefaults, Error> Create(Dictionary<string, WalletId>? defaults)
+    public static Result<ChainDefaults, Error> Create(Dictionary<ChainId, WalletId>? defaults)
     {
         if (defaults is null || defaults.Count == 0)
             return Result.Success<ChainDefaults, Error>(Empty);
@@ -33,21 +33,17 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
         return Result.Success<ChainDefaults, Error>(new ChainDefaults(normalized));
     }
 
-    private static Result<Unit, Error> ValidateInput(Dictionary<string, WalletId> input)
+    private static Result<Unit, Error> ValidateInput(Dictionary<ChainId, WalletId> input)
     {
         foreach (var kvp in input)
         {
-            if (string.IsNullOrWhiteSpace(kvp.Key))
+            if (string.IsNullOrWhiteSpace(kvp.Key.Value))
                 return Result.Failure<Unit, Error>(
                     Error.Validation("Chain identifier cannot be empty.", "IDENTITY.PROFILE.CHAIN.EMPTY"));
 
             if (kvp.Value == default(WalletId))
                 return Result.Failure<Unit, Error>(
-                    Error.Validation($"Wallet ID must be positive for chain '{kvp.Key}'.", "IDENTITY.PROFILE.WALLET_ID.INVALID"));
-
-            if (kvp.Key.Length > 50)
-                return Result.Failure<Unit, Error>(
-                    Error.Validation($"Chain identifier '{kvp.Key}' exceeds 50 characters.", "IDENTITY.PROFILE.CHAIN.TOO_LONG"));
+                    Error.Validation($"Wallet ID must be positive for chain '{kvp.Key.Value}'.", "IDENTITY.PROFILE.WALLET_ID.INVALID"));
         }
 
         if (input.Count > 20)
@@ -57,20 +53,19 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    private static ImmutableDictionary<string, WalletId> NormalizeInput(Dictionary<string, WalletId> input)
+    private static ImmutableDictionary<ChainId, WalletId> NormalizeInput(Dictionary<ChainId, WalletId> input)
     {
         return input.ToImmutableDictionary(
-            kvp => kvp.Key.ToLowerInvariant(),
-            kvp => kvp.Value,
-            StringComparer.OrdinalIgnoreCase);
+            kvp => kvp.Key,
+            kvp => kvp.Value);
     }
 
     /// <summary>
     /// Creates a new ChainDefaults with an additional chain-wallet mapping.
     /// </summary>
-    public Result<ChainDefaults, Error> WithDefault(string chain, WalletId walletId)
+    public Result<ChainDefaults, Error> WithDefault(ChainId chainId, WalletId walletId)
     {
-        if (string.IsNullOrWhiteSpace(chain))
+        if (string.IsNullOrWhiteSpace(chainId.Value))
             return Result.Failure<ChainDefaults, Error>(
                 Error.Validation("Chain cannot be empty.", "IDENTITY.PROFILE.CHAIN.EMPTY"));
 
@@ -79,7 +74,7 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
                 Error.Validation("Wallet ID must be positive.", "IDENTITY.PROFILE.WALLET_ID.INVALID"));
 
         var newDefaults = _value.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-        newDefaults[chain.ToLowerInvariant()] = walletId;
+        newDefaults[chainId] = walletId;
 
         return Create(newDefaults);
     }
@@ -87,17 +82,16 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
     /// <summary>
     /// Creates a new ChainDefaults with a chain-wallet mapping removed.
     /// </summary>
-    public ChainDefaults WithoutDefault(string chain)
+    public ChainDefaults WithoutDefault(ChainId chainId)
     {
-        if (string.IsNullOrWhiteSpace(chain))
+        if (string.IsNullOrWhiteSpace(chainId.Value))
             return this;
 
-        var normalizedChain = chain.ToLowerInvariant();
-        if (!_value.ContainsKey(normalizedChain))
+        if (!_value.ContainsKey(chainId))
             return this;
 
         var newDefaults = _value
-            .Where(kvp => !string.Equals(kvp.Key, normalizedChain, StringComparison.OrdinalIgnoreCase))
+            .Where(kvp => kvp.Key != chainId)
             .ToImmutableDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
         return new ChainDefaults(newDefaults);
@@ -106,27 +100,26 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
     /// <summary>
     /// Gets the default wallet ID for a specific chain.
     /// </summary>
-    public WalletId? GetDefaultWalletForChain(string chain)
+    public WalletId? GetDefaultWalletForChain(ChainId chainId)
     {
-        if (string.IsNullOrWhiteSpace(chain))
+        if (string.IsNullOrWhiteSpace(chainId.Value))
             return null;
 
-        var normalizedChain = chain.ToLowerInvariant();
-        return _value.TryGetValue(normalizedChain, out var walletId) && walletId != default(WalletId) ? walletId : null;
+        return _value.TryGetValue(chainId, out var walletId) && walletId != default(WalletId) ? walletId : null;
     }
 
     /// <summary>
     /// Checks if there's a default wallet configured for the specified chain.
     /// </summary>
-    public bool HasDefaultForChain(string chain)
+    public bool HasDefaultForChain(ChainId chainId)
     {
-        return GetDefaultWalletForChain(chain).HasValue;
+        return GetDefaultWalletForChain(chainId).HasValue;
     }
 
     /// <summary>
     /// Gets all chains that have defaults configured.
     /// </summary>
-    public IEnumerable<string> GetChainsWithDefaults()
+    public IEnumerable<ChainId> GetChainsWithDefaults()
     {
         return _value.Where(kvp => kvp.Value != default(WalletId)).Select(kvp => kvp.Key);
     }
@@ -144,7 +137,7 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
     /// <summary>
     /// Gets the underlying dictionary for serialization purposes.
     /// </summary>
-    public IReadOnlyDictionary<string, WalletId> Value => _value;
+    public IReadOnlyDictionary<ChainId, WalletId> Value => _value;
 
     public bool Equals(ChainDefaults? other)
     {
@@ -167,7 +160,7 @@ public sealed class ChainDefaults : IEquatable<ChainDefaults>
     public override int GetHashCode()
     {
         var hash = new HashCode();
-        foreach (var kvp in _value.OrderBy(k => k.Key))
+        foreach (var kvp in _value.OrderBy(k => k.Key.Value, StringComparer.Ordinal))
         {
             hash.Add(kvp.Key);
             hash.Add(kvp.Value);

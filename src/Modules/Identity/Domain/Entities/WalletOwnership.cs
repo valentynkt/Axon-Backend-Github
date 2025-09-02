@@ -10,6 +10,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
 {
     public AxonId AxonId { get; private set; }
     public WalletId WalletId { get; private set; }
+    public ChainId ChainId { get; private set; }
     public ProofType ProofType { get; private set; }
     public AccessMode AccessMode { get; private set; }
     public OwnershipState State { get; private set; }
@@ -24,6 +25,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
         WalletOwnershipId id,
         AxonId axonId,
         WalletId walletId,
+        ChainId chainId,
         ProofType proofType,
         AccessMode accessMode,
         OwnershipState state,
@@ -33,6 +35,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     {
         AxonId = axonId;
         WalletId = walletId;
+        ChainId = chainId;
         ProofType = proofType;
         AccessMode = accessMode;
         State = state;
@@ -44,6 +47,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     internal static Result<WalletOwnership, Error> Create(
         AxonId axonId,
         WalletId walletId,
+        ChainId chainId,
         ProofType proofType,
         AccessMode? accessMode = null,
         OwnershipState? state = null,
@@ -53,6 +57,10 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
         if (walletId == WalletId.Empty)
             return Result.Failure<WalletOwnership, Error>(
                 Error.Validation("Wallet ID cannot be empty.", "IDENTITY.WALLET.ID.INVALID"));
+
+        if (string.IsNullOrWhiteSpace(chainId.Value))
+            return Result.Failure<WalletOwnership, Error>(
+                Error.Validation("Chain ID cannot be empty.", "IDENTITY.WALLET.CHAIN.INVALID"));
 
         var id = new WalletOwnershipId(Guid.CreateVersion7());
         var effectiveAccessMode = accessMode ?? AccessMode.Default;
@@ -66,7 +74,7 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
         }
 
         var ownership = new WalletOwnership(
-            id, axonId, walletId, proofType, effectiveAccessMode, 
+            id, axonId, walletId, chainId, proofType, effectiveAccessMode, 
             effectiveState, effectiveFirstLinked, lastVerified, label);
 
         return Result.Success<WalletOwnership, Error>(ownership);
@@ -137,6 +145,8 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     public bool BelongsTo(AxonId principalId) => AxonId == principalId;
 
     public bool IsForWallet(WalletId walletId) => WalletId == walletId;
+
+    public bool IsForChain(ChainId chainId) => ChainId == chainId;
 
     public bool IsActive => !IsDeleted && State.IsVerified;
 

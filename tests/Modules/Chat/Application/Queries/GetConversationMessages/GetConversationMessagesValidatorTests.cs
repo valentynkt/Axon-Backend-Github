@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Queries.GetConversationMessages;
 using Axon.Modules.Chat.Application.Tests.Builders;
 using Axon.Modules.Chat.Application.Tests.Common;

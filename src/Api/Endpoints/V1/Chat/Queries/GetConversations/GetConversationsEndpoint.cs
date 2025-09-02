@@ -1,6 +1,6 @@
 using Axon.Api.Contracts.V1.Chat;
 using Axon.Api.Modules;
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Queries.GetConversations;
 using BuildingBlocks.Web.Endpoints.Base;
 using MediatR;

@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Domain.Rules;
 
@@ -13,8 +14,8 @@ internal sealed class TagMustBeAllowedRule : BusinessRule
 
     public TagMustBeAllowedRule(string tagValue)
         : base(
-            message: $"Tag '{tagValue}' is not allowed.",
-            code: "WALLET.TAG_NOT_ALLOWED")
+            message: WalletDomainErrors.Tag.NotAllowed(tagValue).Message,
+            code: WalletDomainErrors.Tag.NotAllowed(tagValue).Code)
     {
         _tagValue = tagValue;
     }

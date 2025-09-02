@@ -1,5 +1,5 @@
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Common.Queries;
 using Axon.Modules.Chat.Application.Common.Specifications;
 using Axon.Modules.Chat.Application.Specifications.Conversations;

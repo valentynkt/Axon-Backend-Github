@@ -1,4 +1,4 @@
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Common.Queries;
 using BuildingBlocks.Core.Abstractions.CQRS;
 

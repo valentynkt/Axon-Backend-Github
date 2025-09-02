@@ -1,3 +1,5 @@
+using Axon.Modules.Identity.Domain.ValueObjects;
+
 namespace Axon.Modules.Identity.Domain.Events;
 
 /// <summary>
@@ -9,6 +11,6 @@ public sealed record WalletOwnershipLinkedEvent(
     WalletOwnershipId OwnershipId,
     string ProofType,
     string AccessMode,
-    string Chain,
+    ChainId ChainId,
     DateTimeOffset LinkedAt
 ) : DomainEvent;

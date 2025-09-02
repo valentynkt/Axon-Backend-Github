@@ -13,7 +13,7 @@ global using Axon.Modules.Chat.Domain.Tests.Common;
 global using Axon.Modules.Chat.Domain.Tests.Builders;
 global using Axon.Modules.Chat.Application.Commands.StartConversation;
 global using Axon.Modules.Chat.Application.Queries.GetConversations;
-global using Axon.Modules.Chat.Application.Common.Pagination;
+global using BuildingBlocks.Application.Pagination;
 global using Axon.Modules.Chat.Application.Common.Sorting;
 global using Axon.Modules.Chat.Application.Contracts.Telemetry;
 global using Axon.Modules.Chat.Application.Abstractions.Persistence;

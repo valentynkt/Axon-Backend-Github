@@ -1,7 +1,7 @@
 using Mapster;
 using Axon.Api.Contracts.V1.Chat;
 using Axon.Modules.Chat.Application.Common;
-using Axon.Modules.Chat.Application.Common.Pagination;
+using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Chat.Application.Common.Sorting;
 using Axon.Modules.Chat.Application.DTOs.Requests;
 using Axon.Modules.Chat.Application.DTOs.Responses;

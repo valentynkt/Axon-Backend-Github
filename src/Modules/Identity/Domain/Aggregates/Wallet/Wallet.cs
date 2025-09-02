@@ -83,7 +83,7 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
 
             // Raise domain event
             wallet.RaiseDomainEvent(new WalletRegisteredEvent(
-                id, chainId.Value, canonicalAddress.Value, firstSeenAt));
+                id, chainId, canonicalAddress, firstSeenAt));
 
             return Result.Success<Wallet, Error>(wallet);
         }
