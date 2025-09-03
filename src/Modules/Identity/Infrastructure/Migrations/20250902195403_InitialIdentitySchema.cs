@@ -11,6 +11,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            ArgumentNullException.ThrowIfNull(migrationBuilder);
             migrationBuilder.EnsureSchema(
                 name: "identity");
 
@@ -251,6 +252,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            ArgumentNullException.ThrowIfNull(migrationBuilder);
             migrationBuilder.DropTable(
                 name: "identity_credentials",
                 schema: "identity");

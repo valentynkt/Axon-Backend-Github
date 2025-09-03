@@ -33,6 +33,7 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
     private readonly IDynamicToCommandsMapper _mapper;
     private readonly IWalletProcessorService _walletProcessor;
     private readonly IMediator _mediator;
+    private readonly IExchangeMetricsService _metricsService;
     private readonly ILogger<DynamicAuthOrchestrator> _logger;
 
     public DynamicAuthOrchestrator(
@@ -40,12 +41,14 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
         IDynamicToCommandsMapper mapper,
         IWalletProcessorService walletProcessor,
         IMediator mediator,
+        IExchangeMetricsService metricsService,
         ILogger<DynamicAuthOrchestrator> logger)
     {
         _jwtBridge = jwtBridge ?? throw new ArgumentNullException(nameof(jwtBridge));
         _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
         _walletProcessor = walletProcessor ?? throw new ArgumentNullException(nameof(walletProcessor));
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -123,12 +126,17 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
             );
 
             stopwatch.Stop();
+            _metricsService.RecordExchangeSuccess(userData.UserId, outcome.Created, outcome.WalletsProcessed, outcome.WalletsLinked, outcome.Conflicts, stopwatch.ElapsedMilliseconds);
+            
             _logger.LogInformation("Exchange completed for user {UserId} in {ElapsedMs}ms: Created={Created}, WalletsProcessed={WalletsProcessed}, WalletsLinked={WalletsLinked}, DefaultsApplied={DefaultsApplied}, Skipped={Skipped}, Conflicts={Conflicts}", 
                 userData.UserId, stopwatch.ElapsedMilliseconds, outcome.Created, outcome.WalletsProcessed, outcome.WalletsLinked, outcome.DefaultsApplied, outcome.Skipped, outcome.Conflicts);
             return Result.Success<ExchangeOutcome, Error>(outcome);
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
+            _metricsService.RecordExchangeFailure(DynamicAuthConstants.ErrorCodes.ExchangeError, "External", stopwatch.ElapsedMilliseconds);
+            
             _logger.LogError(ex, "Unexpected error during Dynamic JWT exchange");
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.External("JWT exchange failed", DynamicAuthConstants.ErrorCodes.ExchangeError, ex));

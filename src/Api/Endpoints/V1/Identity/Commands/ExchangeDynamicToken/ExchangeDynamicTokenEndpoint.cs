@@ -14,13 +14,16 @@ namespace Axon.Api.Endpoints.V1.Identity.Commands.ExchangeDynamicToken;
 public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicTokenRequest, ExchangeDynamicTokenResponse>
 {
     private readonly IDynamicAuthOrchestrator _orchestrator;
+    private readonly Axon.Modules.Identity.Application.Services.IRateLimitService _rateLimitService;
     private readonly ILogger<ExchangeDynamicTokenEndpoint> _logger;
 
     public ExchangeDynamicTokenEndpoint(
         IDynamicAuthOrchestrator orchestrator,
+        Axon.Modules.Identity.Application.Services.IRateLimitService rateLimitService,
         ILogger<ExchangeDynamicTokenEndpoint> logger)
     {
         _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
+        _rateLimitService = rateLimitService ?? throw new ArgumentNullException(nameof(rateLimitService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -35,18 +38,61 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
             .Produces<ExchangeDynamicTokenResponse>(200, "application/json")
             .ProducesProblemFE(400)
             .ProducesProblemFE(401)
+            .ProducesProblemFE(409)
             .ProducesProblemFE(422)
+            .ProducesProblemFE(429)
             .ProducesProblemFE(500));
 
         Summary(s =>
         {
             s.Summary = "Exchange Dynamic JWT for Axon identity";
-            s.Description = "Validates a Dynamic.xyz JWT token and creates/updates the corresponding Axon principal with all associated wallets";
-            s.Responses[200] = "Successfully exchanged JWT token for Axon identity";
-            s.Responses[400] = "Invalid request format";
-            s.Responses[401] = "Invalid, expired, or malformed JWT token";
-            s.Responses[422] = "Business rule violation during exchange";
-            s.Responses[500] = "Internal server error";
+            s.Description = """
+                Validates a Dynamic.xyz JWT token and creates/updates the corresponding Axon principal with all associated wallets.
+                
+                **Authentication Flow:**
+                1. Extract Bearer token from Authorization header
+                2. Validate JWT signature against Dynamic.xyz JWKS
+                3. Create or update Axon principal and credential
+                4. Process all wallets: activity tracking, ownership linking, default assignment
+                5. Return detailed exchange metrics
+                
+                **Features:**
+                - Idempotent operations - safe to retry
+                - Soft-failure handling for individual wallets
+                - Automatic default wallet assignment (first per chain)
+                - Comprehensive audit logging and metrics
+                - JWT replay attack protection (if jti claim present)
+                
+                **Rate Limiting:** 10 requests per minute per IP
+                """;
+            s.Responses[200] = "Successfully exchanged JWT token for Axon identity. Returns principal ID and detailed wallet processing metrics.";
+            s.Responses[400] = "Invalid request format, malformed JWT, or JWT size exceeds limits (8KB max)";
+            s.Responses[401] = "Invalid, expired, malformed JWT token, or replay attempt detected";
+            s.Responses[409] = "Wallet ownership conflict - wallet already owned by another principal";
+            s.Responses[422] = "Business rule violation during exchange (e.g., principal creation constraints)";
+            s.Responses[429] = "Rate limit exceeded - too many requests";
+            s.Responses[500] = "Internal server error or external service unavailable";
+            
+            // Add request example
+            s.ExampleRequest = new ExchangeDynamicTokenRequest
+            {
+                // Request body is typically empty since JWT comes in Authorization header
+            };
+            
+            // Add response examples
+            s.ResponseExamples[200] = new ExchangeDynamicTokenResponse(
+                AxonId: "01HKQR8X9N2Y3Z4A5B6C7D8E9F",
+                Created: true,
+                    WalletsProcessed: 3,
+                    WalletsLinked: 2,
+                    DefaultsApplied: 2,
+                    Skipped: 1,
+                    Conflicts: 0
+                );
+            
+            s.ResponseExamples[401] = new { error = "AUTH.TOKEN_EXPIRED: Token has expired" };
+            
+            s.ResponseExamples[409] = new { error = "Wallet ownership conflict: 0x123...abc already owned by another principal" };
         });
     }
 
@@ -54,12 +100,34 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
     {
         _logger.LogDebug("Processing Dynamic JWT exchange request");
 
+        // Check rate limit first
+        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var rateLimitResult = await _rateLimitService.CheckRateLimitAsync(clientIp, "jwt_exchange", ct);
+        if (rateLimitResult.IsFailure)
+        {
+            var rateLimitError = rateLimitResult.Error;
+            _logger.LogWarning("Rate limit exceeded for IP {ClientIp}: {Message}", clientIp, rateLimitError.Message);
+            
+            HttpContext.Response.Headers.RetryAfter = rateLimitError.RetryAfterSeconds.ToString();
+            HttpContext.Response.Headers["X-RateLimit-Remaining"] = rateLimitError.RequestsRemaining.ToString();
+            HttpContext.Response.Headers["X-RateLimit-Reset"] = rateLimitError.WindowResetAt.ToUnixTimeSeconds().ToString();
+            
+            ThrowError(rateLimitError.Message, statusCode: 429);
+        }
+
         // Extract JWT from Authorization header
         var jwt = ExtractJwtFromAuthorizationHeader();
         if (string.IsNullOrWhiteSpace(jwt))
         {
             _logger.LogWarning("Exchange request missing Authorization header or Bearer token");
             ThrowError("Authorization header with Bearer token is required", statusCode: 401);
+        }
+
+        // Validate JWT format and size before processing
+        if (!IsValidJwtFormat(jwt))
+        {
+            _logger.LogWarning("Invalid JWT format received");
+            ThrowError("Invalid JWT token format", statusCode: 400);
         }
 
         // Delegate to orchestrator for the complete flow
@@ -106,6 +174,55 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
             return null;
 
         return authHeader[bearerPrefix.Length..].Trim();
+    }
+
+    /// <summary>
+    /// Validates JWT token format and basic constraints
+    /// </summary>
+    private static bool IsValidJwtFormat(string jwt)
+    {
+        if (string.IsNullOrWhiteSpace(jwt))
+            return false;
+
+        // JWT should not exceed reasonable size limits (8KB max)
+        if (jwt.Length > 8192)
+            return false;
+
+        // JWT should have exactly 2 dots (header.payload.signature)
+        var parts = jwt.Split('.');
+        if (parts.Length != 3)
+            return false;
+
+        // Each part should not be empty and should be base64url encoded
+        foreach (var part in parts)
+        {
+            if (string.IsNullOrEmpty(part))
+                return false;
+                
+            // Basic base64url validation - should only contain valid characters
+            if (!IsValidBase64Url(part))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Validates if string contains only valid base64url characters
+    /// </summary>
+    private static bool IsValidBase64Url(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return false;
+
+        // Base64url uses: A-Z, a-z, 0-9, -, _
+        foreach (char c in input)
+        {
+            if (!char.IsLetterOrDigit(c) && c != '-' && c != '_')
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>

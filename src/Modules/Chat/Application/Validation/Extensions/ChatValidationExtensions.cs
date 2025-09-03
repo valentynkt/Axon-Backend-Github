@@ -40,7 +40,7 @@ public static class ChatValidationExtensions
                 var result = ConversationTitle.Create(title);
                 if (result.IsFailure)
                 {
-                    context.AddFailure(new ValidationFailure(context.PropertyName, result.Error.Message)
+                    context.AddFailure(new ValidationFailure(context.PropertyPath, result.Error.Message)
                     {
                         ErrorCode = result.Error.Code
                     });

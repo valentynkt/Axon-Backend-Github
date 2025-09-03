@@ -39,6 +39,8 @@ public sealed class IdentityApiModule : IApiModule
         
         // Register authentication services
         services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
+        services.AddScoped<Axon.Modules.Identity.Application.Services.IJwtReplayGuard, Axon.Modules.Identity.Infrastructure.Services.MemoryJwtReplayGuard>();
+        services.AddScoped<Axon.Modules.Identity.Application.Services.IRateLimitService, Axon.Modules.Identity.Infrastructure.Services.MemoryRateLimitService>();
         
         services.AddScoped<IDynamicAuthService, DynamicAuthService>(serviceProvider =>
         {
@@ -48,14 +50,16 @@ public sealed class IdentityApiModule : IApiModule
             var logger = serviceProvider.GetRequiredService<ILogger<DynamicAuthService>>();
             var options = serviceProvider.GetRequiredService<IOptions<DynamicXyzOptions>>();
             var normalizer = serviceProvider.GetRequiredService<IDynamicClaimNormalizer>();
+            var replayGuard = serviceProvider.GetRequiredService<Axon.Modules.Identity.Application.Services.IJwtReplayGuard>();
             
-            return new DynamicAuthService(jwksHttpClient, cache, logger, options, normalizer);
+            return new DynamicAuthService(jwksHttpClient, cache, logger, options, normalizer, replayGuard);
         });
         
         // Register Dynamic JWT exchange services
         services.AddSingleton<Axon.Modules.Identity.Application.Services.IDynamicToCommandsMapper, Axon.Modules.Identity.Application.Services.DynamicToCommandsMapper>();
         services.AddScoped<Axon.Modules.Identity.Application.Services.IDynamicJwtBridge, Axon.Modules.Identity.Infrastructure.Services.DynamicJwtBridge>();
         services.AddScoped<Axon.Modules.Identity.Application.Services.IWalletProcessorService, Axon.Modules.Identity.Application.Services.WalletProcessorService>();
+        services.AddScoped<Axon.Modules.Identity.Application.Services.IExchangeMetricsService, Axon.Modules.Identity.Infrastructure.Services.ExchangeMetricsService>();
         services.AddScoped<Axon.Modules.Identity.Application.Services.IDynamicAuthOrchestrator, Axon.Modules.Identity.Application.Services.DynamicAuthOrchestrator>();
         
         // Register current user service

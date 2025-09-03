@@ -90,14 +90,8 @@ public static class ApplicationDIValidation
     {
         try
         {
-            // Check if any validators are registered
-            var validatorServiceType = typeof(IValidator<>);
-            var validatorFactory = serviceProvider.GetService<IValidatorFactory>();
-            
-            if (validatorFactory == null)
-            {
-                errors.Add("APPLICATION: FluentValidation IValidatorFactory is not registered");
-            }
+            // Check if FluentValidation services are registered by trying to resolve a validator
+            // Using service provider directly instead of deprecated IValidatorFactory
 
             // Try to resolve a specific validator if it exists
             var appendMessageValidator = serviceProvider.GetService<IValidator<AppendUserMessageCommand>>();

@@ -32,7 +32,7 @@ public static class InfrastructureDIValidation
             TestServiceResolution<ChatDbContext>(serviceProvider, errors, "ChatDbContext - Write database context");
             // TestServiceResolution<ChatReadDbContext>(serviceProvider, errors, "ChatReadDbContext - Read database context");
             TestServiceResolution<IChatWriteDbContext>(serviceProvider, errors, "IChatWriteDbContext interface");
-            ///TestServiceResolution<IChatReadDbContext>(serviceProvider, errors, "IChatReadDbContext interface");
+            // TestServiceResolution<IChatReadDbContext>(serviceProvider, errors, "IChatReadDbContext interface");
             
             // Repository validation
             TestServiceResolution<IConversationRepository>(serviceProvider, errors, "IConversationRepository");
@@ -65,7 +65,7 @@ public static class InfrastructureDIValidation
             
             // Validate Unit of Work is properly wrapped
             var unitOfWork = serviceProvider.GetService<IWriteUnitOfWork>();
-            if (unitOfWork != null && !unitOfWork.GetType().Name.Contains("EfUnitOfWork"))
+            if (unitOfWork != null && !unitOfWork.GetType().Name.Contains("EfUnitOfWork", StringComparison.Ordinal))
             {
                 errors.Add($"CRITICAL: IWriteUnitOfWork resolves to {unitOfWork.GetType().Name} instead of EfUnitOfWork wrapper. Transaction management not properly configured!");
             }
