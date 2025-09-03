@@ -7,12 +7,12 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct ProviderType
 {
+    private static readonly string[] AllowedValues = { "dynamic", "siws", "oidc", "service_api" };
+
     public static readonly ProviderType Dynamic = From("dynamic");
     public static readonly ProviderType Siws = From("siws");
     public static readonly ProviderType Oidc = From("oidc");
     public static readonly ProviderType ServiceApi = From("service_api");
-
-    private static readonly string[] AllowedValues = { "dynamic", "siws", "oidc", "service_api" };
 
     private static Validation Validate(string input)
     {

@@ -31,6 +31,9 @@ public readonly partial struct ProofType
     public bool IsDirectSignature => Value == DirectSignature.Value;
     public bool IsWatchOnly => Value == WatchOnly.Value;
 
+    public bool IsVerifiedSigning => !IsWatchOnly;
+    public bool SupportsVerification => IsDynamicVerified || IsDirectSignature;
+
     public static Result<ProofType, Error> Create(string? value)
     {
         if (value is null)

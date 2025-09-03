@@ -5,6 +5,15 @@ using Microsoft.Extensions.DependencyInjection;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using System.Text.Encodings.Web;
+using Microsoft.AspNetCore.Mvc.Testing;
+using NSubstitute;
+using NUnit.Framework;
+using Shouldly;
+using System.Net;
+using System.Text.Json;
 
 namespace Axon.Api.Tests.Endpoints.V1.Auth;
 

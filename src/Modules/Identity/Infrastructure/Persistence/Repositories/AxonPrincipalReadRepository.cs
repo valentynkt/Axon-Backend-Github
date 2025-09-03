@@ -1,4 +1,4 @@
-using Axon.Modules.Identity.Application.Abstractions.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.ValueObjects;
@@ -72,5 +72,16 @@ internal sealed class AxonPrincipalReadRepository : EfSpecificationReadRepositor
         var spec = new WalletOwnersByChainSpec(chainId, page, includeWalletOwnerships: true);
         
         return await ListAsync(spec, cancellationToken);
+    }
+
+    public async Task<AxonPrincipal?> GetByIdWithActiveOwnershipsAsync(
+        AxonId axonId,
+        CancellationToken cancellationToken = default)
+    {
+        // Use EF Core to get principal with active wallet ownerships in single query
+        return await _identityDbContext.Set<AxonPrincipal>()
+            .Where(p => p.Id == axonId && !p.IsDeleted)
+            .Include(p => p.WalletOwnerships.Where(wo => !wo.IsDeleted && wo.State.IsVerified))
+            .SingleOrDefaultAsync(cancellationToken);
     }
 }

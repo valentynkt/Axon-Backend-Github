@@ -94,8 +94,8 @@ public sealed partial class AxonPrincipal
             MarkUpdated();
 
             RaiseDomainEvent(new WalletOwnershipLinkedEvent(
-                Id, walletId, ownership.Id, proofType.Value, 
-                accessMode?.Value ?? AccessMode.Default.Value, chainId, now));
+                Id.Value.ToString(), walletId.Value.ToString(), ownership.Id.Value.ToString(), proofType.Value, 
+                accessMode?.Value ?? AccessMode.Default.Value, chainId.Value, now));
 
             return Result.Success<WalletOwnership, Error>(ownership);
         }
@@ -125,7 +125,7 @@ public sealed partial class AxonPrincipal
 
             ownership.SoftDelete();
 
-            // Clear any chain defaults that point to this wallet
+            // Clear any chain defaults that point to this wallet using dedicated method
             var chainsToUpdate = Profile.DefaultPerChain.Value
                 .Where(kvp => kvp.Value == walletId)
                 .Select(kvp => kvp.Key)
@@ -133,7 +133,9 @@ public sealed partial class AxonPrincipal
 
             foreach (var chain in chainsToUpdate)
             {
-                Profile.ClearDefaultForChain(chain);
+                var clearResult = ClearDefaultWalletForChain(chain, timeProvider);
+                if (clearResult.IsFailure)
+                    return clearResult;
             }
 
             MarkUpdated();
@@ -190,7 +192,7 @@ public sealed partial class AxonPrincipal
             MarkUpdated();
 
             RaiseDomainEvent(new DefaultWalletChangedEvent(
-                Id, chainId, walletId, previousDefault, now));
+                Id.Value.ToString(), chainId.Value, walletId.Value.ToString(), previousDefault?.Value.ToString(), now));
 
             return Result.Success<Unit, Error>(Unit.Value);
         }
@@ -407,6 +409,139 @@ public sealed partial class AxonPrincipal
         }
 
         return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Updates the label for a wallet ownership.
+    /// </summary>
+    public Result<Unit, Error> UpdateWalletLabel(
+        WalletId walletId,
+        string? label,
+        TimeProvider? timeProvider = null)
+    {
+        try
+        {
+            CheckRule(new PrincipalMustBeActiveRule(this));
+
+            var ownership = FindWalletOwnership(walletId);
+            if (ownership is null)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
+
+            if (ownership.IsDeleted)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
+
+            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+            var now = effectiveTimeProvider.GetUtcNow();
+
+            var previousLabel = ownership.Label;
+            
+            // Only update if there's an actual change
+            if (previousLabel == label)
+                return Result.Success<Unit, Error>(Unit.Value);
+                
+            var updateResult = ownership.UpdateLabel(label);
+            
+            if (updateResult.IsFailure)
+                return updateResult;
+
+            MarkUpdated();
+
+            RaiseDomainEvent(new WalletLabelUpdatedEvent(
+                Id, walletId, ownership.Id, label, previousLabel, now));
+
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Result.Failure<Unit, Error>(
+                Error.BusinessRule(ex.Message, ex.Error.Code));
+        }
+    }
+
+    /// <summary>
+    /// Updates the access mode for a wallet ownership.
+    /// </summary>
+    public Result<Unit, Error> UpdateWalletAccessMode(
+        WalletId walletId,
+        AccessMode accessMode,
+        TimeProvider? timeProvider = null)
+    {
+        try
+        {
+            CheckRule(new PrincipalMustBeActiveRule(this));
+
+            var ownership = FindWalletOwnership(walletId);
+            if (ownership is null)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
+
+            if (ownership.IsDeleted)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
+
+            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+            var now = effectiveTimeProvider.GetUtcNow();
+
+            var previousAccessMode = ownership.AccessMode;
+            
+            // Only update if there's an actual change
+            if (previousAccessMode == accessMode)
+                return Result.Success<Unit, Error>(Unit.Value);
+                
+            var updateResult = ownership.UpdateAccessMode(accessMode);
+            
+            if (updateResult.IsFailure)
+                return updateResult;
+
+            MarkUpdated();
+
+            RaiseDomainEvent(new WalletAccessModeUpdatedEvent(
+                Id, walletId, ownership.Id, accessMode.Value, previousAccessMode.Value, now));
+
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Result.Failure<Unit, Error>(
+                Error.BusinessRule(ex.Message, ex.Error.Code));
+        }
+    }
+
+    /// <summary>
+    /// Clears the default wallet for a specific chain and raises appropriate events.
+    /// Provides a centralized method for clearing defaults with proper event emission.
+    /// </summary>
+    public Result<Unit, Error> ClearDefaultWalletForChain(
+        ChainId chainId, 
+        TimeProvider? timeProvider = null)
+    {
+        try
+        {
+            CheckRule(new PrincipalMustBeActiveRule(this));
+
+            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+            var now = effectiveTimeProvider.GetUtcNow();
+
+            var previousDefault = Profile.GetDefaultWalletForChain(chainId);
+            
+            // No-op if there's no default to clear
+            if (previousDefault is null)
+                return Result.Success<Unit, Error>(Unit.Value);
+
+            var clearResult = Profile.ClearDefaultForChain(chainId);
+            if (clearResult.IsFailure)
+                return clearResult;
+
+            MarkUpdated();
+
+            RaiseDomainEvent(new DefaultWalletChangedEvent(
+                Id.Value.ToString(), chainId.Value, null, previousDefault.Value.ToString(), now));
+
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Result.Failure<Unit, Error>(
+                Error.BusinessRule(ex.Message, ex.Error.Code));
+        }
     }
 
 }

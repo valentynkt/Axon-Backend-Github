@@ -6,8 +6,8 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// Domain event raised when a new wallet is registered.
 /// </summary>
 public sealed record WalletRegisteredEvent(
-    WalletId WalletId,
-    ChainId ChainId,
-    Address Address,
+    string WalletId,
+    string ChainId,
+    string Address,
     DateTimeOffset FirstSeenAt
 ) : DomainEvent;

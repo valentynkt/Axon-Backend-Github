@@ -1,3 +1,6 @@
+using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Primitives.Ids;
+
 namespace Axon.Modules.Identity.Domain.Events;
 
 /// <summary>

@@ -1,6 +1,9 @@
 using Axon.BuildingBlocks.Web.Configuration;
+using Axon.Modules.Identity.Application.DependencyInjection;
 using Axon.Modules.Identity.Infrastructure.Authentication;
+using Axon.Modules.Identity.Infrastructure.DependencyInjection;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
+using Axon.Modules.Identity.Infrastructure.HealthChecks;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using FluentValidation;
@@ -25,14 +28,11 @@ public sealed class IdentityApiModule : IApiModule
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        // Register MediatR for Identity Application handlers
-        services.AddMediatR(cfg =>
-        {
-            // Register from the Api assembly (current) for endpoint handlers
-            cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
-            // Also register from Identity.Application assembly for domain handlers
-            cfg.RegisterServicesFromAssembly(typeof(Axon.Modules.Identity.Application.Commands.ProcessWebhook.ProcessWebhookCommand).Assembly);
-        });
+        // Register Identity Application layer services (includes MediatR, validators, and authorization services)
+        services.AddIdentityApplication();
+        
+        // Register Identity Infrastructure services (databases, external services)
+        services.AddIdentityInfrastructure(configuration);
 
         // Register Identity Infrastructure services (HTTP clients, external services)
         services.AddDynamicXyzInfrastructure(configuration);
@@ -51,6 +51,12 @@ public sealed class IdentityApiModule : IApiModule
             
             return new DynamicAuthService(jwksHttpClient, cache, logger, options, normalizer);
         });
+        
+        // Register Dynamic JWT exchange services
+        services.AddSingleton<Axon.Modules.Identity.Application.Services.IDynamicToCommandsMapper, Axon.Modules.Identity.Application.Services.DynamicToCommandsMapper>();
+        services.AddScoped<Axon.Modules.Identity.Application.Services.IDynamicJwtBridge, Axon.Modules.Identity.Infrastructure.Services.DynamicJwtBridge>();
+        services.AddScoped<Axon.Modules.Identity.Application.Services.IWalletProcessorService, Axon.Modules.Identity.Application.Services.WalletProcessorService>();
+        services.AddScoped<Axon.Modules.Identity.Application.Services.IDynamicAuthOrchestrator, Axon.Modules.Identity.Application.Services.DynamicAuthOrchestrator>();
         
         // Register current user service
         services.AddHttpContextAccessor();
@@ -72,6 +78,12 @@ public sealed class IdentityApiModule : IApiModule
         
         // Register FluentValidation validators from this assembly
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+        
+        // Add health checks for Dynamic.xyz services  
+        services.AddHealthChecks()
+            .AddCheck<DynamicJwksHealthCheck>(
+                name: "dynamic-jwks",
+                tags: new[] { "dynamic", "external", "auth" });
         
         // Register validators
         RegisterValidators();

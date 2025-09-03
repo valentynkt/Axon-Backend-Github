@@ -56,8 +56,7 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
         string rawAddress,
         DateTimeOffset firstSeenAt,
         Func<ChainId, Address, ValueTask<bool>> walletExistsCheck,
-        Dictionary<string, object>? initialMeta = null,
-        TimeProvider? timeProvider = null)
+        Dictionary<string, object>? initialMeta = null)
     {
         try
         {
@@ -76,14 +75,13 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
             if (metaResult.IsFailure)
                 return Result.Failure<Wallet, Error>(metaResult.Error);
 
-            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
             var id = WalletId.New();
 
             var wallet = new Wallet(id, chainId, canonicalAddress, firstSeenAt, metaResult.Value);
 
             // Raise domain event
             wallet.RaiseDomainEvent(new WalletRegisteredEvent(
-                id, chainId, canonicalAddress, firstSeenAt));
+                id.Value.ToString(), chainId.Value, canonicalAddress.Value, firstSeenAt));
 
             return Result.Success<Wallet, Error>(wallet);
         }

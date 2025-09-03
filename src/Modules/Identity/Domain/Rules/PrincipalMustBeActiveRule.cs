@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using BuildingBlocks.Core.Domain.Rules;
 
 namespace Axon.Modules.Identity.Domain.Rules;
 

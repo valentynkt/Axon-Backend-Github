@@ -165,6 +165,9 @@ public static class IdentityDomainErrors
         public const string InvalidForPrincipalCode = "IDENTITY.PROFILE.RISK_TIER.INVALID_FOR_PRINCIPAL_TYPE";
         public const string InvalidForPrincipalMessage = "Risk tier is not valid for this principal type.";
         
+        public const string ServicePrincipalRiskConstraintCode = "IDENTITY.SERVICE_PRINCIPAL_RISK_CONSTRAINT";
+        public const string ServicePrincipalRiskConstraintMessage = "Service principals can only have Conservative risk tier.";
+        
         public const string ChainEmptyCode = "IDENTITY.PROFILE.CHAIN.EMPTY";
         public const string ChainEmptyMessage = "Chain cannot be empty.";
         
@@ -178,6 +181,7 @@ public static class IdentityDomainErrors
         public static Error InvalidLanguage() => Error.Validation(InvalidLanguageMessage, InvalidLanguageCode);
         public static Error InvalidRiskTier() => Error.Validation(InvalidRiskTierMessage, InvalidRiskTierCode);
         public static Error RiskTierInvalidForPrincipal() => Error.BusinessRule(InvalidForPrincipalMessage, InvalidForPrincipalCode);
+        public static Error ServicePrincipalRiskConstraint() => Error.BusinessRule(ServicePrincipalRiskConstraintMessage, ServicePrincipalRiskConstraintCode);
         public static Error ChainEmpty() => Error.Validation(ChainEmptyMessage, ChainEmptyCode);
         public static Error WalletIdInvalid() => Error.Validation(WalletIdInvalidMessage, WalletIdInvalidCode);
         public static Error Invalid() => Error.Validation(InvalidMessage, InvalidCode);
@@ -214,5 +218,50 @@ public static class IdentityDomainErrors
         
         public const string OutOfRangeCode = "IDENTITY.VALIDATION.OUT_OF_RANGE";
         public const string OutOfRangeMessage = "Value is out of range.";
+
+        public const string AtLeastOneFieldRequiredCode = "IDENTITY.VALIDATION.AT_LEAST_ONE_FIELD_REQUIRED";
+        public const string AtLeastOneFieldRequiredMessage = "At least one field (PreferredLanguage or RiskTier) must be provided.";
+
+        public const string InvalidWalletIdentificationCode = "IDENTITY.VALIDATION.INVALID_WALLET_IDENTIFICATION";
+        public const string InvalidWalletIdentificationMessage = "Invalid wallet identification provided.";
+
+        public const string EitherWalletIdOrCoordinatesRequiredCode = "IDENTITY.VALIDATION.EITHER_WALLET_ID_OR_COORDINATES_REQUIRED";
+        public const string EitherWalletIdOrCoordinatesRequiredMessage = "Either WalletId or (ChainId + RawAddress) must be provided.";
+
+        public const string EitherCredentialIdOrIdentifiersRequiredCode = "IDENTITY.VALIDATION.EITHER_CREDENTIAL_ID_OR_IDENTIFIERS_REQUIRED";
+        public const string EitherCredentialIdOrIdentifiersRequiredMessage = "Either CredentialId or (ProviderType + Issuer + Subject) must be provided.";
+
+        public const string InvalidCredentialIdentifierCode = "IDENTITY.VALIDATION.INVALID_CREDENTIAL_IDENTIFIER";
+        public const string InvalidCredentialIdentifierMessage = "Invalid credential identifier provided.";
+
+        // Error factory methods
+        public static Error RequiredField(string fieldName) => Error.Validation($"{fieldName} is required.", RequiredFieldCode);
+        public static Error InvalidFormat(string fieldName) => Error.Validation($"{fieldName} has invalid format.", InvalidFormatCode);
+        public static Error OutOfRange(string fieldName) => Error.Validation($"{fieldName} is out of range.", OutOfRangeCode);
+        public static Error AtLeastOneFieldRequired() => Error.Validation(AtLeastOneFieldRequiredMessage, AtLeastOneFieldRequiredCode);
+        public static Error InvalidWalletIdentification() => Error.Validation(InvalidWalletIdentificationMessage, InvalidWalletIdentificationCode);
+        public static Error EitherWalletIdOrCoordinatesRequired() => Error.Validation(EitherWalletIdOrCoordinatesRequiredMessage, EitherWalletIdOrCoordinatesRequiredCode);
+        public static Error EitherCredentialIdOrIdentifiersRequired() => Error.Validation(EitherCredentialIdOrIdentifiersRequiredMessage, EitherCredentialIdOrIdentifiersRequiredCode);
+        public static Error InvalidCredentialIdentifier() => Error.Validation(InvalidCredentialIdentifierMessage, InvalidCredentialIdentifierCode);
+    }
+
+    /// <summary>
+    /// Authentication and challenge related errors.
+    /// </summary>
+    public static class Authentication
+    {
+        public const string ChallengeInvalidCode = "IDENTITY.CHALLENGE.INVALID";
+        public const string ChallengeInvalidMessage = "Challenge is invalid or expired.";
+
+        public const string ChallengeBindingMismatchCode = "IDENTITY.CHALLENGE.BINDING_MISMATCH";
+        public const string ChallengeBindingMismatchMessage = "Challenge does not match the requested chain and address.";
+
+        public const string SignatureInvalidCode = "IDENTITY.SIGNATURE.INVALID";
+        public const string SignatureInvalidMessage = "Invalid signature.";
+
+        // Error factory methods
+        public static Error ChallengeInvalid() => Error.Validation(ChallengeInvalidMessage, ChallengeInvalidCode);
+        public static Error ChallengeBindingMismatch() => Error.Validation(ChallengeBindingMismatchMessage, ChallengeBindingMismatchCode);
+        public static Error SignatureInvalid() => Error.Validation(SignatureInvalidMessage, SignatureInvalidCode);
     }
 }

@@ -142,6 +142,11 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
+    internal Result<Unit, Error> UpdateAccessMode(AccessMode newAccessMode)
+    {
+        return ChangeAccessMode(newAccessMode);
+    }
+
     public bool BelongsTo(AxonId principalId) => AxonId == principalId;
 
     public bool IsForWallet(WalletId walletId) => WalletId == walletId;

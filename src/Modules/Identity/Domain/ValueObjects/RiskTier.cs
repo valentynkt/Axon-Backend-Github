@@ -7,11 +7,11 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct RiskTier
 {
+    private static readonly string[] AllowedValues = { "conservative", "balanced", "aggressive" };
+
     public static readonly RiskTier Conservative = From("conservative");
     public static readonly RiskTier Balanced = From("balanced");
     public static readonly RiskTier Aggressive = From("aggressive");
-
-    private static readonly string[] AllowedValues = { "conservative", "balanced", "aggressive" };
 
     private static Validation Validate(string input)
     {

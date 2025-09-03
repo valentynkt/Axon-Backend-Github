@@ -1,8 +1,8 @@
-using Axon.Modules.Identity.Application.Abstractions.Persistence;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
@@ -67,8 +67,8 @@ public static class ServiceRegistration
         });
         
         // Register Write Repositories
-        services.AddScoped<IAxonPrincipalRepository, AxonPrincipalRepository>();
-        services.AddScoped<IWalletRepository, WalletRepository>();
+        services.AddScoped<IAxonPrincipalWriteRepository, AxonPrincipalWriteRepository>();
+        services.AddScoped<IWalletWriteRepository, WalletWriteRepository>();
         
         // Register Read Repositories
         services.AddScoped<IAxonPrincipalReadRepository, AxonPrincipalReadRepository>();
@@ -84,6 +84,9 @@ public static class ServiceRegistration
             var context = provider.GetRequiredService<IdentityDbContext>();
             return new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
         });
+        
+        // Register application services
+        services.AddScoped<IMeReader, MeReader>();
         
         return services;
     }

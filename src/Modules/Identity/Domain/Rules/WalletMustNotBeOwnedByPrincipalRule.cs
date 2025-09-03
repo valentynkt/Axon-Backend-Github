@@ -1,4 +1,6 @@
 using Axon.Modules.Identity.Domain.Entities;
+using BuildingBlocks.Core.Domain.Rules;
+using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Identity.Domain.Rules;
 

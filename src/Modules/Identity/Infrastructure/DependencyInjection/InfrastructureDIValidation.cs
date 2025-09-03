@@ -1,4 +1,3 @@
-using Axon.Modules.Identity.Application.Abstractions.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using BuildingBlocks.Application;
@@ -30,8 +29,8 @@ public static class InfrastructureDIValidation
             TestServiceResolution<IIdentityReadDbContext>(serviceProvider, errors, "IIdentityReadDbContext interface");
             
             // Write Repository validation
-            TestServiceResolution<IAxonPrincipalRepository>(serviceProvider, errors, "IAxonPrincipalRepository");
-            TestServiceResolution<IWalletRepository>(serviceProvider, errors, "IWalletRepository");
+            TestServiceResolution<IAxonPrincipalWriteRepository>(serviceProvider, errors, "IAxonPrincipalWriteRepository");
+            TestServiceResolution<IWalletWriteRepository>(serviceProvider, errors, "IWalletWriteRepository");
             
             // Read Repository validation
             TestServiceResolution<IAxonPrincipalReadRepository>(serviceProvider, errors, "IAxonPrincipalReadRepository");

@@ -1,190 +1,144 @@
-using System.Security.Claims;
-using BuildingBlocks.Core.Abstractions.Authentication;
+using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Services;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
-using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Application.Queries.GetCurrentUser;
 
 /// <summary>
-/// Handler for retrieving current authenticated user information
+/// Production-ready handler for retrieving current authenticated user information.
+/// Returns only domain-backed data with no stubs or fabricated values.
+/// Uses optimized queries to avoid N+1 problems.
 /// </summary>
 public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, Result<CurrentUserResult, Error>>
 {
-    private readonly ICurrentUserService _currentUserService;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    
+    private readonly IWalletAuthorizationService _walletAuthorizationService;
+    private readonly IAxonPrincipalReadRepository _principalRepository;
+    private readonly IWalletReadRepository _walletRepository;
+    private readonly ILogger<GetCurrentUserQueryHandler> _logger;
     public GetCurrentUserQueryHandler(
-        ICurrentUserService currentUserService,
-        IHttpContextAccessor httpContextAccessor)
+        IWalletAuthorizationService walletAuthorizationService,
+        IAxonPrincipalReadRepository principalRepository,
+        IWalletReadRepository walletRepository,
+        ILogger<GetCurrentUserQueryHandler> logger)
     {
-        _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
-        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _walletAuthorizationService = walletAuthorizationService ?? throw new ArgumentNullException(nameof(walletAuthorizationService));
+        _principalRepository = principalRepository ?? throw new ArgumentNullException(nameof(principalRepository));
+        _walletRepository = walletRepository ?? throw new ArgumentNullException(nameof(walletRepository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+    public async Task<Result<CurrentUserResult, Error>> Handle(GetCurrentUserQuery request, CancellationToken cancellationToken)
+    {
+        using var activity = _logger.BeginScope("GetCurrentUser");
+        
+        try
+        {
+            // Get current user's AxonId through authorization service
+            var axonId = await _walletAuthorizationService.GetCurrentUserAxonIdAsync(cancellationToken);
+            if (axonId == null)
+            {
+                _logger.LogWarning("User is not authenticated or does not have a principal");
+                return Result.Failure<CurrentUserResult, Error>(
+                    Error.Unauthorized("User is not authenticated", "AUTH.NOT_AUTHENTICATED"));
+            }
+
+            _logger.LogDebug("Loading principal {AxonId} with active ownerships", axonId);
+            
+            // Load principal with active wallet ownerships in single query
+            var principal = await _principalRepository.GetByIdWithActiveOwnershipsAsync(axonId.Value, cancellationToken);
+            if (principal == null)
+            {
+                _logger.LogWarning("Principal {AxonId} not found or is deleted", axonId);
+                return Result.Failure<CurrentUserResult, Error>(
+                    Error.NotFound("Principal not found", "IDENTITY.PRINCIPAL.NOT_FOUND"));
+            }
+
+            var activeOwnerships = principal.GetActiveWalletOwnerships();
+            _logger.LogDebug("Found {Count} active wallet ownerships for principal {AxonId}", 
+                activeOwnerships.Count, axonId);
+
+            // Batch load all owned wallets if any exist
+            var wallets = new List<Wallet>();
+            if (activeOwnerships.Count > 0)
+            {
+                var walletIds = activeOwnerships.Select(o => o.WalletId).ToList();
+                wallets = (await _walletRepository.GetByIdsAsync(walletIds, includeDeleted: false, cancellationToken)).ToList();
+                _logger.LogDebug("Loaded {Count} wallets for principal {AxonId}", wallets.Count, axonId);
+            }
+
+            // Map to DTOs
+            var result = MapToCurrentUserResult(principal, activeOwnerships, wallets);
+            
+            _logger.LogInformation("Successfully retrieved current user data for principal {AxonId} with {WalletCount} wallets", 
+                axonId, activeOwnerships.Count);
+                
+            return Result.Success<CurrentUserResult, Error>(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving current user data");
+            return Result.Failure<CurrentUserResult, Error>(
+                Error.Failure("An error occurred retrieving user data", "IDENTITY.GET_CURRENT_USER.FAILED"));
+        }
     }
     
-    public Task<Result<CurrentUserResult, Error>> Handle(GetCurrentUserQuery request, CancellationToken cancellationToken)
+    private static CurrentUserResult MapToCurrentUserResult(
+        Domain.Aggregates.AxonPrincipal.AxonPrincipal principal,
+        IReadOnlyCollection<Domain.Entities.WalletOwnership> activeOwnerships,
+        IReadOnlyList<Wallet> wallets)
     {
-        // Check if user is authenticated
-        if (!_currentUserService.IsAuthenticated || string.IsNullOrEmpty(_currentUserService.UserId))
+        var now = DateTimeOffset.UtcNow;
+        
+        // Create wallet lookup for efficient mapping
+        var walletLookup = wallets.ToDictionary(w => w.Id, w => w);
+        
+        // Map profile
+        var profileDto = new PrincipalProfileDto
         {
-            return Task.FromResult(Result.Failure<CurrentUserResult, Error>(
-                Error.Unauthorized("User is not authenticated", "AUTH.NOT_AUTHENTICATED")));
-        }
-        
-        // Extract user data from claims
-        var userResult = ExtractUserFromClaims();
-        
-        if (userResult == null)
-        {
-            // Fallback to stub data if claims are incomplete
-            userResult = CreateStubUserResult();
-        }
-        
-        return Task.FromResult(Result.Success<CurrentUserResult, Error>(userResult));
-    }
-    
-    private CurrentUserResult? ExtractUserFromClaims()
-    {
-        var httpContext = _httpContextAccessor.HttpContext;
-        if (httpContext?.User?.Identity?.IsAuthenticated != true)
-        {
-            return null;
-        }
-        
-        var claims = httpContext.User.Claims.ToList();
-        
-        // Extract basic user info
-        var userId = _currentUserService.UserId;
-        var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-        
-        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(email))
-        {
-            return null;
-        }
-        
-        // Extract environment ID for Dynamic user ID
-        var environmentId = claims.FirstOrDefault(c => c.Type == "environment_id")?.Value;
-        
-        // Extract wallet data
-        var wallets = new List<WalletData>();
-        var walletClaims = claims.Where(c => c.Type == "wallet").ToList();
-        
-        foreach (var walletClaim in walletClaims)
-        {
-            var address = walletClaim.Value;
-            
-            // Find chain and provider for this wallet
-            var chainClaim = claims.FirstOrDefault(c => c.Type.StartsWith($"wallet:") && 
-                                                        c.Value == address && 
-                                                        !c.Type.Contains("provider", StringComparison.Ordinal));
-            var chain = chainClaim?.Type.Split(':').LastOrDefault() ?? "unknown";
-            
-            var providerClaim = claims.FirstOrDefault(c => c.Type == $"wallet:provider:{chain}");
-            var provider = providerClaim?.Value ?? "unknown";
-            
-            wallets.Add(new WalletData
-            {
-                Id = Guid.NewGuid(), // Generate a new ID for now
-                Address = address,
-                Chain = chain,
-                Provider = provider,
-                WalletName = null,
-                ConnectedAt = DateTime.UtcNow // Use current time as approximation
-            });
-        }
-        
-        // Extract timestamps
-        DateTime? firstVisit = null;
-        DateTime? lastVisit = null;
-        
-        var firstVisitClaim = claims.FirstOrDefault(c => c.Type == "first_visit")?.Value;
-        if (DateTime.TryParse(firstVisitClaim, out var fv))
-        {
-            firstVisit = fv;
-        }
-        
-        var lastVisitClaim = claims.FirstOrDefault(c => c.Type == "last_visit")?.Value;
-        if (DateTime.TryParse(lastVisitClaim, out var lv))
-        {
-            lastVisit = lv;
-        }
-        
-        // Check if new user
-        var isNewUser = claims.FirstOrDefault(c => c.Type == "is_new_user")?.Value == "true";
-        
-        return new CurrentUserResult
-        {
-            User = new UserProfile
-            {
-                Id = userId,
-                DynamicUserId = Guid.TryParse(userId, out var dynId) ? dynId : Guid.NewGuid(),
-                Email = email,
-                DisplayName = email.Split('@').FirstOrDefault() ?? "User",
-                Username = email.Split('@').FirstOrDefault()?.ToLower() ?? "user",
-                FirstVisit = firstVisit ?? DateTime.UtcNow,
-                LastVisit = lastVisit ?? DateTime.UtcNow,
-                Metadata = new Dictionary<string, object>
-                {
-                    ["authenticated"] = true,
-                    ["environment_id"] = environmentId ?? "unknown",
-                    ["is_new_user"] = isNewUser
-                }
-            },
-            Wallets = wallets,
-            SyncedAt = DateTime.UtcNow,
-            SyncStatus = "completed"
+            AxonId = principal.Id.Value.ToString(),
+            PrincipalType = principal.Type.Value,
+            PreferredLanguage = principal.Profile.PreferredLanguage.Value,
+            RiskTier = principal.Profile.RiskTier.Value,
+            PrimaryEmailHash = principal.PrimaryEmailHash?.Value,
+            CreatedAt = principal.CreatedAt,
+            UpdatedAt = principal.UpdatedAt ?? principal.CreatedAt
         };
-    }
-    
-    private static CurrentUserResult CreateStubUserResult()
-    {
-        var now = DateTime.UtcNow;
+        
+        // Map owned wallets with ownership information
+        var ownedWalletDtos = activeOwnerships
+            .Where(ownership => walletLookup.ContainsKey(ownership.WalletId))
+            .Select(ownership =>
+            {
+                var wallet = walletLookup[ownership.WalletId];
+                return new OwnedWalletDto
+                {
+                    WalletId = ownership.WalletId.Value.ToString(),
+                    Address = wallet.Address.Value,
+                    ChainId = ownership.ChainId.Value,
+                    ProofType = ownership.ProofType.Value,
+                    AccessMode = ownership.AccessMode.Value,
+                    OwnershipState = ownership.State.Value,
+                    FirstLinkedAt = ownership.FirstLinkedAt,
+                    LastVerifiedAt = ownership.LastVerifiedAt,
+                    Label = ownership.Label
+                };
+            })
+            .ToList();
+        
+        // Map chain defaults
+        var defaultPerChain = principal.Profile.DefaultPerChain.Value
+            .ToDictionary(kvp => kvp.Key.Value, kvp => kvp.Value.ToString());
         
         return new CurrentUserResult
         {
-            User = new UserProfile
-            {
-                Id = "usr_2Z4e8K9mNp3QrS7T",
-                DynamicUserId = Guid.Parse("95b11417-f18f-457f-8804-68e361f9164f"),
-                Email = "user@example.com",
-                DisplayName = "John Doe",
-                Username = "johndoe",
-                FirstVisit = now.AddDays(-30),
-                LastVisit = now.AddMinutes(-5),
-                Metadata = new Dictionary<string, object>
-                {
-                    ["preferences"] = new Dictionary<string, object>
-                    {
-                        ["theme"] = "dark",
-                        ["notifications"] = true
-                    },
-                    ["tags"] = new[] { "trader", "developer", "early-adopter" }
-                }
-            },
-            Wallets = new List<WalletData>
-            {
-                new()
-                {
-                    Id = Guid.Parse("e5d4c3b2-1a2b-3c4d-5e6f-7a8b9c0d1e2f"),
-                    Address = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
-                    Chain = "solana",
-                    Provider = "phantom",
-                    WalletName = "Primary Wallet",
-                    ConnectedAt = now.AddDays(-7)
-                },
-                new()
-                {
-                    Id = Guid.Parse("f6e5d4c3-2b3c-4d5e-6f7a-8b9c0d1e2f3a"),
-                    Address = "7C4jsPZpht42Tw6MjXWF56Q5RQUocjBBmciEjDa8HRtp",
-                    Chain = "solana",
-                    Provider = "metamask",
-                    WalletName = "Trading Wallet",
-                    ConnectedAt = now.AddDays(-3)
-                }
-            },
-            SyncedAt = now,
-            SyncStatus = "completed"
+            Profile = profileDto,
+            OwnedWallets = ownedWalletDtos,
+            DefaultPerChain = defaultPerChain,
+            SyncedAt = now
         };
     }
 }

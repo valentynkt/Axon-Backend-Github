@@ -1,4 +1,4 @@
-using Axon.Modules.Identity.Application.Abstractions.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Specifications.Wallets;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
@@ -198,5 +198,22 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
             .ToListAsync(cancellationToken);
 
         return distribution.ToDictionary(x => x.Chain, x => x.Count);
+    }
+
+    public async Task<IReadOnlyList<Wallet>> GetByIdsAsync(
+        IEnumerable<WalletId> walletIds,
+        bool includeDeleted = false,
+        CancellationToken cancellationToken = default)
+    {
+        var walletIdList = walletIds.ToList();
+        if (walletIdList.Count == 0)
+            return Array.Empty<Wallet>();
+
+        var wallets = await _identityDbContext.Set<Wallet>()
+            .Where(w => walletIdList.Contains(w.Id) && (includeDeleted || w.DeletedAt == null))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return wallets.AsReadOnly();
     }
 }

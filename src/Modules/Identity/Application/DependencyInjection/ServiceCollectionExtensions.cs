@@ -1,5 +1,4 @@
 using System.Reflection;
-using Axon.Modules.Identity.Application.Abstractions;
 using Axon.Modules.Identity.Application.Services;
 using BuildingBlocks.Application.Configuration;
 using FluentValidation;
@@ -32,9 +31,10 @@ public static class ServiceCollectionExtensions
 
         // Register Identity-specific services
         services.AddSingleton(TimeProvider.System);
-        
-        // Register application services
+        services.AddScoped<IWalletAuthorizationService, WalletAuthorizationService>();
         services.AddScoped<IWalletOwnershipService, WalletOwnershipService>();
+        services.AddScoped<IWalletResolutionService, WalletResolutionService>();
+        services.AddScoped<IDefaultWalletCoordinator, DefaultWalletCoordinator>();
         
         return services;
     }

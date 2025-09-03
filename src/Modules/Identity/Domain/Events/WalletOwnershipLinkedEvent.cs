@@ -6,11 +6,11 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// Domain event raised when a wallet ownership is linked to a principal.
 /// </summary>
 public sealed record WalletOwnershipLinkedEvent(
-    AxonId AxonId,
-    WalletId WalletId,
-    WalletOwnershipId OwnershipId,
+    string AxonId,
+    string WalletId,
+    string OwnershipId,
     string ProofType,
     string AccessMode,
-    ChainId ChainId,
+    string ChainId,
     DateTimeOffset LinkedAt
 ) : DomainEvent;
