@@ -1,3 +1,4 @@
+using System.Linq;
 using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.DependencyInjection; 
 using Axon.Modules.Chat.Infrastructure.DependencyInjection;
@@ -82,10 +83,11 @@ public static class DIValidationService
             
             // Validate MediatR and FluentValidation integration
             var mediator = serviceProvider.GetService<MediatR.IMediator>();
-            var validatorFactory = serviceProvider.GetService<FluentValidation.IValidatorFactory>();
-            if (mediator != null && validatorFactory == null)
+            // Modern FluentValidation uses IServiceProvider directly instead of IValidatorFactory
+            var validationServices = serviceProvider.GetServices(typeof(FluentValidation.IValidator<>));
+            if (mediator != null && !validationServices.Any())
             {
-                errors.Add("CROSS-LAYER: MediatR is registered but FluentValidation IValidatorFactory is missing - validation pipeline will not work");
+                errors.Add("CROSS-LAYER: MediatR is registered but FluentValidation services are missing - validation pipeline will not work");
             }
             
         }

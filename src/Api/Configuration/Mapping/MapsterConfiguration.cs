@@ -47,6 +47,8 @@ public static class MapsterConfiguration
 
     private static void RegisterMappingProfiles(TypeAdapterConfig config, Assembly[] assemblies)
     {
+        ArgumentNullException.ThrowIfNull(assemblies);
+        
         if (assemblies.Length == 0)
         {
             assemblies = new[] { Assembly.GetCallingAssembly() };
@@ -93,6 +95,8 @@ public static class MapsterConfiguration
     /// </summary>
     public static void EnsureMappingExists<TSource, TDestination>(this TypeAdapterConfig config)
     {
+        ArgumentNullException.ThrowIfNull(config);
+        
         try
         {
             var compiledConfig = config.Fork(c => c.NewConfig<TSource, TDestination>());

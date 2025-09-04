@@ -24,6 +24,22 @@ public sealed class IdentityReadDbContext : ReadDbContextBase<IdentityModule>, I
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)
     {
+        // Configure indexes for read optimization, but skip owned entities
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            // Skip owned entity types to avoid configuration conflicts
+            if (entityType.IsOwned()) 
+                continue;
+
+            var builder = modelBuilder.Entity(entityType.ClrType);
+
+            if (entityType.FindProperty("CreatedAt") is not null)
+                builder.HasIndex("CreatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_created_at");
+
+            if (entityType.FindProperty("UpdatedAt") is not null)
+                builder.HasIndex("UpdatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_updated_at");
+        }
+        
         // Add read-specific indexes for AxonPrincipal queries if needed
         // For example:
         // modelBuilder.Entity<AxonPrincipal>()
@@ -35,8 +51,5 @@ public sealed class IdentityReadDbContext : ReadDbContextBase<IdentityModule>, I
         // modelBuilder.Entity<Wallet>()
         //     .HasIndex(w => w.Address)
         //     .HasDatabaseName("ix_wallets_address");
-
-        // Call base implementation for standard timestamp indexes
-        base.ConfigureReadModelOptimizations(modelBuilder);
     }
 }

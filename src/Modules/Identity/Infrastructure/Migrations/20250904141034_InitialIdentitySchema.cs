@@ -11,7 +11,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            ArgumentNullException.ThrowIfNull(migrationBuilder);
             migrationBuilder.EnsureSchema(
                 name: "identity");
 
@@ -74,7 +73,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     verified_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     last_seen_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     metadata = table.Column<string>(type: "jsonb", nullable: false),
-                    axon_principal_id = table.Column<Guid>(type: "uuid", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -90,12 +88,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         principalTable: "axon_principals",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_identity_credentials_axon_principals_axon_principal_id",
-                        column: x => x.axon_principal_id,
-                        principalSchema: "identity",
-                        principalTable: "axon_principals",
-                        principalColumn: "id");
                 });
 
             migrationBuilder.CreateTable(
@@ -113,7 +105,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     first_linked_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     last_verified_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     label = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    axon_principal_id = table.Column<Guid>(type: "uuid", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -129,12 +120,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         principalTable: "axon_principals",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_wallet_ownerships_axon_principals_axon_principal_id",
-                        column: x => x.axon_principal_id,
-                        principalSchema: "identity",
-                        principalTable: "axon_principals",
-                        principalColumn: "id");
                 });
 
             migrationBuilder.CreateIndex(
@@ -175,22 +160,10 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_identity_credentials_axon_principal_id",
-                schema: "identity",
-                table: "identity_credentials",
-                column: "axon_principal_id");
-
-            migrationBuilder.CreateIndex(
                 name: "ix_wallet_ownerships_axon_id",
                 schema: "identity",
                 table: "wallet_ownerships",
                 column: "axon_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_wallet_ownerships_axon_principal_id",
-                schema: "identity",
-                table: "wallet_ownerships",
-                column: "axon_principal_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_wallet_ownerships_chain_id",
@@ -252,7 +225,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            ArgumentNullException.ThrowIfNull(migrationBuilder);
             migrationBuilder.DropTable(
                 name: "identity_credentials",
                 schema: "identity");

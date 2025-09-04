@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Primitives.Ids;

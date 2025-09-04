@@ -28,10 +28,10 @@ public static class ServiceRegistration
     {
         ArgumentNullException.ThrowIfNull(configuration);
         
-        // Get connection string
+        // Get connection string - falls back to shared database (axon_chat)
         var connectionString = configuration.GetConnectionString("IdentityDb") 
             ?? configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Database=axon_identity;Username=postgres;Password=postgres";
+            ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres";
         
         // Write DbContext
         services.AddDbContext<IdentityDbContext>(options =>
@@ -39,6 +39,10 @@ public static class ServiceRegistration
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
             })
             .UseSnakeCaseNamingConvention();
         });
@@ -50,6 +54,10 @@ public static class ServiceRegistration
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
                 npgsqlOptions.CommandTimeout(30); // 30-second timeout for read operations
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
             })
             .UseSnakeCaseNamingConvention();
             

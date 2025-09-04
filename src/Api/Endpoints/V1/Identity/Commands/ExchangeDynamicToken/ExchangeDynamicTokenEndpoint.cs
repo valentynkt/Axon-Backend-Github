@@ -1,3 +1,4 @@
+using System.Globalization;
 using Axon.Api.Contracts.V1.Identity.Authentication;
 using Axon.Api.Modules;
 using Axon.Modules.Identity.Application.Common.Constants;
@@ -108,9 +109,9 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
             var rateLimitError = rateLimitResult.Error;
             _logger.LogWarning("Rate limit exceeded for IP {ClientIp}: {Message}", clientIp, rateLimitError.Message);
             
-            HttpContext.Response.Headers.RetryAfter = rateLimitError.RetryAfterSeconds.ToString();
-            HttpContext.Response.Headers["X-RateLimit-Remaining"] = rateLimitError.RequestsRemaining.ToString();
-            HttpContext.Response.Headers["X-RateLimit-Reset"] = rateLimitError.WindowResetAt.ToUnixTimeSeconds().ToString();
+            HttpContext.Response.Headers.RetryAfter = rateLimitError.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+            HttpContext.Response.Headers["X-RateLimit-Remaining"] = rateLimitError.RequestsRemaining.ToString(CultureInfo.InvariantCulture);
+            HttpContext.Response.Headers["X-RateLimit-Reset"] = rateLimitError.WindowResetAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
             
             ThrowError(rateLimitError.Message, statusCode: 429);
         }

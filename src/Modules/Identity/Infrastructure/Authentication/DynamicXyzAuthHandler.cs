@@ -32,7 +32,12 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
         if (!Request.Headers.ContainsKey("Authorization"))
         {
             Logger.LogDebug("No Authorization header found");
-            return AuthenticateResult.NoResult();
+            
+            // If anonymous access is allowed, return NoResult to let the request continue
+            // If anonymous access is not allowed, fail authentication
+            return Options.AllowAnonymous 
+                ? AuthenticateResult.NoResult() 
+                : AuthenticateResult.Fail("Authorization header is required");
         }
 
         // Extract token from header
@@ -40,7 +45,12 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
         if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             Logger.LogDebug("Invalid Authorization header format");
-            return AuthenticateResult.NoResult();
+            
+            // If anonymous access is allowed, return NoResult to let the request continue
+            // If anonymous access is not allowed, fail authentication
+            return Options.AllowAnonymous 
+                ? AuthenticateResult.NoResult() 
+                : AuthenticateResult.Fail("Invalid Authorization header format");
         }
 
         var token = authHeader["Bearer ".Length..].Trim();

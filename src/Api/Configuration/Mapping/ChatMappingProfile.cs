@@ -19,6 +19,8 @@ public sealed class ChatMappingProfile : IRegister, IChatMappingProfile
 
     public void Register(TypeAdapterConfig config)
     {
+        ArgumentNullException.ThrowIfNull(config);
+        
         ConfigureRequestMappings(config);
         ConfigureResponseMappings(config);
     }

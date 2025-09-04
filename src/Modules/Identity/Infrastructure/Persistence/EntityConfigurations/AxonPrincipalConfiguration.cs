@@ -79,14 +79,14 @@ public sealed class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPr
                 .HasColumnType("jsonb");
         });
 
-        // Navigation to IdentityCredentials - configured as separate entity with FK
-        builder.HasMany<IdentityCredential>()
+        // Configure navigation properties without creating additional foreign keys
+        // The relationships are defined in the child entity configurations
+        builder.HasMany(p => p.Credentials)
             .WithOne()
             .HasForeignKey(c => c.AxonId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Navigation to WalletOwnerships - configured as separate entity with FK  
-        builder.HasMany<WalletOwnership>()
+        builder.HasMany(p => p.WalletOwnerships)
             .WithOne()
             .HasForeignKey(o => o.AxonId)
             .OnDelete(DeleteBehavior.Cascade);

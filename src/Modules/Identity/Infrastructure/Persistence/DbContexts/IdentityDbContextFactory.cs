@@ -46,7 +46,7 @@ public sealed class IdentityDbContextFactory : IDesignTimeDbContextFactory<Ident
             }
         }
 
-        // Default connection string for development
-        return "Host=localhost;Database=axon_identity;Username=postgres;Password=postgres;Port=5432";
+        // Default connection string for development - shared database
+        return "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Port=5432";
     }
 }

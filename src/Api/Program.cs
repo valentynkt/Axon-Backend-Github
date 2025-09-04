@@ -6,10 +6,7 @@ using BuildingBlocks.Web.OpenApi;
 using BuildingBlocks.Web.Configuration;
 using FastEndpoints;
 using FastEndpoints.Swagger;
-using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.Logging.Console;
-using Microsoft.OData.Edm;
-using Microsoft.OData.ModelBuilder;
 using BuildingBlocks.Primitives.Ids;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using BuildingBlocks.Web.Middleware;
@@ -48,7 +45,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new MessageContent.MessageContentSystemTextJsonConverter());
 });
 
-// Add API versioning and OData
+// Add API versioning
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new ApiVersion(1, 0);
@@ -105,7 +102,7 @@ app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 var corsOptions = app.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>();
 app.UseCors(corsOptions?.PolicyName ?? "DefaultPolicy");
 
-// Configure OData routing BEFORE authentication/authorization
+// Configure routing
 app.UseRouting();
 
 // Authentication enabled with Dynamic.xyz JWT validation
@@ -116,7 +113,7 @@ app.UseAuthorization();
 // Configure FastEndpoints (before MVC controllers)
 app.UseFastEndpoints();
 
-// Configure MVC controllers (including OData)
+// Configure MVC controllers
 app.MapControllers();
 
 // PRODUCTION-READY: Configure comprehensive health check endpoints

@@ -71,23 +71,26 @@ public sealed class IdentityApiModule : IApiModule
             .AddScheme<DynamicXyzAuthOptions, DynamicXyzAuthHandler>("DynamicXyz", options =>
             {
                 options.Realm = "Axon API";
-                options.AllowAnonymous = false; // Require authentication by default
+                options.AllowAnonymous = true; // Allow anonymous access - endpoints control their own auth requirements
             });
         
         // Set Dynamic.xyz as the default authentication scheme
         services.AddAuthorizationBuilder()
-            .SetDefaultPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .SetDefaultPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder("DynamicXyz")
                 .RequireAuthenticatedUser()
                 .Build());
         
         // Register FluentValidation validators from this assembly
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
         
-        // Add health checks for Dynamic.xyz services  
+        // Add health checks for Dynamic.xyz services and Identity database
         services.AddHealthChecks()
             .AddCheck<DynamicJwksHealthCheck>(
                 name: "dynamic-jwks",
-                tags: new[] { "dynamic", "external", "auth" });
+                tags: new[] { "dynamic", "external", "auth" })
+            .AddCheck<IdentityDatabaseHealthCheck>(
+                name: "identity-database",
+                tags: new[] { "database", "identity", "ready" });
         
         // Register validators
         RegisterValidators();

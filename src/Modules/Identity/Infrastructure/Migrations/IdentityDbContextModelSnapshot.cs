@@ -162,10 +162,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("axon_id");
 
-                    b.Property<Guid?>("AxonPrincipalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("axon_principal_id");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -224,9 +220,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasIndex("AxonId")
                         .HasDatabaseName("ix_credentials_axon_id");
 
-                    b.HasIndex("AxonPrincipalId")
-                        .HasDatabaseName("ix_identity_credentials_axon_principal_id");
-
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_credentials_created_at");
 
@@ -255,10 +248,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.Property<Guid>("AxonId")
                         .HasColumnType("uuid")
                         .HasColumnName("axon_id");
-
-                    b.Property<Guid?>("AxonPrincipalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("axon_principal_id");
 
                     b.Property<string>("ChainId")
                         .IsRequired()
@@ -316,9 +305,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
 
                     b.HasIndex("AxonId")
                         .HasDatabaseName("ix_wallet_ownerships_axon_id");
-
-                    b.HasIndex("AxonPrincipalId")
-                        .HasDatabaseName("ix_wallet_ownerships_axon_principal_id");
 
                     b.HasIndex("ChainId")
                         .HasDatabaseName("ix_wallet_ownerships_chain_id");
@@ -378,31 +364,21 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.IdentityCredential", b =>
                 {
                     b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany()
+                        .WithMany("Credentials")
                         .HasForeignKey("AxonId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_identity_credentials_axon_principals_axon_id");
-
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany("Credentials")
-                        .HasForeignKey("AxonPrincipalId")
-                        .HasConstraintName("fk_identity_credentials_axon_principals_axon_principal_id");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletOwnership", b =>
                 {
                     b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany()
+                        .WithMany("WalletOwnerships")
                         .HasForeignKey("AxonId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_wallet_ownerships_axon_principals_axon_id");
-
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany("WalletOwnerships")
-                        .HasForeignKey("AxonPrincipalId")
-                        .HasConstraintName("fk_wallet_ownerships_axon_principals_axon_principal_id");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>
