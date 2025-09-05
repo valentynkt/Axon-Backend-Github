@@ -40,8 +40,8 @@ public static class ServiceRegistration
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
                 npgsqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null);
             })
             .UseSnakeCaseNamingConvention();
@@ -53,10 +53,10 @@ public static class ServiceRegistration
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
-                npgsqlOptions.CommandTimeout(30); // 30-second timeout for read operations
+                npgsqlOptions.CommandTimeout(60); // 60-second timeout for read operations
                 npgsqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null);
             })
             .UseSnakeCaseNamingConvention();

@@ -46,16 +46,31 @@ public sealed class EfUnitOfWork<TContext, TModule> : IWriteUnitOfWork<TModule>
             action,
             async (context, operation, cancellationToken) =>
             {
-                await _db.BeginTransactionAsync(cancellationToken);
+                // Create separate timeout token for transaction operations only
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                using var transactionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                
+                // Use transaction token only for Begin/Commit/Rollback operations
+                await _db.BeginTransactionAsync(transactionCts.Token);
                 try 
                 { 
+                    // Use original cancellation token for business operations to preserve client cancellation
                     var result = await operation(cancellationToken); 
-                    await _db.CommitTransactionAsync(cancellationToken); 
+                    await _db.CommitTransactionAsync(transactionCts.Token); 
                     return result;
                 }
-                catch 
+                catch (Exception ex)
                 { 
-                    await _db.RollbackTransactionAsync(cancellationToken); 
+                    try
+                    {
+                        await _db.RollbackTransactionAsync(CancellationToken.None); // Don't pass cancelled token to rollback
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        // Log rollback failure but don't mask the original exception
+                        // In production, you might want to log this
+                        _ = rollbackEx; // Suppress unused variable warning
+                    }
                     throw; 
                 }
             },

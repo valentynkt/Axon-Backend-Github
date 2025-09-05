@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Application.Queries.GetCurrentUser;
+using Axon.Modules.Identity.Infrastructure.Authentication;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Extensions;
@@ -24,7 +25,7 @@ public class GetCurrentUserEndpoint : EndpointWithoutRequest<CurrentUserResult>
     public override void Configure()
     {
         Get("/api/v1/auth/me");
-        AuthSchemes("DynamicXyz");
+        AuthSchemes(AuthenticationSchemes.DynamicJwt);
         
         Summary(s =>
         {

@@ -124,12 +124,12 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
-    /// Gets the default wallet for a specific chain.
+    /// Gets the default wallet ownership for a specific chain.
     /// </summary>
-    public WalletOwnership? GetDefaultWalletForChain(ChainId chainId)
+    public WalletOwnership? GetDefaultWalletOwnershipForChain(ChainId chainId)
     {
-        var walletId = Profile.GetDefaultWalletForChain(chainId);
-        if (!walletId.HasValue)
+        var walletId = GetDefaultWalletForChain(chainId);
+        if (walletId == null)
             return null;
 
         return FindWalletOwnership(walletId.Value);

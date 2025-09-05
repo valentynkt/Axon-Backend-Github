@@ -141,7 +141,7 @@ public class AxonPrincipalRepositoryIntegrationTests
 
         var credentialResult = principal.LinkIdentityCredential(
             providerType, issuer, subject, 
-            environmentId: null, metadata: null, timeProvider: TimeProvider.System);
+            environmentId: null, timeProvider: TimeProvider.System);
         
         credentialResult.IsSuccess.Should().BeTrue();
         
@@ -181,7 +181,7 @@ public class AxonPrincipalRepositoryIntegrationTests
 
         var credentialResult = principal.LinkIdentityCredential(
             providerType, issuer, subject,
-            environmentId: null, metadata: null, timeProvider: TimeProvider.System);
+            environmentId: null, timeProvider: TimeProvider.System);
         
         credentialResult.IsSuccess.Should().BeTrue();
         

@@ -30,6 +30,19 @@ builder.Services.Configure<ConsoleFormatterOptions>(options =>
 // Add services to the container
 builder.Services.AddApplicationServices(builder.Configuration, builder.Environment);
 
+// Configure Kestrel server options with timeout settings
+builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+{
+    // Increase request timeout to 2 minutes for long-running operations
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+    
+    // Configure request body limits
+    options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+    options.Limits.MaxRequestLineSize = 8192; // 8KB for JWT tokens
+    options.Limits.MaxRequestHeadersTotalSize = 32768; // 32KB for headers
+});
+
 // Configure JSON serialization options
 builder.Services.ConfigureHttpJsonOptions(options =>
 {

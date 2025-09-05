@@ -107,5 +107,14 @@ public sealed class WalletOwnershipConfiguration : IEntityTypeConfiguration<Wall
         
         builder.HasIndex(o => o.CreatedAt)
             .HasDatabaseName("ix_wallet_ownerships_created_at");
+            
+        // Composite index for AxonId lookups (common in principal operations)
+        builder.HasIndex(o => new { o.AxonId, o.State })
+            .HasDatabaseName("ix_wallet_ownerships_axon_id_state")
+            .HasFilter("is_deleted = false");
+            
+        // Composite index for wallet-chain relationships
+        builder.HasIndex(o => new { o.WalletId, o.ChainId, o.IsDeleted })
+            .HasDatabaseName("ix_wallet_ownerships_wallet_chain_deleted");
     }
 }

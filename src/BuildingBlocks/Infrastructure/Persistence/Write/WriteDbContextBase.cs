@@ -62,8 +62,11 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
         finally
         {
-            await _currentTransaction.DisposeAsync();
-            _currentTransaction = null;
+            if (_currentTransaction != null)
+            {
+                await _currentTransaction.DisposeAsync();
+                _currentTransaction = null;
+            }
         }
     }
 
@@ -76,8 +79,11 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         }
         finally
         {
-            await _currentTransaction.DisposeAsync();
-            _currentTransaction = null;
+            if (_currentTransaction != null)
+            {
+                await _currentTransaction.DisposeAsync();
+                _currentTransaction = null;
+            }
         }
     }
 

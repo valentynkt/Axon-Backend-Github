@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Events;
 using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.Rules;
@@ -16,7 +17,7 @@ namespace Axon.Modules.Identity.Domain.Aggregates.Wallet;
 /// </summary>
 public sealed partial class Wallet : AggregateRoot<WalletId>
 {
-    private readonly HashSet<Tag> _tags = new();
+    private readonly List<WalletTag> _walletTags = new();
 
     // Core immutable attributes (W1-W3: Global uniqueness, immutability, canonical form)
     public ChainId Chain { get; private set; }
@@ -25,10 +26,11 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
     // Mutable attributes
     public DateTimeOffset FirstSeenAt { get; private set; }
     public DateTimeOffset LastSeenAt { get; private set; }
-    public WalletMeta Meta { get; private set; } = WalletMeta.Empty;
+    public WalletProfile Profile { get; private set; } = null!;
     
-    // Tags collection (W6: Tag policy)
-    public IReadOnlySet<Tag> Tags => _tags.ToHashSet();
+    // Tags collection (W6: Tag policy) - now via join table
+    public IReadOnlyCollection<WalletTag> WalletTags => _walletTags.AsReadOnly();
+    public IReadOnlySet<Tag> Tags => _walletTags.Select(wt => wt.Tag).ToHashSet();
 
     // EF Core parameterless constructor
     private Wallet() : base() { }
@@ -38,13 +40,13 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
         ChainId chain,
         Address address,
         DateTimeOffset firstSeenAt,
-        WalletMeta? meta = null) : base(id)
+        WalletProfile profile) : base(id)
     {
         Chain = chain;
         Address = address;
         FirstSeenAt = firstSeenAt;
         LastSeenAt = firstSeenAt; // W4: Monotonicity - start equal
-        Meta = meta ?? WalletMeta.Empty;
+        Profile = profile;
     }
 
     /// <summary>
@@ -56,7 +58,8 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
         string rawAddress,
         DateTimeOffset firstSeenAt,
         Func<ChainId, Address, ValueTask<bool>> walletExistsCheck,
-        Dictionary<string, object>? initialMeta = null)
+        ProviderType? provider = null,
+        string? displayName = null)
     {
         try
         {
@@ -70,14 +73,17 @@ public sealed partial class Wallet : AggregateRoot<WalletId>
             // Check global uniqueness (W1)
             await CheckRuleAsync(new WalletMustNotExistRule(chainId, canonicalAddress, walletExistsCheck));
 
-            // Validate initial metadata (W5)
-            var metaResult = WalletMeta.Create(initialMeta);
-            if (metaResult.IsFailure)
-                return Result.Failure<Wallet, Error>(metaResult.Error);
-
             var id = WalletId.New();
 
-            var wallet = new Wallet(id, chainId, canonicalAddress, firstSeenAt, metaResult.Value);
+            // Create initial profile
+            var profileResult = WalletProfile.Create(
+                id, 
+                provider ?? ProviderType.From("unknown"), 
+                displayName);
+            if (profileResult.IsFailure)
+                return Result.Failure<Wallet, Error>(profileResult.Error);
+
+            var wallet = new Wallet(id, chainId, canonicalAddress, firstSeenAt, profileResult.Value);
 
             // Raise domain event
             wallet.RaiseDomainEvent(new WalletRegisteredEvent(

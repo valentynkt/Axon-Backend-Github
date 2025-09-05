@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Events;
 using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.Rules;
@@ -44,26 +45,21 @@ public sealed partial class Wallet
     }
 
     /// <summary>
-    /// Updates wallet metadata with additive merging.
-    /// Enforces W5 invariant - meta size and shape constraints.
+    /// Updates wallet profile information.
+    /// Replaces the old UpdateMeta method with typed profile updates.
     /// </summary>
-    public Result<Unit, Error> UpdateMeta(
-        Dictionary<string, object> metaPatch)
+    public Result<Unit, Error> UpdateProfile(ProviderType provider, string? displayName = null)
     {
         try
         {
             CheckRule(new WalletMustBeActiveRule(this));
-            CheckRule(new MetaSizeLimitRule(Meta, metaPatch));
 
-            var mergeResult = Meta.Merge(metaPatch);
-            if (mergeResult.IsFailure)
-                return Result.Failure<Unit, Error>(mergeResult.Error);
+            var updateResult = Profile.Update(provider, displayName);
+            if (updateResult.IsFailure)
+                return Result.Failure<Unit, Error>(updateResult.Error);
 
-            var keysChanged = metaPatch.Keys.ToArray();
-            Meta = mergeResult.Value;
             MarkUpdated();
-
-            RaiseDomainEvent(new WalletMetaUpdatedEvent(Id, keysChanged));
+            RaiseDomainEvent(new WalletMetaUpdatedEvent(Id, new[] { "provider", "displayName" }));
 
             return Result.Success<Unit, Error>(Unit.Value);
         }
@@ -77,6 +73,7 @@ public sealed partial class Wallet
     /// <summary>
     /// Adds a tag to the wallet.
     /// Enforces W6 invariant - tag policy validation.
+    /// Now uses proper join table instead of JSON array.
     /// </summary>
     public Result<Unit, Error> AddTag(string tagValue)
     {
@@ -91,12 +88,20 @@ public sealed partial class Wallet
 
             var tag = tagResult.Value;
             
-            // Idempotent add - no error if already present
-            if (_tags.Add(tag))
+            // Check if tag already exists (idempotent add)
+            if (_walletTags.Any(wt => wt.IsTag(tag)))
             {
-                MarkUpdated();
-                RaiseDomainEvent(new WalletTaggedEvent(Id, tag.Value));
+                return Result.Success<Unit, Error>(Unit.Value); // Already present
             }
+
+            // Create new WalletTag association
+            var walletTagResult = WalletTag.Create(Id, tag);
+            if (walletTagResult.IsFailure)
+                return Result.Failure<Unit, Error>(walletTagResult.Error);
+
+            _walletTags.Add(walletTagResult.Value);
+            MarkUpdated();
+            RaiseDomainEvent(new WalletTaggedEvent(Id, tag.Value));
 
             return Result.Success<Unit, Error>(Unit.Value);
         }
@@ -110,6 +115,7 @@ public sealed partial class Wallet
     /// <summary>
     /// Removes a tag from the wallet.
     /// Idempotent operation - no error if tag not present.
+    /// Now uses proper join table instead of JSON array.
     /// </summary>
     public Result<Unit, Error> RemoveTag(string tagValue)
     {
@@ -123,9 +129,11 @@ public sealed partial class Wallet
 
             var tag = tagResult.Value;
             
-            // Idempotent remove - no error if not present
-            if (_tags.Remove(tag))
+            // Find and remove the WalletTag association
+            var walletTag = _walletTags.FirstOrDefault(wt => wt.IsTag(tag));
+            if (walletTag != null)
             {
+                _walletTags.Remove(walletTag);
                 MarkUpdated();
                 RaiseDomainEvent(new WalletUntaggedEvent(Id, tag.Value));
             }
@@ -137,6 +145,22 @@ public sealed partial class Wallet
             return Result.Failure<Unit, Error>(
                 Error.BusinessRule(ex.Message, ex.Error.Code));
         }
+    }
+
+    /// <summary>
+    /// Adds a tag using the Tag value object directly.
+    /// </summary>
+    public Result<Unit, Error> AddTag(Tag tag)
+    {
+        return AddTag(tag.Value);
+    }
+
+    /// <summary>
+    /// Removes a tag using the Tag value object directly.
+    /// </summary>
+    public Result<Unit, Error> RemoveTag(Tag tag)
+    {
+        return RemoveTag(tag.Value);
     }
 
     /// <summary>

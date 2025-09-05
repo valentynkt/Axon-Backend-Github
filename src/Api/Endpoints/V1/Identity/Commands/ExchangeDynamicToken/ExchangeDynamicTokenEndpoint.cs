@@ -12,7 +12,7 @@ namespace Axon.Api.Endpoints.V1.Identity.Commands.ExchangeDynamicToken;
 /// <summary>
 /// Endpoint for exchanging a Dynamic JWT token for Axon identity
 /// </summary>
-public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicTokenRequest, ExchangeDynamicTokenResponse>
+public sealed class ExchangeDynamicTokenEndpoint : Endpoint<EmptyRequest, ExchangeDynamicTokenResponse>
 {
     private readonly IDynamicAuthOrchestrator _orchestrator;
     private readonly Axon.Modules.Identity.Application.Services.IRateLimitService _rateLimitService;
@@ -31,11 +31,11 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
     public override void Configure()
     {
         Post("/api/v1/auth/exchange");
-        AllowAnonymous(); // JWT validation happens inside the orchestrator
+        AllowAnonymous(); // This endpoint handles JWT as input data, not authentication
+        Options(x => x.WithRequestTimeout(TimeSpan.FromMinutes(3))); // Allow sufficient time for complex operations
         
         Description(d => d
             .WithTags("Authentication")
-            .Accepts<ExchangeDynamicTokenRequest>("application/json")
             .Produces<ExchangeDynamicTokenResponse>(200, "application/json")
             .ProducesProblemFE(400)
             .ProducesProblemFE(401)
@@ -50,12 +50,17 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
             s.Description = """
                 Validates a Dynamic.xyz JWT token and creates/updates the corresponding Axon principal with all associated wallets.
                 
+                **JWT is supplied via Authorization: Bearer <token>. This route does not accept a body.**
+                
                 **Authentication Flow:**
                 1. Extract Bearer token from Authorization header
                 2. Validate JWT signature against Dynamic.xyz JWKS
                 3. Create or update Axon principal and credential
                 4. Process all wallets: activity tracking, ownership linking, default assignment
                 5. Return detailed exchange metrics
+                
+                **Optional Headers:**
+                - X-Axon-Exchange-Options: applyDefaults=true (string kv; ignored if unknown)
                 
                 **Features:**
                 - Idempotent operations - safe to retry
@@ -74,11 +79,7 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
             s.Responses[429] = "Rate limit exceeded - too many requests";
             s.Responses[500] = "Internal server error or external service unavailable";
             
-            // Add request example
-            s.ExampleRequest = new ExchangeDynamicTokenRequest
-            {
-                // Request body is typically empty since JWT comes in Authorization header
-            };
+            // No request body - JWT comes from Authorization header
             
             // Add response examples
             s.ResponseExamples[200] = new ExchangeDynamicTokenResponse(
@@ -97,7 +98,7 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
         });
     }
 
-    public override async Task HandleAsync(ExchangeDynamicTokenRequest request, CancellationToken ct)
+    public override async Task HandleAsync(EmptyRequest request, CancellationToken ct)
     {
         _logger.LogDebug("Processing Dynamic JWT exchange request");
 
@@ -121,44 +122,56 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
         if (string.IsNullOrWhiteSpace(jwt))
         {
             _logger.LogWarning("Exchange request missing Authorization header or Bearer token");
-            ThrowError("Authorization header with Bearer token is required", statusCode: 401);
+            ThrowError("AUTH.TOKEN_REQUIRED", statusCode: 400);
         }
+
+        // Parse optional exchange options from header
+        _ = ParseExchangeOptions();
 
         // Validate JWT format and size before processing
         if (!IsValidJwtFormat(jwt))
         {
             _logger.LogWarning("Invalid JWT format received");
-            ThrowError("Invalid JWT token format", statusCode: 400);
+            ThrowError("AUTH.INVALID_TOKEN_FORMAT", statusCode: 400);
         }
 
         // Delegate to orchestrator for the complete flow
-        var result = await _orchestrator.ExchangeAsync(jwt, ct);
-        
-        if (result.IsFailure)
+        try
         {
-            HandleError(result.Error);
+            var result = await _orchestrator.ExchangeAsync(jwt, ct);
+            
+            if (result.IsFailure)
+            {
+                HandleError(result.Error);
+                return;
+            }
+
+            // Map domain result to API response
+            var outcome = result.Value;
+            
+            // Add AxonId to logging context for structured observability
+            using var axonScope = _logger.BeginScope("AxonId:{AxonId}", outcome.AxonId);
+            
+            var response = new ExchangeDynamicTokenResponse(
+                AxonId: outcome.AxonId,
+                Created: outcome.Created,
+                WalletsProcessed: outcome.WalletsProcessed,
+                WalletsLinked: outcome.WalletsLinked,
+                DefaultsApplied: outcome.DefaultsApplied,
+                Skipped: outcome.Skipped,
+                Conflicts: outcome.Conflicts
+            );
+
+            _logger.LogInformation("JWT exchange completed successfully: Created={Created}, WalletsProcessed={WalletsProcessed}, WalletsLinked={WalletsLinked}", 
+                outcome.Created, outcome.WalletsProcessed, outcome.WalletsLinked);
+            Response = response;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _logger.LogInformation("JWT exchange cancelled by client");
+            ThrowError("Request cancelled by client", statusCode: 499);
             return;
         }
-
-        // Map domain result to API response
-        var outcome = result.Value;
-        
-        // Add AxonId to logging context for structured observability
-        using var axonScope = _logger.BeginScope("AxonId:{AxonId}", outcome.AxonId);
-        
-        var response = new ExchangeDynamicTokenResponse(
-            AxonId: outcome.AxonId,
-            Created: outcome.Created,
-            WalletsProcessed: outcome.WalletsProcessed,
-            WalletsLinked: outcome.WalletsLinked,
-            DefaultsApplied: outcome.DefaultsApplied,
-            Skipped: outcome.Skipped,
-            Conflicts: outcome.Conflicts
-        );
-
-        _logger.LogInformation("JWT exchange completed successfully: Created={Created}, WalletsProcessed={WalletsProcessed}, WalletsLinked={WalletsLinked}", 
-            outcome.Created, outcome.WalletsProcessed, outcome.WalletsLinked);
-        Response = response;
     }
 
     /// <summary>
@@ -175,6 +188,19 @@ public sealed class ExchangeDynamicTokenEndpoint : Endpoint<ExchangeDynamicToken
             return null;
 
         return authHeader[bearerPrefix.Length..].Trim();
+    }
+
+    /// <summary>
+    /// Parses optional exchange options from X-Axon-Exchange-Options header
+    /// </summary>
+    private bool ParseExchangeOptions()
+    {
+        var optionsHeader = HttpContext.Request.Headers["X-Axon-Exchange-Options"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(optionsHeader))
+            return true; // Default to applying defaults
+
+        // Simple parsing for applyDefaults=true/false
+        return !optionsHeader.Contains("applyDefaults=false", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

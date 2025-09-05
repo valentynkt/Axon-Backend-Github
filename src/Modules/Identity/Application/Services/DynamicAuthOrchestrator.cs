@@ -170,7 +170,6 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
 
         _logger.LogDebug("Principal upserted with status {Status} for user {UserId}, AxonId={AxonId}", 
             result.Value.Status, userData.UserId, result.Value.Principal.AxonId);
-        
         return Result.Success<UpsertPrincipalResponse, Error>(result.Value);
     }
 

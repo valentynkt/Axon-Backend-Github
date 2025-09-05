@@ -130,8 +130,8 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, R
             .ToList();
         
         // Map chain defaults
-        var defaultPerChain = principal.Profile.DefaultPerChain.Value
-            .ToDictionary(kvp => kvp.Key.Value, kvp => kvp.Value.ToString());
+        var defaultPerChain = principal.ChainDefaults
+            .ToDictionary(cd => cd.ChainId.Value, cd => cd.WalletId.Value.ToString());
         
         return new CurrentUserResult
         {

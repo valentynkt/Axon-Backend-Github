@@ -3,7 +3,6 @@ using System;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,12 +10,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Axon.Modules.Identity.Infrastructure.Migrations
 {
-    [DbContext(typeof(IdentityDbContext))]
-    [Migration("20250904141034_InitialIdentitySchema")]
-    partial class InitialIdentitySchema
+    [DbContext(typeof(IdentityMigrationContext))]
+    partial class IdentityMigrationContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -60,7 +57,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnName("updated_at");
 
                     b.Property<long>("Version")
-                        .IsConcurrencyToken()
                         .HasColumnType("bigint")
                         .HasColumnName("version");
 
@@ -70,10 +66,27 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_axon_principals_created_at");
 
+                    b.HasIndex("PrimaryEmailHash")
+                        .HasDatabaseName("ix_axon_principals_primary_email_hash")
+                        .HasFilter("primary_email_hash IS NOT NULL");
+
                     b.HasIndex("Type")
                         .HasDatabaseName("ix_axon_principals_type");
 
-                    b.ToTable("axon_principals", "identity");
+                    b.HasIndex("IsDeleted", "Type")
+                        .HasDatabaseName("ix_axon_principals_is_deleted_type")
+                        .HasFilter("is_deleted = false");
+
+                    b.ToTable("axon_principals", "identity", t =>
+                        {
+                            t.HasCheckConstraint("ck_axon_principals_email_hash_format", "primary_email_hash IS NULL OR (LENGTH(primary_email_hash) = 64 AND primary_email_hash ~ '^[a-f0-9]+$')");
+
+                            t.HasCheckConstraint("ck_axon_principals_preferred_language", "preferred_language IN ('en', 'es', 'fr', 'de', 'ja', 'ko', 'zh')");
+
+                            t.HasCheckConstraint("ck_axon_principals_risk_tier", "risk_tier IN ('low', 'medium', 'high', 'critical')");
+
+                            t.HasCheckConstraint("ck_axon_principals_type", "type IN ('human', 'service')");
+                        });
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", b =>
@@ -114,24 +127,13 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_seen_at");
 
-                    b.Property<string>("Meta")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("meta");
-
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.Property<long>("Version")
-                        .IsConcurrencyToken()
                         .HasColumnType("bigint")
                         .HasColumnName("version");
-
-                    b.Property<string>("_tags")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("tags");
 
                     b.HasKey("Id")
                         .HasName("pk_wallets");
@@ -191,11 +193,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_seen_at");
-
-                    b.Property<string>("Metadata")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("metadata");
 
                     b.Property<string>("ProviderType")
                         .IsRequired()
@@ -306,9 +303,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_wallet_ownerships");
 
-                    b.HasIndex("AxonId")
-                        .HasDatabaseName("ix_wallet_ownerships_axon_id");
-
                     b.HasIndex("ChainId")
                         .HasDatabaseName("ix_wallet_ownerships_chain_id");
 
@@ -318,25 +312,124 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasIndex("WalletId")
                         .HasDatabaseName("ix_wallet_ownerships_wallet_id");
 
+                    b.HasIndex("AxonId", "State")
+                        .HasDatabaseName("ix_wallet_ownerships_axon_id_state")
+                        .HasFilter("is_deleted = false");
+
                     b.HasIndex("State", "AccessMode")
                         .HasDatabaseName("ix_wallet_ownerships_state_access_mode")
                         .HasFilter("is_deleted = false");
 
+                    b.HasIndex("WalletId", "ChainId", "IsDeleted")
+                        .HasDatabaseName("ix_wallet_ownerships_wallet_chain_deleted");
+
                     b.ToTable("wallet_ownerships", "identity");
+                });
+
+            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tag");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WalletId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wallet_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wallet_tags");
+
+                    b.HasIndex("Tag")
+                        .HasDatabaseName("ix_wallet_tags_tag");
+
+                    b.HasIndex("WalletId", "Tag")
+                        .IsUnique()
+                        .HasDatabaseName("ix_wallet_tags_wallet_tag_unique");
+
+                    b.ToTable("wallet_tags", "identity", t =>
+                        {
+                            t.HasCheckConstraint("ck_wallet_tags_allowed_values", "tag IN ('personal', 'business', 'trading', 'defi', 'gaming', 'nft', 'dao', 'test', 'main', 'hot', 'cold')");
+                        });
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>
                 {
+                    b.OwnsMany("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", "ChainDefaults", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<Guid>("AxonId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("axon_id");
+
+                            b1.Property<Guid>("AxonPrincipalId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("axon_principal_id");
+
+                            b1.Property<string>("ChainId")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("chain_id");
+
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("created_at");
+
+                            b1.Property<DateTimeOffset?>("UpdatedAt")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("updated_at");
+
+                            b1.Property<Guid>("WalletId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("wallet_id");
+
+                            b1.HasKey("Id")
+                                .HasName("pk_principal_chain_defaults");
+
+                            b1.HasIndex("AxonPrincipalId")
+                                .HasDatabaseName("ix_principal_chain_defaults_axon_principal_id");
+
+                            b1.HasIndex("ChainId")
+                                .HasDatabaseName("ix_principal_chain_defaults_chain_id");
+
+                            b1.HasIndex("WalletId")
+                                .HasDatabaseName("ix_principal_chain_defaults_wallet_id");
+
+                            b1.HasIndex("AxonId", "ChainId")
+                                .IsUnique()
+                                .HasDatabaseName("ix_principal_chain_defaults_axon_chain_unique");
+
+                            b1.ToTable("principal_chain_defaults", "identity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("AxonPrincipalId")
+                                .HasConstraintName("fk_principal_chain_defaults_axon_principals_axon_principal_id");
+                        });
+
                     b.OwnsOne("Axon.Modules.Identity.Domain.Entities.PrincipalProfile", "Profile", b1 =>
                         {
                             b1.Property<Guid>("AxonPrincipalId")
                                 .HasColumnType("uuid")
                                 .HasColumnName("id");
-
-                            b1.Property<string>("DefaultPerChain")
-                                .IsRequired()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("default_per_chain");
 
                             b1.Property<string>("PreferredLanguage")
                                 .IsRequired()
@@ -350,14 +443,50 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                                 .HasColumnType("character varying(20)")
                                 .HasColumnName("risk_tier");
 
-                            b1.HasKey("AxonPrincipalId")
-                                .HasName("pk_axon_principals");
+                            b1.HasKey("AxonPrincipalId");
 
                             b1.ToTable("axon_principals", "identity");
 
                             b1.WithOwner()
                                 .HasForeignKey("AxonPrincipalId")
                                 .HasConstraintName("fk_axon_principals_axon_principals_id");
+                        });
+
+                    b.Navigation("ChainDefaults");
+
+                    b.Navigation("Profile")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", b =>
+                {
+                    b.OwnsOne("Axon.Modules.Identity.Domain.Entities.WalletProfile", "Profile", b1 =>
+                        {
+                            b1.Property<Guid>("WalletId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<string>("DisplayName")
+                                .HasMaxLength(255)
+                                .HasColumnType("character varying(255)")
+                                .HasColumnName("display_name");
+
+                            b1.Property<string>("Provider")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("provider");
+
+                            b1.HasKey("WalletId");
+
+                            b1.HasIndex("Provider")
+                                .HasDatabaseName("ix_wallets_provider");
+
+                            b1.ToTable("wallets", "identity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("WalletId")
+                                .HasConstraintName("fk_wallets_wallets_id");
                         });
 
                     b.Navigation("Profile")
@@ -372,6 +501,55 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_identity_credentials_axon_principals_axon_id");
+
+                    b.OwnsOne("Axon.Modules.Identity.Domain.Entities.CredentialContext", "Context", b1 =>
+                        {
+                            b1.Property<Guid>("IdentityCredentialId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<string>("DeviceId")
+                                .HasMaxLength(255)
+                                .HasColumnType("character varying(255)")
+                                .HasColumnName("device_id");
+
+                            b1.Property<string>("EmailHash")
+                                .HasMaxLength(64)
+                                .HasColumnType("character varying(64)")
+                                .HasColumnName("email_hash");
+
+                            b1.Property<string>("IpHash")
+                                .HasMaxLength(64)
+                                .HasColumnType("character varying(64)")
+                                .HasColumnName("ip_hash");
+
+                            b1.Property<string>("SessionPublicKey")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("session_public_key");
+
+                            b1.Property<string>("UserAgent")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("user_agent");
+
+                            b1.Property<string>("VerificationMethod")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("verification_method");
+
+                            b1.HasKey("IdentityCredentialId");
+
+                            b1.ToTable("identity_credentials", "identity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("IdentityCredentialId")
+                                .HasConstraintName("fk_identity_credentials_identity_credentials_id");
+                        });
+
+                    b.Navigation("Context")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletOwnership", b =>
@@ -384,11 +562,26 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasConstraintName("fk_wallet_ownerships_axon_principals_axon_id");
                 });
 
+            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletTag", b =>
+                {
+                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", null)
+                        .WithMany("WalletTags")
+                        .HasForeignKey("WalletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wallet_tags_wallets_wallet_id");
+                });
+
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>
                 {
                     b.Navigation("Credentials");
 
                     b.Navigation("WalletOwnerships");
+                });
+
+            modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", b =>
+                {
+                    b.Navigation("WalletTags");
                 });
 #pragma warning restore 612, 618
         }

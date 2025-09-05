@@ -5,6 +5,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// <summary>
 /// Identity credential representing proof of identity from an external provider.
 /// Child entity of AxonPrincipal with unique constraint on (ProviderType, Issuer, Subject).
+/// Now uses strongly-typed CredentialContext instead of JSON metadata.
 /// </summary>
 public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCredentialId>
 {
@@ -17,15 +18,13 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
     public DateTimeOffset LastSeenAt { get; private set; }
     
     /// <summary>
-    /// Structured metadata for additional credential information.
+    /// Strongly-typed context information for this credential.
+    /// Replaces the JSON-based CredentialMetadata.
     /// </summary>
-    public CredentialMetadata Metadata { get; private set; }
+    public CredentialContext Context { get; private set; } = null!;
 
     // EF Core parameterless constructor
-    private IdentityCredential() : base() 
-    {
-        Metadata = CredentialMetadata.Empty;
-    }
+    private IdentityCredential() : base() { }
 
     private IdentityCredential(
         IdentityCredentialId id,
@@ -35,7 +34,7 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         string subject,
         string? environmentId,
         DateTimeOffset verifiedAt,
-        CredentialMetadata metadata) : base(id)
+        CredentialContext context) : base(id)
     {
         AxonId = axonId;
         ProviderType = providerType;
@@ -44,9 +43,12 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         EnvironmentId = environmentId;
         VerifiedAt = verifiedAt;
         LastSeenAt = verifiedAt;
-        Metadata = metadata;
+        Context = context;
     }
 
+    /// <summary>
+    /// Creates a new identity credential with typed context information.
+    /// </summary>
     internal static Result<IdentityCredential, Error> Create(
         AxonId axonId,
         ProviderType providerType,
@@ -54,7 +56,12 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         string subject,
         string? environmentId,
         DateTimeOffset verifiedAt,
-        Dictionary<string, object>? metadata = null)
+        ProofType? verificationMethod = null,
+        EmailHash? emailHash = null,
+        string? sessionPublicKey = null,
+        string? deviceId = null,
+        string? userAgent = null,
+        string? ipHash = null)
     {
         if (string.IsNullOrWhiteSpace(issuer))
             return Result.Failure<IdentityCredential, Error>(
@@ -76,25 +83,42 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
             return Result.Failure<IdentityCredential, Error>(
                 Error.Validation("Environment ID cannot exceed 50 characters.", "IDENTITY.CREDENTIAL.ENVIRONMENT_ID.TOO_LONG"));
 
-        var metadataResult = CredentialMetadata.Create(metadata);
-        if (metadataResult.IsFailure)
-            return Result.Failure<IdentityCredential, Error>(metadataResult.Error);
-
         var id = new IdentityCredentialId(Guid.CreateVersion7());
+
+        // Create the credential context
+        var contextResult = CredentialContext.Create(
+            id,
+            verificationMethod ?? ProofType.From("unknown"),
+            emailHash,
+            sessionPublicKey,
+            deviceId,
+            userAgent,
+            ipHash);
+
+        if (contextResult.IsFailure)
+            return Result.Failure<IdentityCredential, Error>(contextResult.Error);
+
         var credential = new IdentityCredential(
-            id, axonId, providerType, issuer, subject, environmentId, verifiedAt, metadataResult.Value);
+            id, axonId, providerType, issuer, subject, environmentId, verifiedAt, contextResult.Value);
 
         return Result.Success<IdentityCredential, Error>(credential);
     }
 
+    /// <summary>
+    /// Updates the last seen timestamp.
+    /// </summary>
     internal void UpdateLastSeen(DateTimeOffset lastSeenAt)
     {
         if (lastSeenAt > LastSeenAt)
         {
             LastSeenAt = lastSeenAt;
+            MarkUpdated();
         }
     }
 
+    /// <summary>
+    /// Updates the verified timestamp.
+    /// </summary>
     internal void UpdateVerifiedAt(DateTimeOffset verifiedAt)
     {
         if (verifiedAt > VerifiedAt)
@@ -104,23 +128,64 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         }
     }
 
-    internal Result<Unit, Error> UpdateMetadata(Dictionary<string, object> newMetadata)
+    /// <summary>
+    /// Updates the credential context with new typed information.
+    /// Replaces the old UpdateMetadata method.
+    /// </summary>
+    internal Result<Unit, Error> UpdateContext(
+        ProofType? verificationMethod = null,
+        EmailHash? emailHash = null,
+        string? sessionPublicKey = null,
+        string? deviceId = null,
+        string? userAgent = null,
+        string? ipHash = null)
     {
-        var metadataResult = CredentialMetadata.Create(newMetadata);
-        if (metadataResult.IsFailure)
-            return Result.Failure<Unit, Error>(metadataResult.Error);
+        var updateResult = Context.Update(
+            verificationMethod,
+            emailHash,
+            sessionPublicKey,
+            deviceId,
+            userAgent,
+            ipHash);
 
-        Metadata = metadataResult.Value;
+        if (updateResult.IsFailure)
+            return Result.Failure<Unit, Error>(updateResult.Error);
+
+        MarkUpdated();
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
-    internal Result<Unit, Error> AddMetadata(string key, object value)
+    /// <summary>
+    /// Sets the verification method for this credential.
+    /// </summary>
+    internal void SetVerificationMethod(ProofType verificationMethod)
     {
-        var metadataResult = Metadata.WithMetadata(key, value);
-        if (metadataResult.IsFailure)
-            return Result.Failure<Unit, Error>(metadataResult.Error);
+        Context.SetVerificationMethod(verificationMethod);
+        MarkUpdated();
+    }
 
-        Metadata = metadataResult.Value;
+    /// <summary>
+    /// Updates context information from a session interaction.
+    /// </summary>
+    internal Result<Unit, Error> TouchSession(
+        string? deviceId = null,
+        string? userAgent = null,
+        string? ipHash = null,
+        DateTimeOffset? lastSeenAt = null)
+    {
+        var updateResult = Context.Update(
+            deviceId: deviceId,
+            userAgent: userAgent,
+            ipHash: ipHash);
+
+        if (updateResult.IsFailure)
+            return Result.Failure<Unit, Error>(updateResult.Error);
+
+        if (lastSeenAt.HasValue)
+        {
+            UpdateLastSeen(lastSeenAt.Value);
+        }
+
         return Result.Success<Unit, Error>(Unit.Value);
     }
 
@@ -140,5 +205,23 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
                string.Equals(Subject, subject, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Checks if this credential belongs to the specified principal.
+    /// </summary>
     public bool BelongsTo(AxonId principalId) => AxonId == principalId;
+
+    /// <summary>
+    /// Gets the email hash from the context if available.
+    /// </summary>
+    public EmailHash? GetEmailHash() => Context.EmailHash;
+
+    /// <summary>
+    /// Gets the session public key from the context if available.
+    /// </summary>
+    public string? GetSessionPublicKey() => Context.SessionPublicKey;
+
+    /// <summary>
+    /// Gets the verification method from the context.
+    /// </summary>
+    public ProofType GetVerificationMethod() => Context.VerificationMethod;
 }

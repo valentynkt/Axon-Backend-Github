@@ -1,5 +1,5 @@
-using System.Text.Json;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +9,7 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.EntityConfigurations;
 
 /// <summary>
 /// EF Core configuration for Wallet aggregate root.
-/// Includes critical unique constraints on chain+address and performance indexes.
+/// Now uses strongly-typed WalletProfile and WalletTag join table instead of JSON.
 /// </summary>
 public sealed class WalletConfiguration : IEntityTypeConfiguration<Wallet>
 {
@@ -53,27 +53,32 @@ public sealed class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasColumnName("last_seen_at")
             .IsRequired();
 
-        // WalletMeta as JSON
-        builder.Property(w => w.Meta)
-            .HasConversion(
-                meta => JsonSerializer.Serialize(meta.Data, JsonSerializationOptions.DatabaseStorage),
-                json => WalletMeta.Create(
-                    JsonSerializer.Deserialize<Dictionary<string, object>>(json, JsonSerializationOptions.DatabaseStorage))
-                    .Value)
-            .HasColumnName("meta")
-            .HasColumnType("jsonb");
+        // Owned entity: WalletProfile (inline columns)
+        builder.OwnsOne(w => w.Profile, profile =>
+        {
+            // Ignore inherited Entity properties for owned entities
+            profile.Ignore(p => p.Id);
+            profile.Ignore(p => p.CreatedAt);
+            profile.Ignore(p => p.UpdatedAt);
 
-        // Tags collection stored as JSON array
-        builder.Property<HashSet<Tag>>("_tags")
-            .HasConversion(
-                tags => JsonSerializer.Serialize(tags.Select(t => t.Value).ToArray(), JsonSerializationOptions.SimpleCollections),
-                json => JsonSerializer.Deserialize<string[]>(json, JsonSerializationOptions.SimpleCollections) != null
-                    ? JsonSerializer.Deserialize<string[]>(json, JsonSerializationOptions.SimpleCollections)!
-                        .Select(Tag.From)
-                        .ToHashSet()
-                    : new HashSet<Tag>())
-            .HasColumnName("tags")
-            .HasColumnType("jsonb");
+            profile.Property(p => p.Provider)
+                .HasConversion(
+                    provider => provider.Value,
+                    value => ProviderType.From(value))
+                .HasColumnName("provider")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            profile.Property(p => p.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(255);
+        });
+
+        // Configure relationship to WalletTag join table
+        builder.HasMany(w => w.WalletTags)
+            .WithOne()
+            .HasForeignKey(wt => wt.WalletId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Audit properties
         builder.Property(w => w.CreatedAt).HasColumnName("created_at");
@@ -101,5 +106,68 @@ public sealed class WalletConfiguration : IEntityTypeConfiguration<Wallet>
         
         builder.HasIndex(w => w.FirstSeenAt)
             .HasDatabaseName("ix_wallets_first_seen_at");
+
+        // Index on provider for filtering by wallet source
+        // Use proper expression for owned entity property
+        builder.OwnsOne(w => w.Profile)
+            .HasIndex(p => p.Provider)
+            .HasDatabaseName("ix_wallets_provider");
+    }
+}
+
+/// <summary>
+/// EF Core configuration for WalletTag join entity.
+/// </summary>
+public sealed class WalletTagConfiguration : IEntityTypeConfiguration<WalletTag>
+{
+    public void Configure(EntityTypeBuilder<WalletTag> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Table configuration
+        builder.ToTable("wallet_tags", "identity");
+
+        // Primary key
+        builder.HasKey(wt => wt.Id);
+        builder.Property(wt => wt.Id)
+            .HasConversion(
+                id => id,
+                value => value)
+            .HasColumnName("id");
+
+        // Foreign key to Wallet
+        builder.Property(wt => wt.WalletId)
+            .HasConversion(
+                id => id.Value,
+                value => new WalletId(value))
+            .HasColumnName("wallet_id")
+            .IsRequired();
+
+        // Tag value object
+        builder.Property(wt => wt.Tag)
+            .HasConversion(
+                tag => tag.Value,
+                value => Tag.From(value))
+            .HasColumnName("tag")
+            .HasMaxLength(100)
+            .IsRequired();
+
+        // Audit properties
+        builder.Property(wt => wt.CreatedAt).HasColumnName("created_at");
+        builder.Property(wt => wt.UpdatedAt).HasColumnName("updated_at");
+
+        // 🚨 CRITICAL: Unique constraint on (WalletId, Tag)
+        builder.HasIndex(wt => new { wt.WalletId, wt.Tag })
+            .IsUnique()
+            .HasDatabaseName("ix_wallet_tags_wallet_tag_unique");
+
+        // Performance index on tag for searching across wallets
+        builder.HasIndex(wt => wt.Tag)
+            .HasDatabaseName("ix_wallet_tags_tag");
+
+        // Check constraint to ensure only allowed tags
+        // Note: This would be better generated from the Tag VO allowed values
+        builder.HasCheckConstraint("ck_wallet_tags_allowed_values", 
+            "tag IN ('personal', 'business', 'trading', 'defi', 'gaming', 'nft', 'dao', 'test', 'main', 'hot', 'cold')");
     }
 }

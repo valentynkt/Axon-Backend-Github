@@ -26,9 +26,9 @@ public static class IdentityDtoMapper
             Type: principal.Type.Value,
             PreferredLanguage: principal.Profile.PreferredLanguage.Value,
             RiskTier: principal.Profile.RiskTier.Value,
-            DefaultPerChain: principal.Profile.DefaultPerChain.Value.ToDictionary(
-                kvp => kvp.Key.Value, 
-                kvp => kvp.Value.ToString()),
+            DefaultPerChain: principal.ChainDefaults.ToDictionary(
+                cd => cd.ChainId.Value, 
+                cd => cd.WalletId.Value.ToString()),
             ActiveWalletCount: principal.WalletOwnerships.Count(w => !w.IsDeleted),
             ActiveCredentialCount: principal.Credentials.Count(c => !c.IsDeleted)
         );
@@ -52,7 +52,7 @@ public static class IdentityDtoMapper
             EnvironmentId: credential.EnvironmentId,
             VerifiedAt: credential.VerifiedAt,
             LastSeenAt: credential.LastSeenAt,
-            MetadataKeys: credential.Metadata.GetKeys().ToArray()
+            MetadataKeys: new[] { "verification_method", "email_hash", "session_public_key", "device_id", "user_agent", "ip_hash" }
         );
     }
 
@@ -74,7 +74,7 @@ public static class IdentityDtoMapper
             FirstSeenAt: wallet.FirstSeenAt,
             LastSeenAt: wallet.LastSeenAt,
             Tags: includeTags ? wallet.Tags.Select(t => t.Value).ToArray() : Array.Empty<string>(),
-            MetadataSizeBytes: wallet.Meta.EstimatedSizeBytes,
+            MetadataSizeBytes: wallet.Profile.DisplayName?.Length ?? 0,
             IsActive: !wallet.IsDeleted
         );
     }

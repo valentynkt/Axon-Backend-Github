@@ -3,6 +3,7 @@ using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using BuildingBlocks.Infrastructure.Persistence;
+using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -26,8 +27,6 @@ public sealed class IdentityDbContext : WriteDbContextBase<IdentityModule>, IIde
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        ArgumentNullException.ThrowIfNull(modelBuilder);
-        
         base.OnModelCreating(modelBuilder);
         
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
@@ -35,4 +34,17 @@ public sealed class IdentityDbContext : WriteDbContextBase<IdentityModule>, IIde
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
         modelBuilder.ToSnakeCaseTables();
     }
+}
+
+/// <summary>
+/// Design-time factory for IdentityDbContext to support EF Core tools (migrations, etc.)
+/// </summary>
+public sealed class IdentityDbContextFactory : DesignTimeDbContextFactoryBase<IdentityDbContext>
+{
+    protected override IdentityDbContext CreateNewInstance(DbContextOptions<IdentityDbContext> options) =>
+        new(options);
+
+    protected override void ConfigureProvider(DbContextOptionsBuilder<IdentityDbContext> builder, string connectionString) =>
+        builder.UseNpgsql(connectionString, opt => opt.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName))
+               .UseSnakeCaseNamingConvention();
 }

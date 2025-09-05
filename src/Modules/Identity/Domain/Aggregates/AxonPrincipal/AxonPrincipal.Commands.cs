@@ -8,19 +8,24 @@ namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 
 /// <summary>
 /// AxonPrincipal partial class containing command operations (state-changing methods).
+/// Now uses PrincipalChainDefault collection instead of JSON-based chain defaults.
 /// </summary>
 public sealed partial class AxonPrincipal
 {
     /// <summary>
-    /// Links an identity credential to this principal.
-    /// Enforces in-aggregate uniqueness; cross-principal uniqueness is handled by the application/domain service.
+    /// Links an identity credential to this principal with typed context.
     /// </summary>
     public Result<IdentityCredential, Error> LinkIdentityCredential(
         ProviderType providerType,
         string issuer,
         string subject,
         string? environmentId = null,
-        Dictionary<string, object>? metadata = null,
+        ProofType? verificationMethod = null,
+        EmailHash? emailHash = null,
+        string? sessionPublicKey = null,
+        string? deviceId = null,
+        string? userAgent = null,
+        string? ipHash = null,
         TimeProvider? timeProvider = null)
     {
         try
@@ -32,7 +37,8 @@ public sealed partial class AxonPrincipal
             var now = effectiveTimeProvider.GetUtcNow();
 
             var credentialResult = IdentityCredential.Create(
-                Id, providerType, issuer, subject, environmentId, now, metadata);
+                Id, providerType, issuer, subject, environmentId, now,
+                verificationMethod, emailHash, sessionPublicKey, deviceId, userAgent, ipHash);
 
             if (credentialResult.IsFailure)
                 return Result.Failure<IdentityCredential, Error>(credentialResult.Error);
@@ -55,7 +61,6 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Links a wallet to this principal with proof of ownership.
-    /// Enforces in-aggregate uniqueness; cross-principal uniqueness is handled by the application/domain service.
     /// </summary>
     public Result<WalletOwnership, Error> LinkWallet(
         WalletId walletId,
@@ -84,7 +89,7 @@ public sealed partial class AxonPrincipal
             _walletOwnerships.Add(ownership);
 
             // If link creates a verified-signing ownership, set default (via aggregate command)
-            if (ownership.IsVerifiedSigning && !Profile.HasDefaultWalletForChain(chainId))
+            if (ownership.IsVerifiedSigning && !HasDefaultWalletForChain(chainId))
             {
                 var setDefault = SetDefaultWalletForChain(chainId, walletId, timeProvider);
                 if (setDefault.IsFailure)
@@ -125,15 +130,14 @@ public sealed partial class AxonPrincipal
 
             ownership.SoftDelete();
 
-            // Clear any chain defaults that point to this wallet using dedicated method
-            var chainsToUpdate = Profile.DefaultPerChain.Value
-                .Where(kvp => kvp.Value == walletId)
-                .Select(kvp => kvp.Key)
+            // Clear any chain defaults that point to this wallet
+            var defaultsToRemove = _chainDefaults
+                .Where(cd => cd.WalletId == walletId)
                 .ToList();
 
-            foreach (var chain in chainsToUpdate)
+            foreach (var chainDefault in defaultsToRemove)
             {
-                var clearResult = ClearDefaultWalletForChain(chain, timeProvider);
+                var clearResult = RemoveDefaultWallet(chainDefault.ChainId, timeProvider);
                 if (clearResult.IsFailure)
                     return clearResult;
             }
@@ -153,9 +157,9 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
-    /// Sets the default wallet for a specific chain.
+    /// Sets the default wallet for a specific chain using typed domain objects.
     /// Validates that the wallet belongs to the correct chain and is verified signing.
-    /// Clears any previous default for the same chain.
+    /// Replaces any previous default for the same chain.
     /// </summary>
     public Result<Unit, Error> SetDefaultWalletForChain(
         ChainId chainId, 
@@ -172,27 +176,37 @@ public sealed partial class AxonPrincipal
             if (ownership is null)
                 return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwned());
 
-            // Validate chain matches ownership's chain (E5)
+            // Validate chain matches ownership's chain
             if (ownership.ChainId != chainId)
                 return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.ChainMismatch());
 
-            // Validate ownership is verified signing (E9)
+            // Validate ownership is verified signing
             if (!ownership.IsVerifiedSigning)
                 return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.WatchOnlyNotAllowedAsDefault());
 
             var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
             var now = effectiveTimeProvider.GetUtcNow();
 
-            var previousDefault = Profile.GetDefaultWalletForChain(chainId);
-            var setResult = Profile.SetDefaultWalletForChain(chainId, walletId);
+            var previousDefault = GetDefaultWalletForChain(chainId);
 
-            if (setResult.IsFailure)
-                return Result.Failure<Unit, Error>(setResult.Error);
+            // Remove any existing default for this chain
+            var existingDefault = _chainDefaults.FirstOrDefault(cd => cd.IsForChain(chainId));
+            if (existingDefault != null)
+            {
+                _chainDefaults.Remove(existingDefault);
+            }
 
+            // Create new default
+            var chainDefaultResult = PrincipalChainDefault.Create(Id, chainId, walletId);
+            if (chainDefaultResult.IsFailure)
+                return Result.Failure<Unit, Error>(chainDefaultResult.Error);
+
+            _chainDefaults.Add(chainDefaultResult.Value);
             MarkUpdated();
 
             RaiseDomainEvent(new DefaultWalletChangedEvent(
-                Id.Value.ToString(), chainId.Value, walletId.Value.ToString(), previousDefault?.Value.ToString(), now));
+                Id.Value.ToString(), chainId.Value, walletId.Value.ToString(), 
+                previousDefault?.Value.ToString(), now));
 
             return Result.Success<Unit, Error>(Unit.Value);
         }
@@ -201,6 +215,56 @@ public sealed partial class AxonPrincipal
             return Result.Failure<Unit, Error>(
                 Error.BusinessRule(ex.Message, ex.Error.Code));
         }
+    }
+
+    /// <summary>
+    /// Removes the default wallet for a specific chain.
+    /// </summary>
+    public Result<Unit, Error> RemoveDefaultWallet(ChainId chainId, TimeProvider? timeProvider = null)
+    {
+        try
+        {
+            CheckRule(new PrincipalMustBeActiveRule(this));
+
+            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
+            var now = effectiveTimeProvider.GetUtcNow();
+
+            var existingDefault = _chainDefaults.FirstOrDefault(cd => cd.IsForChain(chainId));
+            if (existingDefault == null)
+                return Result.Success<Unit, Error>(Unit.Value); // No default to remove
+
+            var previousDefaultWalletId = existingDefault.WalletId;
+            _chainDefaults.Remove(existingDefault);
+            MarkUpdated();
+
+            RaiseDomainEvent(new DefaultWalletChangedEvent(
+                Id.Value.ToString(), chainId.Value, null, 
+                previousDefaultWalletId.Value.ToString(), now));
+
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return Result.Failure<Unit, Error>(
+                Error.BusinessRule(ex.Message, ex.Error.Code));
+        }
+    }
+
+    /// <summary>
+    /// Gets the default wallet for a specific chain.
+    /// </summary>
+    public WalletId? GetDefaultWalletForChain(ChainId chainId)
+    {
+        var chainDefault = _chainDefaults.FirstOrDefault(cd => cd.IsForChain(chainId));
+        return chainDefault?.WalletId;
+    }
+
+    /// <summary>
+    /// Checks if there's a default wallet configured for the specified chain.
+    /// </summary>
+    public bool HasDefaultWalletForChain(ChainId chainId)
+    {
+        return _chainDefaults.Any(cd => cd.IsForChain(chainId));
     }
 
     /// <summary>
@@ -270,8 +334,6 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Soft deletes the principal, marking it as inactive.
-    /// Prevents further operations while preserving audit trail.
-    /// Enforces business rules to ensure safe deletion.
     /// </summary>
     public Result<Unit, Error> SoftDelete(TimeProvider? timeProvider = null)
     {
@@ -306,7 +368,7 @@ public sealed partial class AxonPrincipal
         var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
         var now = effectiveTimeProvider.GetUtcNow();
 
-        base.Restore(); // Call base restore method
+        base.Restore();
 
         RaiseDomainEvent(new PrincipalRestoredEvent(Id, now, reason));
 
@@ -401,7 +463,7 @@ public sealed partial class AxonPrincipal
             Id, walletId, ownership.Id, ownership.ProofType.Value, now, verificationMethod));
 
         // After verification, make it default if none exists on this chain and it's signing
-        if (ownership.IsVerifiedSigning && !Profile.HasDefaultWalletForChain(ownership.ChainId))
+        if (ownership.IsVerifiedSigning && !HasDefaultWalletForChain(ownership.ChainId))
         {
             var setDefault = SetDefaultWalletForChain(ownership.ChainId, walletId, timeProvider);
             if (setDefault.IsFailure)
@@ -507,41 +569,12 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Clears the default wallet for a specific chain and raises appropriate events.
-    /// Provides a centralized method for clearing defaults with proper event emission.
+    /// Alias method for RemoveDefaultWallet for backward compatibility.
     /// </summary>
     public Result<Unit, Error> ClearDefaultWalletForChain(
         ChainId chainId, 
         TimeProvider? timeProvider = null)
     {
-        try
-        {
-            CheckRule(new PrincipalMustBeActiveRule(this));
-
-            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
-            var now = effectiveTimeProvider.GetUtcNow();
-
-            var previousDefault = Profile.GetDefaultWalletForChain(chainId);
-            
-            // No-op if there's no default to clear
-            if (previousDefault is null)
-                return Result.Success<Unit, Error>(Unit.Value);
-
-            var clearResult = Profile.ClearDefaultForChain(chainId);
-            if (clearResult.IsFailure)
-                return clearResult;
-
-            MarkUpdated();
-
-            RaiseDomainEvent(new DefaultWalletChangedEvent(
-                Id.Value.ToString(), chainId.Value, null, previousDefault.Value.ToString(), now));
-
-            return Result.Success<Unit, Error>(Unit.Value);
-        }
-        catch (BusinessRuleException ex)
-        {
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule(ex.Message, ex.Error.Code));
-        }
+        return RemoveDefaultWallet(chainId, timeProvider);
     }
-
 }

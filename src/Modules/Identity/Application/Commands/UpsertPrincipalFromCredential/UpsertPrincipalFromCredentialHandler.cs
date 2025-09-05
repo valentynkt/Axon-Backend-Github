@@ -210,7 +210,7 @@ public sealed class UpsertPrincipalFromCredentialHandler : BaseIdentityIdempoten
         // Link credential
         var credentialResult = principal.LinkIdentityCredential(
             providerType, command.Issuer, command.Subject, 
-            command.EnvironmentId, command.CredentialMetadata, _timeProvider);
+            command.EnvironmentId, timeProvider: _timeProvider);
 
         if (credentialResult.IsFailure)
         {
@@ -260,9 +260,8 @@ public sealed class UpsertPrincipalFromCredentialHandler : BaseIdentityIdempoten
             }
         }
 
-        // Save principal
+        // Add principal to repository (UnitOfWorkBehavior will handle SaveChanges)
         await _principalRepository.AddAsync(principal, cancellationToken);
-        await _principalRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
         var status = walletOwnership is not null 
             ? UpsertPrincipalStatus.LinkedWithWallet 

@@ -1,6 +1,9 @@
 using Axon.BuildingBlocks.Web.Configuration;
-using Axon.Modules.Identity.Application.DependencyInjection;
 using Axon.Modules.Identity.Infrastructure.Authentication;
+using Axon.Modules.Identity.Application.DependencyInjection;
+using Axon.Modules.Identity.Infrastructure.Authentication.Handlers;
+using Axon.Modules.Identity.Infrastructure.Authentication.Options;
+using Axon.Modules.Identity.Infrastructure.Authentication.Policies;
 using Axon.Modules.Identity.Infrastructure.DependencyInjection;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 using Axon.Modules.Identity.Infrastructure.HealthChecks;
@@ -66,19 +69,19 @@ public sealed class IdentityApiModule : IApiModule
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, HttpContextUserService>();
         
-        // Configure Dynamic.xyz authentication
-        services.AddAuthentication("DynamicXyz")
-            .AddScheme<DynamicXyzAuthOptions, DynamicXyzAuthHandler>("DynamicXyz", options =>
-            {
-                options.Realm = "Axon API";
-                options.AllowAnonymous = true; // Allow anonymous access - endpoints control their own auth requirements
-            });
+        // Configure Dynamic JWT authentication (single scheme)
+        services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = AuthenticationSchemes.DynamicJwt;
+            options.DefaultChallengeScheme = AuthenticationSchemes.DynamicJwt;
+        })
+        .AddScheme<DynamicJwtAuthenticationOptions, DynamicJwtAuthenticationHandler>(AuthenticationSchemes.DynamicJwt, options =>
+        {
+            options.Realm = "Axon API";
+        });
         
-        // Set Dynamic.xyz as the default authentication scheme
-        services.AddAuthorizationBuilder()
-            .SetDefaultPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder("DynamicXyz")
-                .RequireAuthenticatedUser()
-                .Build());
+        // Configure authorization policies
+        services.AddAuthorization(AuthorizationPolicies.Configure);
         
         // Register FluentValidation validators from this assembly
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());

@@ -54,8 +54,7 @@ public sealed class DefaultWalletCoordinator : IDefaultWalletCoordinator
         }
 
         // Check if already default for this chain
-        var currentDefaultOwnership = principal.GetDefaultWalletForChain(chainId);
-        var currentDefault = currentDefaultOwnership?.WalletId;
+        var currentDefault = principal.GetDefaultWalletForChain(chainId);
 
         if (currentDefault == walletId)
         {

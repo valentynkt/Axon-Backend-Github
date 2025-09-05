@@ -3,21 +3,23 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Axon.Modules.Identity.Infrastructure.Authentication.Options;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using static Axon.Modules.Identity.Infrastructure.Services.DynamicAuthService;
 
-namespace Axon.Modules.Identity.Infrastructure.Authentication;
+namespace Axon.Modules.Identity.Infrastructure.Authentication.Handlers;
 
 /// <summary>
-/// Custom authentication handler for Dynamic.xyz JWT validation
-/// Validates tokens via Dynamic.xyz API instead of local JWT validation
+/// Authentication handler for Dynamic.xyz JWT validation
+/// Validates tokens via Dynamic.xyz API for protected endpoints
 /// </summary>
-public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuthOptions>
+public sealed class DynamicJwtAuthenticationHandler : AuthenticationHandler<DynamicJwtAuthenticationOptions>
 {
     private readonly IDynamicAuthService _dynamicAuthService;
     
-    public DynamicXyzAuthHandler(
-        IOptionsMonitor<DynamicXyzAuthOptions> options,
+    public DynamicJwtAuthenticationHandler(
+        IOptionsMonitor<DynamicJwtAuthenticationOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
         IDynamicAuthService dynamicAuthService)
@@ -28,29 +30,18 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        // Check for Authorization header
+        // Simple and clean: if no header, no authentication
         if (!Request.Headers.ContainsKey("Authorization"))
         {
             Logger.LogDebug("No Authorization header found");
-            
-            // If anonymous access is allowed, return NoResult to let the request continue
-            // If anonymous access is not allowed, fail authentication
-            return Options.AllowAnonymous 
-                ? AuthenticateResult.NoResult() 
-                : AuthenticateResult.Fail("Authorization header is required");
+            return AuthenticateResult.NoResult();
         }
 
-        // Extract token from header
         var authHeader = Request.Headers.Authorization.ToString();
         if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             Logger.LogDebug("Invalid Authorization header format");
-            
-            // If anonymous access is allowed, return NoResult to let the request continue
-            // If anonymous access is not allowed, fail authentication
-            return Options.AllowAnonymous 
-                ? AuthenticateResult.NoResult() 
-                : AuthenticateResult.Fail("Invalid Authorization header format");
+            return AuthenticateResult.NoResult();
         }
 
         var token = authHeader["Bearer ".Length..].Trim();
@@ -67,8 +58,7 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
             
             if (validationResult.IsFailure)
             {
-                Logger.LogError("Token validation failed: {ErrorCode} - {ErrorMessage}", 
-                    validationResult.Error.Code, validationResult.Error.Message);
+                Logger.LogWarning("Token validation failed: {ErrorCode}", validationResult.Error.Code);
                 
                 var failureMessage = validationResult.Error.Type switch
                 {
@@ -85,43 +75,9 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
                 return AuthenticateResult.Fail(failureMessage);
             }
 
+            // Build claims principal from validated token
             var userData = validationResult.Value;
-            
-            // Create claims from validated user data
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, userData.UserId),
-                new(ClaimTypes.Email, userData.Email),
-                new("environment_id", userData.EnvironmentId),
-                new("is_new_user", userData.IsNewUser.ToString().ToLower())
-            };
-
-            // Add wallet claims
-            foreach (var wallet in userData.Wallets)
-            {
-                claims.Add(new Claim("wallet", wallet.Address));
-                claims.Add(new Claim($"wallet:{wallet.Chain}", wallet.Address));
-                claims.Add(new Claim($"wallet:provider:{wallet.Chain}", wallet.Provider));
-            }
-
-            // Add visit timestamps if available
-            if (userData.FirstVisitUtc.HasValue)
-            {
-                claims.Add(new Claim("first_visit", userData.FirstVisitUtc.Value.ToString("O")));
-            }
-            
-            if (userData.LastVisitUtc.HasValue)
-            {
-                claims.Add(new Claim("last_visit", userData.LastVisitUtc.Value.ToString("O")));
-            }
-
-            // Add session public key if available
-            if (!string.IsNullOrWhiteSpace(userData.SessionPublicKey))
-            {
-                claims.Add(new Claim("session_public_key", userData.SessionPublicKey));
-            }
-
-            // Create identity and principal
+            var claims = BuildClaims(userData);
             var identity = new ClaimsIdentity(claims, Scheme.Name);
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, Scheme.Name);
@@ -153,20 +109,45 @@ public sealed class DynamicXyzAuthHandler : AuthenticationHandler<DynamicXyzAuth
         Response.StatusCode = 403;
         return Task.CompletedTask;
     }
-}
-
-/// <summary>
-/// Options for Dynamic.xyz authentication handler
-/// </summary>
-public sealed class DynamicXyzAuthOptions : AuthenticationSchemeOptions
-{
+    
     /// <summary>
-    /// The realm to use in WWW-Authenticate challenge headers
+    /// Builds claims from validated user data
     /// </summary>
-    public string Realm { get; set; } = "Axon API";
+    private static List<Claim> BuildClaims(DynamicUserData userData)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, userData.UserId),
+            new(ClaimTypes.Email, userData.Email),
+            new("environment_id", userData.EnvironmentId),
+            new("is_new_user", userData.IsNewUser.ToString().ToLower())
+        };
 
-    /// <summary>
-    /// Whether to allow anonymous access when authentication fails
-    /// </summary>
-    public bool AllowAnonymous { get; set; } = true;
+        // Add wallet claims
+        foreach (var wallet in userData.Wallets)
+        {
+            claims.Add(new Claim("wallet", wallet.Address));
+            claims.Add(new Claim($"wallet:{wallet.Chain}", wallet.Address));
+            claims.Add(new Claim($"wallet:provider:{wallet.Chain}", wallet.Provider));
+        }
+
+        // Add visit timestamps if available
+        if (userData.FirstVisitUtc.HasValue)
+        {
+            claims.Add(new Claim("first_visit", userData.FirstVisitUtc.Value.ToString("O")));
+        }
+        
+        if (userData.LastVisitUtc.HasValue)
+        {
+            claims.Add(new Claim("last_visit", userData.LastVisitUtc.Value.ToString("O")));
+        }
+
+        // Add session public key if available
+        if (!string.IsNullOrWhiteSpace(userData.SessionPublicKey))
+        {
+            claims.Add(new Claim("session_public_key", userData.SessionPublicKey));
+        }
+
+        return claims;
+    }
 }

@@ -1,5 +1,3 @@
-using System.Text.Json;
-using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Primitives.Ids;
@@ -10,7 +8,7 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.EntityConfigurations;
 
 /// <summary>
 /// EF Core configuration for IdentityCredential entity.
-/// Includes critical unique constraints and performance indexes.
+/// Now uses strongly-typed CredentialContext instead of JSON metadata.
 /// </summary>
 public sealed class IdentityCredentialConfiguration : IEntityTypeConfiguration<IdentityCredential>
 {
@@ -65,14 +63,45 @@ public sealed class IdentityCredentialConfiguration : IEntityTypeConfiguration<I
         builder.Property(c => c.LastSeenAt)
             .HasColumnName("last_seen_at");
 
-        builder.Property(c => c.Metadata)
-            .HasConversion(
-                meta => JsonSerializer.Serialize(meta.Value, JsonSerializationOptions.DatabaseStorage),
-                json => CredentialMetadata.Create(
-                    JsonSerializer.Deserialize<Dictionary<string, object>>(json, JsonSerializationOptions.DatabaseStorage))
-                    .Value)
-            .HasColumnName("metadata")
-            .HasColumnType("jsonb");
+        // Owned entity: CredentialContext (inline columns)
+        builder.OwnsOne(c => c.Context, context =>
+        {
+            // Ignore inherited Entity properties for owned entities
+            context.Ignore(ctx => ctx.Id);
+            context.Ignore(ctx => ctx.CreatedAt);
+            context.Ignore(ctx => ctx.UpdatedAt);
+
+            context.Property(ctx => ctx.EmailHash)
+                .HasConversion(
+                    hash => hash != null ? hash.Value.Value : null,
+                    value => value != null ? EmailHash.From(value) : null)
+                .HasColumnName("email_hash")
+                .HasMaxLength(64); // SHA256 hex = 64 chars
+
+            context.Property(ctx => ctx.VerificationMethod)
+                .HasConversion(
+                    method => method.Value,
+                    value => ProofType.From(value))
+                .HasColumnName("verification_method")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            context.Property(ctx => ctx.SessionPublicKey)
+                .HasColumnName("session_public_key")
+                .HasMaxLength(1000); // Accommodate various key formats
+
+            context.Property(ctx => ctx.DeviceId)
+                .HasColumnName("device_id")
+                .HasMaxLength(255);
+
+            context.Property(ctx => ctx.UserAgent)
+                .HasColumnName("user_agent")
+                .HasMaxLength(1000); // User agents can be quite long
+
+            context.Property(ctx => ctx.IpHash)
+                .HasColumnName("ip_hash")
+                .HasMaxLength(64); // SHA256 hex = 64 chars
+        });
 
         // Audit columns
         builder.Property(c => c.CreatedAt).HasColumnName("created_at");
@@ -97,5 +126,7 @@ public sealed class IdentityCredentialConfiguration : IEntityTypeConfiguration<I
         
         builder.HasIndex(c => c.CreatedAt)
             .HasDatabaseName("ix_credentials_created_at");
+
+        // TODO: Add indexes and constraints for Context owned entity fields after migration is generated
     }
 }

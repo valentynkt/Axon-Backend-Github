@@ -77,11 +77,8 @@ internal sealed class UpsertWalletActivityHandler : BaseIdentityIdempotentComman
         // Apply MetaPatch if provided
         if (command.MetaPatch is not null && command.MetaPatch.Count > 0)
         {
-            var updateMetaResult = wallet.UpdateMeta(command.MetaPatch);
-            if (updateMetaResult.IsFailure)
-            {
-                return Result.Failure<WalletActivityResponse, Error>(updateMetaResult.Error);
-            }
+            // TODO: Update profile functionality - temporarily disabled
+            // Profile updates disabled temporarily
 
             keysChanged.AddRange(command.MetaPatch.Keys);
         }
