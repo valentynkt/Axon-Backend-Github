@@ -7,11 +7,16 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct OwnershipState
 {
+    private static readonly HashSet<string> AllowedValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "verified",
+        "pending", 
+        "revoked"
+    };
+
     public static readonly OwnershipState Verified = From("verified");
     public static readonly OwnershipState Pending = From("pending");
     public static readonly OwnershipState Revoked = From("revoked");
-
-    private static readonly string[] AllowedValues = { "verified", "pending", "revoked" };
 
     private static Validation Validate(string input)
     {

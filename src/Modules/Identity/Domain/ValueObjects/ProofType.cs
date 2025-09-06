@@ -7,11 +7,20 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct ProofType
 {
+    private static readonly Lazy<HashSet<string>> _allowedValues = new(() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dynamic_verified",
+        "direct_signature", 
+        "watch_only",
+        "unknown"
+    });
+    
+    private static HashSet<string> AllowedValues => _allowedValues.Value;
+
     public static readonly ProofType DynamicVerified = From("dynamic_verified");
     public static readonly ProofType DirectSignature = From("direct_signature");
     public static readonly ProofType WatchOnly = From("watch_only");
-
-    private static readonly string[] AllowedValues = { "dynamic_verified", "direct_signature", "watch_only" };
+    public static readonly ProofType Unknown = From("unknown");
 
     private static Validation Validate(string input)
     {
@@ -30,6 +39,7 @@ public readonly partial struct ProofType
     public bool IsDynamicVerified => Value == DynamicVerified.Value;
     public bool IsDirectSignature => Value == DirectSignature.Value;
     public bool IsWatchOnly => Value == WatchOnly.Value;
+    public bool IsUnknown => Value == Unknown.Value;
 
     public bool IsVerifiedSigning => !IsWatchOnly;
     public bool SupportsVerification => IsDynamicVerified || IsDirectSignature;

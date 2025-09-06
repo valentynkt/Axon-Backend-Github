@@ -24,8 +24,8 @@ internal sealed class ValidRiskTierRule : BusinessRule
 
     public override bool IsBroken()
     {
-        // Service principals should only use conservative risk tier for security
-        if (_principalType.IsService && !_riskTier.IsConservative)
+        // Service principals should only use low risk tier for security
+        if (_principalType.IsService && !_riskTier.IsLow)
             return true;
 
         // Human principals can use any risk tier

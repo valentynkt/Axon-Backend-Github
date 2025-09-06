@@ -13,8 +13,6 @@ public readonly partial struct PreferredLanguage
     public static readonly PreferredLanguage Spanish = From("es");
     public static readonly PreferredLanguage French = From("fr");
     public static readonly PreferredLanguage German = From("de");
-    public static readonly PreferredLanguage Portuguese = From("pt");
-    public static readonly PreferredLanguage Italian = From("it");
     public static readonly PreferredLanguage Japanese = From("ja");
     public static readonly PreferredLanguage Korean = From("ko");
     public static readonly PreferredLanguage Chinese = From("zh");

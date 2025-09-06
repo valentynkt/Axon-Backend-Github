@@ -7,11 +7,18 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct RiskTier
 {
-    private static readonly string[] AllowedValues = { "conservative", "balanced", "aggressive" };
+    private static readonly HashSet<string> AllowedValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "low",
+        "medium",
+        "high", 
+        "critical"
+    };
 
-    public static readonly RiskTier Conservative = From("conservative");
-    public static readonly RiskTier Balanced = From("balanced");
-    public static readonly RiskTier Aggressive = From("aggressive");
+    public static readonly RiskTier Low = From("low");
+    public static readonly RiskTier Medium = From("medium");
+    public static readonly RiskTier High = From("high");
+    public static readonly RiskTier Critical = From("critical");
 
     private static Validation Validate(string input)
     {
@@ -27,11 +34,12 @@ public readonly partial struct RiskTier
 
     private static string NormalizeInput(string input) => input.ToLowerInvariant();
 
-    public bool IsConservative => Value == Conservative.Value;
-    public bool IsBalanced => Value == Balanced.Value;
-    public bool IsAggressive => Value == Aggressive.Value;
+    public bool IsLow => Value == Low.Value;
+    public bool IsMedium => Value == Medium.Value;
+    public bool IsHigh => Value == High.Value;
+    public bool IsCritical => Value == Critical.Value;
 
-    public static RiskTier Default => Balanced;
+    public static RiskTier Default => Medium;
 
     public static Result<RiskTier, Error> Create(string? value)
     {

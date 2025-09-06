@@ -97,6 +97,15 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
             }
 
             var upsertResponse = principalResult.Value;
+            
+            // Defensive check for null Principal (should not happen after validation above)
+            if (upsertResponse?.Principal == null)
+            {
+                _logger.LogError("Principal response is null after successful upsert for user {UserId}", userData.UserId);
+                return Result.Failure<ExchangeOutcome, Error>(
+                    Error.Internal("Principal response is invalid", "AUTH.INVALID_RESPONSE"));
+            }
+            
             var axonId = upsertResponse.Principal.AxonId;
             var created = upsertResponse.Status == UpsertPrincipalStatus.Created;
 
@@ -166,6 +175,13 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
                     Error.Conflict("Principal creation conflicted with existing wallet ownership", DynamicAuthConstants.ErrorCodes.PrincipalConflict));
             }
             return Result.Failure<UpsertPrincipalResponse, Error>(result.Error);
+        }
+
+        if (result.Value?.Principal == null)
+        {
+            _logger.LogError("Principal upsert succeeded but returned null Principal for user {UserId}", userData.UserId);
+            return Result.Failure<UpsertPrincipalResponse, Error>(
+                Error.Internal("Principal creation succeeded but no principal was returned", "AUTH.NULL_PRINCIPAL"));
         }
 
         _logger.LogDebug("Principal upserted with status {Status} for user {UserId}, AxonId={AxonId}", 

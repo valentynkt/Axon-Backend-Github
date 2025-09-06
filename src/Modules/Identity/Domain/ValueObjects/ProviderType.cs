@@ -7,12 +7,22 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct ProviderType
 {
-    private static readonly string[] AllowedValues = { "dynamic", "siws", "oidc", "service_api" };
+    private static readonly Lazy<HashSet<string>> _allowedValues = new(() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dynamic",
+        "siws", 
+        "oidc",
+        "service_api",
+        "unknown"
+    });
+    
+    private static HashSet<string> AllowedValues => _allowedValues.Value;
 
     public static readonly ProviderType Dynamic = From("dynamic");
     public static readonly ProviderType Siws = From("siws");
     public static readonly ProviderType Oidc = From("oidc");
     public static readonly ProviderType ServiceApi = From("service_api");
+    public static readonly ProviderType Unknown = From("unknown");
 
     private static Validation Validate(string input)
     {
@@ -32,6 +42,7 @@ public readonly partial struct ProviderType
     public bool IsSiws => Value == Siws.Value;
     public bool IsOidc => Value == Oidc.Value;
     public bool IsServiceApi => Value == ServiceApi.Value;
+    public bool IsUnknown => Value == Unknown.Value;
 
     public static Result<ProviderType, Error> Create(string? value)
     {

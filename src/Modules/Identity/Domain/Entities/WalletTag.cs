@@ -22,7 +22,7 @@ public sealed class WalletTag : AuditableEntity<Guid>
     // EF Core parameterless constructor
     private WalletTag() : base() 
     {
-        Tag = Tag.From("unknown");
+        Tag = Tag.Personal; // Default to personal wallet tag
     }
 
     private WalletTag(

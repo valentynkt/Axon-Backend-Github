@@ -7,10 +7,16 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct AccessMode
 {
+    private static readonly Lazy<HashSet<string>> _allowedValues = new(() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        "signing",
+        "watch_only"
+    });
+    
+    private static HashSet<string> AllowedValues => _allowedValues.Value;
+
     public static readonly AccessMode Signing = From("signing");
     public static readonly AccessMode WatchOnly = From("watch_only");
-
-    private static readonly string[] AllowedValues = { "signing", "watch_only" };
 
     private static Validation Validate(string input)
     {

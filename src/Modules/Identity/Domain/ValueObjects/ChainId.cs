@@ -8,16 +8,18 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct ChainId
 {
-    public static readonly ChainId Solana = From("solana");
-    public static readonly ChainId Ethereum = From("ethereum");
-    public static readonly ChainId Polygon = From("polygon");
-
-    private static readonly HashSet<string> SupportedChains = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Lazy<HashSet<string>> _supportedChains = new(() => new(StringComparer.OrdinalIgnoreCase)
     {
         "solana",
         "ethereum",
         "polygon"
-    };
+    });
+    
+    private static HashSet<string> SupportedChains => _supportedChains.Value;
+
+    public static readonly ChainId Solana = From("solana");
+    public static readonly ChainId Ethereum = From("ethereum");
+    public static readonly ChainId Polygon = From("polygon");
 
     private static Validation Validate(string input)
     {

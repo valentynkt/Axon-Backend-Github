@@ -1,0 +1,11 @@
+global using NUnit.Framework;
+global using Shouldly;
+global using NSubstitute;
+global using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+global using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+global using Axon.Modules.Identity.Domain.Entities;
+global using Axon.Modules.Identity.Domain.ValueObjects;
+global using Axon.Modules.Identity.Domain.Rules;
+global using Axon.Modules.Identity.Domain.Errors;
+global using BuildingBlocks.Core.Domain;
+global using CSharpFunctionalExtensions;

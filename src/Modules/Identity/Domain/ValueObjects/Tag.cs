@@ -9,14 +9,37 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
 public readonly partial struct Tag
 {
-    public static readonly Tag Operational = From("operational");
-    public static readonly Tag NonMergeable = From("non-mergeable");
-    
     private static readonly HashSet<string> AllowedTags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "operational",
-        "non-mergeable"
+        // Wallet purpose
+        "personal",
+        "business", 
+        "trading",
+        "defi",
+        "gaming",
+        "nft",
+        "dao",
+        
+        // Wallet status
+        "test",
+        "main",
+        
+        // Security level
+        "hot",
+        "cold"
     };
+
+    public static readonly Tag Personal = From("personal");
+    public static readonly Tag Business = From("business");
+    public static readonly Tag Trading = From("trading");
+    public static readonly Tag Defi = From("defi");
+    public static readonly Tag Gaming = From("gaming");
+    public static readonly Tag Nft = From("nft");
+    public static readonly Tag Dao = From("dao");
+    public static readonly Tag Test = From("test");
+    public static readonly Tag Main = From("main");
+    public static readonly Tag Hot = From("hot");
+    public static readonly Tag Cold = From("cold");
 
     private static Validation Validate(string input)
     {

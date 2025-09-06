@@ -92,7 +92,7 @@ public sealed class UpdateProfileHandler : BaseIdentityCommandHandler<UpdateProf
             if (principal.Profile.RiskTier != riskTierResult.Value)
             {
                 // Enforce service principal constraints
-                if (principal.IsService && riskTierResult.Value != RiskTier.Conservative)
+                if (principal.IsService && riskTierResult.Value != RiskTier.Low)
                 {
                     return Result.Failure<UpdateProfileResponse, Error>(
                         IdentityDomainErrors.Profile.ServicePrincipalRiskConstraint());
