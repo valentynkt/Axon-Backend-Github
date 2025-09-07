@@ -8,27 +8,15 @@ namespace Axon.Modules.Identity.Application.DTOs.Responses.CommandResponses;
 public enum UpsertPrincipalStatus
 {
     Created,
-    UpdatedLastSeen,
-    LinkedWithWallet,
-    ConflictOwnedByOther
+    UpdatedLastSeen
 }
 
 /// <summary>
 /// Response for UpsertPrincipalFromCredential command.
+/// Wallet operations should be performed separately through dedicated wallet commands.
 /// </summary>
 public sealed record UpsertPrincipalResponse(
     PrincipalDto Principal,
     CredentialDto Credential,
-    WalletOwnershipDto? AttachedWallet,
-    bool? AppliedDefault,
-    string? DefaultNotAppliedReason,
-    UpsertPrincipalStatus Status,
-    ConflictInfo? Conflict
-);
-
-/// <summary>
-/// Information about conflicts when they occur.
-/// </summary>
-public sealed record ConflictInfo(
-    AxonId ExistingOwnerPrincipalId
+    UpsertPrincipalStatus Status
 );

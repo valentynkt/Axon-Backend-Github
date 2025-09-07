@@ -14,7 +14,13 @@ using Microsoft.Extensions.Logging;
 namespace Axon.Modules.Identity.Application.Services;
 
 /// <summary>
-/// Implementation of Dynamic.xyz user data to Identity commands mapper
+/// Implementation of Dynamic.xyz user data to Identity commands mapper.
+/// 
+/// ARCHITECTURAL DECISION: Command Isolation and Phase Separation
+/// - UpsertPrincipalFromCredential command NO LONGER includes wallet attachment
+/// - Wallet operations are mapped to separate commands (EnsureWalletLinked, UpsertWalletActivity)
+/// - This maintains clean separation between identity and wallet concerns per Clean Architecture
+/// - Each command has single responsibility and can be tested/evolved independently
 /// </summary>
 public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
 {
@@ -41,8 +47,9 @@ public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
             Subject: userData.UserId,
             EnvironmentId: userData.EnvironmentId,
             CredentialMetadata: CreateCredentialMetadata(userData),
-            PrimaryEmailHash: primaryEmailHash,
-            AttachWallet: null // No wallet attachment during principal upsert
+            PrimaryEmailHash: primaryEmailHash
+            // REMOVED AttachWallet parameter - wallet operations now handled separately
+            // via EnsureWalletLinked and UpsertWalletActivity commands for clean architecture
         );
     }
 

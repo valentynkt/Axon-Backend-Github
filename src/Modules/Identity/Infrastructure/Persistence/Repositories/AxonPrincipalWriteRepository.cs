@@ -21,14 +21,34 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
     public IWriteUnitOfWork UnitOfWork => _unitOfWork;
 
+    private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
+    {
+        return DbSet
+            .Include(p => p.Credentials)
+            .Include(p => p.WalletOwnerships)
+            .Include(p => p.ChainDefaults);
+    }
+
+    private IQueryable<AxonPrincipal> GetPrincipalForRead()
+    {
+        return DbSet
+            .Include(p => p.Credentials)
+            .AsNoTracking();
+    }
+
+    public override async Task<AxonPrincipal?> GetByIdAsync(AxonId id, CancellationToken ct = default)
+    {
+        return await GetPrincipalWithIncludes()
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
+    }
+
     public async Task<AxonPrincipal?> FindByCredentialAsync(
         ProviderType providerType,
         string issuer,
         string subject,
         CancellationToken ct = default)
     {
-        return await DbSet
-            .Include(p => p.Credentials)
+        return await GetPrincipalForRead()
             .FirstOrDefaultAsync(p => p.Credentials.Any(c => 
                 c.ProviderType == providerType && 
                 c.Issuer == issuer && 
@@ -39,8 +59,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         WalletId walletId,
         CancellationToken ct = default)
     {
-        return await DbSet
-            .Include(p => p.WalletOwnerships)
+        return await GetPrincipalWithIncludes()
             .FirstOrDefaultAsync(p => p.WalletOwnerships.Any(wo => wo.WalletId == walletId), ct);
     }
 
@@ -76,8 +95,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         if (walletIdsList.Count == 0)
             return new Dictionary<WalletId, AxonPrincipal>();
 
-        var principals = await DbSet
-            .Include(p => p.WalletOwnerships)
+        var principals = await GetPrincipalWithIncludes()
             .Where(p => p.WalletOwnerships.Any(wo => 
                 walletIdsList.Contains(wo.WalletId) && 
                 wo.AccessMode == AccessMode.Signing))

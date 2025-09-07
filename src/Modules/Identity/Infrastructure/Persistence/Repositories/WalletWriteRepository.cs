@@ -19,12 +19,24 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 
     public IWriteUnitOfWork UnitOfWork => _unitOfWork;
 
+    private IQueryable<Wallet> GetWalletWithIncludes()
+    {
+        return DbSet
+            .Include(w => w.WalletTags);
+    }
+
+    public override async Task<Wallet?> GetByIdAsync(WalletId id, CancellationToken ct = default)
+    {
+        return await GetWalletWithIncludes()
+            .FirstOrDefaultAsync(w => w.Id == id, ct);
+    }
+
     public async Task<Wallet?> GetByChainAndAddressAsync(
         ChainId chainId, 
         Address address, 
         CancellationToken cancellationToken = default)
     {
-        return await DbSet
+        return await GetWalletWithIncludes()
             .FirstOrDefaultAsync(w => w.Chain == chainId && w.Address == address, cancellationToken);
     }
 
@@ -37,7 +49,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         if (walletIdsList.Count == 0)
             return Array.Empty<Wallet>();
 
-        var wallets = await DbSet
+        var wallets = await GetWalletWithIncludes()
             .Where(w => walletIdsList.Contains(w.Id))
             .ToListAsync(cancellationToken);
 

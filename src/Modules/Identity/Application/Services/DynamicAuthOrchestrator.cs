@@ -18,9 +18,15 @@ namespace Axon.Modules.Identity.Application.Services;
 /// <summary>
 /// Orchestrates the complete Dynamic JWT exchange flow with command coordination.
 /// 
+/// ARCHITECTURAL DECISIONS:
+/// - Phase Separation: Principal creation is cleanly separated from wallet operations
+/// - Command Isolation: Each step uses dedicated commands following CQRS patterns
+/// - Wallet operations are performed separately through dedicated wallet commands
+/// - Failure Isolation: Wallet processing failures don't affect principal creation
+/// 
 /// Implements a 4-step process:
 /// 1. JWT validation and normalization via DynamicJwtBridge
-/// 2. Principal and credential upsert with conflict handling
+/// 2. Principal and credential upsert (NO wallet attachment per clean architecture)
 /// 3. Wallet processing (activity, linking, defaults) via WalletProcessorService
 /// 4. Optional profile updates based on JWT claims
 /// 

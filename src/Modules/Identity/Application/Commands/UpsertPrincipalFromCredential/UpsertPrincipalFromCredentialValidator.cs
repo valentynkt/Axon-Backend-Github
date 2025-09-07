@@ -4,6 +4,7 @@ namespace Axon.Modules.Identity.Application.Commands.UpsertPrincipalFromCredenti
 
 /// <summary>
 /// Validator for UpsertPrincipalFromCredential command.
+/// Note: AttachWallet validation removed - wallet operations handled separately.
 /// </summary>
 public sealed class UpsertPrincipalFromCredentialValidator : AbstractValidator<UpsertPrincipalFromCredentialCommand>
 {
@@ -43,39 +44,5 @@ public sealed class UpsertPrincipalFromCredentialValidator : AbstractValidator<U
             .MaximumLength(255)
             .When(x => !string.IsNullOrEmpty(x.CorrelationId))
             .WithMessage("CorrelationId must not exceed 255 characters");
-
-        // Validate AttachWallet if provided
-        RuleFor(x => x.AttachWallet)
-            .SetValidator(new AttachWalletRequestValidator()!)
-            .When(x => x.AttachWallet is not null);
-    }
-}
-
-/// <summary>
-/// Validator for AttachWalletRequest.
-/// </summary>
-public sealed class AttachWalletRequestValidator : AbstractValidator<DTOs.Requests.AttachWalletRequest>
-{
-    public AttachWalletRequestValidator()
-    {
-        RuleFor(x => x.RawAddress)
-            .NotEmpty()
-            .MaximumLength(100)
-            .WithMessage("RawAddress is required and must not exceed 100 characters");
-
-        RuleFor(x => x.ProofType)
-            .NotEmpty()
-            .MaximumLength(50)
-            .WithMessage("ProofType is required and must not exceed 50 characters");
-
-        RuleFor(x => x.AccessMode)
-            .MaximumLength(50)
-            .When(x => !string.IsNullOrEmpty(x.AccessMode))
-            .WithMessage("AccessMode must not exceed 50 characters");
-
-        RuleFor(x => x.Label)
-            .MaximumLength(100)
-            .When(x => !string.IsNullOrEmpty(x.Label))
-            .WithMessage("Label must not exceed 100 characters");
     }
 }
