@@ -61,9 +61,7 @@ public sealed class IdentityApiModule : IApiModule
         // Register Dynamic JWT exchange services
         services.AddSingleton<Axon.Modules.Identity.Application.Services.IDynamicToCommandsMapper, Axon.Modules.Identity.Application.Services.DynamicToCommandsMapper>();
         services.AddScoped<Axon.Modules.Identity.Application.Services.IDynamicJwtBridge, Axon.Modules.Identity.Infrastructure.Services.DynamicJwtBridge>();
-        services.AddScoped<Axon.Modules.Identity.Application.Services.IWalletProcessorService, Axon.Modules.Identity.Application.Services.WalletProcessorService>();
         services.AddScoped<Axon.Modules.Identity.Application.Services.IExchangeMetricsService, Axon.Modules.Identity.Infrastructure.Services.ExchangeMetricsService>();
-        services.AddScoped<Axon.Modules.Identity.Application.Services.IDynamicAuthOrchestrator, Axon.Modules.Identity.Application.Services.DynamicAuthOrchestrator>();
         
         // Register current user service
         services.AddHttpContextAccessor();

@@ -46,24 +46,23 @@ public sealed class EfUnitOfWork<TContext, TModule> : IWriteUnitOfWork<TModule>
             action,
             async (context, operation, cancellationToken) =>
             {
-                // Create separate timeout token for transaction operations only
-                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-                using var transactionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-                
-                // Use transaction token only for Begin/Commit/Rollback operations
-                await _db.BeginTransactionAsync(transactionCts.Token);
+                // Use the client's cancellation token for all operations
+                // This removes the artificial 2-minute timeout that was causing premature cancellations
+                await _db.BeginTransactionAsync(cancellationToken);
                 try 
                 { 
-                    // Use original cancellation token for business operations to preserve client cancellation
+                    // Execute business operations with the original cancellation token
                     var result = await operation(cancellationToken); 
-                    await _db.CommitTransactionAsync(transactionCts.Token); 
+                    await _db.CommitTransactionAsync(cancellationToken); 
                     return result;
                 }
                 catch (Exception ex)
                 { 
                     try
                     {
-                        await _db.RollbackTransactionAsync(CancellationToken.None); // Don't pass cancelled token to rollback
+                        // Use CancellationToken.None for rollback to ensure it always completes
+                        // even if the original operation was cancelled
+                        await _db.RollbackTransactionAsync(CancellationToken.None);
                     }
                     catch (Exception rollbackEx)
                     {
