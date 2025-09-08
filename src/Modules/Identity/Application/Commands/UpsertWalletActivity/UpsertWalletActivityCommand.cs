@@ -11,7 +11,6 @@ namespace Axon.Modules.Identity.Application.Commands.UpsertWalletActivity;
 /// Used by Dynamic JWT exchange orchestrator.
 /// </summary>
 public sealed record UpsertWalletActivityCommand(
-    string? IdempotencyKey,
     string? CorrelationId,
     WalletId? WalletId,
     ChainId? ChainId,
@@ -20,12 +19,8 @@ public sealed record UpsertWalletActivityCommand(
     Dictionary<string, object>? MetaPatch,
     string[]? TagsToAdd,
     string[]? TagsToRemove
-) : IdentityIdempotentCommand<WalletActivityResponse>
+) : IdentityBaseCommand<WalletActivityResponse>
 {
-    /// <summary>
-    /// Override idempotency key if provided by caller.
-    /// </summary>
-    public override string? GetExplicitIdempotencyKey() => IdempotencyKey;
 
     /// <summary>
     /// Validates that either WalletId or (ChainId + RawAddress) is provided.

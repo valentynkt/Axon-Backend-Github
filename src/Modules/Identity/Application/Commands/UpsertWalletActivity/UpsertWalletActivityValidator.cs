@@ -41,11 +41,6 @@ internal sealed class UpsertWalletActivityValidator : AbstractValidator<UpsertWa
             .When(x => x.TagsToRemove is not null)
             .WithMessage("All tags must be non-empty and not exceed 50 characters");
 
-        RuleFor(x => x.IdempotencyKey)
-            .MaximumLength(255)
-            .When(x => !string.IsNullOrEmpty(x.IdempotencyKey))
-            .WithMessage("IdempotencyKey must not exceed 255 characters");
-
         RuleFor(x => x.CorrelationId)
             .MaximumLength(255)
             .When(x => !string.IsNullOrEmpty(x.CorrelationId))

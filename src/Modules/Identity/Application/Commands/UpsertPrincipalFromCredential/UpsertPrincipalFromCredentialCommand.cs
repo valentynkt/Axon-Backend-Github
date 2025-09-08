@@ -9,7 +9,6 @@ namespace Axon.Modules.Identity.Application.Commands.UpsertPrincipalFromCredenti
 /// Wallet operations should be performed separately through dedicated wallet commands.
 /// </summary>
 public sealed record UpsertPrincipalFromCredentialCommand(
-    string? IdempotencyKey,
     string? CorrelationId,
     string ProviderType,
     string Issuer,
@@ -17,10 +16,4 @@ public sealed record UpsertPrincipalFromCredentialCommand(
     string? EnvironmentId,
     Dictionary<string, object>? CredentialMetadata,
     string? PrimaryEmailHash
-) : IdentityIdempotentCommand<UpsertPrincipalResponse>
-{
-    /// <summary>
-    /// Override idempotency key if provided by caller.
-    /// </summary>
-    public override string? GetExplicitIdempotencyKey() => IdempotencyKey;
-};
+) : IdentityBaseCommand<UpsertPrincipalResponse>;

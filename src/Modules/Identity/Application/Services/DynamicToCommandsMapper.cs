@@ -40,7 +40,6 @@ public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
         var primaryEmailHash = ComputePrimaryEmailHash(userData.Email);
 
         return new UpsertPrincipalFromCredentialCommand(
-            IdempotencyKey: null, // Let domain generate
             CorrelationId: correlationId,
             ProviderType: DynamicAuthConstants.ProviderType,
             Issuer: $"{DynamicAuthConstants.IssuerPrefix}/{userData.EnvironmentId}",
@@ -71,7 +70,6 @@ public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
         var lastSeenAt = wallet.ConnectedAtUtc ?? DateTimeOffset.UtcNow;
 
         return new UpsertWalletActivityCommand(
-            IdempotencyKey: null,
             CorrelationId: correlationId,
             WalletId: null, // Use coordinates instead
             ChainId: chainId,
@@ -102,15 +100,14 @@ public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
         var label = CreateWalletLabel(wallet);
 
         return new EnsureWalletLinkedCommand(
-            IdempotencyKey: null,
             CorrelationId: correlationId,
             AxonId: axonId,
             ChainId: chainId,
             RawAddress: wallet.Address,
-            ProofType: DynamicAuthConstants.OidcProofType,
-            AccessMode: DynamicAuthConstants.UnknownAccessMode,
+            ProofType: DynamicAuthConstants.DynamicVerifiedProofType,
+            AccessMode: DynamicAuthConstants.SigningMode, // Dynamic has verified signing capability
             Label: label,
-            Verify: false, // Don't auto-verify OIDC wallets
+            Verify: true, // Dynamic has already verified wallet ownership via signature
             SetAsDefault: setAsDefault
         );
     }

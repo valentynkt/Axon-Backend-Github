@@ -16,14 +16,14 @@ public static class DynamicAuthConstants
     public const string IssuerPrefix = "app.dynamicauth.com";
     
     /// <summary>
-    /// Proof type for OIDC-based wallet ownership
+    /// Proof type for Dynamic.xyz verified wallet ownership
     /// </summary>
-    public const string OidcProofType = "oidc";
+    public const string DynamicVerifiedProofType = "dynamic_verified";
     
     /// <summary>
-    /// Access mode for wallets with unknown signing capability
+    /// Access mode for Dynamic.xyz wallets (signing capability verified by Dynamic)
     /// </summary>
-    public const string UnknownAccessMode = "unknown";
+    public const string SigningMode = "signing";
     
     /// <summary>
     /// Chain normalization mappings from Dynamic format to Axon format

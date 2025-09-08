@@ -37,11 +37,6 @@ public sealed class EnsureWalletLinkedValidator : AbstractValidator<EnsureWallet
             .When(x => !string.IsNullOrEmpty(x.Label))
             .WithMessage("Label must not exceed 100 characters");
 
-        RuleFor(x => x.IdempotencyKey)
-            .MaximumLength(255)
-            .When(x => !string.IsNullOrEmpty(x.IdempotencyKey))
-            .WithMessage("IdempotencyKey must not exceed 255 characters");
-
         RuleFor(x => x.CorrelationId)
             .MaximumLength(255)
             .When(x => !string.IsNullOrEmpty(x.CorrelationId))

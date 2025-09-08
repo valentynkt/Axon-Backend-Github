@@ -44,6 +44,11 @@ public sealed class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPr
             .HasColumnName("primary_email_hash")
             .HasMaxLength(64); // SHA256 hex = 64 chars
 
+        // Version for optimistic concurrency (from AggregateRoot)
+        builder.Property(p => p.Version)
+            .IsConcurrencyToken()
+            .HasColumnName("version");
+
         // Owned entity: PrincipalProfile (simplified - no more ChainDefaults)
         builder.OwnsOne(p => p.Profile, profile =>
         {

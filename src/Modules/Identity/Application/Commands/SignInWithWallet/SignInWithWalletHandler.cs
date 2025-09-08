@@ -20,7 +20,7 @@ namespace Axon.Modules.Identity.Application.Commands.SignInWithWallet;
 /// Handles SignInWithWallet command for wallet-first authentication flow.
 /// Atomically verifies wallet control and links/creates principal with verified signing proof.
 /// </summary>
-public sealed class SignInWithWalletHandler : BaseIdentityIdempotentCommandHandler<SignInWithWalletCommand, SignInWithWalletResponse>
+public sealed class SignInWithWalletHandler : BaseIdentityCommandHandler<SignInWithWalletCommand, SignInWithWalletResponse>
 {
     private readonly IAxonPrincipalWriteRepository _principalRepository;
     private readonly IWalletResolutionService _walletResolutionService;

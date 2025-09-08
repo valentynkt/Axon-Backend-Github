@@ -1,9 +1,12 @@
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.DTOs;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 
 namespace Axon.Modules.Identity.Application.Services;
 
@@ -79,10 +82,24 @@ public sealed class WalletResolutionService : IWalletResolutionService
             var newWallet = walletResult.Value;
             await _walletRepository.AddAsync(newWallet, cancellationToken);
 
-            _logger.LogDebug("Created new wallet {WalletId} for chain {ChainId} and address {Address}",
-                newWallet.Id, chainId, canonicalAddress);
+            // Save the new wallet immediately to ensure it's persisted
+            // before any subsequent modifications are applied
+            await _walletRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
-            return Result.Success<(Wallet, bool), Error>((newWallet, true));
+            // Reload the wallet after save to ensure all navigation properties
+            // and related data are properly hydrated for subsequent operations
+            var reloadedWallet = await _walletRepository.GetByIdAsync(newWallet.Id, cancellationToken);
+            if (reloadedWallet is null)
+            {
+                _logger.LogError("Failed to reload newly created wallet {WalletId} after save", newWallet.Id);
+                return Result.Failure<(Wallet, bool), Error>(
+                    Error.Failure("Failed to reload wallet after creation", "IDENTITY.WALLET.RELOAD_FAILED"));
+            }
+
+            _logger.LogDebug("Created new wallet {WalletId} for chain {ChainId} and address {Address}",
+                reloadedWallet.Id, chainId, canonicalAddress);
+
+            return Result.Success<(Wallet, bool), Error>((reloadedWallet, true));
         }
         catch (Exception ex)
         {

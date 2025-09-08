@@ -24,6 +24,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
     private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
     {
         return DbSet
+            .AsSplitQuery()
             .Include(p => p.Credentials)
             .Include(p => p.WalletOwnerships)
             .Include(p => p.ChainDefaults);

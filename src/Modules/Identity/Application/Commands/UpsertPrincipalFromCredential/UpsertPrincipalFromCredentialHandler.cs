@@ -18,7 +18,7 @@ namespace Axon.Modules.Identity.Application.Commands.UpsertPrincipalFromCredenti
 /// Resolves or creates a human principal from a credential and updates last-seen if found.
 /// Wallet operations should be performed separately through dedicated wallet commands.
 /// </summary>
-public sealed class UpsertPrincipalFromCredentialHandler : BaseIdentityIdempotentCommandHandler<UpsertPrincipalFromCredentialCommand, UpsertPrincipalResponse>
+public sealed class UpsertPrincipalFromCredentialHandler : BaseIdentityCommandHandler<UpsertPrincipalFromCredentialCommand, UpsertPrincipalResponse>
 {
     private readonly IAxonPrincipalWriteRepository _principalRepository;
     private readonly IWalletOwnershipService _walletOwnershipService;

@@ -17,12 +17,5 @@ public sealed record SignInWithWalletCommand(
     string? Label = null,
     bool SetAsDefault = false,
     string? AccessMode = null,
-    string? IdempotencyKey = null,
     string? CorrelationId = null
-) : IdentityIdempotentCommand<SignInWithWalletResponse>
-{
-    /// <summary>
-    /// Override idempotency key if provided by caller.
-    /// </summary>
-    public override string? GetExplicitIdempotencyKey() => IdempotencyKey;
-};
+) : IdentityBaseCommand<SignInWithWalletResponse>;

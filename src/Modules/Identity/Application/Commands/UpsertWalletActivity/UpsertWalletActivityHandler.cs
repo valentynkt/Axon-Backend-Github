@@ -19,7 +19,7 @@ namespace Axon.Modules.Identity.Application.Commands.UpsertWalletActivity;
 /// (also register on the fly if needed).
 /// INTERNAL USE ONLY - Not part of public Identity API surface.
 /// </summary>
-internal sealed class UpsertWalletActivityHandler : BaseIdentityIdempotentCommandHandler<UpsertWalletActivityCommand, WalletActivityResponse>
+internal sealed class UpsertWalletActivityHandler : BaseIdentityCommandHandler<UpsertWalletActivityCommand, WalletActivityResponse>
 {
     private readonly IWalletWriteRepository _walletRepository;
     private readonly ILogger<UpsertWalletActivityHandler> _logger;
@@ -73,19 +73,12 @@ internal sealed class UpsertWalletActivityHandler : BaseIdentityIdempotentComman
                 return Result.Failure<WalletActivityResponse, Error>(touchResult.Error);
             }
         }
-
-        // Apply MetaPatch if provided
-        if (command.MetaPatch is not null && command.MetaPatch.Count > 0)
-        {
-            // TODO: Update profile functionality - temporarily disabled
-            // Profile updates disabled temporarily
-
-            keysChanged.AddRange(command.MetaPatch.Keys);
-        }
+        
 
         // Apply tag changes
         if (command.TagsToAdd is not null)
         {
+             
             foreach (var tagValue in command.TagsToAdd)
             {
                 // Snapshot existing tags before adding
@@ -212,7 +205,21 @@ internal sealed class UpsertWalletActivityHandler : BaseIdentityIdempotentComman
             var newWallet = walletResult.Value;
             await _walletRepository.AddAsync(newWallet, cancellationToken);
 
-            return Result.Success<(Wallet, bool), Error>((newWallet, true));
+            // 🔧 FIX: Save the new wallet immediately to ensure it's persisted
+            // before any subsequent modifications are applied
+            await _walletRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+
+            // 🔧 FIX: Reload the wallet after save to ensure all navigation properties
+            // and related data are properly hydrated for subsequent operations
+            var reloadedWallet = await _walletRepository.GetByIdAsync(newWallet.Id, cancellationToken);
+            if (reloadedWallet is null)
+            {
+                _logger.LogError("Failed to reload newly created wallet {WalletId} after save", newWallet.Id);
+                return Result.Failure<(Wallet, bool), Error>(
+                    WalletDomainErrors.General.CreationFailed("Failed to reload wallet after creation"));
+            }
+
+            return Result.Success<(Wallet, bool), Error>((reloadedWallet, true));
         }
 
         return Result.Failure<(Wallet, bool), Error>(

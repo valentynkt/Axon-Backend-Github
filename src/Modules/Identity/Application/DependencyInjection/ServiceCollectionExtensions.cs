@@ -35,6 +35,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWalletOwnershipService, WalletOwnershipService>();
         services.AddScoped<IWalletResolutionService, WalletResolutionService>();
         services.AddScoped<IDefaultWalletCoordinator, DefaultWalletCoordinator>();
+        services.AddScoped<IWalletProcessorService, WalletProcessorService>();
+        services.AddScoped<IDynamicAuthOrchestrator, DynamicAuthOrchestrator>();
         
         return services;
     }

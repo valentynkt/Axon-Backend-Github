@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Common.Commands;
 using Axon.Modules.Identity.Application.Common.Mappers;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.DTOs;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using Axon.Modules.Identity.Application.DTOs.Responses.CommandResponses;
 using Axon.Modules.Identity.Application.Services;
@@ -20,7 +21,7 @@ namespace Axon.Modules.Identity.Application.Commands.EnsureWalletLinked;
 /// Given a principal and wallet coordinates, ensures the wallet exists and is linked 
 /// with the desired state (verify, default, label, access mode).
 /// </summary>
-public sealed class EnsureWalletLinkedHandler : BaseIdentityIdempotentCommandHandler<EnsureWalletLinkedCommand, EnsureWalletResponse>
+public sealed class EnsureWalletLinkedHandler : BaseIdentityCommandHandler<EnsureWalletLinkedCommand, EnsureWalletResponse>
 {
     private readonly IAxonPrincipalWriteRepository _principalRepository;
     private readonly IWalletResolutionService _walletResolutionService;

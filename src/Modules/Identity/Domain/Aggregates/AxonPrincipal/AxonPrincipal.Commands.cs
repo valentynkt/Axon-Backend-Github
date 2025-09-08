@@ -189,19 +189,24 @@ public sealed partial class AxonPrincipal
 
             var previousDefault = GetDefaultWalletForChain(chainId);
 
-            // Remove any existing default for this chain
+            // Check if default already exists for this chain
             var existingDefault = _chainDefaults.FirstOrDefault(cd => cd.IsForChain(chainId));
             if (existingDefault != null)
             {
-                _chainDefaults.Remove(existingDefault);
+                // Update existing default instead of removing and re-adding
+                var updateResult = existingDefault.UpdateWallet(walletId);
+                if (updateResult.IsFailure)
+                    return Result.Failure<Unit, Error>(updateResult.Error);
             }
+            else
+            {
+                // Create new default only if none exists
+                var chainDefaultResult = PrincipalChainDefault.Create(Id, chainId, walletId);
+                if (chainDefaultResult.IsFailure)
+                    return Result.Failure<Unit, Error>(chainDefaultResult.Error);
 
-            // Create new default
-            var chainDefaultResult = PrincipalChainDefault.Create(Id, chainId, walletId);
-            if (chainDefaultResult.IsFailure)
-                return Result.Failure<Unit, Error>(chainDefaultResult.Error);
-
-            _chainDefaults.Add(chainDefaultResult.Value);
+                _chainDefaults.Add(chainDefaultResult.Value);
+            }
             MarkUpdated();
 
             RaiseDomainEvent(new DefaultWalletChangedEvent(

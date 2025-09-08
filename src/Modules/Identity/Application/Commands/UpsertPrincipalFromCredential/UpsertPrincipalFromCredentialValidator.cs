@@ -35,11 +35,6 @@ public sealed class UpsertPrincipalFromCredentialValidator : AbstractValidator<U
             .When(x => !string.IsNullOrEmpty(x.PrimaryEmailHash))
             .WithMessage("PrimaryEmailHash must not exceed 64 characters");
 
-        RuleFor(x => x.IdempotencyKey)
-            .MaximumLength(255)
-            .When(x => !string.IsNullOrEmpty(x.IdempotencyKey))
-            .WithMessage("IdempotencyKey must not exceed 255 characters");
-
         RuleFor(x => x.CorrelationId)
             .MaximumLength(255)
             .When(x => !string.IsNullOrEmpty(x.CorrelationId))

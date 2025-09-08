@@ -7,6 +7,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// Principal chain default owned entity representing a default wallet for a specific chain.
 /// Owned by AxonPrincipal - enforces single default per chain constraint.
 /// Replaces the JSON-based ChainDefaults with strongly-typed collection.
+/// Note: AxonPrincipalId is managed by EF Core as a shadow property for the owned relationship.
 /// </summary>
 public sealed class PrincipalChainDefault : AuditableEntity<Guid>
 {
@@ -78,11 +79,6 @@ public sealed class PrincipalChainDefault : AuditableEntity<Guid>
         
         return Result.Success<Unit, Error>(Unit.Value);
     }
-
-    /// <summary>
-    /// Checks if this default belongs to the specified principal.
-    /// </summary>
-    internal bool BelongsTo(AxonId principalId) => AxonId == principalId;
 
     /// <summary>
     /// Checks if this default is for the specified chain.

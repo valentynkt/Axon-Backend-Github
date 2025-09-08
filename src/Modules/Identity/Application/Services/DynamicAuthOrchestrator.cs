@@ -119,12 +119,25 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
             var seenChainsWithDefault = new HashSet<string>(upsertResponse.Principal.DefaultPerChain.Keys);
 
             // Step 3: Process all wallets (activity + linking + defaults)
-            var walletResults = await _walletProcessor.ProcessWalletsAsync(
+            var walletResultsResult = await _walletProcessor.ProcessWalletsAsync(
                 userData.Wallets, 
                 axonId, 
                 seenChainsWithDefault,
                 correlationId, 
                 cancellationToken);
+
+            if (walletResultsResult.IsFailure)
+            {
+                stopwatch.Stop();
+                _metricsService.RecordExchangeFailure(userData.UserId, "wallet_processing_failed", stopwatch.ElapsedMilliseconds);
+                
+                _logger.LogError("Wallet processing failed for user {UserId}: {ErrorCode} - {ErrorMessage}", 
+                    userData.UserId, walletResultsResult.Error.Code, walletResultsResult.Error.Message);
+                    
+                return Result.Failure<ExchangeOutcome, Error>(walletResultsResult.Error);
+            }
+
+            var walletResults = walletResultsResult.Value;
 
             // Step 4: Update profile if needed (currently no-op)
             await UpdateProfileIfNeededAsync(axonId, userData, upsertResponse.Principal.PreferredLanguage, correlationId, cancellationToken);

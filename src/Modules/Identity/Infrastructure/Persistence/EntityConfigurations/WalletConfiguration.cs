@@ -53,6 +53,11 @@ public sealed class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasColumnName("last_seen_at")
             .IsRequired();
 
+        // Version for optimistic concurrency (from AggregateRoot)
+        builder.Property(w => w.Version)
+            .IsConcurrencyToken()
+            .HasColumnName("version");
+
         // Owned entity: WalletProfile (inline columns)
         builder.OwnsOne(w => w.Profile, profile =>
         {

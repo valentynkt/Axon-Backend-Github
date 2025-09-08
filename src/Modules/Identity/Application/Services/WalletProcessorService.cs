@@ -8,6 +8,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Application.Services;
@@ -31,7 +32,7 @@ public sealed class WalletProcessorService : IWalletProcessorService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<WalletProcessingResult> ProcessWalletsAsync(
+    public async Task<Result<WalletProcessingResult, Error>> ProcessWalletsAsync(
         List<ExchangeWalletData> wallets, 
         string axonId,
         HashSet<string> seenChainsWithDefault,
@@ -104,9 +105,26 @@ public sealed class WalletProcessorService : IWalletProcessorService
                     defaultsApplied++;
                 }
             }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogError(ex, "Concurrency conflict processing wallet {Chain}:{Address}", 
+                    wallet.Chain, wallet.Address);
+                // Return error instead of continuing - concurrency conflicts should fail the operation
+                return Result.Failure<WalletProcessingResult, Error>(
+                    Error.Concurrency(
+                        $"Concurrent update conflict for wallet {wallet.Chain}:{wallet.Address}. Please retry.", 
+                        "IDENTITY.WALLET.CONCURRENCY_CONFLICT"));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("Wallet processing cancelled for {Chain}:{Address}", 
+                    wallet.Chain, wallet.Address);
+                // Don't increment skipped count for cancellations - operation was interrupted, not failed
+                throw; // Re-throw to propagate cancellation
+            }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Unexpected error processing wallet {Chain}:{Address}, skipping", 
+                _logger.LogError(ex, "Unexpected error processing wallet {Chain}:{Address}, skipping", 
                     wallet.Chain, wallet.Address);
                 skippedCount++;
             }
@@ -115,7 +133,7 @@ public sealed class WalletProcessorService : IWalletProcessorService
         var result = new WalletProcessingResult(linkedCount, defaultsApplied, skippedCount, conflictsCount);
         _logger.LogDebug("Wallet processing completed: {Result}", result);
         
-        return result;
+        return Result.Success<WalletProcessingResult, Error>(result);
     }
 
     #region Private Methods
@@ -135,11 +153,26 @@ public sealed class WalletProcessorService : IWalletProcessorService
             
             if (result.IsSuccess)
             {
-                _logger.LogDebug("Wallet activity updated for {Chain}:{Address} with status {Status}", 
-                    wallet.Chain, wallet.Address, result.Value.Status);
+                if (result.Value != null)
+                {
+                    _logger.LogDebug("Wallet activity updated for {Chain}:{Address} with status {Status}", 
+                        wallet.Chain, wallet.Address, result.Value.Status);
+                }
+                else
+                {
+                    _logger.LogWarning("Wallet activity result was null for {Chain}:{Address}", 
+                        wallet.Chain, wallet.Address);
+                    return Result.Failure<WalletActivityResponse, Error>(
+                        Error.Internal("Wallet activity result was null", "NULL_ACTIVITY_RESULT"));
+                }
             }
             
             return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Operation was cancelled - let it propagate
+            throw;
         }
         catch (ArgumentException ex) when (ex.Message.Contains("Invalid chain format", StringComparison.Ordinal))
         {
@@ -188,6 +221,11 @@ public sealed class WalletProcessorService : IWalletProcessorService
             
             return result;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Operation was cancelled - let it propagate
+            throw;
+        }
         catch (ArgumentException ex) when (ex.Message.Contains("Invalid chain format", StringComparison.Ordinal))
         {
             // Invalid chain/address format - skip this wallet
@@ -216,7 +254,7 @@ public interface IWalletProcessorService
     /// <param name="correlationId">Correlation ID for request tracking</param>
     /// <param name="cancellationToken">Cancellation token for async operations</param>
     /// <returns>A result containing counts of linked, skipped, conflicted, and default wallets</returns>
-    Task<WalletProcessingResult> ProcessWalletsAsync(
+    Task<Result<WalletProcessingResult, Error>> ProcessWalletsAsync(
         List<ExchangeWalletData> wallets, 
         string axonId,
         HashSet<string> seenChainsWithDefault,

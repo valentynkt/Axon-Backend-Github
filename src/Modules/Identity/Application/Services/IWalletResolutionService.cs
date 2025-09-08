@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.DTOs;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;

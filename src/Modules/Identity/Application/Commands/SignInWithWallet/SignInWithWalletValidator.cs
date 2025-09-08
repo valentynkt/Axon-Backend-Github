@@ -43,9 +43,6 @@ public sealed class SignInWithWalletValidator : AbstractValidator<SignInWithWall
             .WithMessage("Access mode must be 'signing' or 'watch_only'.")
             .When(x => !string.IsNullOrEmpty(x.AccessMode));
 
-        RuleFor(x => x.IdempotencyKey)
-            .MaximumLength(255)
-            .WithMessage("Idempotency key cannot exceed 255 characters.")
-            .When(x => !string.IsNullOrEmpty(x.IdempotencyKey));
+
     }
 }
