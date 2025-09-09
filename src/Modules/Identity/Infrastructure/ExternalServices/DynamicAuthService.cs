@@ -1,18 +1,14 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text.Json;
 using Axon.Modules.Identity.Application.Services;
-using BuildingBlocks.Core.Diagnostics.Errors;
-using CSharpFunctionalExtensions;
+using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
+using Axon.Modules.Identity.Infrastructure.Services;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 
-namespace Axon.Modules.Identity.Infrastructure.Services;
+namespace Axon.Modules.Identity.Infrastructure.ExternalServices;
 
 /// <summary>
 /// Service for validating JWT tokens using local JWT validation with JWKS

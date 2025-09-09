@@ -4,9 +4,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Axon.Modules.Identity.Infrastructure.Authentication.Options;
+using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using static Axon.Modules.Identity.Infrastructure.Services.DynamicAuthService;
+using static Axon.Modules.Identity.Infrastructure.ExternalServices.DynamicAuthService;
 
 namespace Axon.Modules.Identity.Infrastructure.Authentication.Handlers;
 

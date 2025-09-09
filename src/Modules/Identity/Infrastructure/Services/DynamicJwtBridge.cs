@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
+using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;

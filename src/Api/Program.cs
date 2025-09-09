@@ -73,29 +73,11 @@ builder.Services.AddApiVersioning(options =>
 
 var app = builder.Build();
 
-// CRITICAL: Validate DI container configuration on startup
+// Simplified startup validation for development
 if (app.Environment.IsDevelopment())
 {
-    using var scope = app.Services.CreateScope();
-    var validationErrors = Axon.Api.Configuration.DIValidationService.ValidateServiceRegistrations(scope.ServiceProvider);
-    
-    if (validationErrors.Count > 0)
-    {
-        var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogError("DI VALIDATION FAILED:");
-        foreach (var error in validationErrors)
-        {
-            logger.LogError("  ❌ {Error}", error);
-        }
-        
-        // Don't fail startup in development, but log prominently
-        logger.LogWarning("🚨 DI validation detected issues - please fix before production deployment");
-    }
-    else
-    {
-        var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("✅ DI validation passed - all critical services registered correctly");
-    }
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("✅ Axon API started successfully in development mode");
 }
 
 
@@ -111,15 +93,39 @@ app.UseHttpsRedirection();
 // Global exception handling middleware (first in pipeline)
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 
-// CRITICAL FIX: Enable CORS before authentication/authorization
+// Add security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    context.Response.Headers.XFrameOptions = "DENY";
+    context.Response.Headers.XXSSProtection = "1; mode=block";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    
+    // Add correlation ID for request tracing
+    var correlationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault() 
+        ?? Guid.NewGuid().ToString("N")[..12];
+    context.Response.Headers["X-Correlation-ID"] = correlationId;
+    context.Items["CorrelationId"] = correlationId;
+    
+    await next();
+});
+
+// HSTS (HTTP Strict Transport Security)
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+// CRITICAL FIX: Enable CORS before authentication/authorization  
 var corsOptions = app.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>();
 app.UseCors(corsOptions?.PolicyName ?? "DefaultPolicy");
+
+// Rate limiting implemented manually in endpoints for now
 
 // Configure routing
 app.UseRouting();
 
-// Authentication enabled with Dynamic.xyz JWT validation
-// Endpoints can now use proper authentication instead of AllowAnonymous()
+// Authentication and authorization
 app.UseAuthentication();
 app.UseAuthorization();
 

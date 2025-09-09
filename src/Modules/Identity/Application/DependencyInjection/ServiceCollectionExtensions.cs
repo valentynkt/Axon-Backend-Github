@@ -34,9 +34,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWalletAuthorizationService, WalletAuthorizationService>();
         services.AddScoped<IWalletOwnershipService, WalletOwnershipService>();
         services.AddScoped<IWalletResolutionService, WalletResolutionService>();
-        services.AddScoped<IDefaultWalletCoordinator, DefaultWalletCoordinator>();
-        services.AddScoped<IWalletProcessorService, WalletProcessorService>();
         services.AddScoped<IDynamicAuthOrchestrator, DynamicAuthOrchestrator>();
+        
+        // Register new Auth command/query handlers (MediatR will auto-discover them)
+        // ExchangeTokenCommandHandler and GetCurrentUserQueryHandler are auto-registered by MediatR
         
         return services;
     }
