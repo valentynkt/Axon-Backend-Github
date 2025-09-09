@@ -1,104 +1,54 @@
 using Axon.Modules.Identity.Domain.Entities;
-using Axon.Modules.Identity.Domain.Errors;
-using Axon.Modules.Identity.Domain.Events;
-using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Domain.Enums;
 using BuildingBlocks.Core.Domain.Entities.Base;
 
 namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 
 /// <summary>
-/// AxonPrincipal aggregate root representing a canonical subject (human or service)
-/// that owns identity credentials, wallet ownerships, and profile preferences.
-/// Enforces domain invariants and maintains identity integrity.
+/// AxonPrincipal aggregate root representing a subject (human or service).
 /// </summary>
-public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
+public sealed class AxonPrincipal : AggregateRoot<AxonId>
 {
-    private readonly List<IdentityCredential> _credentials = new();
-    private readonly List<WalletOwnership> _walletOwnerships = new();
-    private readonly List<PrincipalChainDefault> _chainDefaults = new();
+    private readonly List<IdentityCredential> _credentials = [];
+    private readonly List<WalletOwnership> _walletOwnerships = [];
 
     public IReadOnlyCollection<IdentityCredential> Credentials => _credentials;
     public IReadOnlyCollection<WalletOwnership> WalletOwnerships => _walletOwnerships;
-    public IReadOnlyCollection<PrincipalChainDefault> ChainDefaults => _chainDefaults.AsReadOnly();
 
     public PrincipalType Type { get; private set; }
-    public EmailHash? PrimaryEmailHash { get; private set; }
-    public PrincipalProfile Profile { get; private set; } = null!;
+    public RiskTier RiskTier { get; private set; } = RiskTier.Low;
 
-    // Computed properties
-    public bool IsHuman => Type.IsHuman;
-    public bool IsService => Type.IsService;
-
-    // EF Core parameterless constructor
+    // EF Core constructor
     private AxonPrincipal() { }
 
-    private AxonPrincipal(
-        AxonId id,
-        PrincipalType type,
-        EmailHash? primaryEmailHash = null) : base(id)
+    private AxonPrincipal(AxonId id, PrincipalType type) : base(id)
     {
         Type = type;
-        PrimaryEmailHash = primaryEmailHash;
-        Profile = PrincipalProfile.CreateDefault(id);
+        RiskTier = RiskTier.Low;
     }
 
-    /// <summary>
-    /// Creates a new human principal.
-    /// </summary>
-    public static Result<AxonPrincipal, Error> CreateHumanPrincipal(
-        EmailHash? primaryEmailHash = null,
-        TimeProvider? timeProvider = null)
+    public static AxonPrincipal CreateHuman(AxonId? id = null)
     {
-        try
-        {
-            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
-            var id = AxonId.New();
-            var now = effectiveTimeProvider.GetUtcNow();
-
-            var principal = new AxonPrincipal(id, PrincipalType.Human, primaryEmailHash);
-
-            principal.RaiseDomainEvent(new PrincipalCreatedEvent(
-                id, PrincipalType.Human.Value, primaryEmailHash?.Value, now));
-
-            return Result.Success<AxonPrincipal, Error>(principal);
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure<AxonPrincipal, Error>(
-                IdentityDomainErrors.Principal.CreationFailed(ex.Message));
-        }
+        return new AxonPrincipal(id ?? AxonId.New(), PrincipalType.Human);
     }
 
-    /// <summary>
-    /// Creates a new service principal.
-    /// </summary>
-    public static Result<AxonPrincipal, Error> CreateServicePrincipal(
-        TimeProvider? timeProvider = null)
+    public static AxonPrincipal CreateService(AxonId? id = null)
     {
-        try
-        {
-            var effectiveTimeProvider = timeProvider ?? TimeProvider.System;
-            var id = AxonId.New();
-            var now = effectiveTimeProvider.GetUtcNow();
-
-            var principal = new AxonPrincipal(id, PrincipalType.Service);
-
-            principal.RaiseDomainEvent(new PrincipalCreatedEvent(
-                id, PrincipalType.Service.Value, null, now));
-
-            return Result.Success<AxonPrincipal, Error>(principal);
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure<AxonPrincipal, Error>(
-                IdentityDomainErrors.Principal.CreationFailed(ex.Message));
-        }
+        return new AxonPrincipal(id ?? AxonId.New(), PrincipalType.Service);
     }
 
-
-    private static void CheckRule(IBusinessRule rule)
+    public void UpdateRiskTier(RiskTier riskTier)
     {
-        if (rule.IsBroken())
-            throw new BusinessRuleException(rule);
+        RiskTier = riskTier;
+    }
+
+    public void AddCredential(IdentityCredential credential)
+    {
+        _credentials.Add(credential);
+    }
+
+    public void AddWalletOwnership(WalletOwnership ownership)
+    {
+        _walletOwnerships.Add(ownership);
     }
 }

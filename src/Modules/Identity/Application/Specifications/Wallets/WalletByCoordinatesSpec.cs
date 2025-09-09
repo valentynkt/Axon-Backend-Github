@@ -10,7 +10,7 @@ namespace Axon.Modules.Identity.Application.Specifications.Wallets;
 /// </summary>
 public sealed class WalletByCoordinatesSpec : Specification<Wallet>, ISingleResultSpecification<Wallet>
 {
-    public WalletByCoordinatesSpec(ChainId chainId, Address address, bool includeDeleted = false)
+    public WalletByCoordinatesSpec(string chainId, Address address, bool includeDeleted = false)
     {
         Query.Where(w => w.Chain == chainId && w.Address == address);
         

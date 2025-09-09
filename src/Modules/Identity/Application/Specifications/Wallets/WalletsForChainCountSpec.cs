@@ -11,7 +11,7 @@ namespace Axon.Modules.Identity.Application.Specifications.Wallets;
 /// </summary>
 public sealed class WalletsForChainCountSpec : CountSpecification<Wallet>
 {
-    public WalletsForChainCountSpec(ChainId chainId)
+    public WalletsForChainCountSpec(string chainId)
     {
         // Apply same filters as the paged specification
         Query.Where(w => w.Chain == chainId);

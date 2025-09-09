@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;

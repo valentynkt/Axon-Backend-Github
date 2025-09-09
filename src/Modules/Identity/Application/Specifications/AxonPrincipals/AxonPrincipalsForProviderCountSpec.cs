@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Ardalis.Specification;
 using BuildingBlocks.Application.Specifications;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;

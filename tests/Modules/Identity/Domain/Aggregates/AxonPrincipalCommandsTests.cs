@@ -1,244 +1,80 @@
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
-using Axon.Modules.Identity.Domain.Errors;
-using Axon.Modules.Identity.Domain.Events;
-using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Domain.Tests.TestData;
+using Axon.Modules.Identity.Domain.Entities;
+using Axon.Modules.Identity.Domain.Enums;
 using BuildingBlocks.Primitives.Ids;
+using NUnit.Framework;
+using Shouldly;
 
 namespace Axon.Modules.Identity.Domain.Tests.Aggregates;
 
 [TestFixture]
 public class AxonPrincipalCommandsTests
 {
-    private readonly TimeProvider _timeProvider = TimeProvider.System;
-
-    private AxonPrincipal CreateTestHumanPrincipal()
-    {
-        var result = AxonPrincipal.CreateHumanPrincipal(timeProvider: _timeProvider);
-        result.IsSuccess.ShouldBeTrue();
-        var principal = result.Value;
-        principal.ClearDomainEvents(); // Clear creation event for cleaner test assertions
-        return principal;
-    }
-
     [TestFixture]
-    public class LinkIdentityCredential : AxonPrincipalCommandsTests
+    public class CreateHuman : AxonPrincipalCommandsTests
     {
         [Test]
-        public void WithValidData_ShouldSucceed()
+        public void WithoutId_ShouldGenerateNewId()
         {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var providerType = Builders.DynamicProvider;
-            var issuer = "https://test-issuer.com";
-            var subject = "user123";
-            var emailHash = EmailHash.From("test@example.com");
-
             // Act
-            var result = principal.LinkIdentityCredential(
-                providerType, issuer, subject, 
-                emailHash: emailHash,
-                timeProvider: _timeProvider);
+            var principal = AxonPrincipal.CreateHuman();
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var credential = result.Value;
-            credential.ProviderType.ShouldBe(providerType);
-            credential.Issuer.ShouldBe(issuer);
-            credential.Subject.ShouldBe(subject);
-            credential.GetEmailHash().ShouldBe(emailHash);
-            principal.Credentials.ShouldContain(credential);
+            // Assert
+            principal.ShouldNotBeNull();
+            principal.Id.ShouldNotBe(default(AxonId));
+            principal.Type.ShouldBe(PrincipalType.Human);
+            principal.RiskTier.ShouldBe(RiskTier.Low);
+            principal.Credentials.ShouldBeEmpty();
+            principal.WalletOwnerships.ShouldBeEmpty();
         }
 
         [Test]
-        public void ShouldRaiseIdentityCredentialLinkedEvent()
+        public void WithSpecificId_ShouldUseProvidedId()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var providerType = Builders.DynamicProvider;
-            var issuer = "https://test-issuer.com";
-            var subject = "user123";
+            var id = AxonId.New();
 
             // Act
-            var result = principal.LinkIdentityCredential(
-                providerType, issuer, subject, timeProvider: _timeProvider);
+            var principal = AxonPrincipal.CreateHuman(id);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var linkedEvent = events.First().ShouldBeOfType<IdentityCredentialLinkedEvent>().Subject;
-            linkedEvent.AxonId.ShouldBe(principal.Id);
-            linkedEvent.ProviderType.ShouldBe(providerType.Value);
-            linkedEvent.Issuer.ShouldBe(issuer);
-            linkedEvent.Subject.ShouldBe(subject);
-        }
-
-        [Test]
-        public void WithDuplicateCredential_ShouldFail()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var providerType = Builders.DynamicProvider;
-            var issuer = "https://test-issuer.com";
-            var subject = "user123";
-
-            // First credential should succeed
-            var firstResult = principal.LinkIdentityCredential(
-                providerType, issuer, subject, timeProvider: _timeProvider);
-            firstResult.IsSuccess.ShouldBeTrue();
-
-            // Act - Second identical credential should fail
-            var result = principal.LinkIdentityCredential(
-                providerType, issuer, subject, timeProvider: _timeProvider);
-
-            // Should
-            result.IsFailure.ShouldBeTrue();
-            result.Error.Code.ShouldContain("UNIQUE");
-        }
-
-        [Test]
-        public void WithInvalidIssuer_ShouldFail()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-
-            // Act
-            var result = principal.LinkIdentityCredential(
-                Builders.DynamicProvider, "", "subject", timeProvider: _timeProvider);
-
-            // Should
-            result.IsFailure.ShouldBeTrue();
-            result.Error.Code.ShouldContain("ISSUER.REQUIRED");
-        }
-
-        [Test]
-        public void WithInvalidSubject_ShouldFail()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-
-            // Act
-            var result = principal.LinkIdentityCredential(
-                Builders.DynamicProvider, "issuer", "", timeProvider: _timeProvider);
-
-            // Should
-            result.IsFailure.ShouldBeTrue();
-            result.Error.Code.ShouldContain("SUBJECT.REQUIRED");
+            // Assert
+            principal.Id.ShouldBe(id);
+            principal.Type.ShouldBe(PrincipalType.Human);
+            principal.RiskTier.ShouldBe(RiskTier.Low);
         }
     }
 
     [TestFixture]
-    public class LinkWallet : AxonPrincipalCommandsTests
+    public class CreateService : AxonPrincipalCommandsTests
     {
         [Test]
-        public void WithValidData_ShouldSucceed()
+        public void WithoutId_ShouldGenerateNewId()
         {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var walletId = WalletId.New();
-            var chainId = Builders.SolanaChain;
-            var proofType = Builders.SignatureProof;
-            var accessMode = AccessMode.Signing;
-            var label = "My Main Wallet";
-
             // Act
-            var result = principal.LinkWallet(
-                walletId, chainId, proofType, accessMode, label, _timeProvider);
+            var principal = AxonPrincipal.CreateService();
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var ownership = result.Value;
-            ownership.WalletId.ShouldBe(walletId);
-            ownership.ChainId.ShouldBe(chainId);
-            ownership.ProofType.ShouldBe(proofType);
-            ownership.AccessMode.ShouldBe(accessMode);
-            ownership.Label.ShouldBe(label);
-            principal.WalletOwnerships.ShouldContain(ownership);
+            // Assert
+            principal.ShouldNotBeNull();
+            principal.Id.ShouldNotBe(default(AxonId));
+            principal.Type.ShouldBe(PrincipalType.Service);
+            principal.RiskTier.ShouldBe(RiskTier.Low);
+            principal.Credentials.ShouldBeEmpty();
+            principal.WalletOwnerships.ShouldBeEmpty();
         }
 
         [Test]
-        public void ShouldRaiseWalletOwnershipLinkedEvent()
+        public void WithSpecificId_ShouldUseProvidedId()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var walletId = WalletId.New();
-            var chainId = Builders.SolanaChain;
-            var proofType = Builders.SignatureProof;
+            var id = AxonId.New();
 
             // Act
-            var result = principal.LinkWallet(
-                walletId, chainId, proofType, timeProvider: _timeProvider);
+            var principal = AxonPrincipal.CreateService(id);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var linkedEvent = events.First().ShouldBeOfType<WalletOwnershipLinkedEvent>().Subject;
-            linkedEvent.PrincipalId.ShouldBe(principal.Id.Value.ToString());
-            linkedEvent.WalletId.ShouldBe(walletId.Value.ToString());
-            linkedEvent.ProofType.ShouldBe(proofType.Value);
-        }
-
-        [Test]
-        public void WithDuplicateWallet_ShouldFail()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var walletId = WalletId.New();
-            var chainId = Builders.SolanaChain;
-            var proofType = Builders.SignatureProof;
-
-            // First link should succeed
-            var firstResult = principal.LinkWallet(
-                walletId, chainId, proofType, timeProvider: _timeProvider);
-            firstResult.IsSuccess.ShouldBeTrue();
-
-            // Act - Second link of same wallet should fail
-            var result = principal.LinkWallet(
-                walletId, chainId, proofType, timeProvider: _timeProvider);
-
-            // Should
-            result.IsFailure.ShouldBeTrue();
-            result.Error.Code.ShouldContain("OWNED");
-        }
-    }
-
-    [TestFixture]
-    public class UpdatePreferredLanguage : AxonPrincipalCommandsTests
-    {
-        [Test]
-        public void WithValidLanguage_ShouldSucceed()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var newLanguage = Builders.SpanishLanguage;
-
-            // Act
-            var result = principal.UpdatePreferredLanguage(newLanguage, _timeProvider);
-
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            principal.Profile.PreferredLanguage.ShouldBe(newLanguage);
-        }
-
-        [Test]
-        public void ShouldRaiseProfileLanguageChangedEvent()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var newLanguage = Builders.SpanishLanguage;
-
-            // Act
-            var result = principal.UpdatePreferredLanguage(newLanguage, _timeProvider);
-
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var languageEvent = events.First().ShouldBeOfType<ProfileLanguageChangedEvent>().Subject;
-            languageEvent.PrincipalId.ShouldBe(principal.Id);
-            languageEvent.NewLanguage.ShouldBe(newLanguage.Value);
+            // Assert
+            principal.Id.ShouldBe(id);
+            principal.Type.ShouldBe(PrincipalType.Service);
+            principal.RiskTier.ShouldBe(RiskTier.Low);
         }
     }
 
@@ -246,186 +82,111 @@ public class AxonPrincipalCommandsTests
     public class UpdateRiskTier : AxonPrincipalCommandsTests
     {
         [Test]
-        public void WithValidRiskTier_ShouldSucceed()
+        public void WithValidRiskTier_ShouldUpdate()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var newRiskTier = Builders.HighRiskTier;
+            var principal = AxonPrincipal.CreateHuman();
+            principal.RiskTier.ShouldBe(RiskTier.Low);
 
             // Act
-            var result = principal.UpdateRiskTier(newRiskTier, _timeProvider);
+            principal.UpdateRiskTier(RiskTier.High);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            principal.Profile.RiskTier.ShouldBe(newRiskTier);
+            // Assert
+            principal.RiskTier.ShouldBe(RiskTier.High);
         }
 
         [Test]
-        public void ShouldRaiseProfileRiskTierChangedEvent()
+        public void WithMediumRiskTier_ShouldUpdate()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var newRiskTier = Builders.MediumRiskTier;
+            var principal = AxonPrincipal.CreateHuman();
 
             // Act
-            var result = principal.UpdateRiskTier(newRiskTier, _timeProvider);
+            principal.UpdateRiskTier(RiskTier.Medium);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var riskTierEvent = events.First().ShouldBeOfType<ProfileRiskTierChangedEvent>().Subject;
-            riskTierEvent.PrincipalId.ShouldBe(principal.Id);
-            riskTierEvent.NewRiskTier.ShouldBe(newRiskTier.Value);
+            // Assert
+            principal.RiskTier.ShouldBe(RiskTier.Medium);
         }
     }
 
     [TestFixture]
-    public class SetDefaultWalletForChain : AxonPrincipalCommandsTests
+    public class AddCredential : AxonPrincipalCommandsTests
     {
         [Test]
-        public void WithVerifiedSigningWallet_ShouldSucceed()
+        public void WithValidCredential_ShouldAdd()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var walletId = WalletId.New();
-            var chainId = Builders.SolanaChain;
-            var proofType = Builders.SignatureProof;
-
-            // First link and verify wallet
-            var linkResult = principal.LinkWallet(
-                walletId, chainId, proofType, AccessMode.Signing, timeProvider: _timeProvider);
-            linkResult.IsSuccess.ShouldBeTrue();
-            
-            var verifyResult = principal.VerifyWalletOwnership(walletId, timeProvider: _timeProvider);
-            verifyResult.IsSuccess.ShouldBeTrue();
-
-            principal.ClearDomainEvents();
+            var principal = AxonPrincipal.CreateHuman();
+            var credential = IdentityCredential.Create(
+                principal.Id,
+                "dynamic",
+                "https://test-issuer.com",
+                "test-subject");
 
             // Act
-            var result = principal.SetDefaultWalletForChain(chainId, walletId, _timeProvider);
+            principal.AddCredential(credential);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            principal.GetDefaultWalletForChain(chainId).ShouldBe(walletId);
-            principal.HasDefaultWalletForChain(chainId).ShouldBeTrue();
+            // Assert
+            principal.Credentials.ShouldContain(credential);
+            principal.Credentials.Count.ShouldBe(1);
         }
 
         [Test]
-        public void ShouldRaiseDefaultWalletChangedEvent()
+        public void WithMultipleCredentials_ShouldAddAll()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var walletId = WalletId.New();
-            var chainId = Builders.SolanaChain;
-
-            // Setup verified signing wallet
-            principal.LinkWallet(walletId, chainId, Builders.SignatureProof, AccessMode.Signing, timeProvider: _timeProvider);
-            principal.VerifyWalletOwnership(walletId, timeProvider: _timeProvider);
-            principal.ClearDomainEvents();
+            var principal = AxonPrincipal.CreateHuman();
+            var credential1 = IdentityCredential.Create(principal.Id, "dynamic", "issuer1", "subject1");
+            var credential2 = IdentityCredential.Create(principal.Id, "oidc", "issuer2", "subject2");
 
             // Act
-            var result = principal.SetDefaultWalletForChain(chainId, walletId, _timeProvider);
+            principal.AddCredential(credential1);
+            principal.AddCredential(credential2);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var defaultEvent = events.First().ShouldBeOfType<DefaultWalletChangedEvent>().Subject;
-            defaultEvent.PrincipalId.ShouldBe(principal.Id.Value.ToString());
-            defaultEvent.ChainId.ShouldBe(chainId.Value);
-            defaultEvent.NewDefaultWalletId.ShouldBe(walletId.Value.ToString());
-        }
-
-        [Test]
-        public void WithWalletNotOwned_ShouldFail()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            var walletId = WalletId.New();
-            var chainId = Builders.SolanaChain;
-
-            // Act
-            var result = principal.SetDefaultWalletForChain(chainId, walletId, _timeProvider);
-
-            // Should
-            result.IsFailure.ShouldBeTrue();
-            result.Error.Code.ShouldContain("NOT_OWNED");
+            // Assert
+            principal.Credentials.Count.ShouldBe(2);
+            principal.Credentials.ShouldContain(credential1);
+            principal.Credentials.ShouldContain(credential2);
         }
     }
 
     [TestFixture]
-    public class SoftDelete : AxonPrincipalCommandsTests
+    public class AddWalletOwnership : AxonPrincipalCommandsTests
     {
         [Test]
-        public void WithNoActiveWallets_ShouldSucceed()
+        public void WithValidOwnership_ShouldAdd()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
+            var principal = AxonPrincipal.CreateHuman();
+            var walletId = WalletId.New();
+            var ownership = WalletOwnership.Create(principal.Id, walletId);
 
             // Act
-            var result = principal.SoftDelete(_timeProvider);
+            principal.AddWalletOwnership(ownership);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            principal.IsDeleted.ShouldBeTrue();
+            // Assert
+            principal.WalletOwnerships.ShouldContain(ownership);
+            principal.WalletOwnerships.Count.ShouldBe(1);
         }
 
         [Test]
-        public void ShouldRaisePrincipalSoftDeletedEvent()
+        public void WithMultipleOwnerships_ShouldAddAll()
         {
             // Arrange
-            var principal = CreateTestHumanPrincipal();
+            var principal = AxonPrincipal.CreateHuman();
+            var walletId1 = WalletId.New();
+            var walletId2 = WalletId.New();
+            var ownership1 = WalletOwnership.Create(principal.Id, walletId1, AccessMode.Signing);
+            var ownership2 = WalletOwnership.Create(principal.Id, walletId2, AccessMode.WatchOnly);
 
             // Act
-            var result = principal.SoftDelete(_timeProvider);
+            principal.AddWalletOwnership(ownership1);
+            principal.AddWalletOwnership(ownership2);
 
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var deletedEvent = events.First().ShouldBeOfType<PrincipalSoftDeletedEvent>().Subject;
-            deletedEvent.PrincipalId.ShouldBe(principal.Id);
-        }
-    }
-
-    [TestFixture]
-    public class Restore : AxonPrincipalCommandsTests
-    {
-        [Test]
-        public void DeletedPrincipal_ShouldSucceed()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            principal.SoftDelete(_timeProvider);
-            principal.ClearDomainEvents();
-
-            // Act
-            var result = principal.Restore("Test restoration", _timeProvider);
-
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            principal.IsDeleted.ShouldBeFalse();
-        }
-
-        [Test]
-        public void ShouldRaisePrincipalRestoredEvent()
-        {
-            // Arrange
-            var principal = CreateTestHumanPrincipal();
-            principal.SoftDelete(_timeProvider);
-            principal.ClearDomainEvents();
-
-            // Act
-            var result = principal.Restore("Test restoration", _timeProvider);
-
-            // Should
-            result.IsSuccess.ShouldBeTrue();
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var restoredEvent = events.First().ShouldBeOfType<PrincipalRestoredEvent>().Subject;
-            restoredEvent.PrincipalId.ShouldBe(principal.Id);
-            restoredEvent.Reason.ShouldBe("Test restoration");
+            // Assert
+            principal.WalletOwnerships.Count.ShouldBe(2);
+            principal.WalletOwnerships.ShouldContain(ownership1);
+            principal.WalletOwnerships.ShouldContain(ownership2);
         }
     }
 }

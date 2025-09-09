@@ -1,7 +1,5 @@
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
-using Axon.Modules.Identity.Domain.Errors;
-using Axon.Modules.Identity.Domain.Events;
-using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Tests.TestData;
 using BuildingBlocks.Primitives.Ids;
 using NUnit.Framework;
@@ -12,158 +10,159 @@ namespace Axon.Modules.Identity.Domain.Tests.Aggregates;
 [TestFixture]
 public class AxonPrincipalTests
 {
-    private readonly TimeProvider _timeProvider = TimeProvider.System;
-
     [TestFixture] 
-    public class CreateHumanPrincipal : AxonPrincipalTests
+    public class CreateHuman : AxonPrincipalTests
     {
         [Test]
-        public void WithValidData_ShouldSucceed()
+        public void ShouldCreateWithValidDefaults()
         {
-            // Arrange
-            var emailHash = EmailHash.From("test@example.com");
-
             // Act
-            var result = AxonPrincipal.CreateHumanPrincipal(emailHash, _timeProvider);
+            var principal = AxonPrincipal.CreateHuman();
 
             // Should
-            result.IsSuccess.ShouldBeTrue();
-            var principal = result.Value;
+            principal.ShouldNotBeNull();
+            principal.Id.ShouldNotBe(default(AxonId));
             principal.Type.ShouldBe(PrincipalType.Human);
-            principal.PrimaryEmailHash.ShouldBe(emailHash);
-            principal.IsHuman.ShouldBeTrue();
-            principal.IsService.ShouldBeFalse();
-            principal.Profile.ShouldNotBeNull();
+            principal.RiskTier.ShouldBe(RiskTier.Low);
             principal.Credentials.ShouldBeEmpty();
             principal.WalletOwnerships.ShouldBeEmpty();
         }
 
         [Test]
-        public void WithoutEmailHash_ShouldSucceed()
+        public void WithCustomId_ShouldUseProvidedId()
         {
+            // Arrange
+            var customId = AxonId.New();
+
             // Act
-            var result = AxonPrincipal.CreateHumanPrincipal(timeProvider: _timeProvider);
+            var principal = AxonPrincipal.CreateHuman(customId);
 
             // Should
-            result.IsSuccess.ShouldBeTrue();
-            var principal = result.Value;
+            principal.Id.ShouldBe(customId);
             principal.Type.ShouldBe(PrincipalType.Human);
-            principal.PrimaryEmailHash.ShouldBeNull();
-            principal.IsHuman.ShouldBeTrue();
         }
 
         [Test]
-        public void ShouldRaisePrincipalCreatedEvent()
+        public void ShouldStartWithLowRiskTier()
         {
-            // Arrange
-            var emailHash = EmailHash.From("test@example.com");
-
             // Act
-            var result = AxonPrincipal.CreateHumanPrincipal(emailHash, _timeProvider);
+            var principal = AxonPrincipal.CreateHuman();
 
             // Should
-            result.IsSuccess.ShouldBeTrue();
-            var principal = result.Value;
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var createdEvent = events.First().ShouldBeOfType<PrincipalCreatedEvent>().Subject;
-            createdEvent.PrincipalId.ShouldBe(principal.Id);
-            createdEvent.PrincipalType.ShouldBe(PrincipalType.Human.Value);
-            createdEvent.PrimaryEmailHash.ShouldBe(emailHash.Value);
+            principal.RiskTier.ShouldBe(RiskTier.Low);
         }
     }
 
     [TestFixture]
-    public class CreateServicePrincipal : AxonPrincipalTests
+    public class CreateService : AxonPrincipalTests
     {
         [Test]
-        public void WithValidData_ShouldSucceed()
+        public void ShouldCreateWithValidDefaults()
         {
             // Act
-            var result = AxonPrincipal.CreateServicePrincipal(_timeProvider);
+            var principal = AxonPrincipal.CreateService();
 
             // Should
-            result.IsSuccess.ShouldBeTrue();
-            var principal = result.Value;
+            principal.ShouldNotBeNull();
+            principal.Id.ShouldNotBe(default(AxonId));
             principal.Type.ShouldBe(PrincipalType.Service);
-            principal.PrimaryEmailHash.ShouldBeNull();
-            principal.IsHuman.ShouldBeFalse();
-            principal.IsService.ShouldBeTrue();
-            principal.Profile.ShouldNotBeNull();
+            principal.RiskTier.ShouldBe(RiskTier.Low);
+            principal.Credentials.ShouldBeEmpty();
+            principal.WalletOwnerships.ShouldBeEmpty();
         }
 
         [Test]
-        public void ShouldRaisePrincipalCreatedEvent()
+        public void WithCustomId_ShouldUseProvidedId()
         {
+            // Arrange
+            var customId = AxonId.New();
+
             // Act
-            var result = AxonPrincipal.CreateServicePrincipal(_timeProvider);
+            var principal = AxonPrincipal.CreateService(customId);
 
             // Should
-            result.IsSuccess.ShouldBeTrue();
-            var principal = result.Value;
-            var events = principal.DomainEvents;
-            events.ShouldHaveCount(1);
-            var createdEvent = events.First().ShouldBeOfType<PrincipalCreatedEvent>().Subject;
-            createdEvent.PrincipalId.ShouldBe(principal.Id);
-            createdEvent.PrincipalType.ShouldBe(PrincipalType.Service.Value);
-            createdEvent.PrimaryEmailHash.ShouldBeNull();
+            principal.Id.ShouldBe(customId);
+            principal.Type.ShouldBe(PrincipalType.Service);
         }
     }
 
     [TestFixture]
-    public class Properties : AxonPrincipalTests
+    public class RiskTierOperations : AxonPrincipalTests
     {
         [Test]
-        public void HumanPrincipal_ShouldHaveCorrectProperties()
+        public void UpdateRiskTier_ShouldChangeRiskLevel()
         {
             // Arrange
-            var result = AxonPrincipal.CreateHumanPrincipal(timeProvider: _timeProvider);
-            var principal = result.Value;
+            var principal = AxonPrincipal.CreateHuman();
+            principal.RiskTier.ShouldBe(RiskTier.Low);
+
+            // Act
+            principal.UpdateRiskTier(RiskTier.High);
 
             // Should
-            principal.IsHuman.ShouldBeTrue();
-            principal.IsService.ShouldBeFalse();
-            principal.Type.IsHuman.ShouldBeTrue();
-            principal.Type.IsService.ShouldBeFalse();
+            principal.RiskTier.ShouldBe(RiskTier.High);
         }
 
         [Test]
-        public void ServicePrincipal_ShouldHaveCorrectProperties()
+        public void UpdateRiskTier_CanSetAllLevels()
         {
             // Arrange
-            var result = AxonPrincipal.CreateServicePrincipal(_timeProvider);
-            var principal = result.Value;
+            var principal = AxonPrincipal.CreateHuman();
 
-            // Should
-            principal.IsHuman.ShouldBeFalse();
-            principal.IsService.ShouldBeTrue();
-            principal.Type.IsHuman.ShouldBeFalse();
-            principal.Type.IsService.ShouldBeTrue();
+            // Act & Should - Test all risk tiers
+            principal.UpdateRiskTier(RiskTier.Low);
+            principal.RiskTier.ShouldBe(RiskTier.Low);
+
+            principal.UpdateRiskTier(RiskTier.Medium);
+            principal.RiskTier.ShouldBe(RiskTier.Medium);
+
+            principal.UpdateRiskTier(RiskTier.High);
+            principal.RiskTier.ShouldBe(RiskTier.High);
         }
+    }
 
+    [TestFixture]
+    public class CollectionOperations : AxonPrincipalTests
+    {
         [Test]
         public void NewPrincipal_ShouldHaveEmptyCollections()
         {
             // Arrange
-            var result = AxonPrincipal.CreateHumanPrincipal(timeProvider: _timeProvider);
-            var principal = result.Value;
+            var principal = AxonPrincipal.CreateHuman();
 
             // Should
             principal.Credentials.ShouldBeEmpty();
             principal.WalletOwnerships.ShouldBeEmpty();
-            principal.ChainDefaults.ShouldBeEmpty();
         }
 
         [Test]
-        public void NewPrincipal_ShouldBeActive()
+        public void AddCredential_ShouldIncreaseCredentialsCollection()
         {
             // Arrange
-            var result = AxonPrincipal.CreateHumanPrincipal(timeProvider: _timeProvider);
-            var principal = result.Value;
+            var principal = AxonPrincipal.CreateHuman();
+            var credential = Builders.CreateIdentityCredential();
+
+            // Act
+            principal.AddCredential(credential);
 
             // Should
-            principal.IsDeleted.ShouldBeFalse();
-            principal.CreatedAt.ShouldBeAfter(DateTimeOffset.UtcNow.AddSeconds(-10));
+            principal.Credentials.ShouldContain(credential);
+            principal.Credentials.Count.ShouldBe(1);
+        }
+
+        [Test]
+        public void AddWalletOwnership_ShouldIncreaseWalletOwnershipsCollection()
+        {
+            // Arrange
+            var principal = AxonPrincipal.CreateHuman();
+            var ownership = Builders.CreateWalletOwnership();
+
+            // Act
+            principal.AddWalletOwnership(ownership);
+
+            // Should
+            principal.WalletOwnerships.ShouldContain(ownership);
+            principal.WalletOwnerships.Count.ShouldBe(1);
         }
     }
 }

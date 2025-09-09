@@ -12,7 +12,7 @@ namespace Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
 public sealed class WalletOwnersByChainSpec : PagedSpecification<AxonPrincipal>
 {
     public WalletOwnersByChainSpec(
-        ChainId chainId,
+        string chainId,
         Page page,
         bool includeWalletOwnerships = false)
         : base(page)

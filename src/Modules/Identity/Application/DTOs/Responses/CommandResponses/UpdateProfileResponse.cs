@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Identity.Application.DTOs.Responses.CommandResponses;
@@ -24,7 +25,7 @@ public sealed record ProfileChanges(
 /// </summary>
 public sealed record UpdateProfileResponse(
     AxonId AxonId,
-    string PreferredLanguage,
+    string Language,
     string RiskTier,
     ProfileChanges Changed,
     UpdateProfileStatus Status

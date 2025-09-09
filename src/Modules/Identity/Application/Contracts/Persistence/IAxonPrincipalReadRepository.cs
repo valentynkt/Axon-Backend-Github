@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Application;
@@ -41,7 +42,7 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
     /// Useful for chain-specific analytics and reporting.
     /// </summary>
     Task<IReadOnlyList<AxonPrincipal>> GetWalletOwnersByChainAsync(
-        ChainId chainId,
+        string chainId,
         int skip = 0,
         int take = 100,
         CancellationToken cancellationToken = default);

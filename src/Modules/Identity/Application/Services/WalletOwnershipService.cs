@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;

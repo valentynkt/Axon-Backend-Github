@@ -140,7 +140,7 @@ public sealed class DynamicAuthOrchestrator : IDynamicAuthOrchestrator
             var walletResults = walletResultsResult.Value;
 
             // Step 4: Update profile if needed (currently no-op)
-            await UpdateProfileIfNeededAsync(axonId, userData, upsertResponse.Principal.PreferredLanguage, correlationId, cancellationToken);
+            await UpdateProfileIfNeededAsync(axonId, userData, upsertResponse.Principal.Language, correlationId, cancellationToken);
 
             // Step 5: Build final outcome
             var outcome = new ExchangeOutcome(

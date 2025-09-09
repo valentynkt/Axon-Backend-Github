@@ -226,7 +226,7 @@ public static class IdentityDomainErrors
         public const string InvalidWalletIdentificationMessage = "Invalid wallet identification provided.";
 
         public const string EitherWalletIdOrCoordinatesRequiredCode = "IDENTITY.VALIDATION.EITHER_WALLET_ID_OR_COORDINATES_REQUIRED";
-        public const string EitherWalletIdOrCoordinatesRequiredMessage = "Either WalletId or (ChainId + RawAddress) must be provided.";
+        public const string EitherWalletIdOrCoordinatesRequiredMessage = "Either WalletId or (string + RawAddress) must be provided.";
 
         public const string EitherCredentialIdOrIdentifiersRequiredCode = "IDENTITY.VALIDATION.EITHER_CREDENTIAL_ID_OR_IDENTIFIERS_REQUIRED";
         public const string EitherCredentialIdOrIdentifiersRequiredMessage = "Either CredentialId or (ProviderType + Issuer + Subject) must be provided.";

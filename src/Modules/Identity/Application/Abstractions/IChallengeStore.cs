@@ -7,7 +7,7 @@ namespace Axon.Modules.Identity.Application.Abstractions;
 /// Challenge information bound to specific chain and address for replay protection.
 /// </summary>
 public sealed record ChallengeInfo(
-    ChainId ChainId, 
+    string ChainId, 
     Address CanonicalAddress, 
     DateTimeOffset ExpiresAt);
 

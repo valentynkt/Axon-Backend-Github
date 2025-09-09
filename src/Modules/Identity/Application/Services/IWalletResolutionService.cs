@@ -21,7 +21,7 @@ public interface IWalletResolutionService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A tuple containing the wallet and a flag indicating if it was newly created</returns>
     Task<Result<(Wallet wallet, bool wasCreated), Error>> ResolveOrRegisterAsync(
-        ChainId chainId,
+        string chainId,
         string rawAddress,
         CancellationToken cancellationToken = default);
 }

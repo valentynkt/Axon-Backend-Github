@@ -1,72 +1,27 @@
 namespace Axon.Modules.Identity.Domain.ValueObjects;
 
 /// <summary>
-/// Blockchain chain identifier for Wallet BC.
-/// Normalized chain key that must belong to supported set.
+/// Represents a blockchain network chain identifier.
 /// </summary>
-[ValueObject<string>(
-    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
-public readonly partial struct ChainId
+public sealed record ChainId
 {
-    private static readonly Lazy<HashSet<string>> _supportedChains = new(() => new(StringComparer.OrdinalIgnoreCase)
+    public string Value { get; }
+
+    private ChainId(string value)
     {
-        "solana",
-        "ethereum",
-        "polygon"
-    });
-    
-    private static HashSet<string> SupportedChains => _supportedChains.Value;
-
-    public static readonly ChainId Solana = From("solana");
-    public static readonly ChainId Ethereum = From("ethereum");
-    public static readonly ChainId Polygon = From("polygon");
-
-    private static Validation Validate(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return Validation.Invalid("Chain cannot be empty.");
-
-        var normalized = input.ToLowerInvariant();
-
-        if (normalized.Length < 2)
-            return Validation.Invalid("Chain must be at least 2 characters long.");
-
-        if (normalized.Length > 50)
-            return Validation.Invalid("Chain cannot exceed 50 characters.");
-
-        // Allow alphanumeric and hyphens only
-        if (!IsValidChainFormat(normalized))
-            return Validation.Invalid("Chain must contain only lowercase letters, numbers, and hyphens.");
-
-        // Must be in supported set
-        if (!SupportedChains.Contains(normalized))
-            return Validation.Invalid($"Unsupported chain '{normalized}'. Supported: {string.Join(", ", SupportedChains)}");
-
-        return Validation.Ok;
+        Value = value;
     }
 
-    private static string NormalizeInput(string input) => input.ToLowerInvariant().Trim();
-
-    private static bool IsValidChainFormat(string chain)
+    public static ChainId From(string value)
     {
-        return chain.All(c => char.IsLetterOrDigit(c) || c == '-');
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("ChainId cannot be null or empty.", nameof(value));
+
+        return new ChainId(value.Trim());
     }
 
-    public static Result<ChainId, Error> Create(string? value)
-    {
-        if (value is null)
-            return Result.Failure<ChainId, Error>(
-                Error.Validation("Chain is required.", "WALLET.CHAIN.REQUIRED"));
+    public static implicit operator string(ChainId chainId) => chainId.Value;
+    public static implicit operator ChainId(string value) => From(value);
 
-        try
-        {
-            var vo = From(value);
-            return Result.Success<ChainId, Error>(vo);
-        }
-        catch (ValueObjectValidationException ex)
-        {
-            return Result.Failure<ChainId, Error>(
-                Error.Validation(ex.Message, "WALLET.CHAIN.INVALID"));
-        }
-    }
+    public override string ToString() => Value;
 }

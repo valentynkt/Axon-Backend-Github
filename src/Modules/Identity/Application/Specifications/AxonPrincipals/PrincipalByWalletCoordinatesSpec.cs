@@ -12,7 +12,7 @@ namespace Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
 /// </summary>
 public sealed class PrincipalByWalletCoordinatesSpec : Specification<AxonPrincipal>, ISingleResultSpecification<AxonPrincipal>
 {
-    public PrincipalByWalletCoordinatesSpec(ChainId chainId)
+    public PrincipalByWalletCoordinatesSpec(string chainId)
     {
         Query
             .Where(p => p.WalletOwnerships.Any(wo => 

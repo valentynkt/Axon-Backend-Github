@@ -166,9 +166,18 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
                 {
                     try
                     {
-                        _logger.LogDebug("Reloading conflicted entity: {EntityType}", entry.Entity.GetType().Name);
+                        _logger.LogDebug("Reloading conflicted entity: {EntityType} (State: {EntityState})", 
+                            entry.Entity.GetType().Name, entry.State);
                         
-                        // Reload the entity from database
+                        // Skip reloading for Added entities - they don't exist in DB yet
+                        if (entry.State == EntityState.Added)
+                        {
+                            _logger.LogDebug("Skipping reload for new entity: {EntityType} - will be retried as new", 
+                                entry.Entity.GetType().Name);
+                            continue;
+                        }
+                        
+                        // Only reload Modified/Deleted entities from database
                         var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
                         if (databaseValues != null)
                         {
@@ -184,9 +193,17 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
                         }
                         else
                         {
-                            _logger.LogWarning("Entity {EntityType} was deleted by another process", entry.Entity.GetType().Name);
-                            // Entity was deleted by another process - let the operation fail
-                            throw new InvalidOperationException($"Entity {entry.Entity.GetType().Name} was deleted by another process");
+                            // Entity was deleted by another process - only problematic for Modified entities
+                            if (entry.State == EntityState.Modified)
+                            {
+                                _logger.LogWarning("Entity {EntityType} was deleted by another process", entry.Entity.GetType().Name);
+                                throw new InvalidOperationException($"Entity {entry.Entity.GetType().Name} was deleted by another process");
+                            }
+                            else
+                            {
+                                _logger.LogDebug("Entity {EntityType} not found in database (State: {EntityState}) - skipping reload", 
+                                    entry.Entity.GetType().Name, entry.State);
+                            }
                         }
                     }
                     catch (Exception reloadEx)

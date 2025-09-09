@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 
 namespace Axon.Modules.Identity.Application.DTOs.Requests;
@@ -6,7 +7,7 @@ namespace Axon.Modules.Identity.Application.DTOs.Requests;
 /// Request object for attaching a wallet to a principal during credential operations.
 /// </summary>
 public sealed record AttachWalletRequest(
-    ChainId ChainId,
+    string ChainId,
     string RawAddress,
     string ProofType,
     string? AccessMode = null,

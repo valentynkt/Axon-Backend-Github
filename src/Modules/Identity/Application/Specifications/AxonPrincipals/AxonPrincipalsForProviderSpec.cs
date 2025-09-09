@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Ardalis.Specification;
 using BuildingBlocks.Application.Pagination;
 using BuildingBlocks.Application.Specifications;

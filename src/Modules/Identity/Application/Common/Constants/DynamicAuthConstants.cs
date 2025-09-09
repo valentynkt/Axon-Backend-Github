@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 namespace Axon.Modules.Identity.Application.Common.Constants;
 
 /// <summary>

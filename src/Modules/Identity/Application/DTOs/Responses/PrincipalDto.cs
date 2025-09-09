@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 namespace Axon.Modules.Identity.Application.DTOs.Responses;
 
 /// <summary>
@@ -7,7 +8,7 @@ namespace Axon.Modules.Identity.Application.DTOs.Responses;
 public sealed record PrincipalDto(
     string AxonId,
     string Type,
-    string PreferredLanguage,
+    string Language,
     string RiskTier,
     Dictionary<string, string> DefaultPerChain,
     int ActiveWalletCount,

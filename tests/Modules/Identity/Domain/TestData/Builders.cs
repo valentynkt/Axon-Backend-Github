@@ -1,13 +1,16 @@
+using Axon.Modules.Identity.Domain.Entities;
+using Axon.Modules.Identity.Domain.Enums;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Identity.Domain.Tests.TestData;
 
 /// <summary>
-/// Simplified test data builders focused on what's needed for testing rules.
+/// Test data builders for Identity Domain entities matching story 1.1 implementation.
 /// </summary>
 public static class Builders
 {
-    // Simple value object creators for tests
+    // Enum values
     public static RiskTier LowRiskTier => RiskTier.Low;
     public static RiskTier MediumRiskTier => RiskTier.Medium;
     public static RiskTier HighRiskTier => RiskTier.High;
@@ -15,26 +18,61 @@ public static class Builders
     public static PrincipalType HumanPrincipal => PrincipalType.Human;
     public static PrincipalType ServicePrincipal => PrincipalType.Service;
     
-    public static ProviderType DynamicProvider => ProviderType.Dynamic;
-    public static ProviderType SiwsProvider => ProviderType.Siws;
-    public static ProviderType OidcProvider => ProviderType.Oidc;
+    public static AccessMode SigningAccess => AccessMode.Signing;
+    public static AccessMode WatchOnlyAccess => AccessMode.WatchOnly;
     
-    public static ProofType UnknownProof => ProofType.From("unknown");
-    public static ProofType SignatureProof => ProofType.From("signature");
-    
-    public static OwnershipState PendingState => OwnershipState.Pending;
-    public static OwnershipState VerifiedState => OwnershipState.Verified;
-    public static OwnershipState RevokedState => OwnershipState.Revoked;
-    
-    public static PreferredLanguage EnglishLanguage => PreferredLanguage.English;
-    public static PreferredLanguage SpanishLanguage => PreferredLanguage.Spanish;
-    
-    public static ChainId SolanaChain => ChainId.Solana;
-    public static ChainId EthereumChain => ChainId.Ethereum;
+    public static OwnershipStatus PendingStatus => OwnershipStatus.Pending;
+    public static OwnershipStatus VerifiedStatus => OwnershipStatus.Verified;
+    public static OwnershipStatus RevokedStatus => OwnershipStatus.Revoked;
+
+    // Test constants
+    public static string DynamicProvider => "dynamic";
+    public static string SolanaChain => "solana-mainnet";
+    public static string EthereumChain => "ethereum-mainnet";
     
     public static Address SolanaAddress => Address.From(TestConstants.ValidSolanaAddress);
     public static Address EthereumAddress => Address.From(TestConstants.ValidEthAddress);
-    
-    public static Tag TestTag => Tag.From("test-tag");
-    public static Tag AnotherTag => Tag.From("another-tag");
+
+    // Entity builders
+    public static IdentityCredential CreateIdentityCredential(
+        AxonId? principalId = null,
+        string provider = "dynamic",
+        string issuer = "issuer",
+        string subject = "subject",
+        DateTime? timestamp = null)
+    {
+        return IdentityCredential.Create(
+            principalId ?? AxonId.New(),
+            provider,
+            issuer,
+            subject,
+            timestamp
+        );
+    }
+
+    public static WalletOwnership CreateWalletOwnership(
+        AxonId? principalId = null,
+        WalletId? walletId = null,
+        AccessMode accessMode = AccessMode.Signing,
+        OwnershipStatus status = OwnershipStatus.Pending)
+    {
+        return WalletOwnership.Create(
+            principalId ?? AxonId.New(),
+            walletId ?? WalletId.New(),
+            accessMode,
+            status
+        );
+    }
+
+    public static PrincipalChainDefault CreatePrincipalChainDefault(
+        AxonId? principalId = null,
+        string chainId = "solana-mainnet",
+        WalletId? walletId = null)
+    {
+        return PrincipalChainDefault.Create(
+            principalId ?? AxonId.New(),
+            chainId,
+            walletId ?? WalletId.New()
+        );
+    }
 }

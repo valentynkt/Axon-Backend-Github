@@ -31,7 +31,7 @@ public sealed class WalletResolutionService : IWalletResolutionService
     }
 
     public async Task<Result<(Wallet wallet, bool wasCreated), Error>> ResolveOrRegisterAsync(
-        ChainId chainId,
+        string chainId,
         string rawAddress,
         CancellationToken cancellationToken = default)
     {

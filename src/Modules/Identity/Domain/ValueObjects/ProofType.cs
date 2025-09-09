@@ -1,64 +1,32 @@
 namespace Axon.Modules.Identity.Domain.ValueObjects;
 
 /// <summary>
-/// Type of proof used to establish wallet ownership.
+/// Represents a cryptographic proof type for wallet ownership verification.
 /// </summary>
-[ValueObject<string>(
-    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
-public readonly partial struct ProofType
+public sealed record ProofType
 {
-    private static readonly Lazy<HashSet<string>> _allowedValues = new(() => new(StringComparer.OrdinalIgnoreCase)
+    public string Value { get; }
+
+    private ProofType(string value)
     {
-        "dynamic_verified",
-        "direct_signature", 
-        "watch_only",
-        "unknown"
-    });
-    
-    private static HashSet<string> AllowedValues => _allowedValues.Value;
-
-    public static readonly ProofType DynamicVerified = From("dynamic_verified");
-    public static readonly ProofType DirectSignature = From("direct_signature");
-    public static readonly ProofType WatchOnly = From("watch_only");
-    public static readonly ProofType Unknown = From("unknown");
-
-    private static Validation Validate(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return Validation.Invalid("Proof type cannot be empty.");
-
-        var normalized = input.ToLowerInvariant();
-        if (!AllowedValues.Contains(normalized))
-            return Validation.Invalid($"Invalid proof type: {input}. Must be one of: {string.Join(", ", AllowedValues)}.");
-
-        return Validation.Ok;
+        Value = value;
     }
 
-    private static string NormalizeInput(string input) => input.ToLowerInvariant();
-
-    public bool IsDynamicVerified => Value == DynamicVerified.Value;
-    public bool IsDirectSignature => Value == DirectSignature.Value;
-    public bool IsWatchOnly => Value == WatchOnly.Value;
-    public bool IsUnknown => Value == Unknown.Value;
-
-    public bool IsVerifiedSigning => !IsWatchOnly;
-    public bool SupportsVerification => IsDynamicVerified || IsDirectSignature;
-
-    public static Result<ProofType, Error> Create(string? value)
+    public static ProofType From(string value)
     {
-        if (value is null)
-            return Result.Failure<ProofType, Error>(
-                Error.Validation("Proof type is required.", "IDENTITY.WALLET.PROOF.REQUIRED"));
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("ProofType cannot be null or empty.", nameof(value));
 
-        try
-        {
-            var vo = From(value);
-            return Result.Success<ProofType, Error>(vo);
-        }
-        catch (ValueObjectValidationException ex)
-        {
-            return Result.Failure<ProofType, Error>(
-                Error.Validation(ex.Message, "IDENTITY.WALLET.PROOF.INVALID"));
-        }
+        return new ProofType(value.ToLowerInvariant().Trim());
     }
+
+    // Common proof types
+    public static ProofType Signature => From("signature");
+    public static ProofType Message => From("message");
+    public static ProofType Transaction => From("transaction");
+
+    public static implicit operator string(ProofType proofType) => proofType.Value;
+    public static implicit operator ProofType(string value) => From(value);
+
+    public override string ToString() => Value;
 }

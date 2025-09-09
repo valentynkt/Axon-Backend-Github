@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -58,7 +59,7 @@ public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
     {
         ArgumentNullException.ThrowIfNull(wallet);
 
-        // Parse chain to ChainId (let domain validate)
+        // Parse chain to string (let domain validate)
         var normalizedChain = NormalizeChain(wallet.Chain);
         if (!ChainId.TryFrom(normalizedChain, out var chainId))
         {
@@ -89,7 +90,7 @@ public sealed class DynamicToCommandsMapper : IDynamicToCommandsMapper
     {
         ArgumentNullException.ThrowIfNull(wallet);
 
-        // Parse chain to ChainId (let domain validate) 
+        // Parse chain to string (let domain validate) 
         var normalizedChain = NormalizeChain(wallet.Chain);
         if (!ChainId.TryFrom(normalizedChain, out var chainId))
         {

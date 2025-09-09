@@ -10,7 +10,7 @@ namespace Axon.Modules.Identity.Application.DTOs;
 /// </summary>
 public sealed record WalletResolutionResult(
     WalletId Id,
-    ChainId ChainId,
+    string ChainId,
     Address Address,
     DateTimeOffset FirstSeenAt,
     DateTimeOffset LastSeenAt,

@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using BuildingBlocks.Primitives.Ids;
 
 namespace Axon.Modules.Identity.Application.DTOs.Requests;

@@ -6,10 +6,10 @@ The Identity module implements the core domain logic for principal management in
 
 ## Architecture
 
-- **Aggregate Root**: AxonPrincipal
-- **Owned Entities**: PrincipalProfile (1:1)
+- **Aggregate Root**: AxonPrincipal (with direct properties - no profile entity)
+- **Aggregate Root**: Wallet (global wallet catalog)
 - **Child Entities**: IdentityCredential (1:many), WalletOwnership (1:many)
-- **External References**: Wallet BC via repository pattern
+- **External References**: Cross-aggregate coordination via domain events
 
 ## Key Features
 
@@ -99,12 +99,20 @@ The following uniqueness constraints should be implemented in the persistence la
 
 ## Event Handling
 
-### Key Domain Events
-- `DefaultWalletChangedEvent` - Raised when chain default is set/cleared (supports null `NewWalletId` for clearing)
-- `WalletOwnershipLinkedEvent` - Raised when wallet is linked to a principal
-- `WalletOwnershipVerifiedEvent` - Raised when ownership proof is verified
-- `WalletOwnershipUnlinkedEvent` - Raised when wallet is unlinked from a principal
-- `WalletOwnershipConflictSkippedEvent` - Raised when linking is skipped due to global ownership conflicts
+### Consolidated Domain Events Strategy
+The domain uses a **4-event consolidation strategy** for simplicity and consistency:
+
+1. **`PrincipalChangedEvent`** - All principal-level changes including creation, deletion, risk tier changes, and default wallet changes
+   - ChangeTypes: `"created"`, `"deleted"`, `"restored"`, `"risk_tier_changed"`, `"default_wallet_set"`, `"default_wallet_removed"`
+   
+2. **`CredentialChangedEvent`** - All credential-related changes
+   - ChangeTypes: `"linked"`, `"revoked"`, `"last_seen_updated"`
+   
+3. **`OwnershipChangedEvent`** - All wallet ownership relationship changes  
+   - ChangeTypes: `"linked"`, `"unlinked"`, `"verified"`, `"label_updated"`, `"access_mode_updated"`
+   
+4. **`WalletChangedEvent`** - All global wallet catalog changes
+   - ChangeTypes: `"registered"`, `"last_seen_updated"`, `"profile_updated"`, `"tag_added"`, `"tag_removed"`, `"deleted"`, `"restored"`
 
 ### Event Payload Standards
 All domain events use primitive types (strings, GUIDs) rather than value objects for better interoperability and stable serialization contracts across bounded context boundaries.

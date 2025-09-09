@@ -12,7 +12,7 @@ namespace Axon.Modules.Identity.Application.Specifications.Wallets;
 public sealed class WalletsForChainSpec : PagedSpecification<Wallet>
 {
     public WalletsForChainSpec(
-        ChainId chainId,
+        string chainId,
         Page page)
         : base(page)
     {

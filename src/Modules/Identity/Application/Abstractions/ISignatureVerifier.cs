@@ -19,7 +19,7 @@ public interface ISignatureVerifier
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Success if signature is valid, failure with error details if not</returns>
     Task<Result<Unit, Error>> VerifySignatureAsync(
-        ChainId chainId,
+        string chainId,
         Address walletAddress,
         string signature,
         string challengeId,
@@ -30,5 +30,5 @@ public interface ISignatureVerifier
     /// </summary>
     /// <param name="chainId">The chain to check support for</param>
     /// <returns>True if the chain is supported</returns>
-    bool SupportsChain(ChainId chainId);
+    bool SupportsChain(string chainId);
 }

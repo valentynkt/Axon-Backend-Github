@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using System.Security.Claims;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
@@ -28,7 +29,7 @@ public interface IWalletAuthorizationService
     /// <summary>
     /// Checks if the current user owns the wallet at the given coordinates.
     /// </summary>
-    Task<bool> IsWalletOwnerAsync(ChainId chainId, string rawAddress, CancellationToken cancellationToken = default);
+    Task<bool> IsWalletOwnerAsync(string chainId, string rawAddress, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Determines if the current user has the specified service principal permission.
@@ -93,7 +94,7 @@ public sealed class WalletAuthorizationService : IWalletAuthorizationService
         return principal?.Id == currentAxonId;
     }
 
-    public async Task<bool> IsWalletOwnerAsync(ChainId chainId, string rawAddress, CancellationToken cancellationToken = default)
+    public async Task<bool> IsWalletOwnerAsync(string chainId, string rawAddress, CancellationToken cancellationToken = default)
     {
         var currentAxonId = await GetCurrentUserAxonIdAsync(cancellationToken);
         if (currentAxonId == null)

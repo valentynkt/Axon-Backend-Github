@@ -16,7 +16,7 @@ public interface IWalletReadRepository : ISpecificationReadRepository<Wallet>
     /// Efficient existence check without loading the full aggregate.
     /// </summary>
     Task<bool> ExistsByChainAndAddressAsync(
-        ChainId chainId, 
+        string chainId, 
         Address address, 
         CancellationToken cancellationToken = default);
 
@@ -25,7 +25,7 @@ public interface IWalletReadRepository : ISpecificationReadRepository<Wallet>
     /// Optimized with compiled queries for performance.
     /// </summary>
     Task<IReadOnlyList<Wallet>> GetByChainOptimizedAsync(
-        ChainId chainId,
+        string chainId,
         bool includeDeleted = false,
         int skip = 0,
         int take = 100,
@@ -36,7 +36,7 @@ public interface IWalletReadRepository : ISpecificationReadRepository<Wallet>
     /// Optimized with compiled queries for tag-based lookups.
     /// </summary>
     Task<IReadOnlyList<Wallet>> GetByTagOptimizedAsync(
-        Tag tag,
+        string tag,
         bool includeDeleted = false,
         int skip = 0,
         int take = 100,

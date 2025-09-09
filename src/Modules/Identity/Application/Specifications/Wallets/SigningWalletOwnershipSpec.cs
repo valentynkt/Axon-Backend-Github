@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Ardalis.Specification;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;

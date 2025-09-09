@@ -1,64 +1,32 @@
 namespace Axon.Modules.Identity.Domain.ValueObjects;
 
 /// <summary>
-/// Identity provider type for credentials.
+/// Represents an identity provider type (e.g., 'dynamic', 'google', 'github').
 /// </summary>
-[ValueObject<string>(
-    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
-public readonly partial struct ProviderType
+public sealed record ProviderType
 {
-    private static readonly Lazy<HashSet<string>> _allowedValues = new(() => new(StringComparer.OrdinalIgnoreCase)
+    public string Value { get; }
+
+    private ProviderType(string value)
     {
-        "dynamic",
-        "siws", 
-        "oidc",
-        "service_api",
-        "unknown"
-    });
-    
-    private static HashSet<string> AllowedValues => _allowedValues.Value;
-
-    public static readonly ProviderType Dynamic = From("dynamic");
-    public static readonly ProviderType Siws = From("siws");
-    public static readonly ProviderType Oidc = From("oidc");
-    public static readonly ProviderType ServiceApi = From("service_api");
-    public static readonly ProviderType Unknown = From("unknown");
-
-    private static Validation Validate(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return Validation.Invalid("Provider type cannot be empty.");
-
-        var normalized = input.ToLowerInvariant();
-        if (!AllowedValues.Contains(normalized))
-            return Validation.Invalid($"Invalid provider type: {input}. Must be one of: {string.Join(", ", AllowedValues)}.");
-
-        return Validation.Ok;
+        Value = value;
     }
 
-    private static string NormalizeInput(string input) => input.ToLowerInvariant();
-
-    public bool IsDynamic => Value == Dynamic.Value;
-    public bool IsSiws => Value == Siws.Value;
-    public bool IsOidc => Value == Oidc.Value;
-    public bool IsServiceApi => Value == ServiceApi.Value;
-    public bool IsUnknown => Value == Unknown.Value;
-
-    public static Result<ProviderType, Error> Create(string? value)
+    public static ProviderType From(string value)
     {
-        if (value is null)
-            return Result.Failure<ProviderType, Error>(
-                Error.Validation("Provider type is required.", "IDENTITY.CREDENTIAL.PROVIDER.REQUIRED"));
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("ProviderType cannot be null or empty.", nameof(value));
 
-        try
-        {
-            var vo = From(value);
-            return Result.Success<ProviderType, Error>(vo);
-        }
-        catch (ValueObjectValidationException ex)
-        {
-            return Result.Failure<ProviderType, Error>(
-                Error.Validation(ex.Message, "IDENTITY.CREDENTIAL.PROVIDER.INVALID"));
-        }
+        return new ProviderType(value.ToLowerInvariant().Trim());
     }
+
+    // Common provider types
+    public static ProviderType Dynamic => From("dynamic");
+    public static ProviderType Manual => From("manual");
+
+
+    public static implicit operator string(ProviderType providerType) => providerType.Value;
+    public static implicit operator ProviderType(string value) => From(value);
+
+    public override string ToString() => Value;
 }

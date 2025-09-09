@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using BuildingBlocks.Application.Pagination;
 using Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
 using Axon.Modules.Identity.Application.Specifications.Wallets;
@@ -76,7 +77,7 @@ public static class IdentitySpecs
     /// Creates a specification for AxonPrincipals that own wallets on a specific chain.
     /// </summary>
     public static WalletOwnersByChainSpec WalletOwnersByChain(
-        ChainId chainId,
+        string chainId,
         Page page,
         bool includeWalletOwnerships = false) => 
         new(chainId, page, includeWalletOwnerships);
@@ -116,14 +117,14 @@ public static class IdentitySpecs
     /// Creates a paginated specification for wallets by chain.
     /// </summary>
     public static WalletsForChainSpec WalletsByChain(
-        ChainId chainId,
+        string chainId,
         Page page) => 
         new(chainId, page);
 
     /// <summary>
     /// Creates a count specification for wallets by chain.
     /// </summary>
-    public static WalletsForChainCountSpec WalletsByChainCount(ChainId chainId) => 
+    public static WalletsForChainCountSpec WalletsByChainCount(string chainId) => 
         new(chainId);
 
     #endregion

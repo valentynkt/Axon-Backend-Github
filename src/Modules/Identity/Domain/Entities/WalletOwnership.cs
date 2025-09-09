@@ -1,165 +1,43 @@
-using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Domain.Enums;
+using BuildingBlocks.Core.Domain.Entities.Base;
 
 namespace Axon.Modules.Identity.Domain.Entities;
 
 /// <summary>
-/// Wallet ownership link entity proving a principal controls a wallet.
-/// Child entity of AxonPrincipal with global unique constraint on verified wallets.
+/// Links a principal to a wallet with ownership details.
 /// </summary>
-public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>
+public sealed class WalletOwnership : global::BuildingBlocks.Core.Domain.Entities.Base.Entity<WalletOwnershipId>
 {
-    public AxonId AxonId { get; private set; }
+    public AxonId PrincipalId { get; private set; }
     public WalletId WalletId { get; private set; }
-    public ChainId ChainId { get; private set; }
-    public ProofType ProofType { get; private set; }
     public AccessMode AccessMode { get; private set; }
-    public OwnershipState State { get; private set; }
-    public DateTimeOffset FirstLinkedAt { get; private set; }
-    public DateTimeOffset? LastVerifiedAt { get; private set; }
-    public string? Label { get; private set; }
+    public OwnershipStatus Status { get; private set; }
 
-    // EF Core parameterless constructor
-    private WalletOwnership() : base() { }
+    // EF Core constructor
+    private WalletOwnership() { }
 
-    private WalletOwnership(
-        WalletOwnershipId id,
-        AxonId axonId,
-        WalletId walletId,
-        ChainId chainId,
-        ProofType proofType,
-        AccessMode accessMode,
-        OwnershipState state,
-        DateTimeOffset firstLinkedAt,
-        DateTimeOffset? lastVerifiedAt = null,
-        string? label = null) : base(id)
+    private WalletOwnership(WalletOwnershipId id, AxonId principalId, WalletId walletId, AccessMode accessMode, OwnershipStatus status) : base(id)
     {
-        AxonId = axonId;
+        PrincipalId = principalId;
         WalletId = walletId;
-        ChainId = chainId;
-        ProofType = proofType;
         AccessMode = accessMode;
-        State = state;
-        FirstLinkedAt = firstLinkedAt;
-        LastVerifiedAt = lastVerifiedAt;
-        Label = label;
+        Status = status;
     }
 
-    internal static Result<WalletOwnership, Error> Create(
-        AxonId axonId,
-        WalletId walletId,
-        ChainId chainId,
-        ProofType proofType,
-        AccessMode? accessMode = null,
-        OwnershipState? state = null,
-        DateTimeOffset? firstLinkedAt = null,
-        string? label = null)
+    public static WalletOwnership Create(AxonId principalId, WalletId walletId, AccessMode accessMode = AccessMode.Signing, OwnershipStatus status = OwnershipStatus.Pending)
     {
-        if (walletId == WalletId.Empty)
-            return Result.Failure<WalletOwnership, Error>(
-                Error.Validation("Wallet ID cannot be empty.", "IDENTITY.WALLET.ID.INVALID"));
-
-        if (string.IsNullOrWhiteSpace(chainId.Value))
-            return Result.Failure<WalletOwnership, Error>(
-                Error.Validation("Chain ID cannot be empty.", "IDENTITY.WALLET.CHAIN.INVALID"));
-
-        var id = new WalletOwnershipId(Guid.CreateVersion7());
-        var effectiveAccessMode = accessMode ?? AccessMode.Default;
-        var effectiveState = state ?? OwnershipState.Default;
-        var effectiveFirstLinked = firstLinkedAt ?? DateTimeOffset.UtcNow;
-
-        DateTimeOffset? lastVerified = null;
-        if (effectiveState.IsVerified)
-        {
-            lastVerified = effectiveFirstLinked;
-        }
-
-        var ownership = new WalletOwnership(
-            id, axonId, walletId, chainId, proofType, effectiveAccessMode, 
-            effectiveState, effectiveFirstLinked, lastVerified, label);
-
-        return Result.Success<WalletOwnership, Error>(ownership);
+        return new WalletOwnership(WalletOwnershipId.New(), principalId, walletId, accessMode, status);
     }
 
-    internal Result<Unit, Error> Verify(DateTimeOffset verifiedAt)
+    public void UpdateStatus(OwnershipStatus status)
     {
-        if (IsDeleted)
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule("Cannot verify deleted wallet ownership.", "IDENTITY.WALLET.OWNERSHIP.DELETED"));
-
-        if (State.IsRevoked)
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule("Cannot verify revoked wallet ownership.", "IDENTITY.WALLET.OWNERSHIP.REVOKED"));
-
-        State = OwnershipState.Verified;
-        LastVerifiedAt = verifiedAt;
-
-        return Result.Success<Unit, Error>(Unit.Value);
+        Status = status;
     }
 
-    internal Result<Unit, Error> Revoke()
+    public void UpdateAccessMode(AccessMode accessMode)
     {
-        if (IsDeleted)
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule("Cannot revoke deleted wallet ownership.", "IDENTITY.WALLET.OWNERSHIP.DELETED"));
-
-        if (State.IsRevoked)
-            return Result.Success<Unit, Error>(Unit.Value); // Already revoked
-
-        State = OwnershipState.Revoked;
-        // Note: LastVerifiedAt remains as is for audit purposes
-
-        return Result.Success<Unit, Error>(Unit.Value);
+        AccessMode = accessMode;
     }
 
-    internal Result<Unit, Error> UpdateLabel(string? newLabel)
-    {
-        if (IsDeleted)
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule("Cannot update label on deleted wallet ownership.", "IDENTITY.WALLET.OWNERSHIP.DELETED"));
-
-        // Trim and normalize
-        var normalizedLabel = string.IsNullOrWhiteSpace(newLabel) ? null : newLabel.Trim();
-        
-        if (normalizedLabel?.Length > 100) // Reasonable limit
-            return Result.Failure<Unit, Error>(
-                Error.Validation("Wallet label cannot exceed 100 characters.", "IDENTITY.WALLET.LABEL.TOO_LONG"));
-
-        Label = normalizedLabel;
-        return Result.Success<Unit, Error>(Unit.Value);
-    }
-
-    internal Result<Unit, Error> ChangeAccessMode(AccessMode newAccessMode)
-    {
-        if (IsDeleted)
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule("Cannot change access mode on deleted wallet ownership.", "IDENTITY.WALLET.OWNERSHIP.DELETED"));
-
-        if (State.IsRevoked)
-            return Result.Failure<Unit, Error>(
-                Error.BusinessRule("Cannot change access mode on revoked wallet ownership.", "IDENTITY.WALLET.OWNERSHIP.REVOKED"));
-
-        AccessMode = newAccessMode;
-        return Result.Success<Unit, Error>(Unit.Value);
-    }
-
-    internal Result<Unit, Error> UpdateAccessMode(AccessMode newAccessMode)
-    {
-        return ChangeAccessMode(newAccessMode);
-    }
-
-    public bool BelongsTo(AxonId principalId) => AxonId == principalId;
-
-    public bool IsForWallet(WalletId walletId) => WalletId == walletId;
-
-    public bool IsForChain(ChainId chainId) => ChainId == chainId;
-
-    public bool IsActive => !IsDeleted && State.IsVerified;
-
-    public bool IsVerifiedSigning => IsActive && AccessMode.IsSigning;
-
-    /// <summary>
-    /// Checks if this ownership represents a verified signing relationship
-    /// that would conflict with the global single-owner rule.
-    /// </summary>
-    public bool IsConflictingOwnership => State.IsVerified && AccessMode.IsSigning && !IsDeleted;
+    public bool IsVerifiedSigning => Status == OwnershipStatus.Verified && AccessMode == AccessMode.Signing;
 }

@@ -57,6 +57,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnName("updated_at");
 
                     b.Property<long>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("bigint")
                         .HasColumnName("version");
 
@@ -132,6 +133,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnName("updated_at");
 
                     b.Property<long>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("bigint")
                         .HasColumnName("version");
 
@@ -376,10 +378,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                                 .HasColumnType("uuid")
                                 .HasColumnName("id");
 
-                            b1.Property<Guid>("AxonId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("axon_id");
-
                             b1.Property<Guid>("AxonPrincipalId")
                                 .HasColumnType("uuid")
                                 .HasColumnName("axon_principal_id");
@@ -405,16 +403,13 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                             b1.HasKey("Id")
                                 .HasName("pk_principal_chain_defaults");
 
-                            b1.HasIndex("AxonPrincipalId")
-                                .HasDatabaseName("ix_principal_chain_defaults_axon_principal_id");
-
                             b1.HasIndex("ChainId")
                                 .HasDatabaseName("ix_principal_chain_defaults_chain_id");
 
                             b1.HasIndex("WalletId")
                                 .HasDatabaseName("ix_principal_chain_defaults_wallet_id");
 
-                            b1.HasIndex("AxonId", "ChainId")
+                            b1.HasIndex("AxonPrincipalId", "ChainId")
                                 .IsUnique()
                                 .HasDatabaseName("ix_principal_chain_defaults_axon_chain_unique");
 

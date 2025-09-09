@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
@@ -24,7 +25,7 @@ public static class IdentityDtoMapper
         return new PrincipalDto(
             AxonId: principal.Id.Value.ToString(),
             Type: principal.Type.Value,
-            PreferredLanguage: principal.Profile.PreferredLanguage.Value,
+            Language: principal.Profile.Language.Value,
             RiskTier: principal.Profile.RiskTier.Value,
             DefaultPerChain: principal.ChainDefaults.ToDictionary(
                 cd => cd.ChainId.Value, 
