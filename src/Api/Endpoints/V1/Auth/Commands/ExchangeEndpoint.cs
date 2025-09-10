@@ -2,7 +2,6 @@ using Axon.Api.Contracts.V1.Auth;
 using Axon.Api.Modules;
 using Axon.Modules.Identity.Application.Commands.ExchangeToken;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
-using Axon.Modules.Identity.Application.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;

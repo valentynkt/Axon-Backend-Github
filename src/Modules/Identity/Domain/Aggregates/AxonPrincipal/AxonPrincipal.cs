@@ -7,7 +7,7 @@ namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 /// <summary>
 /// AxonPrincipal aggregate root representing a subject (human or service).
 /// </summary>
-public sealed class AxonPrincipal : AggregateRoot<AxonId>
+public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
 {
     private readonly List<IdentityCredential> _credentials = [];
     private readonly List<WalletOwnership> _walletOwnerships = [];
@@ -35,20 +35,5 @@ public sealed class AxonPrincipal : AggregateRoot<AxonId>
     public static AxonPrincipal CreateService(AxonId? id = null)
     {
         return new AxonPrincipal(id ?? AxonId.New(), PrincipalType.Service);
-    }
-
-    public void UpdateRiskTier(RiskTier riskTier)
-    {
-        RiskTier = riskTier;
-    }
-
-    public void AddCredential(IdentityCredential credential)
-    {
-        _credentials.Add(credential);
-    }
-
-    public void AddWalletOwnership(WalletOwnership ownership)
-    {
-        _walletOwnerships.Add(ownership);
     }
 }

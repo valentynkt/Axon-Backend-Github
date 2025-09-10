@@ -19,7 +19,7 @@ public interface IWalletWriteRepository : IWriteRepository<Wallet, WalletId>
     /// Used to enforce global uniqueness constraint (W1).
     /// </summary>
     Task<Wallet?> GetByChainAndAddressAsync(
-        string chainId, 
+        ChainId chainId, 
         Address address, 
         CancellationToken cancellationToken = default);
 

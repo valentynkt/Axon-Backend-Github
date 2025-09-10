@@ -1,3 +1,5 @@
+using BuildingBlocks.Primitives.Ids;
+
 namespace Axon.Modules.Identity.Domain.Events;
 
 /// <summary>
@@ -5,16 +7,26 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// Replaces: PrincipalCreated, PrincipalSoftDeleted, PrincipalRestored, 
 /// ProfileLanguageChanged, ProfileRiskTierChanged, DefaultWalletChanged, and other profile events.
 /// </summary>
-public sealed record PrincipalChangedEvent(
-    string AxonId,
-    string ChangeType, // "created", "deleted", "restored", "risk_tier_changed", "language_changed", "default_wallet_set", "default_wallet_removed", etc.
-    string? PrincipalType = null,
-    string? EmailHash = null,
-    string? RiskTier = null, 
-    string? Language = null,
-    string? Reason = null,
-    string? ChainId = null,
-    string? NewWalletId = null,
-    string? PreviousWalletId = null,
-    DateTime? EventOccurredAt = null
-) : DomainEvent(EventOccurredAt ?? DateTime.UtcNow);
+public sealed record PrincipalChangedEvent : DomainEvent
+{
+    public AxonId PrincipalId { get; init; }
+    public string PropertyChanged { get; init; }
+    public string? OldValue { get; init; }
+    public string? NewValue { get; init; }
+    public Dictionary<string, string>? Metadata { get; init; }
+
+    public PrincipalChangedEvent(
+        AxonId principalId,
+        string propertyChanged,
+        string? oldValue = null,
+        string? newValue = null,
+        Dictionary<string, string>? metadata = null,
+        DateTime? eventOccurredAt = null) : base(eventOccurredAt ?? DateTime.UtcNow)
+    {
+        PrincipalId = principalId;
+        PropertyChanged = propertyChanged;
+        OldValue = oldValue;
+        NewValue = newValue;
+        Metadata = metadata;
+    }
+}

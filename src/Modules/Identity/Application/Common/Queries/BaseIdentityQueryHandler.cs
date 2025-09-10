@@ -1,4 +1,4 @@
-using BuildingBlocks.Application.Services;
+using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;

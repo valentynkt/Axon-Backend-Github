@@ -1,7 +1,7 @@
 using Axon.Modules.Identity.Application.Contracts.Persistence;
-using Axon.Modules.Identity.Application.Specifications.AxonPrincipals;
-using Axon.Modules.Identity.Application.Specifications.Wallets;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using BuildingBlocks.Application;
@@ -14,7 +14,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 {
     private readonly IWriteUnitOfWork _unitOfWork;
 
-    public AxonPrincipalWriteRepository(IdentityDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
+    public AxonPrincipalWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
     }
@@ -51,7 +51,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
     {
         return await GetPrincipalForRead()
             .FirstOrDefaultAsync(p => p.Credentials.Any(c => 
-                c.ProviderType == providerType && 
+                c.Provider == providerType.Value && 
                 c.Issuer == issuer && 
                 c.Subject == subject), ct);
     }
@@ -82,7 +82,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
     {
         return await DbSet
             .AnyAsync(p => p.Credentials.Any(c => 
-                c.ProviderType == providerType && 
+                c.Provider == providerType.Value && 
                 c.Issuer == issuer && 
                 c.Subject == subject), ct);
     }
@@ -119,14 +119,47 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         return result;
     }
 
-    public async Task<IReadOnlyCollection<AxonPrincipal>> FindByEmailHashAsync(
-        EmailHash emailHash,
+
+    public async Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(
+        IEnumerable<(string chainId, Address address)> walletSpecs,
         CancellationToken ct = default)
     {
-        var principals = await DbSet
-            .Where(p => p.PrimaryEmailHash == emailHash)
+        var specs = walletSpecs.ToList();
+        if (specs.Count == 0)
+            return new Dictionary<(string chainId, Address address), WalletId>();
+
+        var context = (IdentityWriteDbContext)Context;
+        var result = new Dictionary<(string chainId, Address address), WalletId>();
+
+        // First, try to find existing wallets
+        var existingWallets = await context.Set<Wallet>()
+            .Where(w => specs.Any(spec => w.Chain == ChainId.Create(spec.chainId) && w.Address == spec.address))
+            .Select(w => new { w.Id, w.Chain, w.Address })
             .ToListAsync(ct);
 
-        return principals.AsReadOnly();
+        // Map existing wallets to the result
+        foreach (var existing in existingWallets)
+        {
+            var chainValue = existing.Chain.Value;
+            var spec = specs.First(s => s.chainId == chainValue && s.address.Equals(existing.Address));
+            result[spec] = existing.Id;
+        }
+
+        // Create missing wallets
+        var missingSpecs = specs.Where(spec => !result.ContainsKey(spec)).ToList();
+        foreach (var spec in missingSpecs)
+        {
+            var wallet = Wallet.Create(ChainId.Create(spec.chainId), spec.address);
+            await context.Set<Wallet>().AddAsync(wallet, ct);
+            result[spec] = wallet.Id;
+        }
+
+        if (missingSpecs.Count > 0)
+        {
+            await context.SaveChangesAsync(ct);
+        }
+
+        return result;
     }
+
 }

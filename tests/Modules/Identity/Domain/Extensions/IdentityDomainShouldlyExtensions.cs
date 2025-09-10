@@ -1,5 +1,12 @@
+using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Events;
-using Axon.Modules.Identity.Domain.Enums;using BuildingBlocks.Core.Domain.Events;
+using Axon.Modules.Identity.Domain.Enums;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
+using BuildingBlocks.Core.Domain.Events;
+using BuildingBlocks.Primitives.Ids;
+using CSharpFunctionalExtensions;
 using Shouldly;
 using System.Diagnostics;
 
@@ -188,6 +195,165 @@ public static class IdentityDomainShouldlyExtensions
             customMessage ?? "Domain event should not have occurred in the future");
         
         return domainEvent;
+    }
+
+    #endregion
+
+    #region DateTime Extensions
+
+    /// <summary>
+    /// Asserts that a DateTime is close to another DateTime within a tolerance.
+    /// </summary>
+    public static void ShouldBeCloseTo(this DateTime actual, DateTime expected, TimeSpan tolerance, string? customMessage = null)
+    {
+        var difference = Math.Abs((actual - expected).TotalMilliseconds);
+        difference.ShouldBeLessThanOrEqualTo(tolerance.TotalMilliseconds,
+            customMessage ?? $"DateTime {actual:yyyy-MM-dd HH:mm:ss.fff} should be within {tolerance.TotalMilliseconds}ms of {expected:yyyy-MM-dd HH:mm:ss.fff}");
+    }
+
+    #endregion
+
+    #region Domain-Specific Composite Assertions
+
+    /// <summary>
+    /// Asserts that an AxonPrincipal has valid default state after creation.
+    /// </summary>
+    public static AxonPrincipal ShouldBeValidPrincipal(this AxonPrincipal principal, PrincipalType expectedType, RiskTier expectedRiskTier = RiskTier.Low)
+    {
+        principal.ShouldNotBeNull("Principal should not be null");
+        principal.Id.ShouldNotBe(default(AxonId), "Principal should have a valid ID");
+        principal.Type.ShouldBe(expectedType, $"Principal type should be {expectedType}");
+        principal.RiskTier.ShouldBe(expectedRiskTier, $"Principal risk tier should be {expectedRiskTier}");
+        return principal;
+    }
+
+    /// <summary>
+    /// Asserts that a principal has the expected ownership for a wallet.
+    /// </summary>
+    public static AxonPrincipal ShouldHaveOwnership(this AxonPrincipal principal, WalletId walletId, AccessMode? expectedMode = null, OwnershipStatus? expectedStatus = null)
+    {
+        var ownership = principal.WalletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
+        ownership.ShouldNotBeNull($"Principal should have ownership for wallet {walletId}");
+        
+        if (expectedMode.HasValue)
+            ownership.AccessMode.ShouldBe(expectedMode.Value, $"Ownership access mode should be {expectedMode}");
+            
+        if (expectedStatus.HasValue)
+            ownership.Status.ShouldBe(expectedStatus.Value, $"Ownership status should be {expectedStatus}");
+            
+        return principal;
+    }
+
+    /// <summary>
+    /// Asserts that a principal does not have ownership for a wallet.
+    /// </summary>
+    public static AxonPrincipal ShouldNotHaveOwnership(this AxonPrincipal principal, WalletId walletId)
+    {
+        var ownership = principal.WalletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
+        ownership.ShouldBeNull($"Principal should not have ownership for wallet {walletId}");
+        return principal;
+    }
+
+    /// <summary>
+    /// Asserts that a principal has the expected credential.
+    /// </summary>
+    public static AxonPrincipal ShouldHaveCredential(this AxonPrincipal principal, string expectedProvider, string expectedSubject)
+    {
+        var credential = principal.Credentials.FirstOrDefault(c => c.Provider == expectedProvider && c.Subject == expectedSubject);
+        credential.ShouldNotBeNull($"Principal should have credential from provider {expectedProvider} with subject {expectedSubject}");
+        return principal;
+    }
+
+    /// <summary>
+    /// Asserts that an aggregate root raised a specific domain event.
+    /// </summary>
+    public static T ShouldHaveRaisedEvent<T>(this IAggregateRoot aggregate) where T : class, IDomainEvent
+    {
+        var domainEvent = aggregate.DomainEvents.OfType<T>().FirstOrDefault();
+        domainEvent.ShouldNotBeNull($"Aggregate should have raised event of type {typeof(T).Name}");
+        return domainEvent;
+    }
+
+    /// <summary>
+    /// Asserts that an aggregate root raised a specific number of domain events.
+    /// </summary>
+    public static IAggregateRoot ShouldHaveRaisedEventCount(this IAggregateRoot aggregate, int expectedCount)
+    {
+        aggregate.DomainEvents.Count.ShouldBe(expectedCount, $"Aggregate should have raised {expectedCount} domain events");
+        return aggregate;
+    }
+
+    /// <summary>
+    /// Asserts that an aggregate root has not raised any domain events.
+    /// </summary>
+    public static IAggregateRoot ShouldNotHaveRaisedAnyEvents(this IAggregateRoot aggregate)
+    {
+        aggregate.DomainEvents.ShouldBeEmpty("Aggregate should not have raised any domain events");
+        return aggregate;
+    }
+
+    /// <summary>
+    /// Asserts that a wallet has valid default state after creation.
+    /// </summary>
+    public static Wallet ShouldBeValidWallet(this Wallet wallet, string expectedChainId, string expectedAddressValue)
+    {
+        wallet.ShouldNotBeNull("Wallet should not be null");
+        wallet.Id.ShouldNotBe(default(WalletId), "Wallet should have a valid ID");
+        wallet.ChainId.ShouldBe(expectedChainId, $"Wallet chain ID should be {expectedChainId}");
+        wallet.Address.Value.ShouldBe(expectedAddressValue, $"Wallet address should be {expectedAddressValue}");
+        wallet.LastSeenAt.ShouldBe(wallet.FirstSeenAt, "LastSeenAt should initially equal FirstSeenAt");
+        return wallet;
+    }
+
+    /// <summary>
+    /// Asserts that a Result is successful and returns the value.
+    /// </summary>
+    public static T ShouldBeSuccessful<T>(this Result<T> result, string? customMessage = null)
+    {
+        result.IsSuccess.ShouldBeTrue(customMessage ?? "Result should be successful");
+        return result.Value;
+    }
+
+    /// <summary>
+    /// Asserts that a Result is a failure and returns the error.
+    /// </summary>
+    public static TError ShouldBeFailure<T, TError>(this Result<T, TError> result, string? customMessage = null)
+    {
+        result.IsFailure.ShouldBeTrue(customMessage ?? "Result should be a failure");
+        return result.Error;
+    }
+
+    /// <summary>
+    /// Asserts that a Result is a failure with specific error code.
+    /// </summary>
+    public static TError ShouldBeFailureWithCode<T, TError>(this Result<T, TError> result, string expectedCode, string? customMessage = null) where TError : class
+    {
+        var error = result.ShouldBeFailure(customMessage);
+        
+        // Assuming error has a Code property - adjust based on actual Error implementation
+        var codeProperty = typeof(TError).GetProperty("Code");
+        if (codeProperty != null)
+        {
+            var actualCode = codeProperty.GetValue(error)?.ToString();
+            actualCode.ShouldBe(expectedCode, $"Error code should be {expectedCode}");
+        }
+        
+        return error;
+    }
+
+    /// <summary>
+    /// Asserts that a WalletOwnership has the expected properties.
+    /// </summary>
+    public static WalletOwnership ShouldBeValidOwnership(this WalletOwnership ownership, 
+        AxonId expectedPrincipalId, WalletId expectedWalletId, 
+        AccessMode expectedMode, OwnershipStatus expectedStatus)
+    {
+        ownership.ShouldNotBeNull("Ownership should not be null");
+        ownership.PrincipalId.ShouldBe(expectedPrincipalId, "Ownership should have correct principal ID");
+        ownership.WalletId.ShouldBe(expectedWalletId, "Ownership should have correct wallet ID");
+        ownership.AccessMode.ShouldBe(expectedMode, "Ownership should have correct access mode");
+        ownership.Status.ShouldBe(expectedStatus, "Ownership should have correct status");
+        return ownership;
     }
 
     #endregion

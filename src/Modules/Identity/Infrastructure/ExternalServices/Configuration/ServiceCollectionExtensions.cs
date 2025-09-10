@@ -1,12 +1,5 @@
-using System.Threading.RateLimiting;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.DynamicXyz.Client;
-using Axon.Modules.Identity.Infrastructure.ExternalServices.Health;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http.Resilience;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly;
 
 namespace Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 
@@ -23,9 +16,7 @@ public static class ServiceCollectionExtensions
 
         // Register memory cache for JWKS caching
         services.AddMemoryCache();
-
-        // Register health check
-        services.AddScoped<DynamicXyzHealthCheck>();
+        
 
         // Register main Dynamic.xyz API HttpClient with policies
         services.AddHttpClient<IDynamicApiClient, DynamicApiClient>("DynamicXyzClient", (serviceProvider, client) =>

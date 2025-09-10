@@ -2,7 +2,6 @@ using Axon.Api.Contracts.V1.Auth;
 using Axon.Modules.Identity.Application.Commands.ExchangeToken;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Queries.GetCurrentUser;
-using Axon.Modules.Identity.Application.Services;
 using Mapster;
 
 namespace Axon.Api.Configuration.Mapping;

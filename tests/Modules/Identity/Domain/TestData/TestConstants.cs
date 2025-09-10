@@ -18,6 +18,10 @@ public static class TestConstants
     public const string GoogleSub = "google-oauth-123456";
     public const string AnotherGoogleSub = "google-oauth-789012";
     
+    // Chain IDs
+    public const string SolanaChain = "solana-mainnet";
+    public const string EthereumChain = "ethereum-mainnet";
+    
     // Test IDs (generated once, reused)
     public static readonly AxonId TestPrincipalId = AxonId.New();
     public static readonly AxonId TestWalletId = AxonId.New();

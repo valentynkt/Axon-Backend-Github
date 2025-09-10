@@ -1,7 +1,5 @@
 using Axon.Modules.Identity.Application.Common.Queries;
-using BuildingBlocks.Application.Services;
-using BuildingBlocks.Core.Diagnostics.Errors;
-using CSharpFunctionalExtensions;
+using BuildingBlocks.Core.Abstractions.Authentication;
 
 namespace Axon.Modules.Identity.Application.Queries.GetCurrentUser;
 
@@ -14,7 +12,7 @@ public sealed class GetCurrentUserQueryHandler : BaseIdentityQueryHandler<GetCur
     {
     }
 
-    public override async Task<Result<CurrentUserInfo, Error>> Handle(GetCurrentUserQuery query, CancellationToken cancellationToken)
+    public override Task<Result<CurrentUserInfo, Error>> Handle(GetCurrentUserQuery query, CancellationToken cancellationToken)
     {
         try
         {
@@ -22,8 +20,8 @@ public sealed class GetCurrentUserQueryHandler : BaseIdentityQueryHandler<GetCur
             
             if (principal?.Identity?.IsAuthenticated != true)
             {
-                return Result.Failure<CurrentUserInfo, Error>(
-                    Error.Authorization("User is not authenticated"));
+                return Task.FromResult(Result.Failure<CurrentUserInfo, Error>(
+                    Error.Unauthorized("User is not authenticated")));
             }
 
             var subjectId = principal.FindFirst("sub")?.Value ?? "unknown";
@@ -41,12 +39,12 @@ public sealed class GetCurrentUserQueryHandler : BaseIdentityQueryHandler<GetCur
                 Claims: claims
             );
 
-            return Result.Success<CurrentUserInfo, Error>(userInfo);
+            return Task.FromResult(Result.Success<CurrentUserInfo, Error>(userInfo));
         }
         catch (Exception ex)
         {
-            return Result.Failure<CurrentUserInfo, Error>(
-                Error.Unexpected("Failed to get current user information", ex.Message));
+            return Task.FromResult(Result.Failure<CurrentUserInfo, Error>(
+                Error.Internal("Failed to get current user information", ex.Message)));
         }
     }
 }

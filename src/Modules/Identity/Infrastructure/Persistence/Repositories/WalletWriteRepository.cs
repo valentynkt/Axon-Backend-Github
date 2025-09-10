@@ -12,7 +12,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 {
     private readonly IWriteUnitOfWork _unitOfWork;
 
-    public WalletWriteRepository(IdentityDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
+    public WalletWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
     }
@@ -21,8 +21,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 
     private IQueryable<Wallet> GetWalletWithIncludes()
     {
-        return DbSet
-            .Include(w => w.WalletTags);
+        return DbSet;  // No includes needed for MVP - WalletTags removed
     }
 
     public override async Task<Wallet?> GetByIdAsync(WalletId id, CancellationToken ct = default)

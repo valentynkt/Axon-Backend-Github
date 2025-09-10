@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// <summary>
 /// Identity credential linking a principal to an external identity provider.
 /// </summary>
-public sealed class IdentityCredential : global::BuildingBlocks.Core.Domain.Entities.Base.Entity<IdentityCredentialId>
+public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCredentialId>
 {
     public AxonId PrincipalId { get; private set; }
     public string Provider { get; private set; } = string.Empty;

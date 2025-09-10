@@ -1,5 +1,4 @@
 using System.Reflection;
-using Axon.Modules.Identity.Application.Services;
 using BuildingBlocks.Application.Configuration;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,10 +30,6 @@ public static class ServiceCollectionExtensions
 
         // Register Identity-specific services
         services.AddSingleton(TimeProvider.System);
-        services.AddScoped<IWalletAuthorizationService, WalletAuthorizationService>();
-        services.AddScoped<IWalletOwnershipService, WalletOwnershipService>();
-        services.AddScoped<IWalletResolutionService, WalletResolutionService>();
-        services.AddScoped<IDynamicAuthOrchestrator, DynamicAuthOrchestrator>();
         
         // Register new Auth command/query handlers (MediatR will auto-discover them)
         // ExchangeTokenCommandHandler and GetCurrentUserQueryHandler are auto-registered by MediatR

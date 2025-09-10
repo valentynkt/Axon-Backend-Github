@@ -21,7 +21,7 @@ namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.Repositories;
 public class AxonPrincipalRepositoryIntegrationTests
 {
     private ServiceProvider _serviceProvider = null!;
-    private IdentityDbContext _context = null!;
+    private IdentityWriteDbContext _context = null!;
     private AxonPrincipalWriteRepository _writeRepository = null!;
 
     [SetUp]
@@ -38,7 +38,7 @@ public class AxonPrincipalRepositoryIntegrationTests
         var config = configBuilder.Build();
 
         // Add EF Core with InMemory database for testing
-        services.AddDbContext<IdentityDbContext>(options =>
+        services.AddDbContext<IdentityWriteDbContext>(options =>
             options.UseInMemoryDatabase(Guid.NewGuid().ToString()) // Unique DB per test
                    .UseSnakeCaseNamingConvention());
                    
@@ -48,12 +48,12 @@ public class AxonPrincipalRepositoryIntegrationTests
         
         // Add UnitOfWork  
         services.AddScoped<IWriteUnitOfWork<Axon.Modules.Identity.Application.Common.Models.IdentityModule>, 
-            EfUnitOfWork<IdentityDbContext, Axon.Modules.Identity.Application.Common.Models.IdentityModule>>();
+            EfUnitOfWork<IdentityWriteDbContext, Axon.Modules.Identity.Application.Common.Models.IdentityModule>>();
         services.AddScoped<IWriteUnitOfWork>(provider => 
             provider.GetRequiredService<IWriteUnitOfWork<Axon.Modules.Identity.Application.Common.Models.IdentityModule>>());
 
         _serviceProvider = services.BuildServiceProvider();
-        _context = _serviceProvider.GetRequiredService<IdentityDbContext>();
+        _context = _serviceProvider.GetRequiredService<IdentityWriteDbContext>();
         _writeRepository = _serviceProvider.GetRequiredService<AxonPrincipalWriteRepository>();
 
         // Ensure database is created with schema

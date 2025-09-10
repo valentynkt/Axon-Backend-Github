@@ -1,9 +1,7 @@
 using Axon.Modules.Identity.Application.Contracts.Persistence;
-using Axon.Modules.Identity.Application.Specifications.Wallets;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
-using BuildingBlocks.Application.Pagination;
 using BuildingBlocks.Infrastructure.Persistence.Read;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,16 +23,16 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         ExistsByChainAndAddressCompiled = EF.CompileAsyncQuery(
             (IdentityReadDbContext context, ChainId chainId, Address address) =>
                 context.Set<Wallet>()
-                    .Any(w => w.Chain == chainId && w.Address == address && w.DeletedAt == null));
+                    .Any(w => w.Chain == chainId && w.Address == address));
 
     /// <summary>
     /// Compiled query for fetching wallets by chain with pagination - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ChainId, bool, int, int, IAsyncEnumerable<Wallet>> 
+    private static readonly Func<IdentityReadDbContext, ChainId, int, int, IAsyncEnumerable<Wallet>> 
         GetByChainOptimizedCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ChainId chainId, bool includeDeleted, int skip, int take) =>
+            (IdentityReadDbContext context, ChainId chainId, int skip, int take) =>
                 context.Set<Wallet>()
-                    .Where(w => w.Chain == chainId && (includeDeleted || w.DeletedAt == null))
+                    .Where(w => w.Chain == chainId)
                     .OrderBy(w => w.FirstSeenAt)
                     .ThenBy(w => w.Id)
                     .Skip(skip)
@@ -44,11 +42,11 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
     /// <summary>
     /// Compiled query for counting wallets by chain - optimized for count operations
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ChainId?, bool, Task<int>> 
+    private static readonly Func<IdentityReadDbContext, ChainId, Task<int>> 
         GetCountOptimizedCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ChainId? chainId, bool includeDeleted) =>
+            (IdentityReadDbContext context, ChainId chainId) =>
                 context.Set<Wallet>()
-                    .Where(w => (chainId == null || w.Chain == chainId) && (includeDeleted || w.DeletedAt == null))
+                    .Where(w => w.Chain == chainId)
                     .Count());
 
     public WalletReadRepository(IdentityReadDbContext context) : base(context)
@@ -71,34 +69,15 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         int take = 100,
         CancellationToken cancellationToken = default)
     {
-        var page = new Page(
-            Number: (skip / take) + 1,
-            Size: take);
-            
-        var spec = new WalletsForChainSpec(chainId, page);
-        // NOTE: includeDeleted and includeOwnership parameters removed as Wallet doesn't support soft delete or ownership navigation properties
-        
-        return await ListAsync(spec, cancellationToken);
+        var results = new List<Wallet>();
+        await foreach (var item in GetByChainOptimizedCompiled(_identityDbContext, chainId, skip, take)
+                          .WithCancellation(cancellationToken))
+        {
+            results.Add(item);
+        }
+        return results.AsReadOnly();
     }
 
-    public async Task<IReadOnlyList<Wallet>> GetByTagOptimizedAsync(
-        Tag tag,
-        bool includeDeleted = false,
-        int skip = 0,
-        int take = 100,
-        CancellationToken cancellationToken = default)
-    {
-        var wallets = await _identityDbContext.Set<Wallet>()
-            .Where(w => w.Tags.Contains(tag) && (includeDeleted || w.DeletedAt == null))
-            .OrderBy(w => w.FirstSeenAt)
-            .ThenBy(w => w.Id)
-            .Skip(skip)
-            .Take(take)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-        return wallets.AsReadOnly();
-    }
 
     public async Task<IReadOnlyList<Wallet>> GetRecentlyActiveAsync(
         TimeSpan withinTimespan,
@@ -110,7 +89,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         var cutoffTime = DateTimeOffset.UtcNow.Subtract(withinTimespan);
         
         var wallets = await _identityDbContext.Set<Wallet>()
-            .Where(w => w.LastSeenAt >= cutoffTime && (includeDeleted || w.DeletedAt == null))
+            .Where(w => w.LastSeenAt >= cutoffTime)
             .OrderByDescending(w => w.LastSeenAt)
             .ThenBy(w => w.Id)
             .Skip(skip)
@@ -131,7 +110,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         var cutoffTime = DateTimeOffset.UtcNow.Subtract(olderThan);
         
         var wallets = await _identityDbContext.Set<Wallet>()
-            .Where(w => w.LastSeenAt < cutoffTime && (includeDeleted || w.DeletedAt == null))
+            .Where(w => w.LastSeenAt < cutoffTime)
             .OrderBy(w => w.LastSeenAt)
             .ThenBy(w => w.Id)
             .Skip(skip)
@@ -149,13 +128,12 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
     {
         if (chainId.HasValue)
         {
-            var countSpec = new WalletsForChainCountSpec(chainId.Value);
-            // NOTE: includeDeleted parameter removed as Wallet doesn't support soft delete
-            return await CountAsync(countSpec, cancellationToken);
+            return await GetCountOptimizedCompiled(_identityDbContext, chainId.Value);
         }
         
-        // For null chainId, use the original compiled query for now
-        return await GetCountOptimizedCompiled(_identityDbContext, chainId, includeDeleted);
+        // For null chainId, count all wallets
+        return await _identityDbContext.Set<Wallet>()
+            .CountAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Wallet>> SearchByAddressAsync(
@@ -165,8 +143,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         int take = 100,
         CancellationToken cancellationToken = default)
     {
-        var query = _identityDbContext.Set<Wallet>()
-            .Where(w => (includeDeleted || w.DeletedAt == null));
+        var query = _identityDbContext.Set<Wallet>().AsQueryable();
 
         if (chainId.HasValue)
         {
@@ -191,7 +168,6 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         CancellationToken cancellationToken = default)
     {
         var distribution = await _identityDbContext.Set<Wallet>()
-            .Where(w => includeDeleted || w.DeletedAt == null)
             .GroupBy(w => w.Chain.Value)
             .Select(g => new { Chain = g.Key, Count = g.Count() })
             .AsNoTracking()
@@ -210,7 +186,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
             return Array.Empty<Wallet>();
 
         var wallets = await _identityDbContext.Set<Wallet>()
-            .Where(w => walletIdList.Contains(w.Id) && (includeDeleted || w.DeletedAt == null))
+            .Where(w => walletIdList.Contains(w.Id))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

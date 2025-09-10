@@ -2,54 +2,46 @@ using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
 using BuildingBlocks.Infrastructure.Persistence.Read;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 
-/// <summary>
-/// Read-side DbContext for Identity module
-/// </summary>
 public sealed class IdentityReadDbContext : ReadDbContextBase<IdentityModule>, IIdentityReadDbContext
 {
     public IdentityReadDbContext(DbContextOptions<IdentityReadDbContext> options, ILogger<IdentityReadDbContext>? logger = null) 
         : base(options, logger) 
     {
         // Additional read-specific optimizations
-        Database.SetCommandTimeout(TimeSpan.FromSeconds(30)); // 30-second timeout for read operations
+        Database.SetCommandTimeout(TimeSpan.FromSeconds(60)); // 60-second timeout for read operations
     }
 
     public override string ModuleName => "identity";
+    
+    // Implement IIdentityReadDbContext interface
+    public DbSet<AxonPrincipal> Principals => Set<AxonPrincipal>();
+    public DbSet<Wallet> Wallets => Set<Wallet>();
+    public DbSet<IdentityCredential> Credentials => Set<IdentityCredential>();
+    public DbSet<WalletOwnership> WalletOwnerships => Set<WalletOwnership>();
+    public DbSet<PrincipalChainDefault> PrincipalChainDefaults => Set<PrincipalChainDefault>();
+    
+    // Keep old property names for compatibility
+    public DbSet<AxonPrincipal> AxonPrincipals => Principals;
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)
     {
-        // Configure indexes for read optimization, but skip owned entities
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            // Skip owned entity types to avoid configuration conflicts
-            if (entityType.IsOwned()) 
-                continue;
+        // Essential indexes for query performance
+        modelBuilder.Entity<AxonPrincipal>()
+            .HasIndex(p => new { p.UpdatedAt, p.Id })
+            .HasDatabaseName("ix_principals_updated_at_id");
 
-            var builder = modelBuilder.Entity(entityType.ClrType);
+        modelBuilder.Entity<Wallet>()
+            .HasIndex(w => new { w.ChainId, w.UpdatedAt })
+            .HasDatabaseName("ix_wallets_chain_updated");
 
-            if (entityType.FindProperty("CreatedAt") is not null)
-                builder.HasIndex("CreatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_created_at");
-
-            if (entityType.FindProperty("UpdatedAt") is not null)
-                builder.HasIndex("UpdatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_updated_at");
-        }
-        
-        // Add read-specific indexes for AxonPrincipal queries if needed
-        // For example:
-        // modelBuilder.Entity<AxonPrincipal>()
-        //     .HasIndex(ap => ap.Email)
-        //     .HasDatabaseName("ix_axon_principals_email");
-
-        // Add read-specific indexes for Wallet queries if needed
-        // For example:
-        // modelBuilder.Entity<Wallet>()
-        //     .HasIndex(w => w.Address)
-        //     .HasDatabaseName("ix_wallets_address");
+        // Call base implementation for standard timestamp indexes
+        base.ConfigureReadModelOptimizations(modelBuilder);
     }
 }

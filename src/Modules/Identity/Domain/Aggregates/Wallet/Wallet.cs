@@ -6,7 +6,7 @@ namespace Axon.Modules.Identity.Domain.Aggregates.Wallet;
 /// <summary>
 /// Wallet aggregate representing a blockchain wallet.
 /// </summary>
-public sealed class Wallet : AggregateRoot<WalletId>
+public sealed partial class Wallet : AggregateRoot<WalletId>
 {
     public string ChainId { get; private set; } = string.Empty;
     public Address Address { get; private set; }

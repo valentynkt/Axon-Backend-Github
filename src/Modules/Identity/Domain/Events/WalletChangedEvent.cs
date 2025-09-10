@@ -1,3 +1,5 @@
+using BuildingBlocks.Primitives.Ids;
+
 namespace Axon.Modules.Identity.Domain.Events;
 
 /// <summary>
@@ -7,30 +9,24 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record WalletChangedEvent : DomainEvent
 {
-    public string WalletId { get; init; }
-    public string ChangeType { get; init; } // "registered", "deleted", "restored", "meta_updated", "touched", "tagged", "untagged", "labeled"
-    public string? ChainId { get; init; }
-    public string? Address { get; init; }
-    public string? DisplayName { get; init; }
-    public string? Tag { get; init; }
-    public string? Label { get; init; }
+    public WalletId WalletId { get; init; }
+    public string PropertyChanged { get; init; } // "ownership", "ownershipStatus", "accessMode", "lastSeen"
+    public string? OldValue { get; init; }
+    public string? NewValue { get; init; }
+    public Dictionary<string, string>? Metadata { get; init; }
 
     public WalletChangedEvent(
-        string walletId,
-        string changeType,
-        string? chainId = null,
-        string? address = null,
-        string? displayName = null,
-        string? tag = null,
-        string? label = null,
+        WalletId walletId,
+        string propertyChanged,
+        string? oldValue = null,
+        string? newValue = null,
+        Dictionary<string, string>? metadata = null,
         DateTime? occurredAt = null) : base(occurredAt ?? DateTime.UtcNow)
     {
         WalletId = walletId;
-        ChangeType = changeType;
-        ChainId = chainId;
-        Address = address;
-        DisplayName = displayName;
-        Tag = tag;
-        Label = label;
+        PropertyChanged = propertyChanged;
+        OldValue = oldValue;
+        NewValue = newValue;
+        Metadata = metadata;
     }
 }
