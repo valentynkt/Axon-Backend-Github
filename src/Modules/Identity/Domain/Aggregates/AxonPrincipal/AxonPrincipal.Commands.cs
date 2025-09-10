@@ -30,6 +30,9 @@ public sealed partial class AxonPrincipal
         var oldTier = RiskTier;
         RiskTier = riskTier;
 
+        // Increment version for concurrency control
+        Version++;
+
         // Raise domain event only when actual change occurs
         RaiseDomainEvent(new PrincipalChangedEvent(
             Id,
@@ -167,6 +170,9 @@ public sealed partial class AxonPrincipal
 
         var oldDefault = _chainDefaults.TryGetValue(chainId, out var existing) ? existing : (WalletId?)null;
         _chainDefaults[chainId] = walletId;
+
+        // Increment version for concurrency control
+        Version++;
 
         // Raise domain event only when actual change occurs
         RaiseDomainEvent(new PrincipalChangedEvent(

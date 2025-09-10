@@ -43,7 +43,7 @@ public class DomainSecurityTests
             errorMessage.ShouldNotContain(_principal.Id.Value.ToString());
             errorMessage.ShouldNotContain("AxonId");
             errorCode.ShouldNotBeNull();
-            errorCode.ShouldBe(IdentityDomainErrors.Wallet.NotOwnedCode);
+            errorCode.ShouldBe(IdentityDomainErrors.Wallet.NotOwnedByPrincipalCode);
         }
 
         [Test]
@@ -61,7 +61,7 @@ public class DomainSecurityTests
             
             errorMessage.ShouldNotContain(nonExistentWalletId.Value.ToString());
             errorMessage.ShouldNotContain("WalletId");
-            result.Error.Code.ShouldBe(IdentityDomainErrors.Wallet.NotOwnedCode);
+            result.Error.Code.ShouldBe(IdentityDomainErrors.Wallet.NotOwnedByPrincipalCode);
         }
 
         [Test]
@@ -160,7 +160,7 @@ public class DomainSecurityTests
                 {
                     result.Error.Code.ShouldNotBeNullOrEmpty();
                     result.Error.Code.ShouldNotContain(" "); // No spaces in error codes
-                    result.Error.Code.ShouldMatch("^[A-Z_]+$"); // Should be uppercase with underscores only
+                    result.Error.Code.ShouldMatch("^[A-Z_.]+$"); // Should be uppercase with underscores and dots only
                 }
             }
         }

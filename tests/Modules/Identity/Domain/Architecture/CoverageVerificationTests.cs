@@ -154,12 +154,12 @@ public class CoverageVerificationTests
             Should.Throw<ValueObjectValidationException>(() => Address.From(null!)); // Null case
 
             // Test ChainId validation boundaries
-            ChainId.From("solana").ShouldNotBeNull(); // Valid case
-            ChainId.From("ethereum").ShouldNotBeNull(); // Valid case
+            ChainId.From("solana").Value.ShouldNotBeNullOrEmpty(); // Valid case
+            ChainId.From("ethereum").Value.ShouldNotBeNullOrEmpty(); // Valid case
             
-            Should.Throw<ArgumentException>(() => ChainId.From("")); // Invalid case
-            Should.Throw<ArgumentException>(() => ChainId.From("invalid-format")); // Invalid case
-            Should.Throw<ArgumentException>(() => ChainId.From(null!)); // Null case
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From("")); // Invalid case
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From("invalid-format")); // Invalid case
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(null!)); // Null case
         }
 
         [Test]

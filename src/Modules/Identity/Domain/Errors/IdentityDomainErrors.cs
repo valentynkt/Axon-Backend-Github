@@ -12,22 +12,22 @@ public static class IdentityDomainErrors
     public static class Principal
     {
         public const string NotFoundCode = "IDENTITY.PRINCIPAL.NOT_FOUND";
-        public const string NotFoundMessage = "Principal not found.";
+        public const string NotFoundMessage = "Account not found.";
         
         public const string DeletedCode = "IDENTITY.PRINCIPAL.DELETED";
-        public const string DeletedMessage = "Principal has been deleted.";
+        public const string DeletedMessage = "Account has been deleted.";
         
         public const string InvalidTypeCode = "IDENTITY.PRINCIPAL.TYPE.INVALID";
-        public const string InvalidTypeMessage = "Invalid principal type.";
+        public const string InvalidTypeMessage = "Invalid account type.";
         
         public const string MustBeActiveCode = "IDENTITY.PRINCIPAL.MUST_BE_ACTIVE";
-        public const string MustBeActiveMessage = "Principal must be active to perform this operation.";
+        public const string MustBeActiveMessage = "Account must be active to perform this operation.";
         
         public const string CannotBeDeletedCode = "IDENTITY.PRINCIPAL.CANNOT_BE_DELETED";
-        public const string CannotBeDeletedMessage = "Principal cannot be deleted while having active wallet ownerships or credentials.";
+        public const string CannotBeDeletedMessage = "Account cannot be deleted while having active wallet ownerships or credentials.";
         
         public const string CreationFailedCode = "IDENTITY.PRINCIPAL.CREATION.FAILED";
-        public const string CreationFailedMessage = "Failed to create principal.";
+        public const string CreationFailedMessage = "Failed to create account.";
 
         // Error factory methods
         public static Error NotFound() => Error.NotFound(NotFoundMessage, NotFoundCode);
@@ -47,7 +47,7 @@ public static class IdentityDomainErrors
         public const string DuplicateMessage = "Credential already exists for this provider, issuer, and subject.";
         
         public const string BelongsToOtherCode = "IDENTITY.CREDENTIAL.BELONGS_TO_OTHER";
-        public const string BelongsToOtherMessage = "Credential belongs to a different principal.";
+        public const string BelongsToOtherMessage = "Credential belongs to a different account.";
         
         public const string NotFoundCode = "IDENTITY.CREDENTIAL.NOT_FOUND";
         public const string NotFoundMessage = "Credential not found.";
@@ -85,19 +85,19 @@ public static class IdentityDomainErrors
     public static class Wallet
     {
         public const string AlreadyOwnedCode = "IDENTITY.WALLET.ALREADY_OWNED";
-        public const string AlreadyOwnedMessage = "Wallet is already owned by another principal.";
+        public const string AlreadyOwnedMessage = "Wallet is already owned by another account.";
         
         public const string AlreadyOwnedByPrincipalCode = "IDENTITY.WALLET.ALREADY_OWNED_BY_PRINCIPAL";
-        public const string AlreadyOwnedByPrincipalMessage = "Wallet is already owned by this principal.";
+        public const string AlreadyOwnedByPrincipalMessage = "Wallet is already owned by this account.";
         
         public const string NotOwnedCode = "IDENTITY.WALLET.NOT_OWNED";
-        public const string NotOwnedMessage = "Wallet is not owned by this principal.";
+        public const string NotOwnedMessage = "Wallet is not owned by this account.";
         
         public const string NotOwnedByPrincipalCode = "IDENTITY.WALLET.NOT_OWNED_BY_PRINCIPAL";
-        public const string NotOwnedByPrincipalMessage = "Wallet is not owned by this principal.";
+        public const string NotOwnedByPrincipalMessage = "Wallet is not owned by this account.";
         
         public const string MaxExceededCode = "IDENTITY.WALLET.MAX_EXCEEDED";
-        public const string MaxExceededMessage = "Principal cannot have more than 10 linked wallets.";
+        public const string MaxExceededMessage = "Account cannot have more than 10 linked wallets.";
         
         public const string IdInvalidCode = "IDENTITY.WALLET.ID.INVALID";
         public const string IdInvalidMessage = "Wallet ID must be positive.";
@@ -124,7 +124,7 @@ public static class IdentityDomainErrors
         public const string LabelTooLongMessage = "Wallet label cannot exceed 100 characters.";
         
         public const string DefaultNotOwnedCode = "IDENTITY.WALLET.DEFAULT_NOT_OWNED";
-        public const string DefaultNotOwnedMessage = "Cannot set default wallet that is not owned by principal.";
+        public const string DefaultNotOwnedMessage = "Cannot set default wallet that is not owned by account.";
         
         public const string ChainMismatchCode = "IDENTITY.WALLET.CHAIN.MISMATCH";
         public const string ChainMismatchMessage = "Wallet chain does not match requested chain.";
@@ -149,6 +149,12 @@ public static class IdentityDomainErrors
         public static Error DefaultNotOwned() => Error.BusinessRule(DefaultNotOwnedMessage, DefaultNotOwnedCode);
         public static Error ChainMismatch() => Error.BusinessRule(ChainMismatchMessage, ChainMismatchCode);
         public static Error WatchOnlyNotAllowedAsDefault() => Error.BusinessRule(WatchOnlyNotAllowedAsDefaultMessage, WatchOnlyNotAllowedAsDefaultCode);
+        
+        // Wallet ownership conflict for exchange operations
+        public static Error WalletOwnershipConflict(string chainId, string address) => Error.Conflict(
+            $"Wallet {address} on chain {chainId} is already owned by another account.",
+            "IDENTITY.WALLET.OWNERSHIP_CONFLICT",
+            new Dictionary<string, object> { ["chainId"] = chainId, ["address"] = address });
     }
 
     /// <summary>
@@ -163,10 +169,10 @@ public static class IdentityDomainErrors
         public const string InvalidRiskTierMessage = "Invalid risk tier.";
         
         public const string InvalidForPrincipalCode = "IDENTITY.PROFILE.RISK_TIER.INVALID_FOR_PRINCIPAL_TYPE";
-        public const string InvalidForPrincipalMessage = "Risk tier is not valid for this principal type.";
+        public const string InvalidForPrincipalMessage = "Risk tier is not valid for this account type.";
         
         public const string ServicePrincipalRiskConstraintCode = "IDENTITY.SERVICE_PRINCIPAL_RISK_CONSTRAINT";
-        public const string ServicePrincipalRiskConstraintMessage = "Service principals can only have Conservative risk tier.";
+        public const string ServicePrincipalRiskConstraintMessage = "Risk tier not available for this account type.";
         
         public const string ChainEmptyCode = "IDENTITY.PROFILE.CHAIN.EMPTY";
         public const string ChainEmptyMessage = "Chain cannot be empty.";

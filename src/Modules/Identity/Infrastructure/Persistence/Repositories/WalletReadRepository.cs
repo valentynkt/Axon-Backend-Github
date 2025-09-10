@@ -23,7 +23,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         ExistsByChainAndAddressCompiled = EF.CompileAsyncQuery(
             (IdentityReadDbContext context, ChainId chainId, Address address) =>
                 context.Set<Wallet>()
-                    .Any(w => w.Chain == chainId && w.Address == address));
+                    .Any(w => w.ChainId == chainId.Value && w.Address == address));
 
     /// <summary>
     /// Compiled query for fetching wallets by chain with pagination - hot path optimization
@@ -32,7 +32,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         GetByChainOptimizedCompiled = EF.CompileAsyncQuery(
             (IdentityReadDbContext context, ChainId chainId, int skip, int take) =>
                 context.Set<Wallet>()
-                    .Where(w => w.Chain == chainId)
+                    .Where(w => w.ChainId == chainId.Value)
                     .OrderBy(w => w.FirstSeenAt)
                     .ThenBy(w => w.Id)
                     .Skip(skip)
@@ -46,7 +46,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         GetCountOptimizedCompiled = EF.CompileAsyncQuery(
             (IdentityReadDbContext context, ChainId chainId) =>
                 context.Set<Wallet>()
-                    .Where(w => w.Chain == chainId)
+                    .Where(w => w.ChainId == chainId.Value)
                     .Count());
 
     public WalletReadRepository(IdentityReadDbContext context) : base(context)
@@ -126,7 +126,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         bool includeDeleted = false,
         CancellationToken cancellationToken = default)
     {
-        if (chainId.HasValue)
+        if (chainId != null)
         {
             return await GetCountOptimizedCompiled(_identityDbContext, chainId.Value);
         }
@@ -145,9 +145,9 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
     {
         var query = _identityDbContext.Set<Wallet>().AsQueryable();
 
-        if (chainId.HasValue)
+        if (chainId != null)
         {
-            query = query.Where(w => w.Chain == chainId.Value);
+            query = query.Where(w => w.ChainId == chainId.Value);
         }
 
         // Using EF.Functions.Like for partial address matching
@@ -168,7 +168,7 @@ internal sealed class WalletReadRepository : EfSpecificationReadRepository<Walle
         CancellationToken cancellationToken = default)
     {
         var distribution = await _identityDbContext.Set<Wallet>()
-            .GroupBy(w => w.Chain.Value)
+            .GroupBy(w => w.ChainId)
             .Select(g => new { Chain = g.Key, Count = g.Count() })
             .AsNoTracking()
             .ToListAsync(cancellationToken);

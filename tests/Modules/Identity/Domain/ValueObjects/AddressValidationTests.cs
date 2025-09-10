@@ -3,6 +3,7 @@ using Axon.Modules.Identity.Domain.Tests.TestData;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using NUnit.Framework;
 using Shouldly;
+using Vogen;
 
 namespace Axon.Modules.Identity.Domain.Tests.ValueObjects;
 
@@ -34,10 +35,10 @@ public class AddressValidationTests
         [TestCase("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")] // Ethereum format
         [TestCase("So1111111111111111111111111111111111111111!")] // Invalid character
         [TestCase("So111111111111111111111111111111111111111")] // Too short by 1
-        public void From_WithInvalidSolanaAddress_ShouldThrowArgumentException(string invalidAddress)
+        public void From_WithInvalidSolanaAddress_ShouldThrowValueObjectValidationException(string invalidAddress)
         {
             // Act & Assert - When creating address from invalid format
-            Should.Throw<ArgumentException>(() => Address.From(invalidAddress));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(invalidAddress));
         }
     }
 
@@ -55,7 +56,7 @@ public class AddressValidationTests
 
             // Assert - Then should create successfully
             result.Value.ShouldNotBeNullOrEmpty();
-            result.Value.ShouldBe(validAddress);
+            result.Value.ShouldBe(validAddress); // Should preserve original case
         }
 
         [TestCase("742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")] // Missing 0x prefix
@@ -63,10 +64,10 @@ public class AddressValidationTests
         [TestCase("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb12")] // Too long
         [TestCase("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEbG")] // Invalid character
         [TestCase("0X742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")] // Wrong case prefix
-        public void From_WithInvalidEthereumAddress_ShouldThrowArgumentException(string invalidAddress)
+        public void From_WithInvalidEthereumAddress_ShouldThrowValueObjectValidationException(string invalidAddress)
         {
             // Act & Assert - When creating address from invalid format
-            Should.Throw<ArgumentException>(() => Address.From(invalidAddress));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(invalidAddress));
         }
     }
 
@@ -74,24 +75,24 @@ public class AddressValidationTests
     public class GeneralValidationTests : AddressValidationTests
     {
         [Test]
-        public void From_WithNullAddress_ShouldThrowArgumentNullException()
+        public void From_WithNullAddress_ShouldThrowValueObjectValidationException()
         {
             // Act & Assert - When creating address from null
-            Should.Throw<ArgumentNullException>(() => Address.From(null!));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(null!));
         }
 
         [Test]
-        public void From_WithEmptyAddress_ShouldThrowArgumentException()
+        public void From_WithEmptyAddress_ShouldThrowValueObjectValidationException()
         {
             // Act & Assert - When creating address from empty string
-            Should.Throw<ArgumentException>(() => Address.From(""));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(""));
         }
 
         [Test]
-        public void From_WithWhitespaceAddress_ShouldThrowArgumentException()
+        public void From_WithWhitespaceAddress_ShouldThrowValueObjectValidationException()
         {
             // Act & Assert - When creating address from whitespace
-            Should.Throw<ArgumentException>(() => Address.From("   "));
+            Should.Throw<ValueObjectValidationException>(() => Address.From("   "));
         }
 
         [TestCase("So11111111111111111111111111111111111111112")]
@@ -231,7 +232,7 @@ public class AddressValidationTests
         public void From_WithMaliciousInput_ShouldRejectSafely(string maliciousInput)
         {
             // Act & Assert - When creating address from malicious input
-            Should.Throw<ArgumentException>(() => Address.From(maliciousInput));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(maliciousInput));
         }
 
         [Test]
@@ -241,7 +242,7 @@ public class AddressValidationTests
             var longInput = new string('a', 10000);
 
             // Act & Assert - When creating address from long input
-            Should.Throw<ArgumentException>(() => Address.From(longInput));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(longInput));
         }
 
         [Test]
@@ -251,7 +252,7 @@ public class AddressValidationTests
             var unicodeInput = "So1111111111111111111111111111111111111111€";
 
             // Act & Assert - When creating address with Unicode
-            Should.Throw<ArgumentException>(() => Address.From(unicodeInput));
+            Should.Throw<ValueObjectValidationException>(() => Address.From(unicodeInput));
         }
     }
 }

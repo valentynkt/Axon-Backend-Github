@@ -1,9 +1,20 @@
+using BuildingBlocks.Core.Diagnostics.Errors;
+using CSharpFunctionalExtensions;
+using Vogen;
+
 namespace Axon.Modules.Identity.Domain.ValueObjects;
 
 /// <summary>
 /// Represents an identity provider type (e.g., 'dynamic', 'google', 'github').
+/// Creation: <c>ProviderType.From("...")</c> (throws on invalid)
+/// Non-throwing: <c>ProviderType.Create("...")</c> (returns Result)
+/// JSON: STJ converter generated
+/// EF Core: value converter generated  
+/// TypeConverter: generated (useful for binding, config, etc.)
 /// </summary>
-public sealed record ProviderType
+[ValueObject<string>(
+    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
+public readonly partial struct ProviderType
 {
     // Supported providers
     private static readonly HashSet<string> SupportedProviders = new(StringComparer.OrdinalIgnoreCase)
@@ -17,24 +28,46 @@ public sealed record ProviderType
         "twitter"
     };
 
-    public string Value { get; }
+    // Vogen will call this before Validate and before storing the value
+    private static string NormalizeInput(string input) => input.Trim().ToLowerInvariant();
 
-    private ProviderType(string value)
+    // Vogen passes the normalized input here
+    private static Validation Validate(string input)
     {
-        Value = value;
+        if (string.IsNullOrWhiteSpace(input))
+            return Validation.Invalid("ProviderType cannot be null or empty.");
+
+        if (!SupportedProviders.Contains(input))
+            return Validation.Invalid($"Unsupported provider type: {input}");
+
+        return Validation.Ok;
     }
 
-    public static ProviderType From(string value)
+    /// <summary>
+    /// Non-throwing factory bridging Vogen to CFE <c>Result</c>.
+    /// Preferred in application layer to avoid exception-based control flow.
+    /// </summary>
+    public static Result<ProviderType, Error> Create(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("ProviderType cannot be null or empty.", nameof(value));
+        {
+            return Result.Failure<ProviderType, Error>(
+                Error.Validation("ProviderType cannot be null or empty.", "PROVIDER.TYPE.EMPTY"));
+        }
 
-        var normalized = value.ToLowerInvariant().Trim();
+        var normalized = NormalizeInput(value);
         
-        if (!IsSupported(normalized))
-            throw new ArgumentException($"Unsupported provider type: {value}", nameof(value));
+        if (!SupportedProviders.Contains(normalized))
+        {
+            return Result.Failure<ProviderType, Error>(
+                Error.Validation($"Unsupported provider type: {value}", "PROVIDER.TYPE.UNSUPPORTED"));
+        }
 
-        return new ProviderType(normalized);
+        // Use generated TryParse; provider null is fine
+        return TryParse(value, provider: null, out var vo)
+            ? Result.Success<ProviderType, Error>(vo)
+            : Result.Failure<ProviderType, Error>(
+                Error.Validation($"Invalid provider type: {value}", "PROVIDER.TYPE.INVALID"));
     }
 
     // Common provider types
@@ -65,9 +98,6 @@ public sealed record ProviderType
     {
         return Value is "google" or "github" or "discord" or "twitter";
     }
-
-    public static implicit operator string(ProviderType providerType) => providerType.Value;
-    public static implicit operator ProviderType(string value) => From(value);
 
     public override string ToString() => Value;
 }

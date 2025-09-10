@@ -133,14 +133,14 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
         // First, try to find existing wallets
         var existingWallets = await context.Set<Wallet>()
-            .Where(w => specs.Any(spec => w.Chain == ChainId.Create(spec.chainId) && w.Address == spec.address))
-            .Select(w => new { w.Id, w.Chain, w.Address })
+            .Where(w => specs.Any(spec => w.ChainId == ChainId.From(spec.chainId) && w.Address == spec.address))
+            .Select(w => new { w.Id, w.ChainId, w.Address })
             .ToListAsync(ct);
 
         // Map existing wallets to the result
         foreach (var existing in existingWallets)
         {
-            var chainValue = existing.Chain.Value;
+            var chainValue = existing.ChainId;
             var spec = specs.First(s => s.chainId == chainValue && s.address.Equals(existing.Address));
             result[spec] = existing.Id;
         }
@@ -149,7 +149,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         var missingSpecs = specs.Where(spec => !result.ContainsKey(spec)).ToList();
         foreach (var spec in missingSpecs)
         {
-            var wallet = Wallet.Create(ChainId.Create(spec.chainId), spec.address);
+            var wallet = Wallet.Create(null, spec.chainId, spec.address);
             await context.Set<Wallet>().AddAsync(wallet, ct);
             result[spec] = wallet.Id;
         }

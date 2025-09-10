@@ -19,14 +19,13 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasColumnType("char(26)");
 
         builder.Property(w => w.ChainId)
+            .HasConversion(new ChainId.EfCoreValueConverter())
             .HasColumnName("chain_id")
             .HasMaxLength(50)
             .IsRequired();
 
         builder.Property(w => w.Address)
-            .HasConversion(
-                addr => addr.Value,
-                value => Address.From(value))
+            .HasConversion(new Address.EfCoreValueConverter())
             .HasColumnName("address")
             .HasMaxLength(200)
             .IsRequired();

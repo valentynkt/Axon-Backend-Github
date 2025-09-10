@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Domain.ValueObjects;
 using NUnit.Framework;
 using Shouldly;
+using Vogen;
 
 namespace Axon.Modules.Identity.Domain.Tests.ValueObjects;
 
@@ -27,7 +28,6 @@ public class ChainIdValidationTests
             var result = ChainId.From(supportedChainId);
 
             // Assert - Then should create successfully
-            result.ShouldNotBeNull();
             result.Value.ShouldBe(supportedChainId);
         }
 
@@ -36,10 +36,10 @@ public class ChainIdValidationTests
         [TestCase("custom-chain")] // Custom chain
         [TestCase("solana-localnet")] // Unsupported network
         [TestCase("ethereum-kovan")] // Deprecated network
-        public void From_WithUnsupportedChainId_ShouldThrowArgumentException(string unsupportedChainId)
+        public void From_WithUnsupportedChainId_ShouldThrowValueObjectValidationException(string unsupportedChainId)
         {
             // Act & Assert - When creating ChainId from unsupported chain
-            Should.Throw<ArgumentException>(() => ChainId.From(unsupportedChainId));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(unsupportedChainId));
         }
     }
 
@@ -56,23 +56,33 @@ public class ChainIdValidationTests
             var result = ChainId.From(validChainId);
 
             // Assert - Then should create successfully
-            result.ShouldNotBeNull();
             result.Value.ShouldBe(validChainId);
+        }
+
+        [TestCase("ETHEREUM-MAINNET", "ethereum-mainnet")] // Uppercase normalization
+        [TestCase("Solana-DevNet", "solana-devnet")] // Mixed case normalization
+        [TestCase(" ethereum-mainnet ", "ethereum-mainnet")] // Whitespace trimming
+        public void From_WithCaseVariations_ShouldNormalizeAndCreateChainId(string input, string expected)
+        {
+            // Act - When creating ChainId with case variations
+            var result = ChainId.From(input);
+
+            // Assert - Then should normalize and create successfully
+            result.Value.ShouldBe(expected);
         }
 
         [TestCase("")] // Empty string
         [TestCase(" ")] // Whitespace
         [TestCase("ethereum_mainnet")] // Wrong separator
         [TestCase("ethereum.mainnet")] // Wrong separator
-        [TestCase("ETHEREUM-MAINNET")] // Wrong case
         [TestCase("ethereum-")] // Missing network
         [TestCase("-mainnet")] // Missing blockchain
         [TestCase("ethereum--mainnet")] // Double separator
         [TestCase("ethereum-mainnet-extra")] // Too many parts
-        public void From_WithInvalidFormat_ShouldThrowArgumentException(string invalidChainId)
+        public void From_WithInvalidFormat_ShouldThrowValueObjectValidationException(string invalidChainId)
         {
             // Act & Assert - When creating ChainId with invalid format
-            Should.Throw<ArgumentException>(() => ChainId.From(invalidChainId));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(invalidChainId));
         }
     }
 
@@ -80,24 +90,24 @@ public class ChainIdValidationTests
     public class NullAndEmptyValidationTests : ChainIdValidationTests
     {
         [Test]
-        public void From_WithNullChainId_ShouldThrowArgumentNullException()
+        public void From_WithNullChainId_ShouldThrowValueObjectValidationException()
         {
             // Act & Assert - When creating ChainId from null
-            Should.Throw<ArgumentNullException>(() => ChainId.From(null!));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(null!));
         }
 
         [Test]
-        public void From_WithEmptyChainId_ShouldThrowArgumentException()
+        public void From_WithEmptyChainId_ShouldThrowValueObjectValidationException()
         {
             // Act & Assert - When creating ChainId from empty string
-            Should.Throw<ArgumentException>(() => ChainId.From(""));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(""));
         }
 
         [Test]
-        public void From_WithWhitespaceChainId_ShouldThrowArgumentException()
+        public void From_WithWhitespaceChainId_ShouldThrowValueObjectValidationException()
         {
             // Act & Assert - When creating ChainId from whitespace
-            Should.Throw<ArgumentException>(() => ChainId.From("   "));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From("   "));
         }
     }
 
@@ -153,8 +163,8 @@ public class ChainIdValidationTests
             // Arrange - Given ChainId
             var chainId = ChainId.From("ethereum-mainnet");
 
-            // Act - When converting to string
-            var stringValue = chainId.ToString();
+            // Act - When getting the value
+            var stringValue = chainId.Value;
 
             // Assert - Then should return ChainId value
             stringValue.ShouldBe("ethereum-mainnet");
@@ -225,7 +235,7 @@ public class ChainIdValidationTests
         public void From_WithMaliciousInput_ShouldRejectSafely(string maliciousInput)
         {
             // Act & Assert - When creating ChainId from malicious input
-            Should.Throw<ArgumentException>(() => ChainId.From(maliciousInput));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(maliciousInput));
         }
 
         [Test]
@@ -235,7 +245,7 @@ public class ChainIdValidationTests
             var longInput = new string('a', 1000);
 
             // Act & Assert - When creating ChainId from long input
-            Should.Throw<ArgumentException>(() => ChainId.From(longInput));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(longInput));
         }
 
         [Test]
@@ -245,7 +255,7 @@ public class ChainIdValidationTests
             var specialCharsInput = "ethereum-main@net";
 
             // Act & Assert - When creating ChainId with special characters
-            Should.Throw<ArgumentException>(() => ChainId.From(specialCharsInput));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(specialCharsInput));
         }
 
         [Test]
@@ -255,7 +265,7 @@ public class ChainIdValidationTests
             var unicodeInput = "ethereum-mainnet€";
 
             // Act & Assert - When creating ChainId with Unicode
-            Should.Throw<ArgumentException>(() => ChainId.From(unicodeInput));
+            Should.Throw<ValueObjectValidationException>(() => ChainId.From(unicodeInput));
         }
     }
 

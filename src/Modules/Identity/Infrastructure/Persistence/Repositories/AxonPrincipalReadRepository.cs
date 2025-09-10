@@ -112,13 +112,13 @@ internal sealed class AxonPrincipalReadRepository : EfSpecificationReadRepositor
         int take = 100,
         CancellationToken cancellationToken = default)
     {
-        var chain = ChainId.Create(chainId);
+        var chain = ChainId.From(chainId);
         // Join principals with their wallet ownerships and wallets to filter by chain
         return await _identityDbContext.Set<AxonPrincipal>()
             .Include(p => p.WalletOwnerships)
             .Where(p => p.WalletOwnerships.Any(wo => 
                 _identityDbContext.Set<Wallet>().Any(w => 
-                    w.Id == wo.WalletId && w.Chain == chain)))
+                    w.Id == wo.WalletId && w.ChainId == chain)))
             .Skip(skip)
             .Take(take)
             .AsNoTracking()

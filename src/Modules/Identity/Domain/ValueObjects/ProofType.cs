@@ -1,23 +1,69 @@
+using BuildingBlocks.Core.Diagnostics.Errors;
+using CSharpFunctionalExtensions;
+using Vogen;
+
 namespace Axon.Modules.Identity.Domain.ValueObjects;
 
 /// <summary>
 /// Represents a cryptographic proof type for wallet ownership verification.
+/// Creation: <c>ProofType.From("...")</c> (throws on invalid)
+/// Non-throwing: <c>ProofType.Create("...")</c> (returns Result)
+/// JSON: STJ converter generated
+/// EF Core: value converter generated  
+/// TypeConverter: generated (useful for binding, config, etc.)
 /// </summary>
-public sealed record ProofType
+[ValueObject<string>(
+    conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
+public readonly partial struct ProofType
 {
-    public string Value { get; }
-
-    private ProofType(string value)
+    // Supported proof types (can be extended)
+    private static readonly HashSet<string> SupportedProofTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        Value = value;
+        "signature",
+        "message",
+        "transaction"
+    };
+
+    // Vogen will call this before Validate and before storing the value
+    private static string NormalizeInput(string input) => input.Trim().ToLowerInvariant();
+
+    // Vogen passes the normalized input here
+    private static Validation Validate(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return Validation.Invalid("ProofType cannot be null or empty.");
+
+        if (!SupportedProofTypes.Contains(input))
+            return Validation.Invalid($"Unsupported proof type: {input}");
+
+        return Validation.Ok;
     }
 
-    public static ProofType From(string value)
+    /// <summary>
+    /// Non-throwing factory bridging Vogen to CFE <c>Result</c>.
+    /// Preferred in application layer to avoid exception-based control flow.
+    /// </summary>
+    public static Result<ProofType, Error> Create(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("ProofType cannot be null or empty.", nameof(value));
+        {
+            return Result.Failure<ProofType, Error>(
+                Error.Validation("ProofType cannot be null or empty.", "PROOF.TYPE.EMPTY"));
+        }
 
-        return new ProofType(value.ToLowerInvariant().Trim());
+        var normalized = NormalizeInput(value);
+        
+        if (!SupportedProofTypes.Contains(normalized))
+        {
+            return Result.Failure<ProofType, Error>(
+                Error.Validation($"Unsupported proof type: {value}", "PROOF.TYPE.UNSUPPORTED"));
+        }
+
+        // Use generated TryParse; provider null is fine
+        return TryParse(value, provider: null, out var vo)
+            ? Result.Success<ProofType, Error>(vo)
+            : Result.Failure<ProofType, Error>(
+                Error.Validation($"Invalid proof type: {value}", "PROOF.TYPE.INVALID"));
     }
 
     // Common proof types
@@ -25,8 +71,13 @@ public sealed record ProofType
     public static ProofType Message => From("message");
     public static ProofType Transaction => From("transaction");
 
-    public static implicit operator string(ProofType proofType) => proofType.Value;
-    public static implicit operator ProofType(string value) => From(value);
+    public static bool IsSupported(string proofType)
+    {
+        return !string.IsNullOrWhiteSpace(proofType) && 
+               SupportedProofTypes.Contains(proofType.Trim().ToLowerInvariant());
+    }
+
+    public static IEnumerable<string> GetSupportedProofTypes() => SupportedProofTypes;
 
     public override string ToString() => Value;
 }

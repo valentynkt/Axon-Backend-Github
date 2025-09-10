@@ -95,7 +95,7 @@ public static class ServiceRegistration
         });
         
         // Register application services
-        services.AddScoped<IMeReader, MeReader>();
+        // TODO: Add application services here
         
         // CRITICAL FIX: Register ICurrentUserService implementation
         // This is required by all command/query handlers in the application

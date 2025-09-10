@@ -1,9 +1,17 @@
 using System.Text.RegularExpressions;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using CSharpFunctionalExtensions;
+using Vogen;
 
 namespace Axon.Modules.Identity.Domain.ValueObjects;
 
 /// <summary>
 /// Simple normalized wallet address value object with enhanced validation.
+/// Creation: <c>Address.From("...")</c> (throws on invalid)
+/// Non-throwing: <c>Address.Create("...")</c> (returns Result)
+/// JSON: STJ converter generated
+/// EF Core: value converter generated  
+/// TypeConverter: generated (useful for binding, config, etc.)
 /// </summary>
 [ValueObject<string>(
     conversions: Conversions.SystemTextJson | Conversions.TypeConverter | Conversions.EfCoreValueConverter)]
@@ -29,6 +37,24 @@ public readonly partial struct Address
         if (trimmed.Length > 200)
             return Validation.Invalid("Address too long.");
 
+        // Validate format for known address types
+        if (IsEthereumFormat(trimmed))
+        {
+            if (!EvmAddressPattern().IsMatch(trimmed))
+                return Validation.Invalid("Invalid Ethereum address format.");
+        }
+        else if (IsSolanaFormat(trimmed))
+        {
+            if (!SolanaAddressPattern().IsMatch(trimmed))
+                return Validation.Invalid("Invalid Solana address format.");
+        }
+        else
+        {
+            // For unknown formats, apply basic security validation
+            if (ContainsMaliciousCharacters(trimmed))
+                return Validation.Invalid("Address contains invalid characters.");
+        }
+
         return Validation.Ok;
     }
 
@@ -36,13 +62,8 @@ public readonly partial struct Address
     {
         var trimmed = input.Trim();
         
-        // Normalize EVM addresses to lowercase
-        if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            return trimmed.ToLowerInvariant();
-        }
-        
-        // Keep Solana addresses as-is (case-sensitive base58)
+        // Don't normalize case - preserve original case for display/storage
+        // Validation will handle format checking
         return trimmed;
     }
 
@@ -63,6 +84,39 @@ public readonly partial struct Address
     }
 
     /// <summary>
+    /// Non-throwing factory bridging Vogen to CFE <c>Result</c>.
+    /// Preferred in application layer to avoid exception-based control flow.
+    /// </summary>
+    public static Result<Address, Error> Create(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Result.Failure<Address, Error>(
+                Error.Validation("Address cannot be empty.", "ADDRESS.EMPTY"));
+        }
+
+        var trimmed = value.Trim();
+        
+        if (trimmed.Length < 10)
+        {
+            return Result.Failure<Address, Error>(
+                Error.Validation("Address too short.", "ADDRESS.TOO_SHORT"));
+        }
+
+        if (trimmed.Length > 200)
+        {
+            return Result.Failure<Address, Error>(
+                Error.Validation("Address too long.", "ADDRESS.TOO_LONG"));
+        }
+
+        // Use generated TryParse; provider null is fine
+        return TryParse(value, provider: null, out var vo)
+            ? Result.Success<Address, Error>(vo)
+            : Result.Failure<Address, Error>(
+                Error.Validation($"Invalid address format: {value}", "ADDRESS.INVALID"));
+    }
+
+    /// <summary>
     /// Gets a shortened version of the address for display (e.g., "0x1234...5678").
     /// </summary>
     public string ToShortDisplay(int prefixLength = 6, int suffixLength = 4)
@@ -71,5 +125,26 @@ public readonly partial struct Address
             return Value;
         
         return $"{Value[..prefixLength]}...{Value[^suffixLength..]}";
+    }
+
+    private static bool IsEthereumFormat(string address)
+    {
+        return address.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && address.Length == 42;
+    }
+
+    private static bool IsSolanaFormat(string address)
+    {
+        return !address.StartsWith("0x") && address.Length >= 32 && address.Length <= 44;
+    }
+
+    private static bool ContainsMaliciousCharacters(string input)
+    {
+        // Check for common malicious patterns
+        return input.Contains("javascript:", StringComparison.OrdinalIgnoreCase) ||
+               input.Contains("<script", StringComparison.OrdinalIgnoreCase) ||
+               input.Contains("DROP TABLE", StringComparison.OrdinalIgnoreCase) ||
+               input.Contains("../") ||
+               input.Any(c => char.IsControl(c) && c != '\t' && c != '\n' && c != '\r') ||
+               input.Any(c => c > 127); // Non-ASCII characters
     }
 }
