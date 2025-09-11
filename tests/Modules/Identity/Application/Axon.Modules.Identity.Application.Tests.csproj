@@ -31,7 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../src/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="../../../../src/Modules/Identity/Application/Axon.Modules.Identity.Application.csproj" />
+    <ProjectReference Include="../../../../src/BuildingBlocks/BuildingBlocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

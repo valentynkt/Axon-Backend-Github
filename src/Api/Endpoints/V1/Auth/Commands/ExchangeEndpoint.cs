@@ -38,6 +38,30 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
 
     protected override string GetSuccessResponse() => "Returns exchange outcome with wallet processing details";
 
+    public override void Configure()
+    {
+        base.Configure();
+        
+        // Override Summary to add rate limiting documentation
+        Summary(s =>
+        {
+            s.Summary = GetSummary();
+            s.Description = GetDescription() + 
+                "\n\n**Response Headers:**\n" +
+                "- `X-RateLimit-Limit`: Maximum requests per window (10)\n" +
+                "- `X-RateLimit-Remaining`: Requests remaining in current window\n" +
+                "- `X-RateLimit-Reset`: Unix timestamp when window resets\n" +
+                "- `Retry-After`: Seconds to wait before retry (429 responses only)";
+            s.Responses[200] = GetSuccessResponse();
+            s.Responses[400] = "Invalid request parameters";
+            s.Responses[401] = "User not authenticated";
+            s.Responses[403] = "User does not have access to this resource";
+            s.Responses[422] = "Business rule violation";
+            s.Responses[429] = "Too Many Requests - Rate limit exceeded (10 requests per minute per IP)";
+            s.Responses[500] = "Internal server error";
+        });
+    }
+
     protected override async Task<Result<ExchangeCredentialCommand, Error>> ExecuteCommand(ExchangeTokenRequestDto request, CancellationToken ct)
     {
         // Extract JWT from Authorization header

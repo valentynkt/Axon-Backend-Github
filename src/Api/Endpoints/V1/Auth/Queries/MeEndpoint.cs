@@ -27,22 +27,28 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
     protected override string GetDescription() => 
         """
-        Returns information about the currently authenticated user.
+        Returns information about the currently authenticated user with ETag caching support.
         
         **Requires**: Valid JWT token in Authorization header
+        
+        **ETag Support**:
+        - Server returns `ETag` header with fingerprint of user data
+        - Client can send `If-None-Match` header to check for changes
+        - Returns `304 Not Modified` if data hasn't changed since provided ETag
+        - Supports client-side caching for improved performance
         """;
 
     protected override string GetSuccessResponse() => "Returns current user information with claims";
 
-    protected override async Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
+    protected override Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
     {
         var user = HttpContext.User;
         
         if (user?.Identity?.IsAuthenticated != true)
         {
             Logger.LogWarning("Unauthenticated user attempting to access /auth/me");
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("User is not authenticated"));
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("User is not authenticated")));
         }
 
         // Extract Dynamic credential information from JWT claims
@@ -52,15 +58,15 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         if (string.IsNullOrWhiteSpace(subjectClaim))
         {
             Logger.LogWarning("JWT missing subject claim for /auth/me request");
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Validation("JWT missing required subject claim"));
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Validation("JWT missing required subject claim")));
         }
 
         if (string.IsNullOrWhiteSpace(issuerClaim))
         {
             Logger.LogWarning("JWT missing issuer claim for /auth/me request");
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Validation("JWT missing required issuer claim"));
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Validation("JWT missing required issuer claim")));
         }
 
         // Create Dynamic provider type
@@ -68,7 +74,7 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         if (providerTypeResult.IsFailure)
         {
             Logger.LogError("Failed to create Dynamic provider type: {Error}", providerTypeResult.Error.Message);
-            return Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error);
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error));
         }
 
         // Extract If-None-Match header for ETag support
@@ -83,6 +89,11 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
             IfNoneMatch: ifNoneMatch
         );
 
-        return Result.Success<GetMyPrincipalQuery, Error>(query);
+        return Task.FromResult(Result.Success<GetMyPrincipalQuery, Error>(query));
+    }
+
+    protected override string? ExtractETagFromDomainResult(CurrentUserResult domainResult)
+    {
+        return domainResult.ETag;
     }
 }

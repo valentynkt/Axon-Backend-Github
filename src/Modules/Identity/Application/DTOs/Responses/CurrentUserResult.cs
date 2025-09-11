@@ -7,7 +7,8 @@ namespace Axon.Modules.Identity.Application.DTOs.Responses;
 public sealed record CurrentUserResult(
     UserProfile Profile,
     IReadOnlyList<WalletInfo> Wallets,
-    IReadOnlyDictionary<string, string> ChainDefaults);
+    IReadOnlyDictionary<string, string> ChainDefaults,
+    string ETag);
 
 /// <summary>
 /// User profile information for the current authenticated user.

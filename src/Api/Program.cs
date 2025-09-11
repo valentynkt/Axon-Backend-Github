@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Axon.Api.Configuration;
 using BuildingBlocks.Web.OpenApi;
@@ -71,6 +72,32 @@ builder.Services.AddApiVersioning(options =>
     options.SubstituteApiVersionInUrl = true;
 });
 
+// Add rate limiting services
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+    {
+        var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        
+        // Apply rate limiting only to /auth/exchange endpoint
+        if (context.Request.Path.StartsWithSegments("/api/v1/auth/exchange"))
+        {
+            return RateLimitPartition.GetFixedWindowLimiter(
+                ipAddress,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
+        }
+        
+        return RateLimitPartition.GetNoLimiter(ipAddress);
+    });
+});
+
 var app = builder.Build();
 
 // Simplified startup validation for development
@@ -120,7 +147,9 @@ if (!app.Environment.IsDevelopment())
 var corsOptions = app.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>();
 app.UseCors(corsOptions?.PolicyName ?? "DefaultPolicy");
 
-// Rate limiting implemented manually in endpoints for now
+// Configure rate limiting middleware with observability
+app.UseRateLimiter();
+app.UseMiddleware<RateLimitObservabilityMiddleware>();
 
 // Configure routing
 app.UseRouting();

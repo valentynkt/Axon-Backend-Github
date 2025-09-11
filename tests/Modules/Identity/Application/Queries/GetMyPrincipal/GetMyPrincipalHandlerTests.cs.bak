@@ -9,6 +9,7 @@ using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
@@ -22,6 +23,7 @@ public class GetMyPrincipalHandlerTests
     private ICurrentUserService _currentUserService = null!;
     private IAxonPrincipalReadRepository _principalRepository = null!;
     private IWalletReadRepository _walletRepository = null!;
+    private ILogger<GetMyPrincipalHandler> _logger = null!;
     private GetMyPrincipalHandler _handler = null!;
 
     [SetUp]
@@ -30,11 +32,13 @@ public class GetMyPrincipalHandlerTests
         _currentUserService = Substitute.For<ICurrentUserService>();
         _principalRepository = Substitute.For<IAxonPrincipalReadRepository>();
         _walletRepository = Substitute.For<IWalletReadRepository>();
+        _logger = Substitute.For<ILogger<GetMyPrincipalHandler>>();
         
         _handler = new GetMyPrincipalHandler(
             _currentUserService,
             _principalRepository,
-            _walletRepository);
+            _walletRepository,
+            _logger);
     }
 
     [TestFixture]
@@ -412,6 +416,85 @@ public class GetMyPrincipalHandlerTests
 
             // Assert
             result.IsSuccess.ShouldBeTrue(); // Should not return 304
+        }
+
+        [Test]
+        public async Task Should_HandleQuotedETagMatching()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                "\"abc123\""); // Quoted ETag as per HTTP spec
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Type.ShouldBe(ErrorType.Conflict);
+            result.Error.Code.ShouldBe("NOT_MODIFIED");
+            result.Error.Metadata["ETag"].ShouldBe(etag);
+            result.Error.Metadata["IsNotModified"].ShouldBe(true);
+        }
+
+        [Test]
+        public async Task Should_IncludeETagInSuccessfulResponse()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                "different-etag");
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _walletRepository
+                .GetByIdsAsync(Arg.Any<IReadOnlyList<WalletId>>(), false, Arg.Any<CancellationToken>())
+                .Returns(new List<Wallet>());
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.ETag.ShouldBe(etag);
         }
     }
 

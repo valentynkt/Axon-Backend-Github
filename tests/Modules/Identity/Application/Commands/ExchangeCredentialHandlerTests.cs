@@ -11,7 +11,7 @@ using CSharpFunctionalExtensions;
 using NSubstitute;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Tests.Application.Commands;
+namespace Axon.Modules.Identity.Application.Tests.Commands;
 
 [TestFixture]
 public class ExchangeCredentialHandlerTests
@@ -21,6 +21,7 @@ public class ExchangeCredentialHandlerTests
     private IWalletWriteRepository _walletRepository = null!;
     private IWriteUnitOfWork _unitOfWork = null!;
     private ExchangeCredentialHandler _handler = null!;
+    private static readonly ProviderType TestProviderType = ProviderType.From("dynamic");
 
     [SetUp]
     public void SetUp()
@@ -93,7 +94,7 @@ public class ExchangeCredentialHandlerTests
         var command = new ExchangeCredentialCommand(userData);
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
         _principalRepository.EnsureManyByChainAndAddressAsync(
@@ -127,7 +128,7 @@ public class ExchangeCredentialHandlerTests
         var existingPrincipal = CreateTestPrincipal();
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(existingPrincipal);
 
         _principalRepository.EnsureManyByChainAndAddressAsync(
@@ -160,7 +161,7 @@ public class ExchangeCredentialHandlerTests
         var command = new ExchangeCredentialCommand(userData);
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
         var walletIds = new Dictionary<(string, Address), WalletId>
@@ -200,8 +201,17 @@ public class ExchangeCredentialHandlerTests
         var command = new ExchangeCredentialCommand(userData);
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
+
+        // Setup mocks for potential repository calls (even though validation should fail early)
+        _principalRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>());
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>());
 
         SetupSuccessfulTransaction();
 
@@ -225,7 +235,7 @@ public class ExchangeCredentialHandlerTests
         var conflictPrincipal = CreateTestPrincipal();
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
         _principalRepository.EnsureManyByChainAndAddressAsync(
@@ -260,7 +270,7 @@ public class ExchangeCredentialHandlerTests
         var command = new ExchangeCredentialCommand(userData);
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
         SetupSuccessfulTransaction();
@@ -282,7 +292,7 @@ public class ExchangeCredentialHandlerTests
         var command = new ExchangeCredentialCommand(userData);
 
         _principalRepository.FindByCredentialAsync(
-            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
         // Setup transaction that fails
@@ -335,7 +345,7 @@ public class ExchangeCredentialHandlerTests
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
-                new("invalid-address", "1")
+                new("short", "1") // Too short - less than 10 characters minimum
             }
         );
     }

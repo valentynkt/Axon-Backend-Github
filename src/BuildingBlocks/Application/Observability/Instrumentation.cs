@@ -26,4 +26,13 @@ public static class Instrumentation
 
     /// <summary>Histogram for request duration</summary>
     public static readonly Histogram<double> Duration = Meter.CreateHistogram<double>("axon.request.duration", unit: "ms", description: "Request duration (ms)");
+
+    /// <summary>Counter for ETag cache hits</summary>
+    public static readonly Counter<long> ETagHits = Meter.CreateCounter<long>("axon.etag.hits", description: "ETag cache hits (304 Not Modified responses)");
+
+    /// <summary>Counter for ETag cache misses</summary>
+    public static readonly Counter<long> ETagMisses = Meter.CreateCounter<long>("axon.etag.misses", description: "ETag cache misses (data changed, returning fresh content)");
+
+    /// <summary>Counter for rate limit violations</summary>
+    public static readonly Counter<long> RateLimitHits = Meter.CreateCounter<long>("identity.rate_limit.hits_total", description: "Total rate limit violations by IP address");
 }

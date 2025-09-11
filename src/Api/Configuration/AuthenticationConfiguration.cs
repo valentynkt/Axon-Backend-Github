@@ -84,13 +84,13 @@ public static class AuthenticationConfiguration
     }
 
     /// <summary>
-    /// Configure basic rate limiting for auth endpoints
-    /// Note: Using simplified approach due to .NET 10 preview limitations
+    /// Configure rate limiting for authentication endpoints
+    /// Rate limiting is now configured globally in Program.cs
     /// </summary>
     public static IServiceCollection AddRateLimiting(this IServiceCollection services)
     {
-        // For now, rate limiting will be handled manually in endpoints
-        // TODO: Implement proper ASP.NET Core rate limiting when stable
+        // Rate limiting is configured globally in Program.cs using ASP.NET Core built-in middleware
+        // This method is kept for backwards compatibility but functionality moved to startup
         return services;
     }
 }

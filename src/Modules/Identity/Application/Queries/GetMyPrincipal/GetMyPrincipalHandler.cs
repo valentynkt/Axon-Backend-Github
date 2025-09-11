@@ -2,7 +2,9 @@ using Axon.Modules.Identity.Application.Common.Queries;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using Axon.Modules.Identity.Domain.Enums;
+using BuildingBlocks.Application.Observability;
 using BuildingBlocks.Core.Abstractions.Authentication;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 
@@ -14,14 +16,17 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
 {
     private readonly IAxonPrincipalReadRepository _principalRepository;
     private readonly IWalletReadRepository _walletRepository;
+    private readonly ILogger<GetMyPrincipalHandler> _logger;
 
     public GetMyPrincipalHandler(
         ICurrentUserService currentUserService,
         IAxonPrincipalReadRepository principalRepository,
-        IWalletReadRepository walletRepository) : base(currentUserService)
+        IWalletReadRepository walletRepository,
+        ILogger<GetMyPrincipalHandler> logger) : base(currentUserService)
     {
         _principalRepository = principalRepository ?? throw new ArgumentNullException(nameof(principalRepository));
         _walletRepository = walletRepository ?? throw new ArgumentNullException(nameof(walletRepository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public override async Task<Result<CurrentUserResult, Error>> Handle(
@@ -47,13 +52,39 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
             cancellationToken);
 
         // Step 3: Check If-None-Match header for 304 Not Modified
-        if (!string.IsNullOrEmpty(query.IfNoneMatch) && 
-            string.Equals(query.IfNoneMatch, currentETag, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrEmpty(query.IfNoneMatch))
         {
-            return Result.Failure<CurrentUserResult, Error>(
-                Error.Conflict(GetMyPrincipalErrorMessages.ContentNotModified, GetMyPrincipalErrorMessages.NotModifiedCode)
-                    .WithMetadata("ETag", currentETag)
-                    .WithMetadata("IsNotModified", true));
+            // Handle both quoted and unquoted ETags as per HTTP spec
+            var ifNoneMatch = query.IfNoneMatch.Trim('"');
+            if (string.Equals(ifNoneMatch, currentETag, StringComparison.OrdinalIgnoreCase))
+            {
+                // ETag HIT - client cache is still valid
+                _logger.LogDebug("ETag HIT: Client ETag {ClientETag} matches current ETag {CurrentETag} for principal {PrincipalId}", 
+                    ifNoneMatch, currentETag, principal.Id.Value);
+                
+                // Record ETag cache hit metric
+                Instrumentation.ETagHits.Add(1, new KeyValuePair<string, object?>("endpoint", "/auth/me"));
+                    
+                return Result.Failure<CurrentUserResult, Error>(
+                    Error.Conflict(GetMyPrincipalErrorMessages.ContentNotModified, GetMyPrincipalErrorMessages.NotModifiedCode)
+                        .WithMetadata("ETag", currentETag)
+                        .WithMetadata("IsNotModified", true));
+            }
+            else
+            {
+                // ETag MISS - client cache is stale
+                _logger.LogDebug("ETag MISS: Client ETag {ClientETag} does not match current ETag {CurrentETag} for principal {PrincipalId}", 
+                    ifNoneMatch, currentETag, principal.Id.Value);
+                
+                // Record ETag cache miss metric
+                Instrumentation.ETagMisses.Add(1, new KeyValuePair<string, object?>("endpoint", "/auth/me"));
+            }
+        }
+        else
+        {
+            // No If-None-Match header provided - not counted as miss since no cache was attempted
+            _logger.LogDebug("No If-None-Match header provided, serving fresh content with ETag {CurrentETag} for principal {PrincipalId}", 
+                currentETag, principal.Id.Value);
         }
 
         // Step 4: Load full principal snapshot with ownerships
@@ -68,13 +99,14 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
         }
 
         // Step 5: Build CurrentUserResult response
-        var result = await BuildCurrentUserResult(principalWithOwnerships, cancellationToken);
+        var result = await BuildCurrentUserResult(principalWithOwnerships, currentETag, cancellationToken);
 
         return Result.Success<CurrentUserResult, Error>(result);
     }
 
     private async Task<CurrentUserResult> BuildCurrentUserResult(
         Domain.Aggregates.AxonPrincipal.AxonPrincipal principal, 
+        string etag,
         CancellationToken cancellationToken)
     {
         // Build user profile
@@ -118,7 +150,8 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
         return new CurrentUserResult(
             Profile: profile,
             Wallets: walletInfos.AsReadOnly(),
-            ChainDefaults: chainDefaults.AsReadOnly());
+            ChainDefaults: chainDefaults.AsReadOnly(),
+            ETag: etag);
     }
 
 }
