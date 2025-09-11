@@ -157,8 +157,8 @@ public class AuthEndpointsTests
             new Claim("sub", "test-subject-123"),
             new Claim("iss", "https://test.dynamic.xyz"),
             new Claim("aud", "test-audience"),
-            new Claim("exp", new DateTimeOffset(DateTime.UtcNow.AddHours(1)).ToUnixTimeSeconds().ToString()),
-            new Claim("iat", new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString())
+            new Claim("exp", new DateTimeOffset(DateTime.UtcNow.AddHours(1)).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new Claim("iat", new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture))
         };
 
         var token = new JwtSecurityToken(

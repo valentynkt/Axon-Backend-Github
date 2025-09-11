@@ -55,4 +55,23 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
     Task<AxonPrincipal?> GetByIdWithActiveOwnershipsAsync(
         AxonId axonId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds a principal by credential information from JWT claims.
+    /// Used to resolve authenticated user's principal for /auth/me queries.
+    /// </summary>
+    Task<AxonPrincipal?> FindByCredentialAsync(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the deterministic fingerprint/ETag for a principal.
+    /// Includes principal.updated_at + max verified and signing ownership.updated_at + max chain_default.updated_at.
+    /// Used for efficient cache validation with If-None-Match header.
+    /// </summary>
+    Task<string> GetPrincipalFingerprintAsync(
+        AxonId principalId,
+        CancellationToken cancellationToken = default);
 }

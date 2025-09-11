@@ -1,11 +1,16 @@
 using Axon.Modules.Identity.Application.Common.Models;
+using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Services;
+using Axon.Modules.Identity.Infrastructure.ExternalServices;
+using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Infrastructure.Persistence.Write;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -94,12 +99,24 @@ public static class ServiceRegistration
             return new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
         });
         
-        // Register application services
-        // TODO: Add application services here
+        // Register External Services
+        services.Configure<DynamicXyzOptions>(configuration.GetSection("DynamicXyz"));
+        services.AddHttpClient<DynamicAuthService>("DynamicAuth", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddScoped<IDynamicAuthService, DynamicAuthService>();
+        services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
+        
+        // Register JWT Replay Guard service
+        services.AddMemoryCache(); // Required for replay guard
+        services.AddScoped<IJwtReplayGuard, MemoryJwtReplayGuard>();
+        
+        // Register Exchange Metrics Service
+        services.AddScoped<IExchangeMetricsService, ExchangeMetricsService>();
         
         // CRITICAL FIX: Register ICurrentUserService implementation
         // This is required by all command/query handlers in the application
-        // Note: When IdentityApiModule is enabled, this should be moved there
         services.AddHttpContextAccessor(); // Required for HttpContextUserService
         services.AddScoped<ICurrentUserService, HttpContextUserService>();
         

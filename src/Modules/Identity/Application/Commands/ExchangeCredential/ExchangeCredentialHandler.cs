@@ -89,7 +89,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             var walletMetrics = walletProcessingResult.Value;
 
             // Step 4: Apply verified-first chain defaults
-            var defaultsApplied = ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds);
+            var defaultsApplied = await ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds, cancellationToken);
 
             // Step 5: Persist changes
             if (isNewPrincipal)
@@ -265,22 +265,60 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             new WalletProcessingMetrics(wallets.Count, linked, skipped, 0, walletIds));
     }
 
-    private static int ApplyChainDefaults(AxonPrincipal principal, List<WalletId> processedWalletIds)
+    /// <summary>
+    /// Applies chain defaults for verified and signing wallets in verified-first order.
+    /// Returns the count of actual defaults applied (excluding no-ops).
+    /// </summary>
+    private async Task<int> ApplyChainDefaults(
+        AxonPrincipal principal, 
+        List<WalletId> processedWalletIds, 
+        CancellationToken cancellationToken)
     {
-        // Get all verified & signing ownerships from processed wallets
-        var eligibleOwnershipsCount = principal.WalletOwnerships
-            .Count(wo => processedWalletIds.Contains(wo.WalletId) && 
+        // Get eligible verified & signing ownerships from processed wallets
+        var eligibleOwnerships = principal.WalletOwnerships
+            .Where(wo => processedWalletIds.Contains(wo.WalletId) && 
                         wo.Status == Domain.Enums.OwnershipStatus.Verified && 
-                        wo.AccessMode == Domain.Enums.AccessMode.Signing);
+                        wo.AccessMode == Domain.Enums.AccessMode.Signing)
+            .ToList();
             
-        // For this simplified implementation, apply no defaults
-        // In a full implementation, we would:
-        // 1. Group by chain ID (requires wallet details)
-        // 2. Apply first verified+signing wallet as default per chain
-        // 3. Use principal.ApplyChainDefault(chainId, walletId) method
-        // 4. Count actual changes (not no-ops)
+        if (eligibleOwnerships.Count == 0)
+            return 0;
+            
+        // Get wallet details to determine chain mappings
+        var wallets = await _walletRepository.GetByIdsAsync(
+            eligibleOwnerships.Select(o => o.WalletId), 
+            cancellationToken);
+            
+        // Group wallets by chain ID and apply verified-first wallet as default per chain
+        var chainGroups = wallets
+            .GroupBy(w => w.ChainId)
+            .ToList();
+            
+        int defaultsApplied = 0;
         
-        return 0; // TODO: Implement full chain defaults logic when wallet-to-chain mapping is available
+        foreach (var chainGroup in chainGroups)
+        {
+            var chainId = chainGroup.Key;
+            
+            // Get the first verified+signing wallet for this chain (order by ID for deterministic behavior)
+            var firstWallet = chainGroup
+                .OrderBy(w => w.Id.Value)
+                .First();
+                
+            // Check current default before applying to detect no-ops
+            var currentDefault = principal.GetDefaultWalletForChain(chainId);
+            
+            // Apply chain default using domain method
+            var result = principal.ApplyChainDefault(chainId, firstWallet.Id);
+            
+            // Count only successful applications that weren't no-ops
+            if (result.IsSuccess && currentDefault != firstWallet.Id)
+            {
+                defaultsApplied++;
+            }
+        }
+        
+        return defaultsApplied;
     }
 
     /// <summary>

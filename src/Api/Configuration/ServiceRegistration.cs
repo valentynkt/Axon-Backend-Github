@@ -15,7 +15,6 @@ using OpenTelemetry.Trace;
 using Polly;
 using Polly.Extensions.Http;
 using System.Reflection;
-using Axon.Modules.Identity.Infrastructure.ExternalServices;
 
 namespace Axon.Api.Configuration;
 
@@ -131,13 +130,7 @@ public static class ServiceRegistration
         // CRITICAL FIX: Add CORS configuration for frontend integration
         services.AddCorsConfiguration(configuration, environment);
         
-        // Add JWT authentication and rate limiting (replacing custom implementations)
-        services.AddJwtAuthentication(configuration);
-        services.AddRateLimiting();
-        
-        // Add simplified Dynamic auth service (now in Identity module)
-        services.AddHttpClient("DynamicAuth");
-        services.AddScoped<IDynamicAuthService, DynamicAuthService>();
+        // JWT authentication and rate limiting are now handled by IdentityApiModule
         
         // Note: MediatR, pipeline behaviors, and validators are registered by individual modules
         // This ensures proper assembly scanning and avoids duplication
@@ -145,7 +138,7 @@ public static class ServiceRegistration
         // Configure Mapster with profiles and validation
         services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
         
-        // Register API modules (excluding complex Identity module for now)
+        // Register API modules
         RegisterApiModules(services, configuration, environment);
         
         return services;
@@ -172,7 +165,7 @@ public static class ServiceRegistration
         // For now, manually register modules
         // In the future, this could use reflection to auto-discover
         modules.Add(new ChatApiModule());
-        // IdentityApiModule temporarily disabled due to missing Commands - replaced by simplified auth
+        modules.Add(new IdentityApiModule()); // Re-enabled after fixing ExchangeTokenCommandHandler
         
         return modules;
     }

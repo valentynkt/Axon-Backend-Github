@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Axon.Modules.Identity.Infrastructure.ExternalServices;
+using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 
 namespace Axon.Modules.Identity.Infrastructure.Services;
 

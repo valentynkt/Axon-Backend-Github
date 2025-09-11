@@ -1,0 +1,496 @@
+using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.DTOs.Responses;
+using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
+using Axon.Modules.Identity.Domain.Enums;
+using Axon.Modules.Identity.Domain.ValueObjects;
+using BuildingBlocks.Core.Abstractions.Authentication;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Primitives.Ids;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
+using NUnit.Framework;
+using Shouldly;
+
+namespace Axon.Modules.Identity.Application.Tests.Queries.GetMyPrincipal;
+
+[TestFixture]
+public class GetMyPrincipalHandlerTests
+{
+    private ICurrentUserService _currentUserService = null!;
+    private IAxonPrincipalReadRepository _principalRepository = null!;
+    private IWalletReadRepository _walletRepository = null!;
+    private GetMyPrincipalHandler _handler = null!;
+
+    [SetUp]
+    public void Setup()
+    {
+        _currentUserService = Substitute.For<ICurrentUserService>();
+        _principalRepository = Substitute.For<IAxonPrincipalReadRepository>();
+        _walletRepository = Substitute.For<IWalletReadRepository>();
+        
+        _handler = new GetMyPrincipalHandler(
+            _currentUserService,
+            _principalRepository,
+            _walletRepository);
+    }
+
+    [TestFixture]
+    public class Handle : GetMyPrincipalHandlerTests
+    {
+        [Test]
+        public async Task Should_ReturnNotFound_When_PrincipalNotFound()
+        {
+            // Arrange
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                null);
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns((AxonPrincipal?)null);
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Type.ShouldBe(ErrorType.NotFound);
+            result.Error.Message.ShouldBe("Principal not found. User may not have completed exchange yet.");
+        }
+
+        [Test]
+        public async Task Should_ReturnNotModified_When_ETagMatches()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com", 
+                "user123",
+                etag);
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Type.ShouldBe(ErrorType.Conflict);
+            result.Error.Message.ShouldBe("Content has not been modified");
+            result.Error.Code.ShouldBe("NOT_MODIFIED");
+            result.Error.Metadata.ShouldContainKey("ETag");
+            result.Error.Metadata["ETag"].ShouldBe(etag);
+            result.Error.Metadata.ShouldContainKey("IsNotModified");
+            result.Error.Metadata["IsNotModified"].ShouldBe(true);
+        }
+
+        [Test]
+        public async Task Should_ReturnCurrentUser_When_ValidPrincipalWithNoWallets()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                "different-etag");
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _walletRepository
+                .GetByIdsAsync(Arg.Any<IReadOnlyList<WalletId>>(), false, Arg.Any<CancellationToken>())
+                .Returns(new List<Wallet>());
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.ShouldNotBeNull();
+            result.Value.Profile.AxonId.ShouldBe(axonId.Value.ToString());
+            result.Value.Profile.RiskTier.ShouldBe("low");
+            result.Value.Wallets.ShouldBeEmpty();
+            result.Value.ChainDefaults.ShouldBeEmpty();
+        }
+
+        [Test]
+        public async Task Should_ReturnCurrentUser_When_ValidPrincipalWithWallets()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var walletId = WalletId.New();
+            var principal = CreateTestPrincipalWithWallet(axonId, walletId);
+            var wallet = CreateTestWallet(walletId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                "different-etag");
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _walletRepository
+                .GetByIdsAsync(
+                    Arg.Is<IReadOnlyList<WalletId>>(ids => ids.Contains(walletId)),
+                    false,
+                    Arg.Any<CancellationToken>())
+                .Returns(new List<Wallet> { wallet });
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.ShouldNotBeNull();
+            result.Value.Profile.AxonId.ShouldBe(axonId.Value.ToString());
+            result.Value.Profile.RiskTier.ShouldBe("low");
+            result.Value.Wallets.ShouldHaveCount(1);
+            
+            var walletInfo = result.Value.Wallets.First();
+            walletInfo.WalletId.ShouldBe(walletId.Value.ToString());
+            walletInfo.ChainId.ShouldBe(wallet.ChainId.ToString());
+            walletInfo.Address.ShouldBe(wallet.Address.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            walletInfo.AccessMode.ShouldBe("signing");
+            walletInfo.IsVerified.ShouldBeTrue();
+        }
+
+        [Test]
+        public async Task Should_ReturnNotFound_When_PrincipalWithOwnershipsNotFound()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                "different-etag");
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns((AxonPrincipal?)null);
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Type.ShouldBe(ErrorType.NotFound);
+            result.Error.Message.ShouldBe("Principal data could not be loaded");
+        }
+
+        [Test]
+        public async Task Should_HandleETagComparison_CaseInsensitive()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "ABC123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                "abc123"); // Different case
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsFailure.ShouldBeTrue();
+            result.Error.Type.ShouldBe(ErrorType.Conflict);
+            result.Error.Code.ShouldBe("NOT_MODIFIED");
+        }
+
+        [Test]
+        public async Task Should_MapRiskTierCorrectly()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipalWithRiskTier(axonId, RiskTier.High);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                null);
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _walletRepository
+                .GetByIdsAsync(Arg.Any<IReadOnlyList<WalletId>>(), false, Arg.Any<CancellationToken>())
+                .Returns(new List<Wallet>());
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Profile.RiskTier.ShouldBe("high");
+        }
+
+        [Test]
+        public async Task Should_MapAccessModeCorrectly()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var walletId = WalletId.New();
+            var principal = CreateTestPrincipalWithWalletAccessMode(axonId, walletId, AccessMode.WatchOnly);
+            var wallet = CreateTestWallet(walletId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                null);
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _walletRepository
+                .GetByIdsAsync(
+                    Arg.Is<IReadOnlyList<WalletId>>(ids => ids.Contains(walletId)),
+                    false,
+                    Arg.Any<CancellationToken>())
+                .Returns(new List<Wallet> { wallet });
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue();
+            result.Value.Wallets.First().AccessMode.ShouldBe("readonly");
+        }
+
+        [Test]
+        public async Task Should_IgnoreEmptyIfNoneMatchHeader()
+        {
+            // Arrange
+            var axonId = AxonId.New();
+            var principal = CreateTestPrincipal(axonId);
+            var etag = "abc123";
+            
+            var query = new GetMyPrincipalQuery(
+                ProviderType.From("dynamic"),
+                "https://issuer.example.com",
+                "user123",
+                ""); // Empty string
+
+            _principalRepository
+                .FindByCredentialAsync(
+                    Arg.Any<ProviderType>(),
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _principalRepository
+                .GetPrincipalFingerprintAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(etag);
+
+            _principalRepository
+                .GetByIdWithActiveOwnershipsAsync(axonId, Arg.Any<CancellationToken>())
+                .Returns(principal);
+
+            _walletRepository
+                .GetByIdsAsync(Arg.Any<IReadOnlyList<WalletId>>(), false, Arg.Any<CancellationToken>())
+                .Returns(new List<Wallet>());
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue(); // Should not return 304
+        }
+    }
+
+    private static AxonPrincipal CreateTestPrincipal(AxonId axonId)
+    {
+        var principalResult = AxonPrincipal.CreateHumanPrincipal();
+        var principal = principalResult.Value;
+        
+        // Use reflection to set the ID for test purposes
+        var idField = typeof(AxonPrincipal).GetField("_id", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        idField?.SetValue(principal, axonId);
+
+        return principal;
+    }
+
+    private static AxonPrincipal CreateTestPrincipalWithRiskTier(AxonId axonId, RiskTier riskTier)
+    {
+        var principal = CreateTestPrincipal(axonId);
+        
+        // Use reflection to set risk tier for test purposes
+        var riskTierField = typeof(AxonPrincipal).GetField("_riskTier", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        riskTierField?.SetValue(principal, riskTier);
+
+        return principal;
+    }
+
+    private static AxonPrincipal CreateTestPrincipalWithWallet(AxonId axonId, WalletId walletId)
+    {
+        var principal = CreateTestPrincipal(axonId);
+        
+        // Add wallet ownership using domain method
+        var linkResult = principal.LinkWallet(
+            walletId,
+            ChainId.From("ethereum"),
+            ProofType.DynamicVerified,
+            AccessMode.Signing,
+            "Test Wallet",
+            TimeProvider.System);
+
+        return principal;
+    }
+
+    private static AxonPrincipal CreateTestPrincipalWithWalletAccessMode(AxonId axonId, WalletId walletId, AccessMode accessMode)
+    {
+        var principal = CreateTestPrincipal(axonId);
+        
+        // Add wallet ownership with specific access mode
+        var linkResult = principal.LinkWallet(
+            walletId,
+            ChainId.From("ethereum"),
+            ProofType.DynamicVerified,
+            accessMode,
+            "Test Wallet",
+            TimeProvider.System);
+
+        return principal;
+    }
+
+    private static Wallet CreateTestWallet(WalletId walletId)
+    {
+        var chainId = ChainId.From("ethereum");
+        var address = "0x1234567890123456789012345678901234567890";
+        
+        var walletResult = Wallet.RegisterAsync(
+            chainId,
+            address,
+            DateTimeOffset.UtcNow,
+            async (_, _) => false, // Not existing
+            TimeProvider.System).Result;
+
+        var wallet = walletResult.Value;
+        
+        // Use reflection to set the ID for test purposes
+        var idField = typeof(Wallet).GetField("_id", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        idField?.SetValue(wallet, walletId);
+
+        return wallet;
+    }
+}

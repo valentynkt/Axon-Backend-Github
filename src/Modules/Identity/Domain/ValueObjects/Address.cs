@@ -129,12 +129,15 @@ public readonly partial struct Address
 
     private static bool IsEthereumFormat(string address)
     {
-        return address.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && address.Length == 42;
+        // If it starts with 0x, treat it as Ethereum regardless of length
+        return address.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSolanaFormat(string address)
     {
-        return !address.StartsWith("0x") && address.Length >= 32 && address.Length <= 44;
+        // If it doesn't start with 0x and is in the valid length range, treat as Solana
+        return !address.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && 
+               address.Length >= 32 && address.Length <= 44;
     }
 
     private static bool ContainsMaliciousCharacters(string input)
@@ -143,7 +146,7 @@ public readonly partial struct Address
         return input.Contains("javascript:", StringComparison.OrdinalIgnoreCase) ||
                input.Contains("<script", StringComparison.OrdinalIgnoreCase) ||
                input.Contains("DROP TABLE", StringComparison.OrdinalIgnoreCase) ||
-               input.Contains("../") ||
+               input.Contains("../", StringComparison.Ordinal) ||
                input.Any(c => char.IsControl(c) && c != '\t' && c != '\n' && c != '\r') ||
                input.Any(c => c > 127); // Non-ASCII characters
     }

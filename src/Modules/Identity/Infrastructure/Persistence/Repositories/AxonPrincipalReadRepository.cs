@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
@@ -54,6 +55,51 @@ internal sealed class AxonPrincipalReadRepository : EfSpecificationReadRepositor
                     .OrderByDescending(p => p.CreatedAt)
                     .Take(take)
                     .AsNoTracking());
+
+    /// <summary>
+    /// Compiled query for finding principal by credential - hot path optimization for /auth/me
+    /// </summary>
+    private static readonly Func<IdentityReadDbContext, string, string, string, Task<AxonPrincipal?>>
+        FindByCredentialCompiled = EF.CompileAsyncQuery(
+            (IdentityReadDbContext context, string provider, string issuer, string subject) =>
+                context.Set<AxonPrincipal>()
+                    .Include(p => p.Credentials)
+                    .Where(p => p.Credentials.Any(c => 
+                        c.Provider == provider && 
+                        c.Issuer == issuer && 
+                        c.Subject == subject))
+                    .AsNoTracking()
+                    .FirstOrDefault());
+
+    /// <summary>
+    /// Compiled query for getting principal fingerprint data - hot path optimization
+    /// </summary>
+    private static readonly Func<IdentityReadDbContext, AxonId, Task<FingerprintData?>>
+        GetPrincipalFingerprintDataCompiled = EF.CompileAsyncQuery(
+            (IdentityReadDbContext context, AxonId principalId) =>
+                context.Set<AxonPrincipal>()
+                    .Where(p => p.Id == principalId)
+                    .Select(p => new FingerprintData
+                    {
+                        PrincipalUpdated = p.UpdatedAt ?? DateTimeOffset.MinValue,
+                        MaxOwnershipUpdated = p.WalletOwnerships
+                            .Where(wo => wo.Status == OwnershipStatus.Verified && wo.AccessMode == AccessMode.Signing)
+                            .Max(wo => (DateTimeOffset?)wo.UpdatedAt),
+                        MaxChainDefaultUpdated = context.Set<PrincipalChainDefault>()
+                            .Where(cd => cd.PrincipalId == principalId)
+                            .Max(cd => (DateTimeOffset?)cd.UpdatedAt)
+                    })
+                    .FirstOrDefault());
+
+    /// <summary>
+    /// Data structure for fingerprint computation
+    /// </summary>
+    private sealed class FingerprintData
+    {
+        public DateTimeOffset PrincipalUpdated { get; set; }
+        public DateTimeOffset? MaxOwnershipUpdated { get; set; }
+        public DateTimeOffset? MaxChainDefaultUpdated { get; set; }
+    }
 
     public AxonPrincipalReadRepository(IdentityReadDbContext context) : base(context)
     {
@@ -136,5 +182,35 @@ internal sealed class AxonPrincipalReadRepository : EfSpecificationReadRepositor
             .Include(p => p.ChainDefaults)
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<AxonPrincipal?> FindByCredentialAsync(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        CancellationToken cancellationToken = default)
+    {
+        return await FindByCredentialCompiled(_identityDbContext, providerType.Value, issuer, subject);
+    }
+
+    public async Task<string> GetPrincipalFingerprintAsync(
+        AxonId principalId,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await GetPrincipalFingerprintDataCompiled(_identityDbContext, principalId);
+        
+        if (data == null)
+            return string.Empty;
+
+        // Format timestamps as invariant culture strings for deterministic hashing
+        var principalUpdated = data.PrincipalUpdated.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture);
+        var maxOwnershipUpdated = data.MaxOwnershipUpdated?.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        var maxChainDefaultUpdated = data.MaxChainDefaultUpdated?.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+
+        var fingerprint = principalUpdated + maxOwnershipUpdated + maxChainDefaultUpdated;
+
+        // Convert to SHA-256 hash for deterministic ETag
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fingerprint));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }

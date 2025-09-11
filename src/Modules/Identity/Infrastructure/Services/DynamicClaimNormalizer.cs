@@ -2,7 +2,7 @@ using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
-using Axon.Modules.Identity.Infrastructure.ExternalServices;
+using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;

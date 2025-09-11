@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 using Axon.Modules.Identity.Infrastructure.Services;
@@ -333,37 +334,4 @@ public sealed class DynamicAuthService : IDynamicAuthService
         return token.Length > 8 ? token[^8..] : token;
     }
 }
-
-/// <summary>
-/// Service interface for Dynamic.xyz authentication operations
-/// </summary>
-public interface IDynamicAuthService
-{
-    Task<Result<DynamicUserData, Error>> ValidateTokenAsync(string token, CancellationToken cancellationToken = default);
-}
-
-/// <summary>
-/// Validated user data from Dynamic.xyz
-/// </summary>
-public record DynamicUserData(
-    string UserId,
-    string Email,
-    string EnvironmentId,
-    List<WalletData> Wallets,
-    DateTimeOffset? FirstVisitUtc,
-    DateTimeOffset? LastVisitUtc,
-    bool IsNewUser,
-    string? SessionPublicKey = null,
-    Dictionary<string, object>? VerifiedCredentialsHashes = null);
-
-/// <summary>
-/// Wallet information for authenticated user
-/// </summary>
-public record WalletData(
-    string Id,
-    string Address,
-    string Chain,
-    string? WalletName,
-    string Provider,
-    DateTimeOffset? ConnectedAtUtc);
     

@@ -18,6 +18,8 @@ public class AddressValidationTests
         [TestCase("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263")] // Valid Solana address
         [TestCase("11111111111111111111111111111111")] // Valid Solana address (32 chars)
         [TestCase("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")] // USDC token address
+        [TestCase("So11111111111111111111111111111111111111112X")] // Valid Solana address (X is valid base58)
+        [TestCase("So111111111111111111111111111111111111111")] // Valid Solana address (41 chars)
         public void From_WithValidSolanaAddress_ShouldCreateAddress(string validAddress)
         {
             // Act - When creating address from valid Solana format
@@ -31,10 +33,10 @@ public class AddressValidationTests
         [TestCase("")] // Empty string
         [TestCase(" ")] // Whitespace
         [TestCase("invalid")] // Too short
-        [TestCase("So11111111111111111111111111111111111111112X")] // Too long
-        [TestCase("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")] // Ethereum format
-        [TestCase("So1111111111111111111111111111111111111111!")] // Invalid character
-        [TestCase("So111111111111111111111111111111111111111")] // Too short by 1
+        [TestCase("So1111111111111111111111111111111111111111!")] // Invalid character !
+        [TestCase("So1111111111111111111111111111111111111111O")] // Invalid character O (zero)
+        [TestCase("So1111111111111111111111111111111111111111I")] // Invalid character I  
+        [TestCase("So1111111111111111111111111111111111111111l")] // Invalid character l (lowercase L)
         public void From_WithInvalidSolanaAddress_ShouldThrowValueObjectValidationException(string invalidAddress)
         {
             // Act & Assert - When creating address from invalid format
