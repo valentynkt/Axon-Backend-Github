@@ -15,7 +15,7 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 /// Supports specification-based queries through Ardalis.Specification integration.
 /// Includes compiled queries for optimal performance on hot paths.
 /// </summary>
-internal sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<AxonPrincipal>, IAxonPrincipalReadRepository
+public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<AxonPrincipal>, IAxonPrincipalReadRepository
 {
     private readonly IdentityReadDbContext _identityDbContext;
 

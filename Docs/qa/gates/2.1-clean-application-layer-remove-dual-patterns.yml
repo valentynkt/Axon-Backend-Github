@@ -1,0 +1,16 @@
+schema: 1
+story: '2.1'
+gate: CONCERNS
+status_reason: 'Template compliance issues present but story is implementation-ready with excellent technical context.'
+reviewer: 'Quinn'
+updated: '2025-01-11T23:45:00Z'
+top_issues:
+  - id: 'DOC-001'
+    severity: low
+    finding: 'Missing QA Results section required by story template'
+    suggested_action: 'Add QA Results section to story before agent implementation'
+  - id: 'DOC-002'
+    severity: low
+    finding: 'Testing section embedded in Dev Notes instead of separate section'
+    suggested_action: 'Extract Testing section per template requirements'
+waiver: { active: false }

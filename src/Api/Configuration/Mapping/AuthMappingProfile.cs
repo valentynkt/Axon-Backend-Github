@@ -1,7 +1,8 @@
 using Axon.Api.Contracts.V1.Auth;
-using Axon.Modules.Identity.Application.Commands.ExchangeToken;
+using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
-using Axon.Modules.Identity.Application.Queries.GetCurrentUser;
+using Axon.Modules.Identity.Application.DTOs.Responses;
+using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 using Mapster;
 
 namespace Axon.Api.Configuration.Mapping;
@@ -23,17 +24,10 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
 
     private static void ConfigureRequestMappings(TypeAdapterConfig config)
     {
-        // ExchangeTokenRequestDto -> ExchangeTokenCommand
-        // Note: The JWT comes from the header, so it's handled in the endpoint itself
-        config.NewConfig<ExchangeTokenRequestDto, ExchangeTokenCommand>()
-            .ConstructUsing(src => new ExchangeTokenCommand(string.Empty)) // JWT will be set in endpoint
-            .IgnoreNonMapped(true);
-
-        // GetCurrentUserRequestDto -> GetCurrentUserQuery  
-        // Note: The Principal comes from HttpContext, so it's handled in the endpoint itself
-        config.NewConfig<GetCurrentUserRequestDto, GetCurrentUserQuery>()
-            .ConstructUsing(src => new GetCurrentUserQuery(new System.Security.Claims.ClaimsPrincipal())) // Principal will be set in endpoint
-            .IgnoreNonMapped(true);
+        // Note: Request mappings are handled entirely in the endpoint logic
+        // The endpoints construct commands/queries directly using JWT data and claims
+        // No mapping configurations needed as endpoints handle construction directly
+        _ = config; // Suppress unused parameter warning
     }
 
     private static void ConfigureResponseMappings(TypeAdapterConfig config)
@@ -47,11 +41,17 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
             .Map(dest => dest.Skipped, src => src.Skipped)
             .Map(dest => dest.Conflicts, src => src.Conflicts);
 
-        // CurrentUserInfo -> GetCurrentUserResponseDto
-        config.NewConfig<CurrentUserInfo, GetCurrentUserResponseDto>()
-            .Map(dest => dest.AxonId, src => src.AxonId)
-            .Map(dest => dest.Subject, src => src.Subject)
-            .Map(dest => dest.IsAuthenticated, src => src.IsAuthenticated)
-            .Map(dest => dest.Claims, src => src.Claims);
+        // CurrentUserResult -> GetCurrentUserResponseDto
+        // Map from new CurrentUserResult structure to existing API contract
+        config.NewConfig<CurrentUserResult, GetCurrentUserResponseDto>()
+            .Map(dest => dest.AxonId, src => src.Profile.AxonId)
+            .Map(dest => dest.Subject, src => src.Profile.AxonId) // Use AxonId as subject for now
+            .Map(dest => dest.IsAuthenticated, src => true) // Always true if we have a result
+            .Map(dest => dest.Claims, src => new Dictionary<string, object> 
+            {
+                { "risk_tier", src.Profile.RiskTier },
+                { "wallet_count", src.Wallets.Count },
+                { "chain_defaults", src.ChainDefaults }
+            });
     }
 }

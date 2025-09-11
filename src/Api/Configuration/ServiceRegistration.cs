@@ -165,7 +165,7 @@ public static class ServiceRegistration
         // For now, manually register modules
         // In the future, this could use reflection to auto-discover
         modules.Add(new ChatApiModule());
-        modules.Add(new IdentityApiModule()); // Re-enabled after fixing ExchangeTokenCommandHandler
+        modules.Add(new IdentityApiModule()); // Clean architecture with canonical command/query patterns
         
         return modules;
     }

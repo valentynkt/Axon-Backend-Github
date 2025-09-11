@@ -12,7 +12,7 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 /// Supports specification-based queries through Ardalis.Specification integration.
 /// Includes compiled queries for optimal performance on hot paths.
 /// </summary>
-internal sealed class WalletReadRepository : EfSpecificationReadRepository<Wallet>, IWalletReadRepository
+public sealed class WalletReadRepository : EfSpecificationReadRepository<Wallet>, IWalletReadRepository
 {
     private readonly IdentityReadDbContext _identityDbContext;
 

@@ -31,8 +31,8 @@ public static class ServiceCollectionExtensions
         // Register Identity-specific services
         services.AddSingleton(TimeProvider.System);
         
-        // Register new Auth command/query handlers (MediatR will auto-discover them)
-        // ExchangeTokenCommandHandler, ExchangeCredentialHandler, GetCurrentUserQueryHandler, and GetMyPrincipalHandler are auto-registered by MediatR
+        // Register canonical Auth command/query handlers (MediatR will auto-discover them)
+        // ExchangeCredentialHandler and GetMyPrincipalHandler are auto-registered by MediatR
         
         return services;
     }
