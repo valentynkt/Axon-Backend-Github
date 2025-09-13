@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
@@ -8,9 +9,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using BuildingBlocks.Core.Diagnostics.Errors;
-using CSharpFunctionalExtensions;
-
 namespace Axon.Modules.Identity.Infrastructure.ExternalServices;
 
 /// <summary>
@@ -19,32 +17,29 @@ namespace Axon.Modules.Identity.Infrastructure.ExternalServices;
 /// </summary>
 public sealed class DynamicAuthService : IDynamicAuthService
 {
-    private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;
     private readonly ILogger<DynamicAuthService> _logger;
     private readonly DynamicXyzOptions _options;
     private readonly IDynamicClaimNormalizer _claimNormalizer;
     private readonly IJwtReplayGuard _replayGuard;
-    private readonly TimeSpan _jwksCacheExpiration;
+    private readonly IJwksService _jwksService;
     private readonly TimeSpan _tokenCacheExpiration;
 
     public DynamicAuthService(
-        HttpClient httpClient,
         IMemoryCache cache,
         ILogger<DynamicAuthService> logger,
         IOptions<DynamicXyzOptions> options,
         IDynamicClaimNormalizer claimNormalizer,
-        IJwtReplayGuard replayGuard)
+        IJwtReplayGuard replayGuard,
+        IJwksService jwksService)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _claimNormalizer = claimNormalizer ?? throw new ArgumentNullException(nameof(claimNormalizer));
         _replayGuard = replayGuard ?? throw new ArgumentNullException(nameof(replayGuard));
+        _jwksService = jwksService ?? throw new ArgumentNullException(nameof(jwksService));
         
-        // Cache JWKS keys for 10 minutes by default
-        _jwksCacheExpiration = TimeSpan.FromMinutes(_options.Jwt?.JwksCacheMinutes ?? 10);
         // Cache validated tokens for 5 minutes to avoid repeated validation
         _tokenCacheExpiration = TimeSpan.FromMinutes(5);
     }
@@ -76,12 +71,16 @@ public sealed class DynamicAuthService : IDynamicAuthService
 
         try
         {
+            using var activity = Activity.Current?.Source.StartActivity("DynamicAuthService.ValidateToken");
+            activity?.SetTag("provider", "dynamic");
+            
             _logger.LogDebug("Validating JWT token locally using JWKS");
 
-            // Get JWKS keys
-            var keysResult = await GetJwksKeysAsync(cancellationToken);
+            // Get JWKS keys from injected service
+            var keysResult = await _jwksService.GetJwksKeysAsync(cancellationToken);
             if (keysResult.IsFailure)
             {
+                activity?.SetTag("error", keysResult.Error.Code);
                 return Result.Failure<DynamicUserData, Error>(keysResult.Error);
             }
 
@@ -89,6 +88,7 @@ public sealed class DynamicAuthService : IDynamicAuthService
             var validationResult = await ValidateJwtTokenAsync(token, keysResult.Value);
             if (validationResult.IsFailure)
             {
+                activity?.SetTag("error", validationResult.Error.Code);
                 return Result.Failure<DynamicUserData, Error>(validationResult.Error);
             }
 
@@ -125,6 +125,8 @@ public sealed class DynamicAuthService : IDynamicAuthService
             // Cache the validated token (but only if replay check passed)
             _cache.Set(cacheKey, userData, _tokenCacheExpiration);
             
+            activity?.SetTag("user_id", userData.UserId);
+            activity?.SetTag("cache_hit", false);
             _logger.LogInformation("Token validated successfully for user {UserId}", userData.UserId);
             return Result.Success<DynamicUserData, Error>(userData);
         }
@@ -132,129 +134,10 @@ public sealed class DynamicAuthService : IDynamicAuthService
         {
             _logger.LogError(ex, "Unexpected error during token validation");
             return Result.Failure<DynamicUserData, Error>(
-                Error.External("Token validation failed", "AUTH.VALIDATION_ERROR", ex));
+                Error.External("Token validation failed", "AUTH.VALIDATION_FAILED", ex));
         }
     }
     
-
-    private async Task<Result<ICollection<SecurityKey>, Error>> GetJwksKeysAsync(CancellationToken cancellationToken)
-    {
-        var jwksCacheKey = "dynamic_jwks_keys";
-        
-        // Check cache first
-        if (_cache.TryGetValue<ICollection<SecurityKey>>(jwksCacheKey, out var cachedKeys) && cachedKeys != null)
-        {
-            _logger.LogDebug("JWKS cache hit");
-            return Result.Success<ICollection<SecurityKey>, Error>(cachedKeys);
-        }
-
-        // Retry logic with exponential backoff
-        const int maxRetries = 3;
-        var baseDelay = TimeSpan.FromMilliseconds(500);
-        
-        for (int attempt = 0; attempt <= maxRetries; attempt++)
-        {
-            try
-            {
-                if (attempt > 0)
-                {
-                    var delay = TimeSpan.FromMilliseconds(baseDelay.TotalMilliseconds * Math.Pow(2, attempt - 1));
-                    _logger.LogDebug("Retrying JWKS fetch (attempt {Attempt}/{MaxRetries}) after {Delay}ms", 
-                        attempt + 1, maxRetries + 1, delay.TotalMilliseconds);
-                    await Task.Delay(delay, cancellationToken);
-                }
-
-                _logger.LogDebug("Fetching JWKS from Dynamic.xyz endpoint: {JwksUri} (attempt {Attempt})", 
-                    _options.JwksUri, attempt + 1);
-                
-                var response = await _httpClient.GetStringAsync(_options.JwksUri, cancellationToken);
-                var jwks = JsonDocument.Parse(response);
-                
-                var keys = new List<SecurityKey>();
-                
-                if (jwks.RootElement.TryGetProperty("keys", out var keysArray))
-                {
-                    foreach (var keyElement in keysArray.EnumerateArray())
-                    {
-                        var keyJson = keyElement.GetRawText();
-                        var jwk = JsonWebKey.Create(keyJson);
-                        keys.Add(jwk);
-                    }
-                }
-
-                if (keys.Count == 0)
-                {
-                    _logger.LogWarning("No keys found in JWKS response from {JwksUri}", _options.JwksUri);
-                    if (attempt == maxRetries)
-                    {
-                        return Result.Failure<ICollection<SecurityKey>, Error>(
-                            Error.External("No keys found in JWKS response", "AUTH.NO_JWKS_KEYS"));
-                    }
-                    continue; // Try again
-                }
-
-                // Cache the keys with longer expiration on successful fetch
-                _cache.Set(jwksCacheKey, (ICollection<SecurityKey>)keys, _jwksCacheExpiration);
-                
-                _logger.LogInformation("Successfully fetched {KeyCount} keys from JWKS (attempt {Attempt})", keys.Count, attempt + 1);
-                return Result.Success<ICollection<SecurityKey>, Error>((ICollection<SecurityKey>)keys);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogDebug("JWKS fetch cancelled");
-                return Result.Failure<ICollection<SecurityKey>, Error>(
-                    Error.External("JWKS fetch was cancelled", "AUTH.JWKS_FETCH_CANCELLED"));
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(ex, "HTTP error fetching JWKS from {JwksUri} (attempt {Attempt}/{MaxRetries}): {Message}", 
-                    _options.JwksUri, attempt + 1, maxRetries + 1, ex.Message);
-                
-                if (attempt == maxRetries)
-                {
-                    return Result.Failure<ICollection<SecurityKey>, Error>(
-                        Error.External($"Failed to fetch JWKS keys after {maxRetries + 1} attempts", "AUTH.JWKS_FETCH_ERROR", ex));
-                }
-            }
-            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(ex, "Timeout fetching JWKS from {JwksUri} (attempt {Attempt}/{MaxRetries})", 
-                    _options.JwksUri, attempt + 1, maxRetries + 1);
-                
-                if (attempt == maxRetries)
-                {
-                    return Result.Failure<ICollection<SecurityKey>, Error>(
-                        Error.External($"JWKS fetch timeout after {maxRetries + 1} attempts", "AUTH.JWKS_FETCH_TIMEOUT", ex));
-                }
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "Invalid JSON in JWKS response from {JwksUri} (attempt {Attempt}): {Message}", 
-                    _options.JwksUri, attempt + 1, ex.Message);
-                
-                if (attempt == maxRetries)
-                {
-                    return Result.Failure<ICollection<SecurityKey>, Error>(
-                        Error.External("Invalid JSON in JWKS response", "AUTH.JWKS_INVALID_JSON", ex));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error fetching JWKS from {JwksUri} (attempt {Attempt}/{MaxRetries})", 
-                    _options.JwksUri, attempt + 1, maxRetries + 1);
-                
-                if (attempt == maxRetries)
-                {
-                    return Result.Failure<ICollection<SecurityKey>, Error>(
-                        Error.External($"Failed to fetch JWKS keys after {maxRetries + 1} attempts", "AUTH.JWKS_FETCH_ERROR", ex));
-                }
-            }
-        }
-
-        // This should never be reached, but added for completeness
-        return Result.Failure<ICollection<SecurityKey>, Error>(
-            Error.External("JWKS fetch failed after all retry attempts", "AUTH.JWKS_FETCH_ERROR"));
-    }
 
     private Task<Result<ClaimsPrincipal, Error>> ValidateJwtTokenAsync(string token, ICollection<SecurityKey> securityKeys)
     {

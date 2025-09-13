@@ -14,6 +14,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Polly;
 
 namespace Axon.Modules.Identity.Infrastructure.DependencyInjection;
 
@@ -101,10 +102,22 @@ public static class ServiceRegistration
         
         // Register External Services
         services.Configure<DynamicXyzOptions>(configuration.GetSection("DynamicXyz"));
-        services.AddHttpClient<DynamicAuthService>("DynamicAuth", client =>
+        
+        // Register JWKS Service with HTTP client and Polly retry policies
+        services.AddHttpClient<IJwksService, JwksService>("JwksClient", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
+        })
+        .AddStandardResilienceHandler(options =>
+        {
+            options.Retry.MaxRetryAttempts = 3;
+            options.Retry.BackoffType = Polly.DelayBackoffType.Exponential;
+            options.Retry.UseJitter = true;
+            options.Retry.Delay = TimeSpan.FromMilliseconds(500);
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(10);
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
         });
+        
         services.AddScoped<IDynamicAuthService, DynamicAuthService>();
         services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
         
