@@ -16,18 +16,18 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
         builder.Property(o => o.Id)
             .HasConversion(id => id.Value, value => new WalletOwnershipId(value))
             .HasColumnName("id")
-            .HasColumnType("char(26)");
+            .HasColumnType("uuid");
 
         builder.Property(o => o.PrincipalId)
             .HasConversion(id => id.Value, value => new AxonId(value))
             .HasColumnName("principal_id")
-            .HasColumnType("char(26)")
+            .HasColumnType("uuid")
             .IsRequired();
 
         builder.Property(o => o.WalletId)
             .HasConversion(id => id.Value, value => new WalletId(value))
             .HasColumnName("wallet_id")
-            .HasColumnType("char(26)")
+            .HasColumnType("uuid")
             .IsRequired();
 
         builder.Property(o => o.AccessMode)

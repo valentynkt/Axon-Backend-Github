@@ -105,7 +105,7 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _principalRepository.EnsureManyByChainAndAddressAsync(
+        _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
 
@@ -139,7 +139,7 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(existingPrincipal);
 
-        _principalRepository.EnsureManyByChainAndAddressAsync(
+        _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
 
@@ -178,7 +178,7 @@ public class ExchangeCredentialHandlerTests
             { ("137", Address.Create("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd").Value), WalletId.New() }
         };
 
-        _principalRepository.EnsureManyByChainAndAddressAsync(
+        _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(walletIds);
 
@@ -195,7 +195,7 @@ public class ExchangeCredentialHandlerTests
         result.IsSuccess.ShouldBeTrue();
         result.Value.WalletsProcessed.ShouldBe(2);
 
-        await _principalRepository.Received(1)
+        await _walletRepository.Received(1)
             .EnsureManyByChainAndAddressAsync(
                 Arg.Is<IEnumerable<(string, Address)>>(specs => specs.Count() == 2),
                 Arg.Any<CancellationToken>());
@@ -213,7 +213,7 @@ public class ExchangeCredentialHandlerTests
             .Returns((AxonPrincipal?)null);
 
         // Setup mocks for potential repository calls (even though validation should fail early)
-        _principalRepository.EnsureManyByChainAndAddressAsync(
+        _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
 
@@ -246,7 +246,7 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _principalRepository.EnsureManyByChainAndAddressAsync(
+        _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>
             {
@@ -417,7 +417,7 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _principalRepository.EnsureManyByChainAndAddressAsync(
+        _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
 

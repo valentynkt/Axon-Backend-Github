@@ -49,8 +49,13 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
-        
-        var entry = _dbSet.Update(aggregate);
+
+        var entry = _context.Entry(aggregate);
+        if (entry.State == EntityState.Detached)
+        {
+            entry = _dbSet.Update(aggregate);
+        }
+
         return Task.FromResult(entry.Entity);
     }
 

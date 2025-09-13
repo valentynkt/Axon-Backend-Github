@@ -17,7 +17,7 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
         builder.Property(p => p.Id)
             .HasConversion(id => id.Value, value => new AxonId(value))
             .HasColumnName("id")
-            .HasColumnType("char(26)");
+            .HasColumnType("uuid");
 
         builder.Property(p => p.Type)
             .HasConversion<string>()
@@ -49,8 +49,7 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
             .HasForeignKey("PrincipalId")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Chain defaults collection - stored as separate entities
-        builder.HasMany<PrincipalChainDefault>("ChainDefaults")
+        builder.HasMany(p => p.PrincipalChainDefaults)
             .WithOne()
             .HasForeignKey("PrincipalId")
             .OnDelete(DeleteBehavior.Cascade);

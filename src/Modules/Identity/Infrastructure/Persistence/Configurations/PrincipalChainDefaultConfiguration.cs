@@ -10,12 +10,17 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
     {
         builder.ToTable("principal_chain_default", "identity");
 
-        builder.HasKey(d => new { d.PrincipalId, d.ChainId });
+        builder.HasKey(d => d.Id);
+
+        // Unique constraint for business logic - one default per principal per chain
+        builder.HasIndex(d => new { d.PrincipalId, d.ChainId })
+            .IsUnique()
+            .HasDatabaseName("ix_principal_chain_default_unique");
         
         builder.Property(d => d.PrincipalId)
             .HasConversion(id => id.Value, value => new AxonId(value))
             .HasColumnName("principal_id")
-            .HasColumnType("char(26)");
+            .HasColumnType("uuid");
 
         builder.Property(d => d.ChainId)
             .HasColumnName("chain_id")
@@ -25,7 +30,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
         builder.Property(d => d.WalletId)
             .HasConversion(id => id.Value, value => new WalletId(value))
             .HasColumnName("wallet_id")
-            .HasColumnType("char(26)")
+            .HasColumnType("uuid")
             .IsRequired();
 
         builder.Property(d => d.CreatedAt)
@@ -41,8 +46,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
         builder.HasIndex(d => d.PrincipalId).HasDatabaseName("ix_default_principal_id");
         builder.HasIndex(d => d.WalletId).HasDatabaseName("ix_default_wallet_id");
 
-        // Foreign key to ensure wallet is verified & signing for this principal
-        builder.HasCheckConstraint("ck_default_wallet_verified_signing", 
-            "EXISTS (SELECT 1 FROM identity.wallet_ownership wo WHERE wo.principal_id = principal_id AND wo.wallet_id = wallet_id AND wo.status = 'Verified' AND wo.access_mode = 'Signing')");
+        // Note: Business logic constraint (verified signing wallet) enforced in domain layer
+        // PostgreSQL doesn't support subqueries in CHECK constraints
     }
 }

@@ -12,7 +12,6 @@ namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 /// </summary>
 public sealed partial class AxonPrincipal
 {
-    private readonly Dictionary<string, WalletId> _chainDefaults = new();
 
     /// <summary>
     /// Updates the risk tier with no-op guard.
@@ -165,11 +164,22 @@ public sealed partial class AxonPrincipal
             return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.WatchOnlyNotAllowedAsDefault());
 
         // No-op guard: if same default, don't update
-        if (_chainDefaults.TryGetValue(chainId, out var currentDefault) && currentDefault == walletId)
+        var existingDefault = _principalChainDefaults.FirstOrDefault(pcd => pcd.ChainId == chainId);
+        if (existingDefault != null && existingDefault.WalletId == walletId)
             return Result.Success<Unit, Error>(Unit.Value);
 
-        var oldDefault = _chainDefaults.TryGetValue(chainId, out var existing) ? existing : (WalletId?)null;
-        _chainDefaults[chainId] = walletId;
+        var oldDefault = existingDefault?.WalletId;
+
+        // Update or create chain default
+        if (existingDefault != null)
+        {
+            existingDefault.UpdateWallet(walletId);
+        }
+        else
+        {
+            var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+            _principalChainDefaults.Add(newDefault);
+        }
 
         // Increment version for concurrency control
         Version++;
@@ -197,10 +207,10 @@ public sealed partial class AxonPrincipal
         _walletOwnerships.Remove(ownership);
 
         // Remove from defaults if it was a default
-        var defaultChains = _chainDefaults.Where(kv => kv.Value == walletId).Select(kv => kv.Key).ToList();
-        foreach (var chain in defaultChains)
+        var defaultsToRemove = _principalChainDefaults.Where(pcd => pcd.WalletId == walletId).ToList();
+        foreach (var defaultToRemove in defaultsToRemove)
         {
-            _chainDefaults.Remove(chain);
+            _principalChainDefaults.Remove(defaultToRemove);
         }
 
         // Raise domain event

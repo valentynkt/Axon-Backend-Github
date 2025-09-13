@@ -21,13 +21,23 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
     public IWriteUnitOfWork UnitOfWork => _unitOfWork;
 
-    private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
+    private IQueryable<AxonPrincipal> GetPrincipalWithIncludesForUpdate()
     {
         return DbSet
             .AsSplitQuery()
             .Include(p => p.Credentials)
             .Include(p => p.WalletOwnerships)
-            .Include(p => p.ChainDefaults);
+            .Include(p => p.PrincipalChainDefaults);
+    }
+
+    private IQueryable<AxonPrincipal> GetPrincipalWithIncludesForRead()
+    {
+        return DbSet
+            .AsSplitQuery()
+            .AsNoTracking()
+            .Include(p => p.Credentials)
+            .Include(p => p.WalletOwnerships)
+            .Include(p => p.PrincipalChainDefaults);
     }
 
     private IQueryable<AxonPrincipal> GetPrincipalForRead()
@@ -39,7 +49,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
     public override async Task<AxonPrincipal?> GetByIdAsync(AxonId id, CancellationToken ct = default)
     {
-        return await GetPrincipalWithIncludes()
+        return await GetPrincipalWithIncludesForUpdate()
             .FirstOrDefaultAsync(p => p.Id == id, ct);
     }
 
@@ -60,7 +70,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         WalletId walletId,
         CancellationToken ct = default)
     {
-        return await GetPrincipalWithIncludes()
+        return await GetPrincipalWithIncludesForRead()
             .FirstOrDefaultAsync(p => p.WalletOwnerships.Any(wo => wo.WalletId == walletId), ct);
     }
 
@@ -96,9 +106,9 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         if (walletIdsList.Count == 0)
             return new Dictionary<WalletId, AxonPrincipal>();
 
-        var principals = await GetPrincipalWithIncludes()
-            .Where(p => p.WalletOwnerships.Any(wo => 
-                walletIdsList.Contains(wo.WalletId) && 
+        var principals = await GetPrincipalWithIncludesForRead()
+            .Where(p => p.WalletOwnerships.Any(wo =>
+                walletIdsList.Contains(wo.WalletId) &&
                 wo.AccessMode == AccessMode.Signing))
             .ToListAsync(ct);
 
@@ -114,49 +124,6 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
                     result[ownership.WalletId] = principal;
                 }
             }
-        }
-
-        return result;
-    }
-
-
-    public async Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(
-        IEnumerable<(string chainId, Address address)> walletSpecs,
-        CancellationToken ct = default)
-    {
-        var specs = walletSpecs.ToList();
-        if (specs.Count == 0)
-            return new Dictionary<(string chainId, Address address), WalletId>();
-
-        var context = (IdentityWriteDbContext)Context;
-        var result = new Dictionary<(string chainId, Address address), WalletId>();
-
-        // First, try to find existing wallets
-        var existingWallets = await context.Set<Wallet>()
-            .Where(w => specs.Any(spec => w.ChainId == ChainId.From(spec.chainId) && w.Address == spec.address))
-            .Select(w => new { w.Id, w.ChainId, w.Address })
-            .ToListAsync(ct);
-
-        // Map existing wallets to the result
-        foreach (var existing in existingWallets)
-        {
-            var chainValue = existing.ChainId;
-            var spec = specs.First(s => s.chainId == chainValue && s.address.Equals(existing.Address));
-            result[spec] = existing.Id;
-        }
-
-        // Create missing wallets
-        var missingSpecs = specs.Where(spec => !result.ContainsKey(spec)).ToList();
-        foreach (var spec in missingSpecs)
-        {
-            var wallet = Wallet.Create(null, spec.chainId, spec.address);
-            await context.Set<Wallet>().AddAsync(wallet, ct);
-            result[spec] = wallet.Id;
-        }
-
-        if (missingSpecs.Count > 0)
-        {
-            await context.SaveChangesAsync(ct);
         }
 
         return result;

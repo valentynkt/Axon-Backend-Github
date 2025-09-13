@@ -284,8 +284,8 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
                 Error.Validation($"Address parsing errors: {string.Join(", ", parseErrors)}", "EXCHANGE.INVALID_ADDRESSES"));
         }
 
-        // Step 2: Batch ensure wallets exist using principal repository method
-        var walletLookup = await _principalRepository.EnsureManyByChainAndAddressAsync(walletSpecs, cancellationToken);
+        // Step 2: Batch ensure wallets exist using wallet repository method
+        var walletLookup = await _walletRepository.EnsureManyByChainAndAddressAsync(walletSpecs, cancellationToken);
         var walletIds = walletLookup.Values.ToList();
 
         // Step 3: Check for existing verified signing ownership conflicts

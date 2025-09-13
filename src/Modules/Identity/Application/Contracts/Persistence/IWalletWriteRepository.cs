@@ -27,6 +27,18 @@ public interface IWalletWriteRepository : IWriteRepository<Wallet, WalletId>
     /// Gets multiple wallets by their identifiers.
     /// </summary>
     Task<IReadOnlyList<Wallet>> GetByIdsAsync(
-        IEnumerable<WalletId> walletIds, 
+        IEnumerable<WalletId> walletIds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ensures multiple wallets exist by their chain and address combinations in batch.
+    /// Creates wallets that don't exist, returns all wallet IDs.
+    /// Used during exchange operations to prevent N+1 queries.
+    /// </summary>
+    /// <param name="walletSpecs">Chain and address combinations to ensure</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Dictionary mapping chain/address pairs to wallet IDs</returns>
+    Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(
+        IEnumerable<(string chainId, Address address)> walletSpecs,
+        CancellationToken ct = default);
 }

@@ -16,10 +16,9 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
         builder.Property(w => w.Id)
             .HasConversion(id => id.Value, value => new WalletId(value))
             .HasColumnName("id")
-            .HasColumnType("char(26)");
+            .HasColumnType("uuid");
 
         builder.Property(w => w.ChainId)
-            .HasConversion(new ChainId.EfCoreValueConverter())
             .HasColumnName("chain_id")
             .HasMaxLength(50)
             .IsRequired();

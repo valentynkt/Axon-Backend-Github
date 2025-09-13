@@ -14,9 +14,11 @@ public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
 {
     private readonly List<IdentityCredential> _credentials = [];
     private readonly List<WalletOwnership> _walletOwnerships = [];
+    private readonly List<PrincipalChainDefault> _principalChainDefaults = [];
 
     public IReadOnlyCollection<IdentityCredential> Credentials => _credentials;
     public IReadOnlyCollection<WalletOwnership> WalletOwnerships => _walletOwnerships;
+    public IReadOnlyCollection<PrincipalChainDefault> PrincipalChainDefaults => _principalChainDefaults;
 
     public PrincipalType Type { get; private set; }
     public RiskTier RiskTier { get; private set; } = RiskTier.Low;

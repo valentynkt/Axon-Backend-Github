@@ -54,4 +54,49 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 
         return wallets.AsReadOnly();
     }
+
+    public async Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(
+        IEnumerable<(string chainId, Address address)> walletSpecs,
+        CancellationToken ct = default)
+    {
+        var specs = walletSpecs.ToList();
+        if (specs.Count == 0)
+            return new Dictionary<(string chainId, Address address), WalletId>();
+
+        var context = (IdentityWriteDbContext)Context;
+        var result = new Dictionary<(string chainId, Address address), WalletId>();
+
+        // Stage 1: Get candidate wallets using simple Contains operations (EF Core friendly)
+        var chainIdValues = specs.Select(s => s.chainId).Distinct().ToList();
+        var addresses = specs.Select(s => s.address).Distinct().ToList();
+
+        var candidateWallets = await DbSet
+            .Where(w => chainIdValues.Contains(w.ChainId) && addresses.Contains(w.Address))
+            .Select(w => new { w.Id, w.ChainId, w.Address })
+            .ToListAsync(ct);
+
+        // Stage 2: Filter candidates for exact (chainId, address) pairs in memory
+        var existingWallets = candidateWallets
+            .Where(w => specs.Any(s => s.chainId.Equals(w.ChainId, StringComparison.OrdinalIgnoreCase) && s.address.Equals(w.Address)))
+            .ToList();
+
+        // Map existing wallets to the result
+        foreach (var existing in existingWallets)
+        {
+            var spec = specs.First(s => s.chainId.Equals(existing.ChainId, StringComparison.OrdinalIgnoreCase) && s.address.Equals(existing.Address));
+            result[spec] = existing.Id;
+        }
+
+        // Create missing wallets
+        var missingSpecs = specs.Where(spec => !result.ContainsKey(spec)).ToList();
+        foreach (var spec in missingSpecs)
+        {
+            var wallet = Wallet.Create(null, spec.chainId, spec.address);
+            await DbSet.AddAsync(wallet, ct);
+            result[spec] = wallet.Id;
+        }
+
+        // Let UnitOfWork handle the SaveChanges - don't call it directly
+        return result;
+    }
 }

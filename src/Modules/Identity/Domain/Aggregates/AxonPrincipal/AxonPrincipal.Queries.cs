@@ -11,7 +11,8 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Gets the chain defaults dictionary.
     /// </summary>
-    public IReadOnlyDictionary<string, WalletId> ChainDefaults => _chainDefaults;
+    public IReadOnlyDictionary<string, WalletId> ChainDefaults =>
+        _principalChainDefaults.ToDictionary(pcd => pcd.ChainId, pcd => pcd.WalletId);
 
     /// <summary>
     /// Checks if the principal has a specific credential.
@@ -55,7 +56,7 @@ public sealed partial class AxonPrincipal
     /// </summary>
     public WalletId? GetDefaultWalletForChain(string chainId)
     {
-        return _chainDefaults.TryGetValue(chainId, out var walletId) ? walletId : null;
+        return _principalChainDefaults.FirstOrDefault(pcd => pcd.ChainId == chainId)?.WalletId;
     }
 
     /// <summary>

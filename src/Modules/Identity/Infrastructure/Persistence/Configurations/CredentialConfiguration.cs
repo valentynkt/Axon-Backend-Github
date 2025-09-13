@@ -15,12 +15,12 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
         builder.Property(c => c.Id)
             .HasConversion(id => id.Value, value => new IdentityCredentialId(value))
             .HasColumnName("id")
-            .HasColumnType("char(26)");
+            .HasColumnType("uuid");
 
         builder.Property(c => c.PrincipalId)
             .HasConversion(id => id.Value, value => new AxonId(value))
             .HasColumnName("principal_id")
-            .HasColumnType("char(26)")
+            .HasColumnType("uuid")
             .IsRequired();
 
         builder.Property(c => c.Provider)

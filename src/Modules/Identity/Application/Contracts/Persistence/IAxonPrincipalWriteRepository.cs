@@ -79,16 +79,4 @@ public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal,
     Task<Dictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
         IEnumerable<WalletId> walletIds,
         CancellationToken ct = default);
-
-
-    /// <summary>
-    /// Ensures multiple wallets exist by their chain and address combinations in batch.
-    /// Used during exchange operations to prevent N+1 queries.
-    /// </summary>
-    /// <param name="walletSpecs">Chain and address combinations to ensure</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Dictionary mapping chain/address pairs to wallet IDs</returns>
-    Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(
-        IEnumerable<(string chainId, Address address)> walletSpecs,
-        CancellationToken ct = default);
 }
