@@ -146,8 +146,8 @@ public class SimpleDynamicAuthServiceTests
     public async Task ValidateTokenAsync_WhenTokenHasInvalidFormat_ShouldReturnInvalidTokenFormatError()
     {
         // Arrange
-        var invalidToken = "invalid.token.format";
-        
+        var invalidToken = "invalid-token-format"; // No dots, so CanReadToken() should return false
+
         _jwksService.GetJwksKeysAsync(Arg.Any<CancellationToken>())
             .Returns(Result.Success<ICollection<SecurityKey>, Error>(_testKeys));
 

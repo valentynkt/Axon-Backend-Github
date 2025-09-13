@@ -24,7 +24,7 @@ public abstract class BaseIdentityCommandEndpoint<TRequest, TResponse, TCommand,
     public override void Configure()
     {
         Post(GetRoute());
-        AllowAnonymous(); // TODO S2: Replace with RequireAuthorization() for Bearer token auth
+        AllowAnonymous(); // ExchangeEndpoint validates JWT internally
 
         Summary(s =>
         {

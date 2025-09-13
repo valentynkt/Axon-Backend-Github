@@ -109,3 +109,4 @@ public sealed class ExchangeWalletDataValidator : AbstractValidator<ExchangeWall
         return chain.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_');
     }
 }
+

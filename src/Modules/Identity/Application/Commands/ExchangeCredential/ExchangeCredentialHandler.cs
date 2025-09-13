@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Common.Commands;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
+using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -9,6 +10,8 @@ using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 
@@ -27,33 +30,102 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 {
     private readonly IAxonPrincipalWriteRepository _principalRepository;
     private readonly IWalletWriteRepository _walletRepository;
+    private readonly IExchangeMetricsService _metricsService;
+    private readonly ILogger<ExchangeCredentialHandler> _logger;
 
     public ExchangeCredentialHandler(
         ICurrentUserService currentUserService,
         IAxonPrincipalWriteRepository principalRepository,
-        IWalletWriteRepository walletRepository) 
+        IWalletWriteRepository walletRepository,
+        IExchangeMetricsService metricsService,
+        ILogger<ExchangeCredentialHandler> logger)
         : base(currentUserService)
     {
         _principalRepository = principalRepository;
         _walletRepository = walletRepository;
+        _metricsService = metricsService;
+        _logger = logger;
     }
 
     public override async Task<Result<ExchangeOutcome, Error>> Handle(
-        ExchangeCredentialCommand command, 
+        ExchangeCredentialCommand command,
         CancellationToken cancellationToken)
     {
+        var correlationId = Activity.Current?.Id ?? "unknown";
+        var processingStartTime = Stopwatch.StartNew();
+
+        // Log exchange start with structured data
+        using var scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["CorrelationId"] = correlationId,
+            ["Provider"] = "dynamic",
+            ["UserId"] = command.UserData?.UserId ?? "unknown",
+            ["EnvironmentId"] = command.UserData?.EnvironmentId ?? "unknown",
+            ["WalletCount"] = command.UserData?.Wallets?.Count ?? 0
+        });
+
+        _logger.LogInformation("Exchange credential operation started for user {UserId} with {WalletCount} wallets",
+            command.UserData?.UserId, command.UserData?.Wallets?.Count ?? 0);
+
         // Validate input data structure
         var validationResult = await ValidateCommand(command);
         if (validationResult.IsFailure)
+        {
+            processingStartTime.Stop();
+            _metricsService.RecordExchangeFailure(
+                validationResult.Error.Code,
+                "validation",
+                processingStartTime.ElapsedMilliseconds);
+
+            _logger.LogWarning("Exchange validation failed: {ErrorCode} - {Message}",
+                validationResult.Error.Code, validationResult.Error.Message);
             return validationResult.Error;
+        }
 
         try
         {
             // Execute all operations within a single transaction
-            return await ExecuteExchangeTransaction(command.UserData, cancellationToken);
+            var result = await ExecuteExchangeTransaction(command.UserData!, cancellationToken);
+
+            processingStartTime.Stop();
+
+            if (result.IsSuccess)
+            {
+                var outcome = result.Value;
+                _metricsService.RecordExchangeSuccess(
+                    command.UserData!.UserId,
+                    outcome.Created,
+                    outcome.WalletsProcessed,
+                    outcome.WalletsLinked,
+                    outcome.Conflicts,
+                    processingStartTime.ElapsedMilliseconds);
+
+                _logger.LogInformation("Exchange completed successfully: Created={Created}, WalletsProcessed={WalletsProcessed}, " +
+                    "WalletsLinked={WalletsLinked}, Conflicts={Conflicts}, DefaultsApplied={DefaultsApplied}, Duration={Duration}ms",
+                    outcome.Created, outcome.WalletsProcessed, outcome.WalletsLinked,
+                    outcome.Conflicts, outcome.DefaultsApplied, processingStartTime.ElapsedMilliseconds);
+            }
+            else
+            {
+                _metricsService.RecordExchangeFailure(
+                    result.Error.Code,
+                    result.Error.Type.ToString().ToLowerInvariant(),
+                    processingStartTime.ElapsedMilliseconds);
+
+                _logger.LogWarning("Exchange failed: {ErrorCode} - {Message}",
+                    result.Error.Code, result.Error.Message);
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
+            processingStartTime.Stop();
+            _metricsService.RecordExchangeFailure("EXCHANGE.INTERNAL", "internal", processingStartTime.ElapsedMilliseconds);
+
+            _logger.LogError(ex, "Unexpected error during exchange processing after {Duration}ms",
+                processingStartTime.ElapsedMilliseconds);
+
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Internal($"Unexpected error during exchange: {ex.Message}", "EXCHANGE.INTERNAL"));
         }
@@ -133,6 +205,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         await Task.CompletedTask;
         return Result.Success<ExchangeOutcome, Error>(default!);
     }
+
 
     private static Result<(ProviderType providerType, string issuer, string subject), Error> CreateDynamicCredential(
         ExchangeUserData userData)
@@ -221,10 +294,14 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         var conflicts = existingOwners.Where(kvp => kvp.Value.Id != principal.Id).ToList();
         if (conflicts.Count > 0)
         {
-            // Return conflict information for 409 response
+            // Log wallet ownership conflict with details
             var conflictWallet = conflicts.First();
             var conflictSpec = walletSpecs.First(ws => walletLookup.ContainsKey(ws) && walletLookup[ws] == conflictWallet.Key);
-            
+
+            _logger.LogWarning("Wallet ownership conflict detected: Chain={Chain}, Address={Address}, " +
+                "ConflictingPrincipalId={ConflictingPrincipalId}, CurrentPrincipalId={CurrentPrincipalId}",
+                conflictSpec.chainId, conflictSpec.address.Value, conflictWallet.Value.Id.Value, principal.Id.Value);
+
             return Result.Failure<WalletProcessingMetrics, Error>(
                 IdentityDomainErrors.Wallet.WalletOwnershipConflict(conflictSpec.chainId, conflictSpec.address.Value));
         }

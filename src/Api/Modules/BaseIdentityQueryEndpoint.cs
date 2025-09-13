@@ -25,7 +25,7 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
     public override void Configure()
     {
         Get(GetRoute());
-        AllowAnonymous(); // TODO S2: Replace with RequireAuthorization() for Bearer token auth
+        // Endpoints are secure by default in FastEndpoints - no need to call RequireAuthorization()
 
         Summary(s =>
         {

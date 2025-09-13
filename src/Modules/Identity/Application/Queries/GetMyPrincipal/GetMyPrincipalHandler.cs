@@ -30,7 +30,7 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
     }
 
     public override async Task<Result<CurrentUserResult, Error>> Handle(
-        GetMyPrincipalQuery query, 
+        GetMyPrincipalQuery query,
         CancellationToken cancellationToken)
     {
         // Step 1: Find principal by credential
