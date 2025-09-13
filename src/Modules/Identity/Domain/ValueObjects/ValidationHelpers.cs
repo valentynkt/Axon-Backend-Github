@@ -29,28 +29,6 @@ public static class ValidationHelpers
     }
 
     /// <summary>
-    /// Validates an email hash.
-    /// </summary>
-    public static Result<string, Error> ValidateEmailHash(string? emailHash)
-    {
-        if (string.IsNullOrWhiteSpace(emailHash))
-            return Result.Failure<string, Error>(
-                Error.Validation("Email hash cannot be empty.", "IDENTITY.EMAIL.HASH.EMPTY"));
-
-        var trimmed = emailHash.Trim();
-        
-        if (trimmed.Length != 64) // SHA256 hex length
-            return Result.Failure<string, Error>(
-                Error.Validation("Email hash must be 64 characters (SHA256 hex).", "IDENTITY.EMAIL.HASH.INVALID_LENGTH"));
-
-        if (!IsValidHexString(trimmed))
-            return Result.Failure<string, Error>(
-                Error.Validation("Email hash must contain only hexadecimal characters.", "IDENTITY.EMAIL.HASH.INVALID_FORMAT"));
-
-        return Result.Success<string, Error>(trimmed.ToLowerInvariant());
-    }
-
-    /// <summary>
     /// Validates a tag value.
     /// </summary>
     public static Result<string, Error> ValidateTag(string? tag)
@@ -76,11 +54,6 @@ public static class ValidationHelpers
     {
         // Allow alphanumeric and common chain naming patterns
         return chainId.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_');
-    }
-
-    private static bool IsValidHexString(string hex)
-    {
-        return hex.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
     }
 
     private static bool IsValidTagFormat(string tag)
