@@ -1,6 +1,6 @@
 # 7. Core Workflows
 
-## New User Credential Exchange (`POST /auth/exchange`) - Epic 2 Simplified
+## New User Credential Exchange (`POST /auth/exchange`) - Epic 3 Wallet-First Resolution
 
 ```mermaid
 sequenceDiagram
@@ -26,10 +26,16 @@ sequenceDiagram
     JWKS Service-->>-Auth Service: Keys
     Auth Service-->>-App Handler: Result<ExchangeUserData>
 
-    App Handler->>+Database: FindByCredentialAsync (Compiled Query)
-    Database-->>-App Handler: Principal or null
+    App Handler->>+Database: Check wallet ownership first (FindByWalletIdAsync)
+    Database-->>-App Handler: Existing principal or null
 
-    App Handler->>App Handler: Create or load Principal aggregate
+    alt Wallet Owner Found
+        App Handler->>App Handler: Use existing principal, add new credential if needed
+    else No Wallet Owner
+        App Handler->>+Database: FindByCredentialAsync (Compiled Query)
+        Database-->>-App Handler: Principal or null
+        App Handler->>App Handler: Create or load Principal aggregate
+    end
     App Handler->>+Database: EnsureManyByChainAndAddressAsync (Batch)
     Database-->>-App Handler: Wallet IDs
 

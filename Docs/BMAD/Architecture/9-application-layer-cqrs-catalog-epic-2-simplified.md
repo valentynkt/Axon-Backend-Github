@@ -31,10 +31,17 @@
 * **Output:** `CurrentUserResult` + `ETag` header OR **304 Not Modified**
 * **Observability:** Metrics (etag_hits/misses), trace correlation, structured logging
 
-## Repository Contract Additions (Epic 2 Complete Implementation)
+## Repository Contract Additions (Epic 3 Complete Implementation)
 
 ```csharp
-// Read-side credential resolution (compiled query for performance)
+// Epic 3: Wallet-first resolution methods
+Task<AxonPrincipal?> FindByWalletIdAsync(
+    WalletId walletId, CancellationToken ct = default);
+
+Task<bool> IsCredentialTakenAsync(
+    ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
+
+// Epic 2: Read-side credential resolution (compiled query for performance)
 Task<AxonPrincipal?> FindByCredentialAsync(
     ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
 
@@ -46,8 +53,8 @@ Task<string> GetPrincipalFingerprintAsync(
 Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>>
   EnsureManyByChainAndAddressAsync(IEnumerable<(string chainId, Address address)> items, CancellationToken ct = default);
 
-// Find verified signing owners (for conflict detection)
-Task<IReadOnlyList<AxonId>> FindVerifiedSigningOwnersAsync(
+// Find verified signing owners (for conflict detection) - Epic 2/3 enhanced
+Task<IReadOnlyDictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
     IEnumerable<WalletId> walletIds, CancellationToken ct = default);
 
 // Last-seen updates (does not affect ETag)

@@ -1,9 +1,9 @@
-# Axon AI Identity & Memory — Backend Architecture (Epic 2 Stabilization)
+# Axon AI Identity & Memory — Backend Architecture (Epic 3 Wallet-First Resolution)
 
 > **Module:** Identity (Principal, Credentials, Wallets)
-> **Goal:** Production-ready canonical identity service with simplified architecture, eliminating dual patterns, implementing ETag caching, rate limiting, and comprehensive observability.
+> **Goal:** Production-ready canonical identity service with wallet-first resolution, preventing duplicate identities when users authenticate with different methods but same wallets.
 > **API Surface:** `POST /auth/exchange`, `GET /auth/me` (stateless, production-hardened).
-> **Key Invariants:** Global wallet uniqueness; **no silent reassignments**; **idempotent** exchange; **verified-first defaults**; **deterministic ETag**; **single command/query patterns**; **no contact identifiers persisted**.
+> **Key Invariants:** **Wallet-first resolution**; Global wallet uniqueness; **no silent reassignments**; **idempotent** exchange; **verified-first defaults**; **deterministic ETag**; **single command/query patterns**; **no contact identifiers persisted**.
 
 ---
 
@@ -11,6 +11,7 @@
 
 | Date       | Version | Description                                                                                                  | Author  |
 | ---------- | ------- | ------------------------------------------------------------------------------------------------------------ | ------- |
+| 2025-09-14 | 3.0.0   | **Epic 3 Wallet-First Resolution**: Implements wallet-first identity resolution to prevent duplicate principals when users authenticate with different methods but control same wallets | Winston |
 | 2025-09-11 | 2.0.0   | **Epic 2 Stabilization**: Eliminates dual patterns, adds ETag caching, rate limiting, simplified services, production observability; grounded in existing implementation | Winston |
 | 2025-09-09 | 1.0.2   | Privacy-minimal MVP: **removed contact identifiers (e.g., primaryEmailHash)**; PRD alignment; docs tightened | Winston |
 | 2025-09-09 | 1.0.1   | Final w/ PRD-aligned fixes (ETag, OpenAPI, privacy, no-op guards, minimalism)                                | Winston |
@@ -20,12 +21,17 @@
 
 ## 1. Introduction
 
-This document captures the **production-ready** architecture of the Axon AI **Identity & Memory** service after **Epic 2 stabilization**. It is a **stateless** backend module, designed with **DDD**, **CQRS**, and **Clean Architecture**, that exposes two REST endpoints with production-hardened features:
+This document captures the **production-ready** architecture of the Axon AI **Identity & Memory** service after **Epic 3 wallet-first resolution**. It is a **stateless** backend module, designed with **DDD**, **CQRS**, and **Clean Architecture**, that exposes two REST endpoints with production-hardened features:
 
-* `POST /auth/exchange` — idempotently creates/updates a **Principal**, links verified wallets, enforces global uniqueness, applies defaults. **Rate-limited** at 10 req/min per IP.
+* `POST /auth/exchange` — idempotently creates/updates a **Principal** using **wallet-first resolution**, links verified wallets, enforces global uniqueness, applies defaults. **Rate-limited** at 10 req/min per IP.
 * `GET /auth/me` — returns a **snapshot** of the authenticated Principal with **conditional GET** support via **ETag** headers for optimal caching.
 
-**Epic 2 Improvements:**
+**Epic 3 Core Innovation:**
+* **Wallet-First Identity Resolution**: Prevents duplicate principals by checking wallet ownership before credential-based lookup
+* **Cross-Authentication Method Unity**: Users with same wallets get same identity regardless of login method (Google, email, Dynamic, etc.)
+* **Enhanced Principal Resolution**: New `ResolveOrCreatePrincipalWalletFirst` method implements the wallet-first workflow
+
+**Previous Epic Improvements (Epics 1-2):**
 * **Eliminated dual patterns**: Single canonical command/query handlers (`ExchangeCredentialCommand`, `GetMyPrincipalQuery`)
 * **Separated concerns**: `DynamicAuthService` with extracted `IJwksService` for JWKS caching and validation
 * **Production observability**: Comprehensive metrics, correlation IDs, structured logging
@@ -232,7 +238,7 @@ graph TD
 
 ## 7. Core Workflows
 
-### New User Credential Exchange (`POST /auth/exchange`) - Epic 2 Simplified
+### New User Credential Exchange (`POST /auth/exchange`) - Epic 3 Wallet-First Resolution
 
 ```mermaid
 sequenceDiagram
@@ -258,10 +264,16 @@ sequenceDiagram
     JWKS Service-->>-Auth Service: Keys
     Auth Service-->>-App Handler: Result<ExchangeUserData>
 
-    App Handler->>+Database: FindByCredentialAsync (Compiled Query)
-    Database-->>-App Handler: Principal or null
+    App Handler->>+Database: Check wallet ownership first (FindByWalletIdAsync)
+    Database-->>-App Handler: Existing principal or null
 
-    App Handler->>App Handler: Create or load Principal aggregate
+    alt Wallet Owner Found
+        App Handler->>App Handler: Use existing principal, add new credential if needed
+    else No Wallet Owner
+        App Handler->>+Database: FindByCredentialAsync (Compiled Query)
+        Database-->>-App Handler: Principal or null
+        App Handler->>App Handler: Create or load Principal aggregate
+    end
     App Handler->>+Database: EnsureManyByChainAndAddressAsync (Batch)
     Database-->>-App Handler: Wallet IDs
 
@@ -526,10 +538,17 @@ paths:
 * **Output:** `CurrentUserResult` + `ETag` header OR **304 Not Modified**
 * **Observability:** Metrics (etag_hits/misses), trace correlation, structured logging
 
-### Repository Contract Additions (Epic 2 Complete Implementation)
+### Repository Contract Additions (Epic 3 Complete Implementation)
 
 ```csharp
-// Read-side credential resolution (compiled query for performance)
+// Epic 3: Wallet-first resolution methods
+Task<AxonPrincipal?> FindByWalletIdAsync(
+    WalletId walletId, CancellationToken ct = default);
+
+Task<bool> IsCredentialTakenAsync(
+    ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
+
+// Epic 2: Read-side credential resolution (compiled query for performance)
 Task<AxonPrincipal?> FindByCredentialAsync(
     ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
 
@@ -541,8 +560,8 @@ Task<string> GetPrincipalFingerprintAsync(
 Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>>
   EnsureManyByChainAndAddressAsync(IEnumerable<(string chainId, Address address)> items, CancellationToken ct = default);
 
-// Find verified signing owners (for conflict detection)
-Task<IReadOnlyList<AxonId>> FindVerifiedSigningOwnersAsync(
+// Find verified signing owners (for conflict detection) - Epic 2/3 enhanced
+Task<IReadOnlyDictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
     IEnumerable<WalletId> walletIds, CancellationToken ct = default);
 
 // Last-seen updates (does not affect ETag)
@@ -942,6 +961,24 @@ src/Modules/Identity/
 
 ## 20. Implementation Status & Roadmap
 
+### Epic 3 (Wallet-First Resolution) - Current Implementation Status ⚡
+
+**Story 3.1 - Wallet-First Principal Resolution**
+- ⚠️ **Partially Complete**: Repository methods (`FindByWalletIdAsync`, `IsCredentialTakenAsync`) are defined in contracts
+- ❌ **Pending Implementation**: `ResolveOrCreatePrincipalWalletFirst` method in `ExchangeCredentialHandler`
+- ✅ **Repository Infrastructure**: Enhanced `FindVerifiedSigningOwnersAsync` returns `Dictionary<WalletId, AxonPrincipal>` for wallet-to-principal mapping
+- ✅ **Current State**: Line 231 in `ExchangeCredentialHandler` has TODO comment acknowledging need for wallet-based resolution
+
+**Story 3.2 - Cross-Credential Identity Linking**
+- ❌ **Pending**: Logic to add new credentials to existing principals found via wallet ownership
+- ❌ **Pending**: Conflict detection when credential belongs to different principal
+- ✅ **Infrastructure Ready**: `IsCredentialTakenAsync` method available for conflict detection
+
+**Story 3.3 - Enhanced Testing for Wallet-First Flow**
+- ❌ **Pending**: Unit tests for wallet resolution scenarios
+- ❌ **Pending**: Integration tests for cross-authentication method unity
+- ❌ **Pending**: Conflict handling test cases
+
 ### Epic 1 (PRD) - Completed Stories ✅
 
 **Story 1.1 - EF Core Model, Configs & Initial Migration**
@@ -1043,9 +1080,26 @@ src/Modules/Identity/
 
 ---
 
-## 22. Next Steps (Epic 2 Implementation Priorities)
+## 22. Next Steps (Epic 3 Implementation Priorities)
 
-### Immediate Epic 2 Priorities (Critical Path)
+### Immediate Epic 3 Priorities (Critical Path) 🎯
+
+**Phase 1: Implement Wallet-First Resolution (Story 3.1)**
+1. **Create `ResolveOrCreatePrincipalWalletFirst` method** - Replace credential-first logic at line 148 in `ExchangeCredentialHandler`
+2. **Update method signature and integration point** - Modify `ExecuteExchangeTransaction` to use wallet specs for resolution
+3. **Handle wallet ownership conflicts** - Use existing `IsCredentialTakenAsync` for conflict detection
+
+**Phase 2: Cross-Credential Linking (Story 3.2)**
+1. **Implement credential addition logic** - Add new credentials to existing principals found via wallet
+2. **Enhance conflict detection** - Prevent credential hijacking across principals
+3. **Update integration logic** - Ensure idempotency when same credential is processed multiple times
+
+**Phase 3: Testing & Validation (Story 3.3)**
+1. **Unit tests for wallet resolution** - Test scenarios where wallet matches existing principal
+2. **Integration tests for cross-auth** - Validate Google → Dynamic → Wallet auth flows resolve to same principal
+3. **Conflict handling tests** - Ensure proper error handling for credential conflicts
+
+### Epic 2 Implementation Status (Background Tasks)
 
 **Phase 1: Service Simplification (Story 2.5)**
 1. **Extract IJwksService from DynamicAuthService** - Create separate service for JWKS caching with Polly retry policies
@@ -1054,7 +1108,7 @@ src/Modules/Identity/
 
 **Phase 2: Architecture Cleanup (Story 2.1, 2.4)**
 1. **Remove dual patterns** - Delete ExchangeTokenCommand, GetCurrentUserQuery folders completely
-2. **Update API endpoints** - Route ExchangeEndpoint and MeEndpoint directly to single canonical handlers  
+2. **Update API endpoints** - Route ExchangeEndpoint and MeEndpoint directly to single canonical handlers
 3. **Aggressive dead code removal** - Delete EmailHash value object, unused validation helpers, clean imports
 4. **Eliminate build warnings** - Clean up all compiler warnings and generated artifacts
 
@@ -1065,28 +1119,60 @@ src/Modules/Identity/
 
 ### Implementation Sequence Recommendation
 
+**Epic 3 (Priority) → Epic 2 (Background)**
+
 ```mermaid
-graph LR
-    A[Story 2.5<br/>Service Refactoring] --> B[Story 2.1<br/>Remove Dual Patterns]
-    B --> C[Story 2.4<br/>Dead Code Cleanup]
-    C --> D[Story 2.2<br/>Complete ETag]
-    D --> E[Story 2.3<br/>Rate Limiting]
-    E --> F[Story 2.6<br/>Observability]
+graph TB
+    subgraph "Epic 3 - Wallet-First Resolution (Priority)"
+        A3[Story 3.1<br/>Wallet-First Resolution Method]
+        B3[Story 3.2<br/>Cross-Credential Linking]
+        C3[Story 3.3<br/>Testing & Validation]
+        A3 --> B3 --> C3
+    end
+
+    subgraph "Epic 2 - Stabilization (Background)"
+        A2[Story 2.5<br/>Service Refactoring]
+        B2[Story 2.1<br/>Remove Dual Patterns]
+        C2[Story 2.4<br/>Dead Code Cleanup]
+        D2[Story 2.2<br/>Complete ETag]
+        E2[Story 2.3<br/>Rate Limiting]
+        F2[Story 2.6<br/>Observability]
+        A2 --> B2 --> C2 --> D2 --> E2 --> F2
+    end
+
+    C3 -.-> A2
 ```
 
-### Validation & Testing
+### Epic 3 Validation & Testing
 
-1. **Integration tests for complete workflows** - Exchange flow, ETag 200→304 cycle, rate limiting behavior
-2. **Repository method completion** - Implement all remaining contract methods with compiled queries
-3. **End-to-end Epic 2 validation** - Verify all architectural improvements work together
-4. **Performance benchmarking** - Confirm ETag cache hit ratios and rate limiter overhead < 1ms
+1. **Wallet-First Resolution Tests**
+   - User logs in with Google → creates principal with wallet
+   - Same user logs in with Dynamic (same wallet) → resolves to same principal, adds Dynamic credential
+   - Verify no duplicate principals created
 
-### Post-Epic 2 Future Enhancements
+2. **Cross-Credential Linking Tests**
+   - Principal A owns wallet X with Google auth
+   - Principal B tries to link wallet X with Dynamic auth → should resolve to Principal A, add Dynamic credential
+   - Credential conflict detection when credential belongs to different principal
 
-- Read replica for `/auth/me` endpoint (performance scaling)
-- Advanced rate limiting strategies (user-based, not just IP-based)
-- Additional authentication providers beyond Dynamic
-- Enhanced audit logging and compliance features
+3. **Edge Case Validation**
+   - Multiple wallets, some owned, some new
+   - Empty wallet list (fallback to credential-only resolution)
+   - Invalid wallet addresses handling
+
+### Epic 2/3 Integration Testing
+
+1. **End-to-end workflow validation** - Complete exchange flow with wallet-first resolution
+2. **Repository method completion** - All Epic 3 methods implemented with compiled queries
+3. **Performance validation** - Wallet lookup adds minimal overhead to exchange flow
+4. **ETag compatibility** - Wallet-first resolution doesn't break ETag caching
+
+### Future Enhancements (Post-Epic 3)
+
+- **Solana Sign-In Integration** - Direct wallet signature authentication without OAuth providers
+- **Advanced wallet verification** - On-chain signature verification for ownership proof
+- **Multi-provider wallet support** - Ethereum, Polygon, BSC wallet resolution
+- **Enhanced audit logging** - Complete audit trail for identity resolution paths
 
 ---
 
@@ -1105,3 +1191,28 @@ graph LR
 * **Statelessness:** Every call validated by provider JWT; no server tokens.
 * **Deterministic Caching:** ETag from DB fingerprint across principal + related rows (verified & signing ownerships + defaults).
 * **Privacy:** MVP persists **no contact identifiers**; logs and audits exclude PII.
+* **Wallet-First Resolution:** Epic 3 ensures single identity per wallet set, preventing authentication method fragmentation.
+
+### Appendix C — Epic 3 Wallet-First Resolution Algorithm
+
+**Core Logic Flow:**
+1. **Wallet Check Phase**: For each wallet in request, query `FindByWalletIdAsync` to find existing owner
+2. **Principal Resolution**: If wallet owner found, use that principal; otherwise fallback to credential lookup
+3. **Credential Addition**: If using existing principal, add new credential if not already present
+4. **Conflict Detection**: Use `IsCredentialTakenAsync` to prevent credential hijacking
+5. **Idempotent Completion**: Process remaining wallets and apply defaults as normal
+
+**Method Signature (Implementation Target):**
+```csharp
+private async Task<Result<(AxonPrincipal, bool), Error>> ResolveOrCreatePrincipalWalletFirst(
+    ProviderType providerType,
+    string issuer,
+    string subject,
+    List<(string chainId, Address address)> walletSpecs,
+    CancellationToken cancellationToken)
+```
+
+**Integration Point:**
+- Replace line 148-149 in `ExchangeCredentialHandler.ExecuteExchangeTransaction`
+- Parse wallet specs from `userData.Wallets` before principal resolution
+- Maintain backward compatibility when no wallets provided (credential-only path)

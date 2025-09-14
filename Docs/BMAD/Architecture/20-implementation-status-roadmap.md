@@ -1,5 +1,23 @@
 # 20. Implementation Status & Roadmap
 
+## Epic 3 (Wallet-First Resolution) - Current Implementation Status ⚡
+
+**Story 3.1 - Wallet-First Principal Resolution**
+- ⚠️ **Partially Complete**: Repository methods (`FindByWalletIdAsync`, `IsCredentialTakenAsync`) are defined in contracts
+- ❌ **Pending Implementation**: `ResolveOrCreatePrincipalWalletFirst` method in `ExchangeCredentialHandler`
+- ✅ **Repository Infrastructure**: Enhanced `FindVerifiedSigningOwnersAsync` returns `Dictionary<WalletId, AxonPrincipal>` for wallet-to-principal mapping
+- ✅ **Current State**: Line 231 in `ExchangeCredentialHandler` has TODO comment acknowledging need for wallet-based resolution
+
+**Story 3.2 - Cross-Credential Identity Linking**
+- ❌ **Pending**: Logic to add new credentials to existing principals found via wallet ownership
+- ❌ **Pending**: Conflict detection when credential belongs to different principal
+- ✅ **Infrastructure Ready**: `IsCredentialTakenAsync` method available for conflict detection
+
+**Story 3.3 - Enhanced Testing for Wallet-First Flow**
+- ❌ **Pending**: Unit tests for wallet resolution scenarios
+- ❌ **Pending**: Integration tests for cross-authentication method unity
+- ❌ **Pending**: Conflict handling test cases
+
 ## Epic 1 (PRD) - Completed Stories ✅
 
 **Story 1.1 - EF Core Model, Configs & Initial Migration**
