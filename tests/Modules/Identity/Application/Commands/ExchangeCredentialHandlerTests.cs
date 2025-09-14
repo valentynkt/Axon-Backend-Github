@@ -7,6 +7,7 @@ using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
@@ -113,7 +114,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<WalletId, AxonPrincipal>());
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -147,7 +147,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<WalletId, AxonPrincipal>());
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -186,7 +185,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<WalletId, AxonPrincipal>());
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -221,7 +219,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<WalletId, AxonPrincipal>());
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -260,7 +257,6 @@ public class ExchangeCredentialHandlerTests
                 { conflictWalletId, conflictPrincipal }
             });
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -281,7 +277,6 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -293,20 +288,14 @@ public class ExchangeCredentialHandlerTests
     }
 
     [Test]
-    public async Task Should_RollbackTransaction_OnFailure()
+    public async Task Should_HandleDatabaseFailure()
     {
         // Arrange
         var userData = CreateTestUserData();
         var command = new ExchangeCredentialCommand(userData);
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
-
-        // Setup transaction that fails
-        _unitOfWork.When(x => x.ExecuteInTransactionAsync<Result<ExchangeOutcome, Error>>(
-            Arg.Any<Func<CancellationToken, Task<Result<ExchangeOutcome, Error>>>>(),
-            Arg.Any<CancellationToken>()))
+        // Setup repository to throw exception during SaveChanges
+        _unitOfWork.When(x => x.SaveChangesAsync(Arg.Any<CancellationToken>()))
             .Do(x => throw new InvalidOperationException("Database error"));
 
         // Act
@@ -377,17 +366,6 @@ public class ExchangeCredentialHandlerTests
         return result.Value;
     }
 
-    private void SetupSuccessfulTransaction()
-    {
-        _unitOfWork.ExecuteInTransactionAsync<Result<ExchangeOutcome, Error>>(
-            Arg.Any<Func<CancellationToken, Task<Result<ExchangeOutcome, Error>>>>(),
-            Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                var func = callInfo.Arg<Func<CancellationToken, Task<Result<ExchangeOutcome, Error>>>>();
-                return func(CancellationToken.None);
-            });
-    }
 
     [Test]
     public async Task Should_RecordMetricsFailure_When_ValidationFails()
@@ -425,7 +403,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<WalletId, AxonPrincipal>());
 
-        SetupSuccessfulTransaction();
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);

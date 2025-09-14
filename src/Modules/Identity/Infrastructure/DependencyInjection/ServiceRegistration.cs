@@ -9,6 +9,7 @@ using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;
+using BuildingBlocks.Infrastructure.Configuration;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
@@ -132,7 +133,10 @@ public static class ServiceRegistration
         // This is required by all command/query handlers in the application
         services.AddHttpContextAccessor(); // Required for HttpContextUserService
         services.AddScoped<ICurrentUserService, HttpContextUserService>();
-        
+
+        // Register BuildingBlocks Infrastructure services (including concurrency handling)
+        services.AddInfrastructure<IdentityWriteDbContext>(configuration);
+
         return services;
     }
 }

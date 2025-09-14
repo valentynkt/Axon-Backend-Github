@@ -57,7 +57,11 @@ public static partial class MassTransitRegistration
             // EF Bus Outbox (one simple path; provider-agnostic)
             x.AddEntityFrameworkOutbox<TDbContext>(o =>
             {
+                // Configure PostgreSQL database lock provider
+                o.UsePostgres();
+
                 o.UseBusOutbox();
+
                 // Default polling is fine; uncomment if you need tuning
                 // o.QueryDelay = TimeSpan.FromSeconds(1);
             });

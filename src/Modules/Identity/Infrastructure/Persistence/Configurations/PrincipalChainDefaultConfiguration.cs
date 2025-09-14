@@ -39,8 +39,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
 
         builder.Property(d => d.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamptz")
-            .IsConcurrencyToken();
+            .HasColumnType("timestamptz");
 
         // Performance indexes
         builder.HasIndex(d => d.PrincipalId).HasDatabaseName("ix_default_principal_id");

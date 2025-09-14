@@ -35,7 +35,10 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
 
         builder.Property(p => p.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamptz")
+            .HasColumnType("timestamptz");
+
+        builder.Property(p => p.Version)
+            .HasColumnName("version")
             .IsConcurrencyToken();
 
         // Navigation properties

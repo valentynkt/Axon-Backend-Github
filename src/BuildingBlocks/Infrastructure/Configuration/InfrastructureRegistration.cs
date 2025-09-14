@@ -1,5 +1,6 @@
 using System.Reflection;
 using BuildingBlocks.Infrastructure.Messaging;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,7 @@ public static class InfrastructureRegistration
     {
         // Register messaging infrastructure with EF Outbox
         services.AddInfrastructureMessaging<TDbContext>(configuration, configureMessaging, consumerAssemblies);
+
 
         // Future: Add other infrastructure services here
         // - Caching

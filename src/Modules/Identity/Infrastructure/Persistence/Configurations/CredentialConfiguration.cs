@@ -48,8 +48,7 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
 
         builder.Property(c => c.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamptz")
-            .IsConcurrencyToken();
+            .HasColumnType("timestamptz");
 
         // Unique constraint for (provider, issuer, subject)
         builder.HasIndex(c => new { c.Provider, c.Issuer, c.Subject })

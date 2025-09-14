@@ -46,8 +46,7 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
 
         builder.Property(o => o.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamptz")
-            .IsConcurrencyToken();
+            .HasColumnType("timestamptz");
 
         // Unique constraint for (principal_id, wallet_id)
         builder.HasIndex(o => new { o.PrincipalId, o.WalletId })

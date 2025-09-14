@@ -29,9 +29,6 @@ public sealed partial class AxonPrincipal
         var oldTier = RiskTier;
         RiskTier = riskTier;
 
-        // Increment version for concurrency control
-        Version++;
-
         // Raise domain event only when actual change occurs
         RaiseDomainEvent(new PrincipalChangedEvent(
             Id,
@@ -148,14 +145,14 @@ public sealed partial class AxonPrincipal
     public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
-        
+
         // Check if the wallet is owned by this principal, prioritize verified signing ownership
         var ownership = _walletOwnerships
             .Where(o => o.WalletId == walletId)
             .OrderByDescending(o => o.IsVerifiedSigning)
             .ThenByDescending(o => o.Status == OwnershipStatus.Verified)
             .FirstOrDefault();
-            
+
         if (ownership == null)
             return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
 
@@ -163,26 +160,62 @@ public sealed partial class AxonPrincipal
         if (!ownership.IsVerifiedSigning)
             return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.WatchOnlyNotAllowedAsDefault());
 
-        // No-op guard: if same default, don't update
-        var existingDefault = _principalChainDefaults.FirstOrDefault(pcd => pcd.ChainId == chainId);
+        // Enhanced no-op guard with defensive checks for concurrent modifications
+        var existingDefault = _principalChainDefaults
+            .Where(pcd => pcd.ChainId == chainId && !pcd.IsDeleted)
+            .FirstOrDefault();
+
         if (existingDefault != null && existingDefault.WalletId == walletId)
+        {
+            // Idempotent operation - no change needed
             return Result.Success<Unit, Error>(Unit.Value);
+        }
 
         var oldDefault = existingDefault?.WalletId;
 
-        // Update or create chain default
+        // Defensive update or create chain default with improved concurrency handling
         if (existingDefault != null)
         {
-            existingDefault.UpdateWallet(walletId);
+            // Check if the existing default is still valid (not soft-deleted by another process)
+            if (!existingDefault.IsDeleted)
+            {
+                existingDefault.UpdateWallet(walletId);
+            }
+            else
+            {
+                // Existing default was soft-deleted, remove it and create new one
+                _principalChainDefaults.Remove(existingDefault);
+                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+                _principalChainDefaults.Add(newDefault);
+            }
         }
         else
         {
-            var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
-            _principalChainDefaults.Add(newDefault);
-        }
+            // Check if there's a conflicting default that might have been added concurrently
+            var potentialConflict = _principalChainDefaults
+                .FirstOrDefault(pcd => pcd.ChainId == chainId);
 
-        // Increment version for concurrency control
-        Version++;
+            if (potentialConflict != null)
+            {
+                // Handle the conflict by updating the existing one
+                if (!potentialConflict.IsDeleted)
+                {
+                    potentialConflict.UpdateWallet(walletId);
+                }
+                else
+                {
+                    _principalChainDefaults.Remove(potentialConflict);
+                    var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+                    _principalChainDefaults.Add(newDefault);
+                }
+            }
+            else
+            {
+                // Safe to create new default
+                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+                _principalChainDefaults.Add(newDefault);
+            }
+        }
 
         // Raise domain event only when actual change occurs
         RaiseDomainEvent(new PrincipalChangedEvent(

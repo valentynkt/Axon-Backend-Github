@@ -2,7 +2,9 @@ using System.Linq.Expressions;
 using System.Reflection;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
@@ -33,6 +35,13 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     )
     {
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
+
+        // Configure MassTransit outbox entities for the module schema
+        var schema = ModuleName.ToLowerInvariant();
+        modelBuilder.AddInboxStateEntity(x => x.Metadata.SetSchema(schema));
+        modelBuilder.AddOutboxMessageEntity(x => x.Metadata.SetSchema(schema));
+        modelBuilder.AddOutboxStateEntity(x => x.Metadata.SetSchema(schema));
+
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
         ApplySoftDeleteQueryFilter(modelBuilder);
         ApplyVersionConcurrencyToken(modelBuilder);
@@ -134,10 +143,10 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditInformation();
-        
+
         const int maxRetries = 3;
         var retryCount = 0;
-        
+
         while (retryCount < maxRetries)
         {
             try
@@ -152,82 +161,51 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
             catch (DbUpdateConcurrencyException ex)
             {
                 retryCount++;
-                _logger.LogWarning("DbUpdateConcurrencyException on attempt {AttemptNumber}/{MaxRetries}. Affected entities: {EntityCount}", 
-                    retryCount, maxRetries, ex.Entries.Count);
-                
+                var affectedEntityTypes = ex.Entries.Select(e => e.Entity.GetType().Name).Distinct().ToList();
+
+                _logger.LogWarning("DbUpdateConcurrencyException on attempt {AttemptNumber}/{MaxRetries}. " +
+                    "Affected entities: {EntityCount}. Types: {EntityTypes}",
+                    retryCount, maxRetries, ex.Entries.Count, string.Join(", ", affectedEntityTypes));
+
                 if (retryCount >= maxRetries)
                 {
-                    _logger.LogError("Maximum retries ({MaxRetries}) exceeded for SaveChanges. Giving up.", maxRetries);
+                    _logger.LogError("Maximum retries ({MaxRetries}) exceeded for SaveChanges. " +
+                        "Final affected entity types: {EntityTypes}. Module: {ModuleName}",
+                        maxRetries, string.Join(", ", affectedEntityTypes), ModuleName);
                     throw;
                 }
-                
-                // For each conflicted entity, reload from database and reset tracking state
+
+                // Simple reload strategy: refresh conflicted entities with database values
                 foreach (var entry in ex.Entries)
                 {
-                    try
+                    if (entry.State == EntityState.Added) continue; // New entities don't exist in DB
+
+                    var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                    if (databaseValues != null)
                     {
-                        _logger.LogDebug("Reloading conflicted entity: {EntityType} (State: {EntityState})", 
-                            entry.Entity.GetType().Name, entry.State);
-                        
-                        // Skip reloading for Added entities - they don't exist in DB yet
-                        if (entry.State == EntityState.Added)
-                        {
-                            _logger.LogDebug("Skipping reload for new entity: {EntityType} - will be retried as new", 
-                                entry.Entity.GetType().Name);
-                            continue;
-                        }
-                        
-                        // Only reload Modified/Deleted entities from database
-                        var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
-                        if (databaseValues != null)
-                        {
-                            // Set original values to database values to avoid conflict
-                            entry.OriginalValues.SetValues(databaseValues);
-                            
-                            // For aggregate roots, we need to ensure the Version property is synced
-                            if (entry.Entity is Core.Domain.Entities.Base.AggregateRoot<object>)
-                            {
-                                // The Version will be automatically updated by EF Core's concurrency handling
-                                _logger.LogDebug("Synchronized aggregate root version for {EntityType}", entry.Entity.GetType().Name);
-                            }
-                        }
-                        else
-                        {
-                            // Entity was deleted by another process - only problematic for Modified entities
-                            if (entry.State == EntityState.Modified)
-                            {
-                                _logger.LogWarning("Entity {EntityType} was deleted by another process", entry.Entity.GetType().Name);
-                                throw new InvalidOperationException($"Entity {entry.Entity.GetType().Name} was deleted by another process");
-                            }
-                            else
-                            {
-                                _logger.LogDebug("Entity {EntityType} not found in database (State: {EntityState}) - skipping reload", 
-                                    entry.Entity.GetType().Name, entry.State);
-                            }
-                        }
+                        entry.OriginalValues.SetValues(databaseValues);
+                        _logger.LogDebug("Refreshed {EntityType} with database values", entry.Entity.GetType().Name);
                     }
-                    catch (Exception reloadEx)
+                    else
                     {
-                        _logger.LogError(reloadEx, "Failed to reload entity {EntityType}", entry.Entity.GetType().Name);
-                        throw;
+                        // Entity was deleted - detach it
+                        entry.State = EntityState.Detached;
+                        _logger.LogWarning("{EntityType} was deleted by another process - detached", entry.Entity.GetType().Name);
                     }
                 }
-                
-                // Add exponential backoff with jitter to reduce collision probability
-                var baseDelay = TimeSpan.FromMilliseconds(100 * Math.Pow(2, retryCount - 1));
-                var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 50));
-                var totalDelay = baseDelay.Add(jitter);
-                
-                _logger.LogDebug("Waiting {DelayMs}ms before retry {RetryNumber}/{MaxRetries}", 
-                    totalDelay.TotalMilliseconds, retryCount + 1, maxRetries);
-                
-                await Task.Delay(totalDelay, cancellationToken);
+
+                // Brief delay before retry to reduce collision probability
+                var delay = TimeSpan.FromMilliseconds(50 * retryCount);
+                _logger.LogDebug("Waiting {DelayMs}ms before retry {RetryNumber}/{MaxRetries}",
+                    delay.TotalMilliseconds, retryCount + 1, maxRetries);
+                await Task.Delay(delay, cancellationToken);
             }
         }
-        
+
         // This should never be reached due to the throw in the catch block
         throw new InvalidOperationException("Unexpected end of retry loop");
     }
+
 
     // --------- Domain events (no dispatch here; App layer coordinates) ---------
     public IReadOnlyList<IDomainEvent> GetDomainEvents() => Array.Empty<IDomainEvent>();

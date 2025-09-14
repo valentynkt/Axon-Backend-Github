@@ -9,6 +9,7 @@ using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -84,7 +85,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         try
         {
-            // Execute all operations within a single transaction
+            // Execute transaction with simple retry pattern
             var result = await ExecuteExchangeTransaction(command.UserData!, cancellationToken);
 
             processingStartTime.Stop();
@@ -131,61 +132,59 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         }
     }
 
+
     private async Task<Result<ExchangeOutcome, Error>> ExecuteExchangeTransaction(
         ExchangeUserData userData,
         CancellationToken cancellationToken)
     {
-        return await _principalRepository.UnitOfWork.ExecuteInTransactionAsync<Result<ExchangeOutcome, Error>>(async (transactionCt) =>
+        // Step 1: Create normalized credential from Dynamic data
+        var credentialResult = CreateDynamicCredential(userData);
+        if (credentialResult.IsFailure)
+            return credentialResult.Error;
+
+        var (providerType, issuer, subject) = credentialResult.Value;
+
+        // Step 2: Find or create Principal
+        var principalResult = await ResolveOrCreatePrincipal(
+            providerType, issuer, subject, cancellationToken);
+        if (principalResult.IsFailure)
+            return principalResult.Error;
+
+        var (principal, isNewPrincipal) = principalResult.Value;
+
+        // Step 3: Process wallets in batch to prevent N+1 queries
+        var walletProcessingResult = await ProcessWalletsBatch(
+            principal, userData.Wallets, cancellationToken);
+        if (walletProcessingResult.IsFailure)
+            return walletProcessingResult.Error;
+
+        var walletMetrics = walletProcessingResult.Value;
+
+        // Step 4: Apply verified-first chain defaults
+        var defaultsApplied = await ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds, cancellationToken);
+
+        // Step 5: Persist changes
+        if (isNewPrincipal)
         {
-            // Step 1: Create normalized credential from Dynamic data
-            var credentialResult = CreateDynamicCredential(userData);
-            if (credentialResult.IsFailure)
-                return credentialResult.Error;
+            await _principalRepository.AddAsync(principal, cancellationToken);
+        }
+        else
+        {
+            await _principalRepository.UpdateAsync(principal, cancellationToken);
+        }
 
-            var (providerType, issuer, subject) = credentialResult.Value;
+        await _principalRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Step 2: Find or create Principal
-            var principalResult = await ResolveOrCreatePrincipal(
-                providerType, issuer, subject, transactionCt);
-            if (principalResult.IsFailure)
-                return principalResult.Error;
-
-            var (principal, isNewPrincipal) = principalResult.Value;
-
-            // Step 3: Process wallets in batch to prevent N+1 queries
-            var walletProcessingResult = await ProcessWalletsBatch(
-                principal, userData.Wallets, transactionCt);
-            if (walletProcessingResult.IsFailure)
-                return walletProcessingResult.Error;
-
-            var walletMetrics = walletProcessingResult.Value;
-
-            // Step 4: Apply verified-first chain defaults
-            var defaultsApplied = await ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds, cancellationToken);
-
-            // Step 5: Persist changes
-            if (isNewPrincipal)
-            {
-                await _principalRepository.AddAsync(principal, cancellationToken);
-            }
-            else
-            {
-                await _principalRepository.UpdateAsync(principal, cancellationToken);
-            }
-
-            await _principalRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Step 6: Return stable metrics
-            return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
-                AxonId: principal.Id,
-                Created: isNewPrincipal,
-                WalletsProcessed: walletMetrics.Processed,
-                WalletsLinked: walletMetrics.Linked,
-                DefaultsApplied: defaultsApplied,
-                Skipped: walletMetrics.Skipped,
-                Conflicts: walletMetrics.Conflicts
-            ));
-        }, cancellationToken);
+        // Step 6: Return stable metrics
+        return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
+            AxonId: principal.Id,
+            Created: isNewPrincipal,
+            WalletsProcessed: walletMetrics.Processed,
+            WalletsLinked: walletMetrics.Linked,
+            DefaultsApplied: defaultsApplied,
+            Skipped: walletMetrics.Skipped,
+            Conflicts: walletMetrics.Conflicts
+        ));
     }
 
     private static async Task<Result<ExchangeOutcome, Error>> ValidateCommand(ExchangeCredentialCommand command)
@@ -229,6 +228,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         CancellationToken cancellationToken)
     {
         // First, try to find existing principal by credential
+        //ToDo: Make it not based on issuer, providerType, but linked to wallet, to make it resolve the same principal without relying on if user use dynamic, os Solana Sign In.
         var existingPrincipal = await _principalRepository.FindByCredentialAsync(
             providerType, issuer, subject, cancellationToken);
 

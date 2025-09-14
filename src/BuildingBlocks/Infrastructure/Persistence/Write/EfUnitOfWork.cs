@@ -46,31 +46,30 @@ public sealed class EfUnitOfWork<TContext, TModule> : IWriteUnitOfWork<TModule>
             action,
             async (context, operation, cancellationToken) =>
             {
-                // Use the client's cancellation token for all operations
-                // This removes the artificial 2-minute timeout that was causing premature cancellations
                 await _db.BeginTransactionAsync(cancellationToken);
-                try 
-                { 
-                    // Execute business operations with the original cancellation token
-                    var result = await operation(cancellationToken); 
-                    await _db.CommitTransactionAsync(cancellationToken); 
+                try
+                {
+                    var result = await operation(cancellationToken);
+                    await _db.CommitTransactionAsync(cancellationToken);
                     return result;
                 }
                 catch (Exception ex)
-                { 
+                {
                     try
                     {
-                        // Use CancellationToken.None for rollback to ensure it always completes
-                        // even if the original operation was cancelled
                         await _db.RollbackTransactionAsync(CancellationToken.None);
                     }
                     catch (Exception rollbackEx)
                     {
-                        // Log rollback failure but don't mask the original exception
-                        // In production, you might want to log this
-                        _ = rollbackEx; // Suppress unused variable warning
+                        _ = rollbackEx;
                     }
-                    throw; 
+
+                    // Enhanced error context for better debugging
+                    throw new InvalidOperationException(
+                        $"Transaction failed in {typeof(TModule).Name} module. " +
+                        $"Transaction ID: {_db.CurrentTransactionId ?? "none"}. " +
+                        $"Original error: {ex.Message}",
+                        ex);
                 }
             },
             verifySucceeded: null,
