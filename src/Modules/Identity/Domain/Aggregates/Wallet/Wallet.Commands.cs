@@ -195,7 +195,13 @@ public sealed partial class Wallet
                 if (!trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || trimmed.Length != 42)
                     return Result.Failure<string, Error>(
                         Error.Validation("Invalid EVM address format.", "WALLET.ADDRESS.INVALID_FORMAT"));
-                
+
+                // Validate hex characters (skip "0x" prefix)
+                var hexPart = trimmed.Substring(2);
+                if (!hexPart.All(c => "0123456789abcdefABCDEF".Contains(c, StringComparison.Ordinal)))
+                    return Result.Failure<string, Error>(
+                        Error.Validation("Invalid EVM address format.", "WALLET.ADDRESS.INVALID_FORMAT"));
+
                 // Normalize to lowercase
                 trimmed = trimmed.ToLowerInvariant();
                 break;

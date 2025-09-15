@@ -69,7 +69,7 @@ public static class IdentityDomainErrors
 
         // Error factory methods
         public static Error Duplicate() => Error.BusinessRule(DuplicateMessage, DuplicateCode);
-        public static Error BelongsToOther() => Error.BusinessRule(BelongsToOtherMessage, BelongsToOtherCode);
+        public static Error BelongsToOther() => Error.Conflict(BelongsToOtherMessage, BelongsToOtherCode);
         public static Error NotFound() => Error.NotFound(NotFoundMessage, NotFoundCode);
         public static Error ProviderRequired() => Error.Validation(ProviderRequiredMessage, ProviderRequiredCode);
         public static Error ProviderInvalid() => Error.Validation(ProviderInvalidMessage, ProviderInvalidCode);
@@ -133,11 +133,11 @@ public static class IdentityDomainErrors
         public const string WatchOnlyNotAllowedAsDefaultMessage = "Only verified signing wallets can be set as default.";
 
         // Error factory methods
-        public static Error AlreadyOwned() => Error.BusinessRule(AlreadyOwnedMessage, AlreadyOwnedCode);
+        public static Error AlreadyOwned() => Error.Conflict(AlreadyOwnedMessage, AlreadyOwnedCode);
         public static Error AlreadyOwnedByPrincipal() => Error.BusinessRule(AlreadyOwnedByPrincipalMessage, AlreadyOwnedByPrincipalCode);
         public static Error NotOwned() => Error.NotFound(NotOwnedMessage, NotOwnedCode);
-        public static Error NotOwnedByPrincipal() => Error.BusinessRule(NotOwnedByPrincipalMessage, NotOwnedByPrincipalCode);
-        public static Error MaxExceeded() => Error.BusinessRule(MaxExceededMessage, MaxExceededCode);
+        public static Error NotOwnedByPrincipal() => Error.NotFound(NotOwnedByPrincipalMessage, NotOwnedByPrincipalCode);
+        public static Error MaxExceeded() => Error.Validation(MaxExceededMessage, MaxExceededCode);
         public static Error IdInvalid() => Error.Validation(IdInvalidMessage, IdInvalidCode);
         public static Error ProofRequired() => Error.Validation(ProofRequiredMessage, ProofRequiredCode);
         public static Error ProofInvalid() => Error.Validation(ProofInvalidMessage, ProofInvalidCode);
@@ -148,7 +148,7 @@ public static class IdentityDomainErrors
         public static Error LabelTooLong() => Error.Validation(LabelTooLongMessage, LabelTooLongCode);
         public static Error DefaultNotOwned() => Error.BusinessRule(DefaultNotOwnedMessage, DefaultNotOwnedCode);
         public static Error ChainMismatch() => Error.BusinessRule(ChainMismatchMessage, ChainMismatchCode);
-        public static Error WatchOnlyNotAllowedAsDefault() => Error.BusinessRule(WatchOnlyNotAllowedAsDefaultMessage, WatchOnlyNotAllowedAsDefaultCode);
+        public static Error WatchOnlyNotAllowedAsDefault() => Error.Validation(WatchOnlyNotAllowedAsDefaultMessage, WatchOnlyNotAllowedAsDefaultCode);
         
         // Wallet ownership conflict for exchange operations
         public static Error WalletOwnershipConflict(string chainId, string address) => Error.Conflict(
@@ -187,7 +187,7 @@ public static class IdentityDomainErrors
         public static Error InvalidLanguage() => Error.Validation(InvalidLanguageMessage, InvalidLanguageCode);
         public static Error InvalidRiskTier() => Error.Validation(InvalidRiskTierMessage, InvalidRiskTierCode);
         public static Error RiskTierInvalidForPrincipal() => Error.BusinessRule(InvalidForPrincipalMessage, InvalidForPrincipalCode);
-        public static Error ServicePrincipalRiskConstraint() => Error.BusinessRule(ServicePrincipalRiskConstraintMessage, ServicePrincipalRiskConstraintCode);
+        public static Error ServicePrincipalRiskConstraint() => Error.Validation(ServicePrincipalRiskConstraintMessage, ServicePrincipalRiskConstraintCode);
         public static Error ChainEmpty() => Error.Validation(ChainEmptyMessage, ChainEmptyCode);
         public static Error WalletIdInvalid() => Error.Validation(WalletIdInvalidMessage, WalletIdInvalidCode);
         public static Error Invalid() => Error.Validation(InvalidMessage, InvalidCode);

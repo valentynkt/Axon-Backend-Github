@@ -3,6 +3,7 @@ using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;
@@ -46,6 +47,14 @@ public class ExchangeCredentialHandlerTests
             _walletRepository,
             _metricsService,
             _logger);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _principalRepository?.Dispose();
+        _walletRepository?.Dispose();
+        _unitOfWork?.Dispose();
     }
 
     [Test]
@@ -705,6 +714,7 @@ public class ExchangeCredentialHandlerTests
         await _principalRepository.DidNotReceive()
             .IsCredentialTakenAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
+
 
     private static AxonPrincipal CreateTestPrincipalWithExistingDynamicCredential(ExchangeUserData userData)
     {

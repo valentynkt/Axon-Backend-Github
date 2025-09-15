@@ -33,9 +33,16 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
         GetMyPrincipalQuery query,
         CancellationToken cancellationToken)
     {
-        // Step 1: Find principal by credential
+        // Step 1: Ensure ProviderType is not null (validation should catch this, but safety first)
+        if (query.ProviderType is null)
+        {
+            return Result.Failure<CurrentUserResult, Error>(
+                Error.Validation("Provider type is required"));
+        }
+
+        // Step 2: Find principal by credential
         var principal = await _principalRepository.FindByCredentialAsync(
-            query.ProviderType,
+            query.ProviderType.Value,
             query.Issuer,
             query.Subject,
             cancellationToken);
@@ -46,12 +53,12 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
                 Error.NotFound(GetMyPrincipalErrorMessages.PrincipalNotFound));
         }
 
-        // Step 2: Generate ETag fingerprint
+        // Step 3: Generate ETag fingerprint
         var currentETag = await _principalRepository.GetPrincipalFingerprintAsync(
             principal.Id, 
             cancellationToken);
 
-        // Step 3: Check If-None-Match header for 304 Not Modified
+        // Step 4: Check If-None-Match header for 304 Not Modified
         if (!string.IsNullOrEmpty(query.IfNoneMatch))
         {
             // Handle both quoted and unquoted ETags as per HTTP spec
@@ -87,7 +94,7 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
                 currentETag, principal.Id.Value);
         }
 
-        // Step 4: Load full principal snapshot with ownerships
+        // Step 5: Load full principal snapshot with ownerships
         var principalWithOwnerships = await _principalRepository.GetByIdWithActiveOwnershipsAsync(
             principal.Id,
             cancellationToken);
@@ -98,7 +105,7 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
                 Error.NotFound(GetMyPrincipalErrorMessages.PrincipalDataLoadFailed));
         }
 
-        // Step 5: Build CurrentUserResult response
+        // Step 6: Build CurrentUserResult response
         var result = await BuildCurrentUserResult(principalWithOwnerships, currentETag, cancellationToken);
 
         return Result.Success<CurrentUserResult, Error>(result);

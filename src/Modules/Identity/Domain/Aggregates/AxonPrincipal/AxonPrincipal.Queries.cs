@@ -9,10 +9,12 @@ namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 public sealed partial class AxonPrincipal
 {
     /// <summary>
-    /// Gets the chain defaults dictionary.
+    /// Gets the active (non-deleted) chain defaults dictionary.
     /// </summary>
     public IReadOnlyDictionary<string, WalletId> ChainDefaults =>
-        _principalChainDefaults.ToDictionary(pcd => pcd.ChainId, pcd => pcd.WalletId);
+        _principalChainDefaults
+            .Where(pcd => !pcd.IsDeleted)
+            .ToDictionary(pcd => pcd.ChainId, pcd => pcd.WalletId);
 
     /// <summary>
     /// Checks if the principal has a specific credential.
