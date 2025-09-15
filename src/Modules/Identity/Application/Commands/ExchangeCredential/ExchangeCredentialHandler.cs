@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Application.Common.Commands;
+using Axon.Modules.Identity.Application.Common.Constants;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
@@ -29,6 +30,7 @@ namespace Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 /// </summary>
 public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<ExchangeCredentialCommand, ExchangeOutcome>
 {
+    private const string JwtIssuerMetadataKey = "jwt_issuer";
     private readonly IAxonPrincipalWriteRepository _principalRepository;
     private readonly IWalletWriteRepository _walletRepository;
     private readonly IExchangeMetricsService _metricsService;
@@ -231,8 +233,14 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         if (providerResult.IsFailure)
             return Result.Failure<(ProviderType, string, string), Error>(providerResult.Error);
 
-        // Use environment ID as issuer and user ID as subject for Dynamic
-        var issuer = $"dynamic:{userData.EnvironmentId}";
+        // Use JWT issuer from metadata if available, otherwise construct using Dynamic's format
+        var issuer = userData.AdditionalMetadata?.TryGetValue(JwtIssuerMetadataKey, out var jwtIssuer) == true && jwtIssuer is string jwtIssuerStr
+            ? jwtIssuerStr
+            : $"{DynamicAuthConstants.IssuerPrefix}/{userData.EnvironmentId}";
+
+        // Log which issuer source was used for debugging
+        var issuerSource = userData.AdditionalMetadata?.ContainsKey(JwtIssuerMetadataKey) == true ? "JWT claim" : "constructed";
+        System.Diagnostics.Debug.WriteLine($"Using issuer from {issuerSource}: {issuer}");
         var subject = userData.UserId;
 
         return Result.Success<(ProviderType, string, string), Error>((providerResult.Value, issuer, subject));

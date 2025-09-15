@@ -11,6 +11,10 @@ using Microsoft.Extensions.Logging.Console;
 using BuildingBlocks.Primitives.Ids;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using BuildingBlocks.Web.Middleware;
+using BuildingBlocks.Infrastructure.Persistence;
+using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,6 +103,9 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// Apply database migrations if enabled
+await app.ApplyMigrationsAsync();
 
 // Simplified startup validation for development
 if (app.Environment.IsDevelopment())
@@ -222,3 +229,49 @@ app.MapHealthChecks("/health/dynamic-auth", new Microsoft.AspNetCore.Diagnostics
 });
 
 app.Run();
+
+namespace Axon.Api
+{
+    /// <summary>
+    /// Extension methods for applying EF Core migrations at startup
+    /// </summary>
+    public static class MigrationExtensions
+    {
+        /// <summary>
+        /// Apply pending migrations for all DbContexts if enabled in configuration
+        /// </summary>
+        public static async Task ApplyMigrationsAsync(this WebApplication app)
+        {
+            ArgumentNullException.ThrowIfNull(app);
+
+            var migrationLogger = app.Services.GetRequiredService<ILogger<Program>>();
+
+            // Check configuration flag
+            var config = app.Configuration.GetSection("DatabaseOptions");
+            if (!config.GetValue<bool>("EnableAutomaticMigrations", false))
+            {
+                migrationLogger.LogDebug("Automatic migrations disabled in configuration");
+                return;
+            }
+
+            // Only apply in development/local environments for safety
+            if (!app.Environment.IsDevelopment() && app.Environment.EnvironmentName != "Local")
+            {
+                migrationLogger.LogWarning("Automatic migrations skipped in {Environment} environment", app.Environment.EnvironmentName);
+                return;
+            }
+
+            migrationLogger.LogInformation("Applying automatic migrations in {Environment} environment", app.Environment.EnvironmentName);
+
+            // Apply migrations for both contexts using existing UseMigration extension
+            // This leverages the existing infrastructure in BuildingBlocks
+            app.UseMigration<ChatDbContext>();
+            app.UseMigration<IdentityWriteDbContext>();
+
+            // Adding await to satisfy async method requirements
+            await Task.CompletedTask;
+
+            migrationLogger.LogInformation("✅ Automatic migrations completed successfully");
+        }
+    }
+}

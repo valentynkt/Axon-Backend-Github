@@ -40,6 +40,10 @@ public sealed class ChatDbContextFactory : DesignTimeDbContextFactoryBase<ChatDb
         new(options);
 
     protected override void ConfigureProvider(DbContextOptionsBuilder<ChatDbContext> builder, string connectionString) =>
-        builder.UseNpgsql(connectionString, opt => opt.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName))
-               .UseSnakeCaseNamingConvention();
+        builder.UseNpgsql(connectionString, opt =>
+        {
+            opt.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+            opt.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+        })
+        .UseSnakeCaseNamingConvention();
 }

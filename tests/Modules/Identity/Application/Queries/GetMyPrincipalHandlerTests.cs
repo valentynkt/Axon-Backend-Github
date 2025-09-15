@@ -238,11 +238,35 @@ public class GetMyPrincipalHandlerTests
 
             userResult.ShouldSatisfyAllConditions(
                 r => r.Profile.AxonId.ShouldBe(principal.Id.Value.ToString()),
+                r => r.Profile.Subject.ShouldBe(TestSubject),
                 r => r.Profile.RiskTier.ShouldBe("low"),
                 r => r.ETag.ShouldBe(etag),
                 r => r.Wallets.ShouldNotBeEmpty(),
                 r => r.ChainDefaults.ShouldNotBeNull()
             );
+        }
+
+        [Test]
+        public async Task Handle_WithValidPrincipal_Should_ReturnDifferentSubjectAndAxonId()
+        {
+            // Arrange
+            var principal = CreateTestPrincipalWithOwnerships();
+            var etag = "test-etag-123";
+            var query = new GetMyPrincipalQuery(TestProviderType, TestIssuer, TestSubject, null);
+
+            SetupSuccessfulPrincipalResolution(principal, etag);
+
+            // Act
+            var result = await _handler.Handle(query, CancellationToken.None);
+
+            // Assert
+            result.IsSuccess.ShouldBeTrue();
+            var userResult = result.Value;
+
+            // Verify that Subject and AxonId are different values
+            userResult.Profile.Subject.ShouldBe(TestSubject);
+            userResult.Profile.AxonId.ShouldBe(principal.Id.Value.ToString());
+            userResult.Profile.Subject.ShouldNotBe(userResult.Profile.AxonId);
         }
 
         [Test]

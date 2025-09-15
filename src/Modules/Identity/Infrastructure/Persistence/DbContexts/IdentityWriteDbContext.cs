@@ -53,6 +53,10 @@ public sealed class IdentityWriteDbContextFactory : DesignTimeDbContextFactoryBa
         new(options);
 
     protected override void ConfigureProvider(DbContextOptionsBuilder<IdentityWriteDbContext> builder, string connectionString) =>
-        builder.UseNpgsql(connectionString, opt => opt.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName))
-               .UseSnakeCaseNamingConvention();
+        builder.UseNpgsql(connectionString, opt =>
+        {
+            opt.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+            opt.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+        })
+        .UseSnakeCaseNamingConvention();
 }

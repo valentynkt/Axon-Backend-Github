@@ -64,9 +64,10 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
             (IdentityReadDbContext context, string provider, string issuer, string subject) =>
                 context.Set<AxonPrincipal>()
                     .Include(p => p.Credentials)
-                    .Where(p => p.Credentials.Any(c => 
-                        c.Provider == provider && 
-                        c.Issuer == issuer && 
+                    .Include(p => p.PrincipalChainDefaults)
+                    .Where(p => p.Credentials.Any(c =>
+                        c.Provider == provider &&
+                        c.Issuer == issuer &&
                         c.Subject == subject))
                     .AsNoTracking()
                     .FirstOrDefault());
@@ -179,7 +180,7 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
         return await _identityDbContext.Set<AxonPrincipal>()
             .Where(p => p.Id == axonId)
             .Include(p => p.WalletOwnerships.Where(wo => wo.Status == OwnershipStatus.Verified))
-            .Include(p => p.ChainDefaults)
+            .Include(p => p.PrincipalChainDefaults)
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
     }

@@ -15,6 +15,7 @@ using OpenTelemetry.Trace;
 using Polly;
 using Polly.Extensions.Http;
 using System.Reflection;
+using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 
 namespace Axon.Api.Configuration;
 
@@ -137,7 +138,10 @@ public static class ServiceRegistration
         
         // Configure Mapster with profiles and validation
         services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
-        
+
+        // Register ISeedManager service required by auto-migration
+        services.AddScoped<ISeedManager, SeedManager>();
+
         // Register API modules
         RegisterApiModules(services, configuration, environment);
         

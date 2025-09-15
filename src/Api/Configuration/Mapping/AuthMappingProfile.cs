@@ -45,9 +45,9 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
         // Map from new CurrentUserResult structure to existing API contract
         config.NewConfig<CurrentUserResult, GetCurrentUserResponseDto>()
             .Map(dest => dest.AxonId, src => src.Profile.AxonId)
-            .Map(dest => dest.Subject, src => src.Profile.AxonId) // Use AxonId as subject for now
+            .Map(dest => dest.Subject, src => src.Profile.Subject) // Use actual subject from JWT
             .Map(dest => dest.IsAuthenticated, src => true) // Always true if we have a result
-            .Map(dest => dest.Claims, src => new Dictionary<string, object> 
+            .Map(dest => dest.Claims, src => new Dictionary<string, object>
             {
                 { "risk_tier", src.Profile.RiskTier },
                 { "wallet_count", src.Wallets.Count },

@@ -4,17 +4,41 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class AddMassTransitOutbox : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.EnsureSchema(
+                name: "chat");
+
+            migrationBuilder.CreateTable(
+                name: "conversations",
+                schema: "chat",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    owner_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    status = table.Column<string>(type: "text", nullable: false),
+                    title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    last_ai_response_id = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    version = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_conversations", x => x.id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "inbox_state",
-                schema: "identity",
+                schema: "chat",
                 columns: table => new
                 {
                     id = table.Column<long>(type: "bigint", nullable: false)
@@ -38,7 +62,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
 
             migrationBuilder.CreateTable(
                 name: "outbox_state",
-                schema: "identity",
+                schema: "chat",
                 columns: table => new
                 {
                     outbox_id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -54,8 +78,36 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "messages",
+                schema: "chat",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    conversation_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    role = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    content = table.Column<string>(type: "text", nullable: false),
+                    sequence = table.Column<int>(type: "integer", nullable: false),
+                    ai_response_id = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_messages", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_messages_conversations_conversation_id",
+                        column: x => x.conversation_id,
+                        principalSchema: "chat",
+                        principalTable: "conversations",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "outbox_message",
-                schema: "identity",
+                schema: "chat",
                 columns: table => new
                 {
                     sequence_number = table.Column<long>(type: "bigint", nullable: false)
@@ -87,85 +139,90 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     table.ForeignKey(
                         name: "fk_outbox_message_inbox_state_inbox_message_id_inbox_consumer_",
                         columns: x => new { x.inbox_message_id, x.inbox_consumer_id },
-                        principalSchema: "identity",
+                        principalSchema: "chat",
                         principalTable: "inbox_state",
                         principalColumns: new[] { "message_id", "consumer_id" });
                     table.ForeignKey(
                         name: "fk_outbox_message_outbox_state_outbox_id",
                         column: x => x.outbox_id,
-                        principalSchema: "identity",
+                        principalSchema: "chat",
                         principalTable: "outbox_state",
                         principalColumn: "outbox_id");
                 });
 
             migrationBuilder.CreateIndex(
                 name: "ix_inbox_state_delivered",
-                schema: "identity",
+                schema: "chat",
                 table: "inbox_state",
                 column: "delivered");
 
             migrationBuilder.CreateIndex(
+                name: "ix_messages_conversation_id",
+                schema: "chat",
+                table: "messages",
+                column: "conversation_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_messages_conversation_id_sequence",
+                schema: "chat",
+                table: "messages",
+                columns: new[] { "conversation_id", "sequence" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_outbox_message_enqueue_time",
-                schema: "identity",
+                schema: "chat",
                 table: "outbox_message",
                 column: "enqueue_time");
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_message_expiration_time",
-                schema: "identity",
+                schema: "chat",
                 table: "outbox_message",
                 column: "expiration_time");
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_message_inbox_message_id_inbox_consumer_id_sequence_",
-                schema: "identity",
+                schema: "chat",
                 table: "outbox_message",
                 columns: new[] { "inbox_message_id", "inbox_consumer_id", "sequence_number" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_message_outbox_id_sequence_number",
-                schema: "identity",
+                schema: "chat",
                 table: "outbox_message",
                 columns: new[] { "outbox_id", "sequence_number" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_state_created",
-                schema: "identity",
+                schema: "chat",
                 table: "outbox_state",
                 column: "created");
-
-            migrationBuilder.AddForeignKey(
-                name: "fk_principal_chain_default_principal_principal_id",
-                schema: "identity",
-                table: "principal_chain_default",
-                column: "principal_id",
-                principalSchema: "identity",
-                principalTable: "principal",
-                principalColumn: "id",
-                onDelete: ReferentialAction.Cascade);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "fk_principal_chain_default_principal_principal_id",
-                schema: "identity",
-                table: "principal_chain_default");
+            migrationBuilder.DropTable(
+                name: "messages",
+                schema: "chat");
 
             migrationBuilder.DropTable(
                 name: "outbox_message",
-                schema: "identity");
+                schema: "chat");
+
+            migrationBuilder.DropTable(
+                name: "conversations",
+                schema: "chat");
 
             migrationBuilder.DropTable(
                 name: "inbox_state",
-                schema: "identity");
+                schema: "chat");
 
             migrationBuilder.DropTable(
                 name: "outbox_state",
-                schema: "identity");
+                schema: "chat");
         }
     }
 }

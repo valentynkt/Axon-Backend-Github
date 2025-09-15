@@ -23,7 +23,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var principalId = AxonId.New();
             var provider = "dynamic";
-            var issuer = "dynamic:test-env";
+            var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
             var timestamp = DateTime.UtcNow;
 
@@ -50,7 +50,7 @@ public class IdentityCredentialTests : IdentityTestBase
             var beforeCreation = DateTime.UtcNow;
             var principalId = AxonId.New();
             var provider = "dynamic";
-            var issuer = "dynamic:test-env";
+            var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
 
             // Act
@@ -68,7 +68,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var principalId = AxonId.New();
             var provider = "dynamic";
-            var issuer = "dynamic:test-env";
+            var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
 
             // Act
@@ -220,7 +220,7 @@ public class IdentityCredentialTests : IdentityTestBase
             var principalId1 = AxonId.New();
             var principalId2 = AxonId.New();
             var provider = "dynamic";
-            var issuer = "dynamic:test-env";
+            var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
 
             // Act
@@ -245,7 +245,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var principalId = AxonId.New();
             var provider = "dynamic";
-            var issuer = "dynamic:test-env";
+            var issuer = "app.dynamicauth.com/test-env";
 
             // Act
             var credential1 = IdentityCredential.Create(principalId, provider, issuer, "user1");

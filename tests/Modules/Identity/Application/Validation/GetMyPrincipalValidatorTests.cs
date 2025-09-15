@@ -130,7 +130,7 @@ public class GetMyPrincipalValidatorTests
         }
 
         [Test]
-        [TestCase("dynamic:test-env")]
+        [TestCase("app.dynamicauth.com/test-env")]
         [TestCase("github.com")]
         [TestCase("accounts.google.com")]
         [TestCase("appleid.apple.com")]
@@ -401,7 +401,7 @@ public class GetMyPrincipalValidatorTests
             var providerType = ProviderType.Create("dynamic").Value;
             var query = new GetMyPrincipalQuery(
                 providerType,
-                "dynamic:test-env",
+                "app.dynamicauth.com/test-env",
                 "test-user-123",
                 "\"abc123def456\"");
 
@@ -536,7 +536,7 @@ public class GetMyPrincipalValidatorTests
             var scenarios = new[]
             {
                 // Dynamic provider scenario
-                (ProviderType.Create("dynamic").Value, "dynamic:production", "user-12345-abcdef"),
+                (ProviderType.Create("dynamic").Value, "app.dynamicauth.com/production", "user-12345-abcdef"),
 
                 // GitHub provider scenario
                 (ProviderType.Create("github").Value, "github.com", "octocat"),

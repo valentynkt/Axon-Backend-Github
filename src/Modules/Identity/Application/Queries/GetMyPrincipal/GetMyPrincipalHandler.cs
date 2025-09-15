@@ -106,19 +106,21 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
         }
 
         // Step 6: Build CurrentUserResult response
-        var result = await BuildCurrentUserResult(principalWithOwnerships, currentETag, cancellationToken);
+        var result = await BuildCurrentUserResult(principalWithOwnerships, query.Subject, currentETag, cancellationToken);
 
         return Result.Success<CurrentUserResult, Error>(result);
     }
 
     private async Task<CurrentUserResult> BuildCurrentUserResult(
-        Domain.Aggregates.AxonPrincipal.AxonPrincipal principal, 
+        Domain.Aggregates.AxonPrincipal.AxonPrincipal principal,
+        string subject,
         string etag,
         CancellationToken cancellationToken)
     {
         // Build user profile
         var profile = new UserProfile(
             AxonId: principal.Id.Value.ToString(),
+            Subject: subject,
             RiskTier: CurrentUserResultMapper.MapRiskTierToWire(principal.RiskTier));
 
         // Build wallets array - only verified wallets for security

@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -13,6 +14,47 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
         {
             migrationBuilder.EnsureSchema(
                 name: "identity");
+
+            migrationBuilder.CreateTable(
+                name: "inbox_state",
+                schema: "identity",
+                columns: table => new
+                {
+                    id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    message_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    consumer_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    lock_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    row_version = table.Column<byte[]>(type: "bytea", rowVersion: true, nullable: true),
+                    received = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    receive_count = table.Column<int>(type: "integer", nullable: false),
+                    expiration_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    consumed = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    delivered = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    last_sequence_number = table.Column<long>(type: "bigint", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_inbox_state", x => x.id);
+                    table.UniqueConstraint("ak_inbox_state_message_id_consumer_id", x => new { x.message_id, x.consumer_id });
+                });
+
+            migrationBuilder.CreateTable(
+                name: "outbox_state",
+                schema: "identity",
+                columns: table => new
+                {
+                    outbox_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    lock_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    row_version = table.Column<byte[]>(type: "bytea", rowVersion: true, nullable: true),
+                    created = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    delivered = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    last_sequence_number = table.Column<long>(type: "bigint", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_outbox_state", x => x.outbox_id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "principal",
@@ -31,25 +73,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_principal", x => x.id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "principal_chain_default",
-                schema: "identity",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    principal_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    chain_id = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    wallet_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false),
-                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_principal_chain_default", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -74,6 +97,51 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "outbox_message",
+                schema: "identity",
+                columns: table => new
+                {
+                    sequence_number = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    enqueue_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    sent_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    headers = table.Column<string>(type: "text", nullable: true),
+                    properties = table.Column<string>(type: "text", nullable: true),
+                    inbox_message_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    inbox_consumer_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    outbox_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    message_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    content_type = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    message_type = table.Column<string>(type: "text", nullable: false),
+                    body = table.Column<string>(type: "text", nullable: false),
+                    conversation_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    correlation_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    initiator_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    request_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    source_address = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    destination_address = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    response_address = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    fault_address = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    expiration_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_outbox_message", x => x.sequence_number);
+                    table.ForeignKey(
+                        name: "fk_outbox_message_inbox_state_inbox_message_id_inbox_consumer_",
+                        columns: x => new { x.inbox_message_id, x.inbox_consumer_id },
+                        principalSchema: "identity",
+                        principalTable: "inbox_state",
+                        principalColumns: new[] { "message_id", "consumer_id" });
+                    table.ForeignKey(
+                        name: "fk_outbox_message_outbox_state_outbox_id",
+                        column: x => x.outbox_id,
+                        principalSchema: "identity",
+                        principalTable: "outbox_state",
+                        principalColumn: "outbox_id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "credential",
                 schema: "identity",
                 columns: table => new
@@ -94,6 +162,32 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     table.PrimaryKey("pk_credential", x => x.id);
                     table.ForeignKey(
                         name: "fk_credential_principal_principal_id",
+                        column: x => x.principal_id,
+                        principalSchema: "identity",
+                        principalTable: "principal",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "principal_chain_default",
+                schema: "identity",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    principal_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    chain_id = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    wallet_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_principal_chain_default", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_principal_chain_default_principal_principal_id",
                         column: x => x.principal_id,
                         principalSchema: "identity",
                         principalTable: "principal",
@@ -148,6 +242,44 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 table: "credential",
                 columns: new[] { "provider", "issuer", "subject" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_inbox_state_delivered",
+                schema: "identity",
+                table: "inbox_state",
+                column: "delivered");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_message_enqueue_time",
+                schema: "identity",
+                table: "outbox_message",
+                column: "enqueue_time");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_message_expiration_time",
+                schema: "identity",
+                table: "outbox_message",
+                column: "expiration_time");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_message_inbox_message_id_inbox_consumer_id_sequence_",
+                schema: "identity",
+                table: "outbox_message",
+                columns: new[] { "inbox_message_id", "inbox_consumer_id", "sequence_number" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_message_outbox_id_sequence_number",
+                schema: "identity",
+                table: "outbox_message",
+                columns: new[] { "outbox_id", "sequence_number" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_state_created",
+                schema: "identity",
+                table: "outbox_state",
+                column: "created");
 
             migrationBuilder.CreateIndex(
                 name: "ix_principal_created_at",
@@ -241,6 +373,10 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 schema: "identity");
 
             migrationBuilder.DropTable(
+                name: "outbox_message",
+                schema: "identity");
+
+            migrationBuilder.DropTable(
                 name: "principal_chain_default",
                 schema: "identity");
 
@@ -250,6 +386,14 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "wallet_ownership",
+                schema: "identity");
+
+            migrationBuilder.DropTable(
+                name: "inbox_state",
+                schema: "identity");
+
+            migrationBuilder.DropTable(
+                name: "outbox_state",
                 schema: "identity");
 
             migrationBuilder.DropTable(

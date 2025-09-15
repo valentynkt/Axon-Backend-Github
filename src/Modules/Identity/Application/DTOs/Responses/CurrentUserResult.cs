@@ -15,6 +15,7 @@ public sealed record CurrentUserResult(
 /// </summary>
 public sealed record UserProfile(
     string AxonId,
+    string Subject,
     string RiskTier);
 
 /// <summary>

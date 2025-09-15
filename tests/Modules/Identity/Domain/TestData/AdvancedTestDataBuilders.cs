@@ -54,7 +54,7 @@ public static class AdvancedTestDataBuilders
             return this;
         }
 
-        public AxonPrincipalBuilder WithDynamicCredential(string issuer = "dynamic:test-env", string subject = "test-user-123")
+        public AxonPrincipalBuilder WithDynamicCredential(string issuer = "app.dynamicauth.com/test-env", string subject = "test-user-123")
         {
             var principalId = _id ?? AxonId.New();
             var credential = IdentityCredential.Create(principalId, "dynamic", issuer, subject);

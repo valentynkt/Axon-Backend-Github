@@ -15,6 +15,7 @@ namespace Axon.Api.Endpoints.V1.Auth;
 /// </summary>
 public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeTokenRequestDto, ExchangeTokenResponseDto, ExchangeCredentialCommand, ExchangeOutcome>
 {
+    private const string JwtIssuerMetadataKey = "jwt_issuer";
     private readonly IDynamicAuthService _dynamicAuthService;
 
     public ExchangeEndpoint(IMediator mediator, ILogger<ExchangeEndpoint> logger, IDynamicAuthService dynamicAuthService) 
@@ -91,8 +92,19 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
 
         var dynamicUserData = validationResult.Value;
 
+        // Get raw claims to extract issuer
+        var rawClaimsResult = await _dynamicAuthService.GetRawClaimsAsync(jwt, ct);
+        if (rawClaimsResult.IsFailure)
+        {
+            Logger.LogWarning("Failed to get raw claims from JWT: {Error}", rawClaimsResult.Error.Message);
+            return Result.Failure<ExchangeCredentialCommand, Error>(rawClaimsResult.Error);
+        }
+
+        var claimsPrincipal = rawClaimsResult.Value;
+        var issuer = claimsPrincipal.FindFirst("iss")?.Value;
+
         // Convert DynamicUserData to ExchangeUserData
-        var exchangeUserData = ConvertToExchangeUserData(dynamicUserData);
+        var exchangeUserData = ConvertToExchangeUserData(dynamicUserData, issuer);
 
         return Result.Success<ExchangeCredentialCommand, Error>(new ExchangeCredentialCommand(exchangeUserData));
     }
@@ -100,7 +112,9 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
     /// <summary>
     /// Converts DynamicUserData from JWT validation to ExchangeUserData for command processing
     /// </summary>
-    private static ExchangeUserData ConvertToExchangeUserData(DynamicUserData dynamicUserData)
+    /// <param name="dynamicUserData">User data extracted from JWT</param>
+    /// <param name="issuer">Optional issuer claim from JWT for accurate credential storage</param>
+    private static ExchangeUserData ConvertToExchangeUserData(DynamicUserData dynamicUserData, string? issuer = null)
     {
         var exchangeWallets = dynamicUserData.Wallets.Select(w => new ExchangeWalletData(
             Address: w.Address,
@@ -110,6 +124,13 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
             ConnectedAtUtc: w.ConnectedAtUtc
         )).ToList();
 
+        // Add issuer to additional metadata if provided
+        var additionalMetadata = new Dictionary<string, object>();
+        if (!string.IsNullOrWhiteSpace(issuer))
+        {
+            additionalMetadata[JwtIssuerMetadataKey] = issuer;
+        }
+
         return new ExchangeUserData(
             UserId: dynamicUserData.UserId,
             Email: dynamicUserData.Email,
@@ -117,7 +138,8 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
             Wallets: exchangeWallets,
             FirstVisitUtc: dynamicUserData.FirstVisitUtc,
             LastVisitUtc: dynamicUserData.LastVisitUtc,
-            IsNewUser: dynamicUserData.IsNewUser
+            IsNewUser: dynamicUserData.IsNewUser,
+            AdditionalMetadata: additionalMetadata.Count > 0 ? additionalMetadata : null
         );
     }
 }

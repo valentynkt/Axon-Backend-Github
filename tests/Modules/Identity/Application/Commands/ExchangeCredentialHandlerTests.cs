@@ -529,7 +529,7 @@ public class ExchangeCredentialHandlerTests
         existingPrincipal.Credentials.Count.ShouldBe(initialCredentialCount + 1);
 
         // Verify the specific credential was added to the principal
-        var expectedIssuer = $"dynamic:{userData.EnvironmentId}";
+        var expectedIssuer = $"app.dynamicauth.com/{userData.EnvironmentId}";
         var addedCredential = existingPrincipal.Credentials.FirstOrDefault(c =>
             c.Provider == "dynamic" &&
             c.Issuer == expectedIssuer &&
@@ -720,7 +720,7 @@ public class ExchangeCredentialHandlerTests
     {
         var result = AxonPrincipal.CreateWithDynamicCredential(
             TestProviderType,
-            $"dynamic:{userData.EnvironmentId}",
+            $"app.dynamicauth.com/{userData.EnvironmentId}",
             userData.UserId);
         return result.Value;
     }
