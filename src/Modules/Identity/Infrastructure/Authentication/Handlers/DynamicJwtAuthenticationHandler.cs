@@ -75,10 +75,22 @@ public sealed class DynamicJwtAuthenticationHandler : AuthenticationHandler<Dyna
                 return AuthenticateResult.Fail(failureMessage);
             }
 
-            // Build claims principal from validated token
+            // Get raw claims from validated token to preserve all original JWT claims
+            var rawClaimsResult = await _dynamicAuthService.GetRawClaimsAsync(token, Context.RequestAborted);
+            if (rawClaimsResult.IsFailure)
+            {
+                Logger.LogError("Failed to get raw claims after successful validation: {ErrorCode}", rawClaimsResult.Error.Code);
+                return AuthenticateResult.Fail("Failed to retrieve token claims");
+            }
+
+            // Build claims identity preserving ALL original claims
             var userData = validationResult.Value;
-            var claims = BuildClaims(userData);
-            var identity = new ClaimsIdentity(claims, Scheme.Name);
+            var rawClaimsPrincipal = rawClaimsResult.Value;
+            var identity = new ClaimsIdentity(rawClaimsPrincipal.Claims, Scheme.Name);
+
+            // Add supplementary claims for easier access (without replacing originals)
+            AddSupplementaryClaims(identity, userData);
+
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
@@ -111,43 +123,65 @@ public sealed class DynamicJwtAuthenticationHandler : AuthenticationHandler<Dyna
     }
     
     /// <summary>
-    /// Builds claims from validated user data
+    /// Adds supplementary claims for easier access without replacing original JWT claims
+    /// Only adds claims that don't already exist or need transformation for compatibility
     /// </summary>
-    private static List<Claim> BuildClaims(DynamicUserData userData)
+    private static void AddSupplementaryClaims(ClaimsIdentity identity, DynamicUserData userData)
     {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, userData.UserId),
-            new(ClaimTypes.Email, userData.Email),
-            new("environment_id", userData.EnvironmentId),
-            new("is_new_user", userData.IsNewUser.ToString().ToLower())
-        };
+        // Add ASP.NET Core standard claims for compatibility (only if not already present)
+        if (!identity.HasClaim(ClaimTypes.NameIdentifier, userData.UserId))
+            identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userData.UserId));
 
-        // Add wallet claims
+        if (!string.IsNullOrWhiteSpace(userData.Email) && !identity.HasClaim(ClaimTypes.Email, userData.Email))
+            identity.AddClaim(new Claim(ClaimTypes.Email, userData.Email));
+
+        // Add structured wallet claims for easier querying
         foreach (var wallet in userData.Wallets)
         {
-            claims.Add(new Claim("wallet", wallet.Address));
-            claims.Add(new Claim($"wallet:{wallet.Chain}", wallet.Address));
-            claims.Add(new Claim($"wallet:provider:{wallet.Chain}", wallet.Provider));
+            // Add wallet address claims for different access patterns
+            if (!identity.HasClaim("wallet", wallet.Address))
+                identity.AddClaim(new Claim("wallet", wallet.Address));
+
+            if (!identity.HasClaim($"wallet:{wallet.Chain}", wallet.Address))
+                identity.AddClaim(new Claim($"wallet:{wallet.Chain}", wallet.Address));
+
+            // Add provider information for each chain
+            if (!string.IsNullOrEmpty(wallet.Provider))
+                identity.AddClaim(new Claim($"wallet:provider:{wallet.Chain}", wallet.Provider));
+
+            // Add wallet name if available
+            if (!string.IsNullOrEmpty(wallet.WalletName))
+                identity.AddClaim(new Claim($"wallet:name:{wallet.Chain}", wallet.WalletName));
+
+            // Add wallet ID for precise identification
+            if (!string.IsNullOrEmpty(wallet.Id))
+                identity.AddClaim(new Claim($"wallet:id:{wallet.Chain}", wallet.Id));
         }
 
-        // Add visit timestamps if available
-        if (userData.FirstVisitUtc.HasValue)
-        {
-            claims.Add(new Claim("first_visit", userData.FirstVisitUtc.Value.ToString("O")));
-        }
-        
-        if (userData.LastVisitUtc.HasValue)
-        {
-            claims.Add(new Claim("last_visit", userData.LastVisitUtc.Value.ToString("O")));
-        }
+        // Add additional metadata claims that may not be in the raw JWT
+        if (!identity.HasClaim(c => c.Type == "is_new_user"))
+            identity.AddClaim(new Claim("is_new_user", userData.IsNewUser.ToString().ToLowerInvariant()));
 
-        // Add session public key if available
-        if (!string.IsNullOrWhiteSpace(userData.SessionPublicKey))
-        {
-            claims.Add(new Claim("session_public_key", userData.SessionPublicKey));
-        }
+        // Add environment_id for multi-tenant support (if not already present)
+        if (!string.IsNullOrWhiteSpace(userData.EnvironmentId) && !identity.HasClaim(c => c.Type == "environment_id"))
+            identity.AddClaim(new Claim("environment_id", userData.EnvironmentId));
 
-        return claims;
+        // Add session public key if available and not already present
+        if (!string.IsNullOrWhiteSpace(userData.SessionPublicKey) && !identity.HasClaim(c => c.Type == "session_public_key"))
+            identity.AddClaim(new Claim("session_public_key", userData.SessionPublicKey));
+
+        // Add visit timestamps if available and not already present
+        if (userData.FirstVisitUtc.HasValue && !identity.HasClaim(c => c.Type == "first_visit"))
+            identity.AddClaim(new Claim("first_visit", userData.FirstVisitUtc.Value.ToString("O")));
+
+        if (userData.LastVisitUtc.HasValue && !identity.HasClaim(c => c.Type == "last_visit"))
+            identity.AddClaim(new Claim("last_visit", userData.LastVisitUtc.Value.ToString("O")));
+
+        // Add verified credentials hashes as JSON if available and not already present
+        if (userData.VerifiedCredentialsHashes?.Count > 0 && !identity.HasClaim(c => c.Type == "verifiedCredentialsHashes"))
+        {
+            var hashesJson = System.Text.Json.JsonSerializer.Serialize(userData.VerifiedCredentialsHashes);
+            identity.AddClaim(new Claim("verifiedCredentialsHashes", hashesJson));
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
@@ -15,6 +16,15 @@ public interface IDynamicAuthService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result with validated user data if successful, error if invalid</returns>
     Task<Result<DynamicUserData, Error>> ValidateTokenAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the raw ClaimsPrincipal from a validated JWT token
+    /// This preserves all original JWT claims exactly as issued by Dynamic.xyz
+    /// </summary>
+    /// <param name="token">The JWT token to get claims from</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Result with ClaimsPrincipal containing all original JWT claims if successful, error if invalid</returns>
+    Task<Result<ClaimsPrincipal, Error>> GetRawClaimsAsync(string token, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

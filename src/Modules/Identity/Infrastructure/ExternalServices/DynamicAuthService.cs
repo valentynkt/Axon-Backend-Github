@@ -12,6 +12,14 @@ using Microsoft.IdentityModel.Tokens;
 namespace Axon.Modules.Identity.Infrastructure.ExternalServices;
 
 /// <summary>
+/// Cached token validation data containing both ClaimsPrincipal and normalized user data
+/// </summary>
+internal sealed record CachedTokenData(
+    ClaimsPrincipal Principal,
+    DynamicUserData UserData,
+    DateTimeOffset CachedAt);
+
+/// <summary>
 /// Service for validating JWT tokens using local JWT validation with JWKS
 /// Validates tokens locally using Dynamic.xyz public keys
 /// </summary>
@@ -63,10 +71,10 @@ public sealed class DynamicAuthService : IDynamicAuthService
 
         // Check cache first
         var cacheKey = $"dynamic_token_{GetTokenHash(token)}";
-        if (_cache.TryGetValue<DynamicUserData>(cacheKey, out var cachedUser) && cachedUser != null)
+        if (_cache.TryGetValue<CachedTokenData>(cacheKey, out var cachedData) && cachedData != null)
         {
-            _logger.LogDebug("Token validation cache hit for user {UserId}", cachedUser.UserId);
-            return Result.Success<DynamicUserData, Error>(cachedUser);
+            _logger.LogDebug("Token validation cache hit for user {UserId}", cachedData.UserData.UserId);
+            return Result.Success<DynamicUserData, Error>(cachedData.UserData);
         }
 
         try
@@ -121,9 +129,10 @@ public sealed class DynamicAuthService : IDynamicAuthService
             
             // Extract user data from JWT claims using the normalizer
             var userData = _claimNormalizer.NormalizeClaimsPrincipal(claimsPrincipal);
-            
-            // Cache the validated token (but only if replay check passed)
-            _cache.Set(cacheKey, userData, _tokenCacheExpiration);
+
+            // Cache both the ClaimsPrincipal and normalized data (but only if replay check passed)
+            var tokenData = new CachedTokenData(claimsPrincipal, userData, DateTimeOffset.UtcNow);
+            _cache.Set(cacheKey, tokenData, _tokenCacheExpiration);
             
             activity?.SetTag("user_id", userData.UserId);
             activity?.SetTag("cache_hit", false);
@@ -137,7 +146,52 @@ public sealed class DynamicAuthService : IDynamicAuthService
                 Error.External("Token validation failed", "AUTH.VALIDATION_FAILED", ex));
         }
     }
-    
+
+    /// <summary>
+    /// Gets the raw ClaimsPrincipal from a validated JWT token
+    /// This preserves all original JWT claims exactly as issued by Dynamic.xyz
+    /// </summary>
+    /// <param name="token">The JWT token to get claims from</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Result with ClaimsPrincipal containing all original JWT claims if successful, error if invalid</returns>
+    public async Task<Result<ClaimsPrincipal, Error>> GetRawClaimsAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            _logger.LogWarning("GetRawClaimsAsync attempted with empty token");
+            return Result.Failure<ClaimsPrincipal, Error>(
+                Error.Validation("Token is required", "AUTH.TOKEN_REQUIRED"));
+        }
+
+        // Check cache first
+        var cacheKey = $"dynamic_token_{GetTokenHash(token)}";
+        if (_cache.TryGetValue<CachedTokenData>(cacheKey, out var cachedData) && cachedData != null)
+        {
+            _logger.LogDebug("Raw claims cache hit for user {UserId}", cachedData.UserData.UserId);
+            return Result.Success<ClaimsPrincipal, Error>(cachedData.Principal);
+        }
+
+        // If not cached, validate the token first to populate cache
+        var validationResult = await ValidateTokenAsync(token, cancellationToken);
+        if (validationResult.IsFailure)
+        {
+            return Result.Failure<ClaimsPrincipal, Error>(validationResult.Error);
+        }
+
+        // Now get from cache (should be there after validation)
+        if (_cache.TryGetValue<CachedTokenData>(cacheKey, out var freshCachedData) && freshCachedData != null)
+        {
+            _logger.LogDebug("Raw claims retrieved after validation for user {UserId}", freshCachedData.UserData.UserId);
+            return Result.Success<ClaimsPrincipal, Error>(freshCachedData.Principal);
+        }
+
+        // This should not happen, but handle gracefully
+        _logger.LogError("Failed to retrieve cached claims after successful validation");
+        return Result.Failure<ClaimsPrincipal, Error>(
+            Error.External("Failed to retrieve validated claims", "AUTH.CACHE_ERROR"));
+    }
 
     private Task<Result<ClaimsPrincipal, Error>> ValidateJwtTokenAsync(string token, ICollection<SecurityKey> securityKeys)
     {

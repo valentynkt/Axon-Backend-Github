@@ -34,6 +34,9 @@ public sealed class MassTransitOptions
 
     /// <summary>Add source-service/environment/version headers.</summary>
     public bool IncludeEnvironmentHeaders { get; init; } = true;
+
+    /// <summary>Outbox-specific configuration options.</summary>
+    public OutboxOptions Outbox { get; init; } = new();
 }
 
 public sealed class RetryOptions
@@ -42,4 +45,13 @@ public sealed class RetryOptions
     public TimeSpan InitialInterval { get; init; } = TimeSpan.FromMilliseconds(200);
     public TimeSpan MaxInterval { get; init; } = TimeSpan.FromSeconds(30);
     public TimeSpan IntervalIncrement { get; init; } = TimeSpan.FromMilliseconds(200);
+}
+
+public sealed class OutboxOptions
+{
+    /// <summary>How often to poll for outbox messages (in seconds).</summary>
+    public int QueryDelaySeconds { get; init; } = 5;
+
+    /// <summary>Disable outbox entirely for InMemory transport.</summary>
+    public bool DisableForInMemoryTransport { get; init; } = true;
 }

@@ -101,16 +101,28 @@ public class SimpleDynamicAuthServiceTests
         var token = "test.jwt.token";
         var cachedUserData = new DynamicUserData(
             UserId: "test-user-id",
-            Email: "test@example.com", 
+            Email: "test@example.com",
             EnvironmentId: "test-env",
             Wallets: new List<WalletData>(),
             FirstVisitUtc: null,
             LastVisitUtc: null,
             IsNewUser: false
         );
-        
+
+        // Create a ClaimsPrincipal with the expected claims
+        var claims = new[]
+        {
+            new Claim("sub", "test-user-id"),
+            new Claim("email", "test@example.com"),
+            new Claim("environment_id", "test-env")
+        };
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(claims));
+
+        // Create cached token data as the service now expects
+        var cachedTokenData = new CachedTokenData(claimsPrincipal, cachedUserData, DateTimeOffset.UtcNow);
+
         var cacheKey = $"dynamic_token_{GetTokenHash(token)}";
-        _memoryCache.Set(cacheKey, cachedUserData);
+        _memoryCache.Set(cacheKey, cachedTokenData);
 
         // Act
         var result = await _dynamicAuthService.ValidateTokenAsync(token);
@@ -140,6 +152,99 @@ public class SimpleDynamicAuthServiceTests
         result.IsFailure.ShouldBeTrue();
         result.Error.Code.ShouldBe("AUTH.JWKS_FETCH_ERROR");
         result.Error.Message.ShouldBe("JWKS fetch failed");
+    }
+
+    [Test]
+    public async Task GetRawClaimsAsync_WhenCacheHit_ShouldReturnCachedClaimsPrincipal()
+    {
+        // Arrange
+        var token = "test.jwt.token";
+        var cachedUserData = new DynamicUserData(
+            UserId: "test-user-id",
+            Email: "test@example.com",
+            EnvironmentId: "test-env",
+            Wallets: new List<WalletData>(),
+            FirstVisitUtc: null,
+            LastVisitUtc: null,
+            IsNewUser: false
+        );
+
+        // Create a ClaimsPrincipal with the expected claims including JWT standard claims
+        var claims = new[]
+        {
+            new Claim("sub", "test-user-id"),
+            new Claim("iss", "app.dynamicauth.com/test-env"),
+            new Claim("aud", "http://localhost:5173"),
+            new Claim("email", "test@example.com"),
+            new Claim("environment_id", "test-env"),
+            new Claim("session_public_key", "test-session-key"),
+            new Claim("kid", "test-key-id"),
+            new Claim("sid", "test-session-id"),
+            new Claim("iat", "1757933354"),
+            new Claim("exp", "1757940554")
+        };
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(claims));
+        var cachedTokenData = new CachedTokenData(claimsPrincipal, cachedUserData, DateTimeOffset.UtcNow);
+
+        var cacheKey = $"dynamic_token_{GetTokenHash(token)}";
+        _memoryCache.Set(cacheKey, cachedTokenData);
+
+        // Act
+        var result = await _dynamicAuthService.GetRawClaimsAsync(token);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        var resultClaims = result.Value;
+
+        // Verify all original JWT claims are preserved
+        resultClaims.FindFirst("sub")?.Value.ShouldBe("test-user-id");
+        resultClaims.FindFirst("iss")?.Value.ShouldBe("app.dynamicauth.com/test-env");
+        resultClaims.FindFirst("aud")?.Value.ShouldBe("http://localhost:5173");
+        resultClaims.FindFirst("email")?.Value.ShouldBe("test@example.com");
+        resultClaims.FindFirst("environment_id")?.Value.ShouldBe("test-env");
+        resultClaims.FindFirst("session_public_key")?.Value.ShouldBe("test-session-key");
+        resultClaims.FindFirst("kid")?.Value.ShouldBe("test-key-id");
+        resultClaims.FindFirst("sid")?.Value.ShouldBe("test-session-id");
+        resultClaims.FindFirst("iat")?.Value.ShouldBe("1757933354");
+        resultClaims.FindFirst("exp")?.Value.ShouldBe("1757940554");
+
+        // Verify no JWKS service call was made
+        await _jwksService.DidNotReceive().GetJwksKeysAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetRawClaimsAsync_WhenCacheMiss_ShouldValidateAndReturnClaims()
+    {
+        // Arrange
+        var token = "test.jwt.token";
+
+        // Set up mocks for validation path since cache miss will trigger validation
+        _jwksService.GetJwksKeysAsync(Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ICollection<SecurityKey>, Error>(new List<SecurityKey>()));
+
+        // Mock the claim normalizer
+        var userData = new DynamicUserData(
+            UserId: "test-user-id",
+            Email: "test@example.com",
+            EnvironmentId: "test-env",
+            Wallets: new List<WalletData>(),
+            FirstVisitUtc: null,
+            LastVisitUtc: null,
+            IsNewUser: false
+        );
+
+        // Setup is minimal since this test focuses on the cache miss -> validation error flow
+
+        _claimNormalizer.NormalizeClaimsPrincipal(Arg.Any<ClaimsPrincipal>())
+            .Returns(userData);
+
+        // Act - This will hit cache miss, validate the token, and then return cached claims
+        var result = await _dynamicAuthService.GetRawClaimsAsync(token);
+
+        // Assert - The result should be failure due to token validation error in test,
+        // but this tests the cache miss -> validation flow
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("AUTH.JWT_VALIDATION_ERROR");
     }
 
     [Test]

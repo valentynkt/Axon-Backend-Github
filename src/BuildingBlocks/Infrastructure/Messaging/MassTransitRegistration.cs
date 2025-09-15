@@ -54,17 +54,24 @@ public static partial class MassTransitRegistration
                 x.AddActivities(consumerAssemblies);
             }
 
-            // EF Bus Outbox (one simple path; provider-agnostic)
-            x.AddEntityFrameworkOutbox<TDbContext>(o =>
+            // Configure outbox based on transport type and configuration
+            var opts = configuration.GetSection("MassTransit").Get<MassTransitOptions>() ?? new MassTransitOptions();
+            var shouldAddOutbox = opts.EnableOutbox &&
+                                  (transport != TransportType.InMemory || !opts.Outbox.DisableForInMemoryTransport);
+
+            if (shouldAddOutbox)
             {
-                // Configure PostgreSQL database lock provider
-                o.UsePostgres();
+                x.AddEntityFrameworkOutbox<TDbContext>(o =>
+                {
+                    // Configure PostgreSQL database lock provider
+                    o.UsePostgres();
 
-                o.UseBusOutbox();
+                    o.UseBusOutbox();
 
-                // Default polling is fine; uncomment if you need tuning
-                // o.QueryDelay = TimeSpan.FromSeconds(1);
-            });
+                    // Configure polling frequency from configuration
+                    o.QueryDelay = TimeSpan.FromSeconds(opts.Outbox.QueryDelaySeconds);
+                });
+            }
 
             // Consistent default naming style; we'll apply prefix at ConfigureEndpoints
             x.SetKebabCaseEndpointNameFormatter();
