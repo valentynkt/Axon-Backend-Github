@@ -494,7 +494,6 @@ public class WalletOwnershipTests : IdentityTestBase
             Thread.Sleep(10); // Small delay to ensure different timestamps
 
             ownership.UpdateStatus(OwnershipStatus.Revoked);
-            var revokedAt = ownership.RevokedAt;
 
             Thread.Sleep(10); // Small delay to ensure different timestamps
 
@@ -506,7 +505,7 @@ public class WalletOwnershipTests : IdentityTestBase
             verifiedAt1.ShouldNotBeNull();
             verifiedAt1.Value.ShouldBeGreaterThanOrEqualTo(time1);
 
-            revokedAt.ShouldBeNull(); // Should be cleared on re-verification
+            ownership.RevokedAt.ShouldBeNull(); // Should be cleared on re-verification
 
             verifiedAt2.ShouldNotBeNull();
             verifiedAt2.Value.ShouldBeGreaterThanOrEqualTo(time3);

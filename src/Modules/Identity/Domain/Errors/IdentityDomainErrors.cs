@@ -144,7 +144,7 @@ public static class IdentityDomainErrors
         public static Error AccessModeInvalid() => Error.Validation(AccessModeInvalidMessage, AccessModeInvalidCode);
         public static Error StateInvalid() => Error.Validation(StateInvalidMessage, StateInvalidCode);
         public static Error OwnershipDeleted() => Error.BusinessRule(OwnershipDeletedMessage, OwnershipDeletedCode);
-        public static Error OwnershipRevoked() => Error.BusinessRule(OwnershipRevokedMessage, OwnershipRevokedCode);
+        public static Error OwnershipRevoked() => Error.Validation(OwnershipRevokedMessage, OwnershipRevokedCode);
         public static Error LabelTooLong() => Error.Validation(LabelTooLongMessage, LabelTooLongCode);
         public static Error DefaultNotOwned() => Error.BusinessRule(DefaultNotOwnedMessage, DefaultNotOwnedCode);
         public static Error ChainMismatch() => Error.BusinessRule(ChainMismatchMessage, ChainMismatchCode);

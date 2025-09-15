@@ -34,6 +34,7 @@ public abstract class AggregateRoot<TId> : AuditableDeletableEntity<TId>, IAggre
     {
         ArgumentNullException.ThrowIfNull(@event);
         _domainEvents.Add(@event);
+        Version++;
     }
 
     /// <summary>Clears all domain events (typically after persistence/dispatch).</summary>
