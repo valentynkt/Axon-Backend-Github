@@ -193,7 +193,7 @@ public class ExchangeCredentialHandlerTests
         result.IsSuccess.ShouldBeTrue();
         result.Value.WalletsProcessed.ShouldBe(2);
 
-        await _walletRepository.Received(1)
+        await _walletRepository.Received(2) // Called twice: once for wallet-first resolution, once for wallet processing
             .EnsureManyByChainAndAddressAsync(
                 Arg.Is<IEnumerable<(string, Address)>>(specs => specs.Count() == 2),
                 Arg.Any<CancellationToken>());
@@ -232,17 +232,14 @@ public class ExchangeCredentialHandlerTests
     [Test]
     public async Task Should_ReturnConflictError_When_WalletOwnedByAnotherPrincipal()
     {
-        // Arrange
+        // Arrange: Wallet owned by different principal than requesting credential
         var userData = CreateTestUserData();
         var command = new ExchangeCredentialCommand(userData);
 
         var conflictWalletId = WalletId.New();
         var conflictPrincipal = CreateTestPrincipal();
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
-
+        // The wallet-first resolution should find the conflicting principal that owns the wallet
         _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>
@@ -257,13 +254,18 @@ public class ExchangeCredentialHandlerTests
                 { conflictWalletId, conflictPrincipal }
             });
 
+        // Setup: The dynamic credential for the userData belongs to a DIFFERENT principal (conflict)
+        _principalRepository.IsCredentialTakenAsync(
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(true); // This credential belongs to someone else
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
+        // Assert: Should return conflict because credential belongs to different account
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.Conflict);
+        result.Error.Message.ShouldContain("This login method belongs to a different account");
     }
 
     [Test]
@@ -426,5 +428,261 @@ public class ExchangeCredentialHandlerTests
         // in the existing workflow tests
         _logger.ShouldNotBeNull();
         _metricsService.ShouldNotBeNull();
+    }
+
+    // Story 3.1: Wallet-First Identity Resolution Tests
+
+    [Test]
+    public async Task Should_ResolveSamePrincipal_When_WalletMatches()
+    {
+        // Arrange: Existing principal owns a wallet
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var existingPrincipal = CreateTestPrincipal();
+        var walletId = WalletId.New();
+
+        // Setup: Wallet is owned by existing principal (wallet-first resolution should find it)
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>
+            {
+                { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
+            });
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>
+            {
+                { walletId, existingPrincipal }
+            });
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Same principal returned, not a new one
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeFalse();
+        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+
+        // Should update existing principal, not create new
+        await _principalRepository.Received(1)
+            .UpdateAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+        await _principalRepository.DidNotReceive()
+            .AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_AddCredential_When_WalletMatches()
+    {
+        // Arrange: Existing principal with one credential type, new dynamic credential being added
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var existingPrincipal = CreateTestPrincipal();
+        var walletId = WalletId.New();
+
+        // Setup: Wallet owned by existing principal, credential doesn't exist yet
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>
+            {
+                { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
+            });
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>
+            {
+                { walletId, existingPrincipal }
+            });
+
+        // Setup: Credential is not taken by another principal
+        _principalRepository.IsCredentialTakenAsync(
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Principal resolved and credential added
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeFalse();
+        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+
+        // Verify credential conflict check was performed
+        await _principalRepository.Received(1)
+            .IsCredentialTakenAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_ReturnConflict_When_CredentialBelongsToOther()
+    {
+        // Arrange: Existing principal owns wallet, but credential belongs to different principal
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var existingPrincipal = CreateTestPrincipal();
+        var walletId = WalletId.New();
+
+        // Setup: Wallet owned by existing principal
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>
+            {
+                { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
+            });
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>
+            {
+                { walletId, existingPrincipal }
+            });
+
+        // Setup: Credential is already taken by another principal
+        _principalRepository.IsCredentialTakenAsync(
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Conflict error returned
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Conflict);
+        result.Error.Message.ShouldContain("This login method belongs to a different account");
+
+        // Should not save any changes
+        await _principalRepository.DidNotReceive()
+            .UpdateAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive()
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_FallbackToCredentialLookup_When_NoWalletOwners()
+    {
+        // Arrange: No existing wallet owners, but credential exists
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var existingPrincipal = CreateTestPrincipal();
+        var walletId = WalletId.New();
+
+        // Setup: Wallets exist but no verified signing owners
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>
+            {
+                { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
+            });
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>()); // Empty - no owners
+
+        // Setup: Credential-first fallback finds existing principal
+        _principalRepository.FindByCredentialAsync(
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(existingPrincipal);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Existing principal found via credential fallback
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeFalse();
+        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+
+        // Verify both wallet-first and credential fallback were attempted
+        await _principalRepository.Received(2) // Called twice: once for wallet-first resolution, once for wallet processing
+            .FindVerifiedSigningOwnersAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>());
+        await _principalRepository.Received(1)
+            .FindByCredentialAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_CreateNewPrincipal_When_NoWalletOwnersAndNoCredential()
+    {
+        // Arrange: No wallet owners and no existing credential
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var walletId = WalletId.New();
+
+        // Setup: Wallets exist but no owners
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>
+            {
+                { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
+            });
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>());
+
+        // Setup: Credential fallback finds nothing
+        _principalRepository.FindByCredentialAsync(
+            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((AxonPrincipal?)null);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: New principal created
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeTrue();
+        result.Value.AxonId.Value.ShouldNotBe(Guid.Empty);
+
+        // Verify both lookups were attempted before creating new
+        await _principalRepository.Received(2) // Called twice: once for wallet-first resolution, once for wallet processing
+            .FindVerifiedSigningOwnersAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>());
+        await _principalRepository.Received(1)
+            .FindByCredentialAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _principalRepository.Received(1)
+            .AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_HandleIdempotency_When_CredentialAlreadyExists()
+    {
+        // Arrange: Principal owns wallet and already has the exact same credential
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var existingPrincipal = CreateTestPrincipalWithExistingDynamicCredential(userData);
+        var walletId = WalletId.New();
+
+        // Setup: Wallet owned by existing principal
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>
+            {
+                { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
+            });
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(
+            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>
+            {
+                { walletId, existingPrincipal }
+            });
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Success without attempting to add duplicate credential
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeFalse();
+        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+
+        // Should not check if credential is taken (idempotency skip)
+        await _principalRepository.DidNotReceive()
+            .IsCredentialTakenAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    private static AxonPrincipal CreateTestPrincipalWithExistingDynamicCredential(ExchangeUserData userData)
+    {
+        var result = AxonPrincipal.CreateWithDynamicCredential(
+            TestProviderType,
+            $"dynamic:{userData.EnvironmentId}",
+            userData.UserId);
+        return result.Value;
     }
 }

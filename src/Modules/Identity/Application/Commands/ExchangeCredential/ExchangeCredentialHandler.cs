@@ -144,9 +144,9 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         var (providerType, issuer, subject) = credentialResult.Value;
 
-        // Step 2: Find or create Principal
-        var principalResult = await ResolveOrCreatePrincipal(
-            providerType, issuer, subject, cancellationToken);
+        // Step 2: Find or create Principal using wallet-first resolution
+        var principalResult = await ResolveOrCreatePrincipalWalletFirst(
+            providerType, issuer, subject, userData.Wallets, cancellationToken);
         if (principalResult.IsFailure)
             return principalResult.Error;
 
@@ -202,7 +202,15 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
                 Error.Validation("Environment ID is required", "EXCHANGE.ENV_ID_REQUIRED"));
 
         await Task.CompletedTask;
-        return Result.Success<ExchangeOutcome, Error>(default!);
+        return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
+            AxonId: default!,
+            Created: false,
+            WalletsProcessed: 0,
+            WalletsLinked: 0,
+            DefaultsApplied: 0,
+            Skipped: 0,
+            Conflicts: 0
+        ));
     }
 
 
@@ -221,34 +229,109 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         return Result.Success<(ProviderType, string, string), Error>((providerResult.Value, issuer, subject));
     }
 
-    private async Task<Result<(AxonPrincipal principal, bool isNew), Error>> ResolveOrCreatePrincipal(
+    private async Task<Result<(AxonPrincipal principal, bool isNew), Error>> ResolveOrCreatePrincipalWalletFirst(
         ProviderType providerType,
         string issuer,
         string subject,
+        List<ExchangeWalletData> wallets,
         CancellationToken cancellationToken)
     {
-        // First, try to find existing principal by credential
-        //ToDo: Make it not based on issuer, providerType, but linked to wallet, to make it resolve the same principal without relying on if user use dynamic, os Solana Sign In.
-        var existingPrincipal = await _principalRepository.FindByCredentialAsync(
-            providerType, issuer, subject, cancellationToken);
+        AxonPrincipal? resolvedPrincipal = null;
 
-        if (existingPrincipal != null)
+        // STEP 1: Check wallets first (if provided) - USE BATCH LOOKUP FOR EFFICIENCY
+        if (wallets is not null && wallets.Count > 0)
         {
-            return Result.Success<(AxonPrincipal, bool), Error>((existingPrincipal, false));
+            // Parse wallet data and create address pairs for batch lookup (reuse from ProcessWalletsBatch)
+            var walletSpecs = new List<(string chainId, Address address)>();
+            var parseErrors = new List<string>();
+
+            foreach (var wallet in wallets)
+            {
+                var addressResult = Address.Create(wallet.Address);
+                if (addressResult.IsFailure)
+                {
+                    parseErrors.Add($"Invalid address {wallet.Address}: {addressResult.Error.Message}");
+                    continue;
+                }
+
+                walletSpecs.Add((wallet.Chain, addressResult.Value));
+            }
+
+            // If we have valid wallet specs, batch lookup wallet owners
+            if (walletSpecs.Count > 0)
+            {
+                var walletLookup = await _walletRepository.EnsureManyByChainAndAddressAsync(
+                    walletSpecs, cancellationToken);
+
+                // Batch check for existing verified signing ownership (PREFERRED APPROACH)
+                var walletOwners = await _principalRepository.FindVerifiedSigningOwnersAsync(
+                    walletLookup.Values, cancellationToken);
+
+                if (walletOwners.Count > 0)
+                {
+                    resolvedPrincipal = walletOwners.First().Value; // Found wallet owner
+                }
+            }
         }
 
-        // Create new principal with Dynamic credential
+        // STEP 2: Fallback to credential lookup (existing logic)
+        if (resolvedPrincipal == null)
+        {
+            resolvedPrincipal = await _principalRepository.FindByCredentialAsync(
+                providerType, issuer, subject, cancellationToken);
+        }
+
+        // STEP 3: Add credential to existing principal (if found)
+        if (resolvedPrincipal != null)
+        {
+            // Check if credential already exists (idempotency)
+            var hasCredential = resolvedPrincipal.Credentials.Any(c =>
+                c.Provider == providerType.Value &&
+                c.Issuer == issuer &&
+                c.Subject == subject);
+
+            if (!hasCredential)
+            {
+                var credential = IdentityCredential.Create(
+                    resolvedPrincipal.Id,
+                    providerType.Value,
+                    issuer,
+                    subject,
+                    DateTime.UtcNow);
+
+                // Use domain method with conflict check function (safer async pattern)
+                var addResult = resolvedPrincipal.AddCredential(credential, (provider, iss, subj) =>
+                {
+                    // Use ConfigureAwait(false) to prevent deadlocks
+                    var isTaken = _principalRepository.IsCredentialTakenAsync(
+                        ProviderType.Create(provider).Value, iss, subj, cancellationToken)
+                        .ConfigureAwait(false).GetAwaiter().GetResult();
+                    return Result.Success<bool, Error>(isTaken);
+                });
+
+                if (addResult.IsFailure)
+                {
+                    // Convert BusinessRule error to Conflict as specified in Story 3.1 requirements
+                    if (addResult.Error.Code == "IDENTITY.CREDENTIAL.BELONGS_TO_OTHER")
+                    {
+                        return Result.Failure<(AxonPrincipal, bool), Error>(
+                            Error.Conflict("This login method belongs to a different account"));
+                    }
+                    return Result.Failure<(AxonPrincipal, bool), Error>(addResult.Error);
+                }
+            }
+
+            return (resolvedPrincipal, false); // Existing principal
+        }
+
+        // STEP 4: Create new principal (existing CreateWithDynamicCredential logic)
         var createResult = AxonPrincipal.CreateWithDynamicCredential(
-            providerType, 
-            issuer, 
-            subject);
+            providerType, issuer, subject);
 
         if (createResult.IsFailure)
-        {
-            return Result.Failure<(AxonPrincipal, bool), Error>(createResult.Error);
-        }
+            return createResult.Error;
 
-        return Result.Success<(AxonPrincipal, bool), Error>((createResult.Value, true));
+        return (createResult.Value, true); // New principal
     }
 
     private async Task<Result<WalletProcessingMetrics, Error>> ProcessWalletsBatch(
