@@ -187,17 +187,26 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         ));
     }
 
+    /// <summary>
+    /// Validates the exchange command for required fields and structural integrity.
+    /// </summary>
+    /// <param name="command">The exchange command to validate</param>
+    /// <returns>Success result with dummy outcome if validation passes, or failure with validation error</returns>
+    /// <remarks>
+    /// Validates that UserData, UserId, and EnvironmentId are provided and non-empty.
+    /// This method performs structural validation only - business rule validation occurs later in the flow.
+    /// </remarks>
     private static async Task<Result<ExchangeOutcome, Error>> ValidateCommand(ExchangeCredentialCommand command)
     {
-        if (command.UserData is null)
+        if (command.UserData is not { } userData)
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Validation("User data is required", "EXCHANGE.USER_DATA_REQUIRED"));
 
-        if (string.IsNullOrWhiteSpace(command.UserData.UserId))
+        if (string.IsNullOrWhiteSpace(userData.UserId))
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Validation("User ID is required", "EXCHANGE.USER_ID_REQUIRED"));
 
-        if (string.IsNullOrWhiteSpace(command.UserData.EnvironmentId))
+        if (string.IsNullOrWhiteSpace(userData.EnvironmentId))
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Validation("Environment ID is required", "EXCHANGE.ENV_ID_REQUIRED"));
 
@@ -229,6 +238,24 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         return Result.Success<(ProviderType, string, string), Error>((providerResult.Value, issuer, subject));
     }
 
+    /// <summary>
+    /// Resolves or creates a principal using wallet-first resolution strategy.
+    /// Prioritizes wallet ownership over credential matching to prevent duplicate identities.
+    /// </summary>
+    /// <param name="providerType">Authentication provider type</param>
+    /// <param name="issuer">Token issuer identifier</param>
+    /// <param name="subject">Token subject identifier</param>
+    /// <param name="wallets">List of wallet data for ownership lookup</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Tuple containing the resolved/created principal and whether it's newly created</returns>
+    /// <remarks>
+    /// This method implements a 4-step resolution process:
+    /// 1. Check wallets for existing ownership (if wallets provided)
+    /// 2. Fallback to credential-based lookup
+    /// 3. Add new credential to existing principal (with conflict detection)
+    /// 4. Create new principal if none found
+    /// The process is idempotent and safe for retries.
+    /// </remarks>
     private async Task<Result<(AxonPrincipal principal, bool isNew), Error>> ResolveOrCreatePrincipalWalletFirst(
         ProviderType providerType,
         string issuer,
@@ -239,7 +266,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         AxonPrincipal? resolvedPrincipal = null;
 
         // STEP 1: Check wallets first (if provided) - USE BATCH LOOKUP FOR EFFICIENCY
-        if (wallets is not null && wallets.Count > 0)
+        if (wallets is { Count: > 0 })
         {
             // Parse wallet data and create address pairs for batch lookup (reuse from ProcessWalletsBatch)
             var walletSpecs = new List<(string chainId, Address address)>();
@@ -275,14 +302,14 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         }
 
         // STEP 2: Fallback to credential lookup (existing logic)
-        if (resolvedPrincipal == null)
+        if (resolvedPrincipal is null)
         {
             resolvedPrincipal = await _principalRepository.FindByCredentialAsync(
                 providerType, issuer, subject, cancellationToken);
         }
 
         // STEP 3: Add credential to existing principal (if found)
-        if (resolvedPrincipal != null)
+        if (resolvedPrincipal is not null)
         {
             // Check if credential already exists (idempotency)
             var hasCredential = resolvedPrincipal.Credentials.Any(c =>
@@ -334,12 +361,27 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         return (createResult.Value, true); // New principal
     }
 
+    /// <summary>
+    /// Processes wallets in batch to prevent N+1 queries and establish verified ownership relationships.
+    /// </summary>
+    /// <param name="principal">The principal to link wallets to</param>
+    /// <param name="wallets">List of wallet data to process</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Processing metrics including counts of processed, linked, skipped, and conflicted wallets</returns>
+    /// <remarks>
+    /// This method implements a 4-step batch processing strategy to prevent N+1 queries:
+    /// 1. Parse and validate wallet addresses
+    /// 2. Batch ensure wallets exist using repository method
+    /// 3. Check for existing verified signing ownership conflicts
+    /// 4. Link wallets with verified &amp; signing ownership
+    /// Conflicts are detected and reported as domain errors for proper HTTP 409 responses.
+    /// </remarks>
     private async Task<Result<WalletProcessingMetrics, Error>> ProcessWalletsBatch(
         AxonPrincipal principal,
         List<ExchangeWalletData> wallets,
         CancellationToken cancellationToken)
     {
-        if (wallets is null || wallets.Count == 0)
+        if (wallets is not { Count: > 0 })
         {
             return Result.Success<WalletProcessingMetrics, Error>(
                 new WalletProcessingMetrics(0, 0, 0, 0, new List<WalletId>()));
@@ -461,6 +503,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             var chainId = chainGroup.Key;
             
             // Get the first verified+signing wallet for this chain (order by ID for deterministic behavior)
+            // Note: .First() is safe here because chainGroup comes from GroupBy() which guarantees non-empty groups
             var firstWallet = chainGroup
                 .OrderBy(w => w.Id.Value)
                 .First();

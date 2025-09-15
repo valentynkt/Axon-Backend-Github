@@ -464,6 +464,11 @@ public class ExchangeCredentialHandlerTests
         result.Value.Created.ShouldBeFalse();
         result.Value.AxonId.ShouldBe(existingPrincipal.Id);
 
+        // Verify wallet ownership relationships are correct
+        await _principalRepository.Received().FindVerifiedSigningOwnersAsync(
+            Arg.Is<IEnumerable<WalletId>>(ids => ids.Contains(walletId)),
+            Arg.Any<CancellationToken>());
+
         // Should update existing principal, not create new
         await _principalRepository.Received(1)
             .UpdateAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
@@ -500,6 +505,9 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(false);
 
+        // Capture initial credential count
+        var initialCredentialCount = existingPrincipal.Credentials.Count;
+
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
@@ -507,6 +515,22 @@ public class ExchangeCredentialHandlerTests
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse();
         result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+
+        // Verify credential count increased by 1
+        existingPrincipal.Credentials.Count.ShouldBe(initialCredentialCount + 1);
+
+        // Verify the specific credential was added to the principal
+        var expectedIssuer = $"dynamic:{userData.EnvironmentId}";
+        var addedCredential = existingPrincipal.Credentials.FirstOrDefault(c =>
+            c.Provider == "dynamic" &&
+            c.Issuer == expectedIssuer &&
+            c.Subject == userData.UserId);
+        addedCredential.ShouldNotBeNull();
+
+        // Verify wallet ownership relationships are correct
+        await _principalRepository.Received().FindVerifiedSigningOwnersAsync(
+            Arg.Is<IEnumerable<WalletId>>(ids => ids.Contains(walletId)),
+            Arg.Any<CancellationToken>());
 
         // Verify credential conflict check was performed
         await _principalRepository.Received(1)
@@ -549,6 +573,11 @@ public class ExchangeCredentialHandlerTests
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.Conflict);
         result.Error.Message.ShouldContain("This login method belongs to a different account");
+
+        // Verify wallet ownership relationships were checked
+        await _principalRepository.Received().FindVerifiedSigningOwnersAsync(
+            Arg.Is<IEnumerable<WalletId>>(ids => ids.Contains(walletId)),
+            Arg.Any<CancellationToken>());
 
         // Should not save any changes
         await _principalRepository.DidNotReceive()
