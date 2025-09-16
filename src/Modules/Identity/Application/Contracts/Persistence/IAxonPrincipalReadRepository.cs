@@ -74,4 +74,44 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
     Task<string> GetPrincipalFingerprintAsync(
         AxonId principalId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks if a wallet is already owned by any principal with verified signing ownership.
+    /// Used to enforce the global single verified owner rule.
+    /// Only returns true for verified signing ownership, not watch-only.
+    /// </summary>
+    /// <param name="walletId">The wallet ID to check</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if the wallet is owned by any principal with verified signing</returns>
+    Task<bool> IsWalletOwnedByVerifiedSigningAsync(
+        WalletId walletId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks if a credential already exists for any principal.
+    /// Used to enforce credential uniqueness across all principals.
+    /// </summary>
+    /// <param name="providerType">The identity provider type</param>
+    /// <param name="issuer">The credential issuer</param>
+    /// <param name="subject">The credential subject</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if the credential exists for any principal</returns>
+    Task<bool> IsCredentialTakenAsync(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds all principals that have verified signing ownership of the specified wallets.
+    /// Used for validation and conflict detection during Dynamic bundle processing.
+    /// Only returns principals with verified signing ownership, not watch-only.
+    /// This is a read-only operation that returns untracked entities.
+    /// </summary>
+    /// <param name="walletIds">The wallet IDs to check</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Dictionary mapping wallet IDs to their owning principals (verified signing only)</returns>
+    Task<Dictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
+        IEnumerable<WalletId> walletIds,
+        CancellationToken cancellationToken = default);
 }

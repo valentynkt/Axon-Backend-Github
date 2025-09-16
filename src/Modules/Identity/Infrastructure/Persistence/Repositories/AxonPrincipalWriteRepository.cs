@@ -21,35 +21,18 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
     public IWriteUnitOfWork UnitOfWork => _unitOfWork;
 
-    private IQueryable<AxonPrincipal> GetPrincipalWithIncludesForUpdate()
+    private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
     {
         return DbSet
             .AsSplitQuery()
             .Include(p => p.Credentials)
             .Include(p => p.WalletOwnerships)
             .Include(p => p.PrincipalChainDefaults);
-    }
-
-    private IQueryable<AxonPrincipal> GetPrincipalWithIncludesForRead()
-    {
-        return DbSet
-            .AsSplitQuery()
-            .AsNoTracking()
-            .Include(p => p.Credentials)
-            .Include(p => p.WalletOwnerships)
-            .Include(p => p.PrincipalChainDefaults);
-    }
-
-    private IQueryable<AxonPrincipal> GetPrincipalForRead()
-    {
-        return DbSet
-            .Include(p => p.Credentials)
-            .AsNoTracking();
     }
 
     public override async Task<AxonPrincipal?> GetByIdAsync(AxonId id, CancellationToken ct = default)
     {
-        return await GetPrincipalWithIncludesForUpdate()
+        return await GetPrincipalWithIncludes()
             .FirstOrDefaultAsync(p => p.Id == id, ct);
     }
 
@@ -59,43 +42,13 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         string subject,
         CancellationToken ct = default)
     {
-        return await GetPrincipalForRead()
-            .FirstOrDefaultAsync(p => p.Credentials.Any(c => 
-                c.Provider == providerType.Value && 
-                c.Issuer == issuer && 
+        return await GetPrincipalWithIncludes()
+            .FirstOrDefaultAsync(p => p.Credentials.Any(c =>
+                c.Provider == providerType.Value &&
+                c.Issuer == issuer &&
                 c.Subject == subject), ct);
     }
 
-    public async Task<AxonPrincipal?> FindByWalletIdAsync(
-        WalletId walletId,
-        CancellationToken ct = default)
-    {
-        return await GetPrincipalWithIncludesForRead()
-            .FirstOrDefaultAsync(p => p.WalletOwnerships.Any(wo => wo.WalletId == walletId), ct);
-    }
-
-    public async Task<bool> IsWalletOwnedByVerifiedSigningAsync(
-        WalletId walletId,
-        CancellationToken ct = default)
-    {
-        return await DbSet
-            .AnyAsync(p => p.WalletOwnerships.Any(wo => 
-                wo.WalletId == walletId && 
-                wo.AccessMode == AccessMode.Signing), ct);
-    }
-
-    public async Task<bool> IsCredentialTakenAsync(
-        ProviderType providerType,
-        string issuer,
-        string subject,
-        CancellationToken ct = default)
-    {
-        return await DbSet
-            .AnyAsync(p => p.Credentials.Any(c => 
-                c.Provider == providerType.Value && 
-                c.Issuer == issuer && 
-                c.Subject == subject), ct);
-    }
 
     public async Task<Dictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
         IEnumerable<WalletId> walletIds,
@@ -106,10 +59,11 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         if (walletIdsList.Count == 0)
             return new Dictionary<WalletId, AxonPrincipal>();
 
-        var principals = await GetPrincipalWithIncludesForRead()
+        var principals = await GetPrincipalWithIncludes()
             .Where(p => p.WalletOwnerships.Any(wo =>
                 walletIdsList.Contains(wo.WalletId) &&
-                wo.AccessMode == AccessMode.Signing))
+                wo.AccessMode == AccessMode.Signing &&
+                wo.Status == OwnershipStatus.Verified))
             .ToListAsync(ct);
 
         var result = new Dictionary<WalletId, AxonPrincipal>();
@@ -118,8 +72,9 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         {
             foreach (var ownership in principal.WalletOwnerships)
             {
-                if (walletIdsList.Contains(ownership.WalletId) && 
-                    ownership.AccessMode == AccessMode.Signing)
+                if (walletIdsList.Contains(ownership.WalletId) &&
+                    ownership.AccessMode == AccessMode.Signing &&
+                    ownership.Status == OwnershipStatus.Verified)
                 {
                     result[ownership.WalletId] = principal;
                 }
@@ -127,6 +82,19 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         }
 
         return result;
+    }
+
+    public async Task<bool> IsCredentialTakenAsync(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        CancellationToken ct = default)
+    {
+        return await DbContext.Set<AxonPrincipal>()
+            .AnyAsync(p => p.Credentials.Any(c =>
+                c.Provider == providerType.Value &&
+                c.Issuer == issuer &&
+                c.Subject == subject), ct);
     }
 
 }

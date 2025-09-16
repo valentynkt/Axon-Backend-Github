@@ -39,7 +39,7 @@ public static class ServiceRegistration
         // Get connection string - falls back to shared database (axon_chat)
         var connectionString = configuration.GetConnectionString("IdentityDb") 
             ?? configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres";
+            ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
         
         // Write DbContext
         services.AddDbContext<IdentityWriteDbContext>(options =>
@@ -53,6 +53,12 @@ public static class ServiceRegistration
                     errorCodesToAdd: null);
             })
             .UseSnakeCaseNamingConvention();
+
+#if DEBUG
+            // Enable detailed logging in development
+            options.EnableSensitiveDataLogging(true);
+            options.EnableDetailedErrors(true);
+#endif
         });
         
         // Read DbContext with read-specific optimizations

@@ -53,7 +53,8 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
         if (_currentTransaction != null) return;
-        _currentTransaction = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+        // Use RepeatableRead to prevent phantom reads during concurrent operations
+        _currentTransaction = await Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken);
     }
 
     public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
@@ -102,7 +103,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         var strategy = CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+            await using var tx = await Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken);
             try
             {
                 await operation();
@@ -122,7 +123,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         var strategy = CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+            await using var tx = await Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken);
             try
             {
                 var result = await operation();

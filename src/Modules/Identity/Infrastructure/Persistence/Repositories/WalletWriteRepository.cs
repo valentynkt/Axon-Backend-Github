@@ -63,32 +63,41 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         if (specs.Count == 0)
             return new Dictionary<(string chainId, Address address), WalletId>();
 
-        var context = (IdentityWriteDbContext)Context;
         var result = new Dictionary<(string chainId, Address address), WalletId>();
 
-        // Stage 1: Get candidate wallets using simple Contains operations (EF Core friendly)
-        var chainIdValues = specs.Select(s => s.chainId).Distinct().ToList();
-        var addresses = specs.Select(s => s.address).Distinct().ToList();
+        // Strategy: Query for existing wallets efficiently
+        var existingWallets = new Dictionary<(string chainId, Address address), WalletId>();
 
-        var candidateWallets = await DbSet
-            .Where(w => chainIdValues.Contains(w.ChainId) && addresses.Contains(w.Address))
-            .Select(w => new { w.Id, w.ChainId, w.Address })
-            .ToListAsync(ct);
-
-        // Stage 2: Filter candidates for exact (chainId, address) pairs in memory
-        var existingWallets = candidateWallets
-            .Where(w => specs.Any(s => s.chainId.Equals(w.ChainId, StringComparison.OrdinalIgnoreCase) && s.address.Equals(w.Address)))
-            .ToList();
-
-        // Map existing wallets to the result
-        foreach (var existing in existingWallets)
+        foreach (var spec in specs)
         {
-            var spec = specs.First(s => s.chainId.Equals(existing.ChainId, StringComparison.OrdinalIgnoreCase) && s.address.Equals(existing.Address));
-            result[spec] = existing.Id;
+            // First check if the wallet is already being tracked by EF (in change tracker)
+            var trackedWallet = DbSet.Local
+                .FirstOrDefault(w => w.ChainId == spec.chainId && w.Address == spec.address);
+
+            if (trackedWallet != null)
+            {
+                existingWallets[spec] = trackedWallet.Id;
+                result[spec] = trackedWallet.Id;
+                continue;
+            }
+
+            // If not in change tracker, check the database
+            var existingWallet = await DbSet
+                .Where(w => w.ChainId == spec.chainId && w.Address == spec.address)
+                .Select(w => new { w.Id })
+                .FirstOrDefaultAsync(ct);
+
+            if (existingWallet != null)
+            {
+                existingWallets[spec] = existingWallet.Id;
+                result[spec] = existingWallet.Id;
+            }
         }
 
-        // Create missing wallets
-        var missingSpecs = specs.Where(spec => !result.ContainsKey(spec)).ToList();
+        // Collect specs for wallets that don't exist yet (neither in change tracker nor database)
+        var missingSpecs = specs.Where(spec => !existingWallets.ContainsKey(spec)).ToList();
+
+        // Create missing wallets - EF retry strategy will handle any race conditions
         foreach (var spec in missingSpecs)
         {
             var wallet = Wallet.Create(null, spec.chainId, spec.address);
@@ -96,7 +105,6 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
             result[spec] = wallet.Id;
         }
 
-        // Let UnitOfWork handle the SaveChanges - don't call it directly
         return result;
     }
 }

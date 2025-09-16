@@ -140,90 +140,105 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
+    /// Applies chain defaults for multiple wallet-to-chain mappings in a single optimized operation.
+    /// This method is significantly more efficient than calling ApplyChainDefault individually.
+    /// </summary>
+    /// <param name="walletChainMappings">Collection of tuples containing (chainId, walletId) pairs to set as defaults</param>
+    /// <returns>Number of actual defaults applied (excluding no-ops and failures)</returns>
+    /// <remarks>
+    /// This method performs optimizations that individual calls cannot:
+    /// - Single pass through existing chain defaults
+    /// - Batch validation of wallet ownership
+    /// - Reduced IsDeleted checks and LINQ operations
+    /// Only processes chains that don't already have the target wallet as default.
+    /// </remarks>
+    public Result<int, Error> ApplyChainDefaultsBatch(IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
+    {
+        var mappings = walletChainMappings.ToList();
+        if (mappings.Count == 0)
+            return Result.Success<int, Error>(0);
+
+        // Pre-validate all wallets are owned with verified+signing in a single pass
+        var walletIds = mappings.Select(m => m.walletId).Distinct().ToList();
+        var eligibleOwnerships = _walletOwnerships
+            .Where(wo => walletIds.Contains(wo.WalletId))
+            .GroupBy(wo => wo.WalletId)
+            .ToDictionary(g => g.Key, g => g
+                .OrderByDescending(wo => wo.IsVerifiedSigning)
+                .ThenByDescending(wo => wo.Status == OwnershipStatus.Verified)
+                .First());
+
+        // Check all mappings for valid ownership
+        foreach (var (chainId, walletId) in mappings)
+        {
+            if (!eligibleOwnerships.TryGetValue(walletId, out var ownership))
+                return Result.Failure<int, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
+
+            if (!ownership.IsVerifiedSigning)
+                return Result.Failure<int, Error>(IdentityDomainErrors.Wallet.WatchOnlyNotAllowedAsDefault());
+        }
+
+        // Get current active defaults in single operation
+        var activeDefaults = _principalChainDefaults
+            .Where(pcd => !pcd.IsDeleted)
+            .ToDictionary(pcd => pcd.ChainId, pcd => pcd);
+
+        int defaultsApplied = 0;
+        var domainEvents = new List<(string chainId, WalletId? oldDefault, WalletId newDefault)>();
+
+        // Process each mapping with minimal overhead
+        foreach (var (chainId, walletId) in mappings)
+        {
+            var existingDefault = activeDefaults.TryGetValue(chainId, out var existing) ? existing : null;
+
+            // Skip if this wallet is already the default (idempotent no-op)
+            if (existingDefault?.WalletId == walletId)
+                continue;
+
+            var oldDefault = existingDefault?.WalletId;
+
+            // Update or create the default
+            if (existingDefault != null)
+            {
+                existingDefault.UpdateWallet(walletId);
+            }
+            else
+            {
+                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+                _principalChainDefaults.Add(newDefault);
+                activeDefaults[chainId] = newDefault; // Update our local cache
+            }
+
+            defaultsApplied++;
+            domainEvents.Add((chainId, oldDefault, walletId));
+        }
+
+        // Raise domain events for all changes
+        foreach (var (chainId, oldDefault, newDefault) in domainEvents)
+        {
+            RaiseDomainEvent(new PrincipalChangedEvent(
+                Id,
+                $"ChainDefault.{chainId}",
+                oldDefault?.ToString() ?? "none",
+                newDefault.ToString()
+            ));
+        }
+
+        return Result.Success<int, Error>(defaultsApplied);
+    }
+
+    /// <summary>
     /// Applies a chain default with verified-first enforcement.
     /// </summary>
     public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
-        // Check if the wallet is owned by this principal, prioritize verified signing ownership
-        var ownership = _walletOwnerships
-            .Where(o => o.WalletId == walletId)
-            .OrderByDescending(o => o.IsVerifiedSigning)
-            .ThenByDescending(o => o.Status == OwnershipStatus.Verified)
-            .FirstOrDefault();
+        // Use the optimized batch method for consistent logic and reduced complexity
+        var batchResult = ApplyChainDefaultsBatch(new[] { (chainId, walletId) });
 
-        if (ownership == null)
-            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
-
-        // Only verified+signing wallets can be defaults
-        if (!ownership.IsVerifiedSigning)
-            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.WatchOnlyNotAllowedAsDefault());
-
-        // Enhanced no-op guard with defensive checks for concurrent modifications
-        var existingDefault = _principalChainDefaults
-            .Where(pcd => pcd.ChainId == chainId && !pcd.IsDeleted)
-            .FirstOrDefault();
-
-        if (existingDefault != null && existingDefault.WalletId == walletId)
-        {
-            // Idempotent operation - no change needed
-            return Result.Success<Unit, Error>(Unit.Value);
-        }
-
-        var oldDefault = existingDefault?.WalletId;
-
-        // Defensive update or create chain default with improved concurrency handling
-        if (existingDefault != null)
-        {
-            // Check if the existing default is still valid (not soft-deleted by another process)
-            if (!existingDefault.IsDeleted)
-            {
-                existingDefault.UpdateWallet(walletId);
-            }
-            else
-            {
-                // Existing default was soft-deleted, remove it and create new one
-                _principalChainDefaults.Remove(existingDefault);
-                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
-                _principalChainDefaults.Add(newDefault);
-            }
-        }
-        else
-        {
-            // Check if there's a conflicting default that might have been added concurrently
-            var potentialConflict = _principalChainDefaults
-                .FirstOrDefault(pcd => pcd.ChainId == chainId);
-
-            if (potentialConflict != null)
-            {
-                // Handle the conflict by updating the existing one
-                if (!potentialConflict.IsDeleted)
-                {
-                    potentialConflict.UpdateWallet(walletId);
-                }
-                else
-                {
-                    _principalChainDefaults.Remove(potentialConflict);
-                    var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
-                    _principalChainDefaults.Add(newDefault);
-                }
-            }
-            else
-            {
-                // Safe to create new default
-                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
-                _principalChainDefaults.Add(newDefault);
-            }
-        }
-
-        // Raise domain event only when actual change occurs
-        RaiseDomainEvent(new PrincipalChangedEvent(
-            Id,
-            $"ChainDefault.{chainId}",
-            oldDefault?.ToString() ?? "none",
-            walletId.ToString()
-        ));
+        if (batchResult.IsFailure)
+            return Result.Failure<Unit, Error>(batchResult.Error);
 
         return Result.Success<Unit, Error>(Unit.Value);
     }

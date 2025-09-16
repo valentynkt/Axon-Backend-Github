@@ -31,7 +31,7 @@ namespace Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<ExchangeCredentialCommand, ExchangeOutcome>
 {
     private const string JwtIssuerMetadataKey = "jwt_issuer";
-    private readonly IAxonPrincipalWriteRepository _principalRepository;
+    private readonly IAxonPrincipalWriteRepository _principalWriteRepository;
     private readonly IWalletWriteRepository _walletRepository;
     private readonly IExchangeMetricsService _metricsService;
     private readonly ILogger<ExchangeCredentialHandler> _logger;
@@ -44,7 +44,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         ILogger<ExchangeCredentialHandler> logger)
         : base(currentUserService)
     {
-        _principalRepository = principalRepository;
+        _principalWriteRepository = principalRepository;
         _walletRepository = walletRepository;
         _metricsService = metricsService;
         _logger = logger;
@@ -168,14 +168,14 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         // Step 5: Persist changes
         if (isNewPrincipal)
         {
-            await _principalRepository.AddAsync(principal, cancellationToken);
+            await _principalWriteRepository.AddAsync(principal, cancellationToken);
         }
         else
         {
-            await _principalRepository.UpdateAsync(principal, cancellationToken);
+            await _principalWriteRepository.UpdateAsync(principal, cancellationToken);
         }
 
-        await _principalRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+        await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
         // Step 6: Return stable metrics
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
@@ -299,7 +299,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
                     walletSpecs, cancellationToken);
 
                 // Batch check for existing verified signing ownership (PREFERRED APPROACH)
-                var walletOwners = await _principalRepository.FindVerifiedSigningOwnersAsync(
+                var walletOwners = await _principalWriteRepository.FindVerifiedSigningOwnersAsync(
                     walletLookup.Values, cancellationToken);
 
                 if (walletOwners.Count > 0)
@@ -312,7 +312,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         // STEP 2: Fallback to credential lookup (existing logic)
         if (resolvedPrincipal is null)
         {
-            resolvedPrincipal = await _principalRepository.FindByCredentialAsync(
+            resolvedPrincipal = await _principalWriteRepository.FindByCredentialAsync(
                 providerType, issuer, subject, cancellationToken);
         }
 
@@ -334,15 +334,17 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
                     subject,
                     DateTime.UtcNow);
 
-                // Use domain method with conflict check function (safer async pattern)
+                // Check credential uniqueness BEFORE calling domain method (proper async pattern)
+                var providerTypeResult = ProviderType.Create(credential.Provider);
+                if (providerTypeResult.IsFailure)
+                    return Result.Failure<(AxonPrincipal, bool), Error>(providerTypeResult.Error);
+
+                var isTaken = await _principalWriteRepository.IsCredentialTakenAsync(
+                    providerTypeResult.Value, credential.Issuer, credential.Subject, cancellationToken);
+
+                // Use domain method with synchronous check function
                 var addResult = resolvedPrincipal.AddCredential(credential, (provider, iss, subj) =>
-                {
-                    // Use ConfigureAwait(false) to prevent deadlocks
-                    var isTaken = _principalRepository.IsCredentialTakenAsync(
-                        ProviderType.Create(provider).Value, iss, subj, cancellationToken)
-                        .ConfigureAwait(false).GetAwaiter().GetResult();
-                    return Result.Success<bool, Error>(isTaken);
-                });
+                    Result.Success<bool, Error>(isTaken));
 
                 if (addResult.IsFailure)
                 {
@@ -422,7 +424,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         var walletIds = walletLookup.Values.ToList();
 
         // Step 3: Check for existing verified signing ownership conflicts
-        var existingOwners = await _principalRepository.FindVerifiedSigningOwnersAsync(walletIds, cancellationToken);
+        var existingOwners = await _principalWriteRepository.FindVerifiedSigningOwnersAsync(walletIds, cancellationToken);
         
         var conflicts = existingOwners.Where(kvp => kvp.Value.Id != principal.Id).ToList();
         if (conflicts.Count > 0)
@@ -476,7 +478,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     }
 
     /// <summary>
-    /// Applies chain defaults for verified and signing wallets in verified-first order.
+    /// Applies chain defaults for verified and signing wallets using optimized batch processing.
     /// Returns the count of actual defaults applied (excluding no-ops).
     /// </summary>
     private async Task<int> ApplyChainDefaults(
@@ -494,52 +496,36 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         if (eligibleOwnerships.Count == 0)
             return 0;
 
-        // OPTIMIZATION: Get existing chain defaults to filter out chains that already have defaults
-        var existingDefaultChains = principal.ChainDefaults.Keys.ToHashSet();
-
         // Get wallet details to determine chain mappings
         var wallets = await _walletRepository.GetByIdsAsync(
             eligibleOwnerships.Select(o => o.WalletId),
             cancellationToken);
 
-        // OPTIMIZATION: Filter to only chains that don't already have defaults
-        var chainGroups = wallets
+        // Create chain-to-wallet mappings using deterministic ordering (first wallet per chain by ID)
+        var chainWalletMappings = wallets
             .GroupBy(w => w.ChainId)
-            .Where(cg => !existingDefaultChains.Contains(cg.Key))  // Skip chains with existing defaults
+            .Select(cg => (
+                chainId: cg.Key,
+                walletId: cg.OrderBy(w => w.Id.Value).First().Id
+            ))
             .ToList();
 
-        int defaultsApplied = 0;
-        int chainsSkipped = existingDefaultChains.Count(chainId =>
-            wallets.Any(w => w.ChainId == chainId));
+        if (chainWalletMappings.Count == 0)
+            return 0;
 
-        // Log optimization metrics
-        _logger.LogDebug("Chain defaults processing: {ChainsToProcess} chains to process, {ChainsSkipped} chains skipped (already have defaults)",
-            chainGroups.Count, chainsSkipped);
+        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method",
+            chainWalletMappings.Count);
 
-        foreach (var chainGroup in chainGroups)
+        // Use optimized batch method that handles all filtering, validation, and no-op detection internally
+        var batchResult = principal.ApplyChainDefaultsBatch(chainWalletMappings);
+
+        if (batchResult.IsFailure)
         {
-            var chainId = chainGroup.Key;
-
-            // Get the first verified+signing wallet for this chain (order by ID for deterministic behavior)
-            // Note: .First() is safe here because chainGroup comes from GroupBy() which guarantees non-empty groups
-            var firstWallet = chainGroup
-                .OrderBy(w => w.Id.Value)
-                .First();
-
-            // Check current default before applying to detect no-ops (defensive check)
-            var currentDefault = principal.GetDefaultWalletForChain(chainId);
-
-            // Apply chain default using domain method
-            var result = principal.ApplyChainDefault(chainId, firstWallet.Id);
-
-            // Count only successful applications that weren't no-ops
-            if (result.IsSuccess && currentDefault != firstWallet.Id)
-            {
-                defaultsApplied++;
-            }
+            _logger.LogWarning("Batch chain defaults application failed: {Error}", batchResult.Error.Message);
+            return 0;
         }
-        
-        return defaultsApplied;
+
+        return batchResult.Value;
     }
 
     /// <summary>

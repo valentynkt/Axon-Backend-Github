@@ -214,4 +214,67 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fingerprint));
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
+
+    public async Task<bool> IsWalletOwnedByVerifiedSigningAsync(
+        WalletId walletId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _identityDbContext.Set<AxonPrincipal>()
+            .AnyAsync(p => p.WalletOwnerships.Any(wo =>
+                wo.WalletId == walletId &&
+                wo.AccessMode == AccessMode.Signing &&
+                wo.Status == OwnershipStatus.Verified), cancellationToken);
+    }
+
+    public async Task<bool> IsCredentialTakenAsync(
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        CancellationToken cancellationToken = default)
+    {
+        return await _identityDbContext.Set<AxonPrincipal>()
+            .AnyAsync(p => p.Credentials.Any(c =>
+                c.Provider == providerType.Value &&
+                c.Issuer == issuer &&
+                c.Subject == subject), cancellationToken);
+    }
+
+    public async Task<Dictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
+        IEnumerable<WalletId> walletIds,
+        CancellationToken cancellationToken = default)
+    {
+        var walletIdsList = walletIds.ToList();
+
+        if (walletIdsList.Count == 0)
+            return new Dictionary<WalletId, AxonPrincipal>();
+
+        var principals = await _identityDbContext.Set<AxonPrincipal>()
+            .AsSplitQuery()
+            .AsNoTracking()
+            .Include(p => p.Credentials)
+            .Include(p => p.WalletOwnerships)
+            .Include(p => p.PrincipalChainDefaults)
+            .Where(p => p.WalletOwnerships.Any(wo =>
+                walletIdsList.Contains(wo.WalletId) &&
+                wo.AccessMode == AccessMode.Signing &&
+                wo.Status == OwnershipStatus.Verified))
+            .ToListAsync(cancellationToken);
+
+        var result = new Dictionary<WalletId, AxonPrincipal>();
+
+        foreach (var principal in principals)
+        {
+            foreach (var ownership in principal.WalletOwnerships)
+            {
+                if (walletIdsList.Contains(ownership.WalletId) &&
+                    ownership.AccessMode == AccessMode.Signing &&
+                    ownership.Status == OwnershipStatus.Verified)
+                {
+                    result[ownership.WalletId] = principal;
+                }
+            }
+        }
+
+        return result;
+    }
 }

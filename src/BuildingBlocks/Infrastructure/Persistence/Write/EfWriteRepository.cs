@@ -16,7 +16,7 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     private readonly DbContext _context;
     private readonly DbSet<TAggregate> _dbSet;
 
-    protected DbContext Context => _context;
+    protected DbContext DbContext => _context;
     protected DbSet<TAggregate> DbSet => _dbSet;
 
     public EfWriteRepository(DbContext context)
