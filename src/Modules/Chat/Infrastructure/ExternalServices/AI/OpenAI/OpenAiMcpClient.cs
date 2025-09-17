@@ -55,12 +55,12 @@ public sealed class OpenAiMcpClient : IAiClient
 
             // Serialize to JSON
             var jsonContent = JsonSerializer.Serialize(requestPayload);
-            using var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             _logger.LogDebug("Sending Responses API request (continuation={Continuation})",
                 !string.IsNullOrWhiteSpace(request.PreviousResponseId));
 
-            using var response = await _http.PostAsync(ResponsesApiUrl, content, cancellationToken);
+            using var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(ResponsesApiUrl, content, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)
@@ -96,9 +96,29 @@ public sealed class OpenAiMcpClient : IAiClient
             _logger.LogWarning("Responses API call cancelled.");
             throw; // bubble up cancellation
         }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request failed during Responses API call.");
+            return Result.Failure<AiResponse, Error>(AiErrors.ServiceUnavailable);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Responses API call timed out.");
+            return Result.Failure<AiResponse, Error>(AiErrors.ServiceUnavailable);
+        }
+        catch (IOException ex)
+        {
+            _logger.LogError(ex, "Network I/O error during Responses API call.");
+            return Result.Failure<AiResponse, Error>(AiErrors.ServiceUnavailable);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogError(ex, "Connection was disposed during Responses API call.");
+            return Result.Failure<AiResponse, Error>(AiErrors.ServiceUnavailable);
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Responses API call failed.");
+            _logger.LogError(ex, "Unexpected error during Responses API call.");
             return Result.Failure<AiResponse, Error>(AiErrors.RequestFailed);
         }
     }

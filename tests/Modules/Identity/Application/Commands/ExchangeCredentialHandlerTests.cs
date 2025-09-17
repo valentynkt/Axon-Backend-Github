@@ -716,6 +716,184 @@ public class ExchangeCredentialHandlerTests
     }
 
 
+    [Test]
+    public async Task Should_ApplyChainDefaults_When_ExchangingWithVerifiedSigningWallets()
+    {
+        // Arrange: Create exchange data with wallets from different chains
+        var userData = new ExchangeUserData(
+            UserId: "test-user-123",
+            Email: "test@example.com",
+            EnvironmentId: "test-env-456",
+            Wallets: new List<ExchangeWalletData>
+            {
+                new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "1"), // Ethereum mainnet
+                new("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS", "1399811149"), // Solana mainnet
+                new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42", "137") // Polygon mainnet
+            }
+        );
+        var command = new ExchangeCredentialCommand(userData);
+
+        // Create wallet IDs and mock lookup results
+        var ethereumWalletId = WalletId.New();
+        var solanaWalletId = WalletId.New();
+        var polygonWalletId = WalletId.New();
+
+        var walletLookup = new Dictionary<(string chainId, Address address), WalletId>
+        {
+            { ("1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41")), ethereumWalletId },
+            { ("1399811149", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS")), solanaWalletId },
+            { ("137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42")), polygonWalletId }
+        };
+
+        // Mock wallet repository
+        _walletRepository.EnsureManyByChainAndAddressAsync(Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(walletLookup);
+
+        // Mock GetByIdsAsync for chain defaults application
+        var wallets = new List<Wallet>
+        {
+            Wallet.Create(ethereumWalletId, "1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
+            Wallet.Create(solanaWalletId, "1399811149", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS"), DateTime.UtcNow),
+            Wallet.Create(polygonWalletId, "137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
+        };
+        _walletRepository.GetByIdsAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(wallets);
+
+        // Mock no existing principal found
+        _principalRepository.FindVerifiedSigningOwnersAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>());
+
+        _principalRepository.FindByCredentialAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((AxonPrincipal?)null);
+
+        _principalRepository.IsCredentialTakenAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        // Track the principal that gets created/updated
+        AxonPrincipal? capturedPrincipal = null;
+        _principalRepository.AddAsync(Arg.Do<AxonPrincipal>(p => capturedPrincipal = p), Arg.Any<CancellationToken>())
+            .Returns(args => (AxonPrincipal)args[0]);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Verify operation succeeded
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeTrue();
+        result.Value.DefaultsApplied.ShouldBe(3); // 3 chains should have defaults applied
+        result.Value.WalletsLinked.ShouldBe(3);
+
+        // Verify principal was captured and has chain defaults
+        capturedPrincipal.ShouldNotBeNull();
+        capturedPrincipal.PrincipalChainDefaults.ShouldNotBeEmpty();
+        capturedPrincipal.PrincipalChainDefaults.Count.ShouldBe(3);
+
+        // Verify each chain has the correct default wallet
+        var chainDefaults = capturedPrincipal.PrincipalChainDefaults.ToList();
+        chainDefaults.ShouldContain(cd => cd.ChainId == "1" && cd.WalletId == ethereumWalletId);
+        chainDefaults.ShouldContain(cd => cd.ChainId == "1399811149" && cd.WalletId == solanaWalletId);
+        chainDefaults.ShouldContain(cd => cd.ChainId == "137" && cd.WalletId == polygonWalletId);
+
+        // Verify all chain defaults have proper audit fields (indicating they're ready for persistence)
+        foreach (var chainDefault in chainDefaults)
+        {
+            chainDefault.Id.ShouldNotBe(Guid.Empty);
+            chainDefault.PrincipalId.ShouldBe(capturedPrincipal.Id);
+            chainDefault.CreatedAt.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-1));
+        }
+
+        // Verify repository calls
+        await _principalRepository.Received(1).AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_ApplyChainDefaults_When_ExistingPrincipalHasWalletsButNoDefaults()
+    {
+        // Arrange: Existing principal with wallets linked but no chain defaults
+        var userData = new ExchangeUserData(
+            UserId: "test-user-123",
+            Email: "test@example.com",
+            EnvironmentId: "test-env-456",
+            Wallets: new List<ExchangeWalletData>
+            {
+                new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "1"), // Ethereum mainnet
+                new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42", "137") // Polygon mainnet
+            }
+        );
+        var command = new ExchangeCredentialCommand(userData);
+
+        // Create existing principal with no chain defaults
+        var existingPrincipal = CreateTestPrincipal();
+
+        // Create wallet IDs and mock lookup results
+        var ethereumWalletId = WalletId.New();
+        var polygonWalletId = WalletId.New();
+
+        var walletLookup = new Dictionary<(string chainId, Address address), WalletId>
+        {
+            { ("1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41")), ethereumWalletId },
+            { ("137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42")), polygonWalletId }
+        };
+
+        // Setup: Existing principal owns the wallets (wallet-first resolution finds it)
+        _walletRepository.EnsureManyByChainAndAddressAsync(Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(walletLookup);
+
+        _principalRepository.FindVerifiedSigningOwnersAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<WalletId, AxonPrincipal>
+            {
+                { ethereumWalletId, existingPrincipal },
+                { polygonWalletId, existingPrincipal }
+            });
+
+        // Mock GetByIdsAsync for chain defaults application
+        var wallets = new List<Wallet>
+        {
+            Wallet.Create(ethereumWalletId, "1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
+            Wallet.Create(polygonWalletId, "137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
+        };
+        _walletRepository.GetByIdsAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
+            .Returns(wallets);
+
+        // Track the principal that gets updated
+        AxonPrincipal? capturedPrincipal = null;
+        _principalRepository.UpdateAsync(Arg.Do<AxonPrincipal>(p => capturedPrincipal = p), Arg.Any<CancellationToken>())
+            .Returns(args => Task.FromResult((AxonPrincipal)args[0]));
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert: Verify operation succeeded
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeFalse(); // Existing principal
+        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.DefaultsApplied.ShouldBe(2); // 2 chains should have defaults applied
+        result.Value.WalletsLinked.ShouldBe(2);
+
+        // Verify principal was captured and has chain defaults
+        capturedPrincipal.ShouldNotBeNull();
+        capturedPrincipal.PrincipalChainDefaults.ShouldNotBeEmpty();
+        capturedPrincipal.PrincipalChainDefaults.Count.ShouldBe(2);
+
+        // Verify each chain has the correct default wallet
+        var chainDefaults = capturedPrincipal.PrincipalChainDefaults.ToList();
+        chainDefaults.ShouldContain(cd => cd.ChainId == "1" && cd.WalletId == ethereumWalletId);
+        chainDefaults.ShouldContain(cd => cd.ChainId == "137" && cd.WalletId == polygonWalletId);
+
+        // Verify all chain defaults have proper audit fields (indicating they're ready for persistence)
+        foreach (var chainDefault in chainDefaults)
+        {
+            chainDefault.Id.ShouldNotBe(Guid.Empty);
+            chainDefault.PrincipalId.ShouldBe(capturedPrincipal.Id);
+            chainDefault.CreatedAt.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(-1));
+        }
+
+        // Verify repository calls - should update existing principal, not add new
+        await _principalRepository.Received(1).UpdateAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+        await _principalRepository.DidNotReceive().AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+    }
+
     private static AxonPrincipal CreateTestPrincipalWithExistingDynamicCredential(ExchangeUserData userData)
     {
         var result = AxonPrincipal.CreateWithDynamicCredential(

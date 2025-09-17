@@ -109,9 +109,7 @@ public static class ServiceRegistration
         // Register simple POC implementation for Direct MCP
         services.AddHttpClient<IAiClient, OpenAiMcpClient>((serviceProvider, client) =>
         {
-            var openAiOptions = serviceProvider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
             client.BaseAddress = new Uri("https://api.openai.com/");
-            client.Timeout = TimeSpan.FromSeconds(openAiOptions.TimeoutSeconds);
         });
         
         

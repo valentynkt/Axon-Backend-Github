@@ -165,17 +165,26 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         // Step 4: Apply verified-first chain defaults
         var defaultsApplied = await ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds, cancellationToken);
 
+        _logger.LogDebug("Before persistence: PrincipalId={PrincipalId}, DefaultsApplied={DefaultsApplied}, " +
+            "ChainDefaultsCount={ChainDefaultsCount}, WalletOwnershipsCount={WalletOwnershipsCount}",
+            principal.Id.Value, defaultsApplied, principal.PrincipalChainDefaults.Count, principal.WalletOwnerships.Count);
+
         // Step 5: Persist changes
         if (isNewPrincipal)
         {
             await _principalWriteRepository.AddAsync(principal, cancellationToken);
+            _logger.LogDebug("Principal added to repository (new): PrincipalId={PrincipalId}", principal.Id.Value);
         }
         else
         {
             await _principalWriteRepository.UpdateAsync(principal, cancellationToken);
+            _logger.LogDebug("Principal updated in repository (existing): PrincipalId={PrincipalId}", principal.Id.Value);
         }
 
-        await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+        var saveResult = await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("SaveChanges completed: PrincipalId={PrincipalId}, RowsAffected={RowsAffected}, " +
+            "DefaultsApplied={DefaultsApplied}, FinalChainDefaultsCount={FinalChainDefaultsCount}",
+            principal.Id.Value, saveResult, defaultsApplied, principal.PrincipalChainDefaults.Count);
 
         // Step 6: Return stable metrics
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
@@ -513,8 +522,11 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         if (chainWalletMappings.Count == 0)
             return 0;
 
-        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method",
-            chainWalletMappings.Count);
+        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method. " +
+            "Chains: [{ChainDetails}], ExistingDefaults: {ExistingDefaultsCount}",
+            chainWalletMappings.Count,
+            string.Join(", ", chainWalletMappings.Select(m => $"{m.chainId}:{m.walletId.Value}")),
+            principal.PrincipalChainDefaults.Count);
 
         // Use optimized batch method that handles all filtering, validation, and no-op detection internally
         var batchResult = principal.ApplyChainDefaultsBatch(chainWalletMappings);
@@ -524,6 +536,10 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             _logger.LogWarning("Batch chain defaults application failed: {Error}", batchResult.Error.Message);
             return 0;
         }
+
+        _logger.LogDebug("Chain defaults batch processing completed: DefaultsApplied={DefaultsApplied}, " +
+            "TotalDefaultsAfter={TotalDefaultsAfter}",
+            batchResult.Value, principal.PrincipalChainDefaults.Count);
 
         return batchResult.Value;
     }

@@ -51,12 +51,49 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
         ArgumentNullException.ThrowIfNull(aggregate);
 
         var entry = _context.Entry(aggregate);
+
         if (entry.State == EntityState.Detached)
         {
-            entry = _dbSet.Update(aggregate);
+            // For detached entities, Update() handles the entire graph correctly
+            _dbSet.Update(aggregate);
+        }
+        else
+        {
+            // For tracked entities, ensure the aggregate is marked as modified
+            entry.State = EntityState.Modified;
+
+            // Explicitly detect and track new entities in navigation collections
+            // This is critical for navigation properties with private backing fields
+            foreach (var navigation in entry.Navigations)
+            {
+                if (navigation.CurrentValue is not null)
+                {
+                    // Handle collection navigations
+                    if (navigation.Metadata.IsCollection)
+                    {
+                        foreach (var item in (System.Collections.IEnumerable)navigation.CurrentValue)
+                        {
+                            var itemEntry = _context.Entry(item);
+                            if (itemEntry.State == EntityState.Detached)
+                            {
+                                itemEntry.State = EntityState.Added;
+                            }
+                        }
+                    }
+                    // Handle reference navigations
+                    else
+                    {
+                        var itemEntry = _context.Entry(navigation.CurrentValue);
+                        if (itemEntry.State == EntityState.Detached)
+                        {
+                            itemEntry.State = EntityState.Added;
+                        }
+                    }
+                }
+            }
         }
 
-        return Task.FromResult(entry.Entity);
+        return Task.FromResult(aggregate);
     }
 
     public virtual Task<IReadOnlyList<TAggregate>> UpdateRangeAsync(

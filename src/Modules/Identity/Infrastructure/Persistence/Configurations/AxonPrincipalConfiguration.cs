@@ -41,21 +41,30 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
             .HasColumnName("version")
             .IsConcurrencyToken();
 
-        // Navigation properties
+        // Navigation properties with backing field access
         builder.HasMany(p => p.Credentials)
             .WithOne()
             .HasForeignKey("PrincipalId")
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(p => p.Credentials)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasMany(p => p.WalletOwnerships)
             .WithOne()
             .HasForeignKey("PrincipalId")
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Navigation(p => p.WalletOwnerships)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasMany(p => p.PrincipalChainDefaults)
             .WithOne()
             .HasForeignKey("PrincipalId")
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(p => p.PrincipalChainDefaults)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         // Indexes
         builder.HasIndex(p => p.Type).HasDatabaseName("ix_principal_type");

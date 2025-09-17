@@ -114,13 +114,16 @@ public sealed class ChatMappingProfile : IRegister, IChatMappingProfile
 
     /// <summary>
     /// Parses string value to ConversationSortBy enum with fallback to default.
+    /// Only accepts exact enum value names - no modifications or workarounds.
     /// </summary>
     /// <param name="value">The string value to parse</param>
     /// <returns>The parsed enum value or default if invalid</returns>
-    private static ConversationSortBy ParseSortBy(string? value) =>
-        Enum.TryParse<ConversationSortBy>(value, ignoreCase: true, out var result) 
-            ? result 
+    private static ConversationSortBy ParseSortBy(string? value)
+    {
+        return Enum.TryParse<ConversationSortBy>(value, ignoreCase: true, out var result)
+            ? result
             : ConversationSortBy.UpdatedAt;
+    }
 
     /// <summary>
     /// Parses string value to SortDirection enum with fallback to default.
