@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
@@ -25,7 +26,7 @@ public class ExchangeCredentialHandlerTests
     private IWalletWriteRepository _walletRepository = null!;
     private IExchangeMetricsService _metricsService = null!;
     private ILogger<ExchangeCredentialHandler> _logger = null!;
-    private IWriteUnitOfWork _unitOfWork = null!;
+    private IWriteUnitOfWork<IdentityModule> _unitOfWork = null!;
     private ExchangeCredentialHandler _handler = null!;
     private static readonly ProviderType TestProviderType = ProviderType.From("dynamic");
 
@@ -37,7 +38,7 @@ public class ExchangeCredentialHandlerTests
         _walletRepository = Substitute.For<IWalletWriteRepository>();
         _metricsService = Substitute.For<IExchangeMetricsService>();
         _logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
-        _unitOfWork = Substitute.For<IWriteUnitOfWork>();
+        _unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
 
         _principalRepository.UnitOfWork.Returns(_unitOfWork);
 

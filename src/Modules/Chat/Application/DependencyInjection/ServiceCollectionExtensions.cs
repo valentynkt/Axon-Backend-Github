@@ -29,17 +29,11 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddChatApplication(
         this IServiceCollection services)
     {
-        // Register MediatR handlers from this assembly
-        services.AddMediatR(cfg => 
-        {
-            cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
-        });
+        // MediatR and pipeline behaviors are now registered centrally in API layer
+        // to prevent handler overwriting issues
 
         // Register FluentValidation validators from this assembly
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
-
-        // Register BuildingBlocks pipeline behaviors
-        services.AddApplicationServices();
 
         // Register Chat-specific services
         services.AddSingleton(TimeProvider.System);

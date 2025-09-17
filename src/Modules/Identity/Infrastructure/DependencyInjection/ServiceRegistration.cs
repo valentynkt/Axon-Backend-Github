@@ -100,8 +100,8 @@ public static class ServiceRegistration
         services.AddScoped<IIdentityReadDbContext>(provider => provider.GetRequiredService<IdentityReadDbContext>());
         services.AddScoped<IIdentityWriteDbContext>(provider => provider.GetRequiredService<IdentityWriteDbContext>());
         
-        // Register UnitOfWork using the EfUnitOfWork wrapper with correct module type
-        services.AddScoped<IWriteUnitOfWork>(provider => 
+        // Register module-specific UnitOfWork using the EfUnitOfWork wrapper with correct module type
+        services.AddScoped<IWriteUnitOfWork<IdentityModule>>(provider =>
         {
             var context = provider.GetRequiredService<IdentityWriteDbContext>();
             return new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);

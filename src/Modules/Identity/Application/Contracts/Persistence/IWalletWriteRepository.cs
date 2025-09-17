@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Application;
@@ -12,7 +13,7 @@ public interface IWalletWriteRepository : IWriteRepository<Wallet, WalletId>
     /// <summary>
     /// Gets the associated unit of work for transaction management
     /// </summary>
-    IWriteUnitOfWork UnitOfWork { get; }
+    IWriteUnitOfWork<IdentityModule> UnitOfWork { get; }
 
     /// <summary>
     /// Gets a wallet by chain and address combination.

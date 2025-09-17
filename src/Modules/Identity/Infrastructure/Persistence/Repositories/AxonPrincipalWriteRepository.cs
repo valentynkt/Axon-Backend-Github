@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
@@ -12,14 +13,14 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
 public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincipal, AxonId>, IAxonPrincipalWriteRepository
 {
-    private readonly IWriteUnitOfWork _unitOfWork;
+    private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
-    public AxonPrincipalWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
+    public AxonPrincipalWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
     }
 
-    public IWriteUnitOfWork UnitOfWork => _unitOfWork;
+    public IWriteUnitOfWork<IdentityModule> UnitOfWork => _unitOfWork;
 
     private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
     {

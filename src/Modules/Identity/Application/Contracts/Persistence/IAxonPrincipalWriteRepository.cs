@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.ValueObjects;
@@ -13,7 +14,7 @@ public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal,
     /// <summary>
     /// Gets the associated unit of work for transaction management.
     /// </summary>
-    IWriteUnitOfWork UnitOfWork { get; }
+    IWriteUnitOfWork<IdentityModule> UnitOfWork { get; }
 
     /// <summary>
     /// Finds a principal by their identity credential.

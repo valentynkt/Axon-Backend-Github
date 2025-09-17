@@ -5,10 +5,10 @@ using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Identity.Application.Common.Models;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
-using Axon.Modules.Identity.Infrastructure.Persistence.Common;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -26,7 +26,7 @@ public class PrincipalChainDefaultPersistenceTests
 {
     private IdentityWriteDbContext _dbContext = null!;
     private AxonPrincipalWriteRepository _repository = null!;
-    private IWriteUnitOfWork _unitOfWork = null!;
+    private IWriteUnitOfWork<IdentityModule> _unitOfWork = null!;
 
     [SetUp]
     public async Task SetUp()

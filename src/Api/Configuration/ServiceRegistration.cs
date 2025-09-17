@@ -16,6 +16,9 @@ using Polly;
 using Polly.Extensions.Http;
 using System.Reflection;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
+using BuildingBlocks.Application.Configuration;
+using Axon.Modules.Chat.Application.Commands.StartConversation;
+using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 
 namespace Axon.Api.Configuration;
 
@@ -132,10 +135,21 @@ public static class ServiceRegistration
         services.AddCorsConfiguration(configuration, environment);
         
         // JWT authentication and rate limiting are now handled by IdentityApiModule
-        
-        // Note: MediatR, pipeline behaviors, and validators are registered by individual modules
-        // This ensures proper assembly scanning and avoids duplication
-        
+
+        // CRITICAL FIX: Register MediatR once for ALL modules to prevent handler overwriting
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblies(
+                // Chat module handlers
+                typeof(StartConversationCommand).Assembly,
+                // Identity module handlers
+                typeof(ExchangeCredentialCommand).Assembly
+            );
+        });
+
+        // Register pipeline behaviors once for all modules
+        services.AddApplicationServices();
+
         // Configure Mapster with profiles and validation
         services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
 

@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
@@ -10,12 +11,12 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 
 public sealed class ConversationRepository : EfWriteRepository<Conversation, ConversationId>, IConversationRepository
 {
-    private readonly IWriteUnitOfWork _unitOfWork;
+    private readonly IWriteUnitOfWork<ChatModule> _unitOfWork;
 
-    public ConversationRepository(ChatDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
+    public ConversationRepository(ChatDbContext context, IWriteUnitOfWork<ChatModule> unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
     }
 
-    public IWriteUnitOfWork UnitOfWork => _unitOfWork;
+    public IWriteUnitOfWork<ChatModule> UnitOfWork => _unitOfWork;
 }

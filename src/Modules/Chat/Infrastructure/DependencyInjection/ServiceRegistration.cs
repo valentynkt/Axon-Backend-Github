@@ -91,8 +91,8 @@ public static class ServiceRegistration
         services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
         services.AddScoped<IChatWriteDbContext>(provider => provider.GetRequiredService<ChatDbContext>());
         
-        // Register UnitOfWork using the EfUnitOfWork wrapper with correct module type
-        services.AddScoped<IWriteUnitOfWork>(provider => 
+        // Register module-specific UnitOfWork using the EfUnitOfWork wrapper with correct module type
+        services.AddScoped<IWriteUnitOfWork<ChatModule>>(provider =>
         {
             var context = provider.GetRequiredService<ChatDbContext>();
             return new EfUnitOfWork<ChatDbContext, ChatModule>(context);

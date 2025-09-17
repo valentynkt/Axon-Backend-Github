@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.Contracts.Telemetry;
@@ -37,8 +38,8 @@ public static class InfrastructureDIValidation
             // Repository validation
             TestServiceResolution<IConversationRepository>(serviceProvider, errors, "IConversationRepository");
             
-            // Unit of Work validation
-            TestServiceResolution<IWriteUnitOfWork>(serviceProvider, errors, "IWriteUnitOfWork");
+            // Unit of Work validation - module-specific
+            TestServiceResolution<IWriteUnitOfWork<ChatModule>>(serviceProvider, errors, "IWriteUnitOfWork<ChatModule>");
             
             // Authentication services
             TestServiceResolution<ICurrentUserService>(serviceProvider, errors, "ICurrentUserService");
@@ -64,10 +65,10 @@ public static class InfrastructureDIValidation
             }
             
             // Validate Unit of Work is properly wrapped
-            var unitOfWork = serviceProvider.GetService<IWriteUnitOfWork>();
+            var unitOfWork = serviceProvider.GetService<IWriteUnitOfWork<ChatModule>>();
             if (unitOfWork != null && !unitOfWork.GetType().Name.Contains("EfUnitOfWork", StringComparison.Ordinal))
             {
-                errors.Add($"CRITICAL: IWriteUnitOfWork resolves to {unitOfWork.GetType().Name} instead of EfUnitOfWork wrapper. Transaction management not properly configured!");
+                errors.Add($"CRITICAL: IWriteUnitOfWork<ChatModule> resolves to {unitOfWork.GetType().Name} instead of EfUnitOfWork wrapper. Transaction management not properly configured!");
             }
             
         }

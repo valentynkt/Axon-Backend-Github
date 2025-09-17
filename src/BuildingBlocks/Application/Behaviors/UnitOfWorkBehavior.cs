@@ -4,6 +4,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using CSharpFunctionalExtensions;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.CQRS; // IWriteUnitOfWork
@@ -21,12 +22,12 @@ namespace BuildingBlocks.Application.Behaviors;
 public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull, IRequest<TResponse>
 {
-    private readonly IWriteUnitOfWork _uow;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<UnitOfWorkBehavior<TRequest, TResponse>> _logger;
 
-    public UnitOfWorkBehavior(IWriteUnitOfWork uow, ILogger<UnitOfWorkBehavior<TRequest, TResponse>> logger)
+    public UnitOfWorkBehavior(IServiceProvider serviceProvider, ILogger<UnitOfWorkBehavior<TRequest, TResponse>> logger)
     {
-        _uow = uow ?? throw new ArgumentNullException(nameof(uow));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -39,8 +40,16 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
         if (!isCommand)
             return await next();
 
+        // Resolve the correct module-specific UnitOfWork based on command namespace
+        var uow = ResolveUnitOfWork(request);
+        if (uow == null)
+        {
+            _logger.LogWarning("No UnitOfWork found for command {Command}. Proceeding without transaction.", typeof(TRequest).Name);
+            return await next();
+        }
+
         // Wrap handler + commit in one transaction
-        return await _uow.ExecuteInTransactionAsync<TResponse>(async token =>
+        return await uow.ExecuteInTransactionAsync<TResponse>(async token =>
         {
             var response = await next(); // handler does domain work
 
@@ -60,11 +69,53 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
                 return response;
             }
 
-            await _uow.SaveChangesAsync(token);
+            await uow.SaveChangesAsync(token);
             _logger.LogDebug("Command {Command} committed successfully.", typeof(TRequest).Name);
             return response;
 
         }, ct);
+    }
+
+    /// <summary>
+    /// Resolves the appropriate module-specific UnitOfWork based on the command's namespace
+    /// </summary>
+    private IWriteUnitOfWork? ResolveUnitOfWork(TRequest request)
+    {
+        var requestType = request.GetType();
+        var namespaceName = requestType.Namespace ?? string.Empty;
+
+        try
+        {
+            // Chat module commands
+            if (namespaceName.Contains("Axon.Modules.Chat"))
+            {
+                var chatModuleType = Type.GetType("Axon.Modules.Chat.Application.Common.Models.ChatModule, Axon.Modules.Chat.Application");
+                if (chatModuleType != null)
+                {
+                    var uowType = typeof(IWriteUnitOfWork<>).MakeGenericType(chatModuleType);
+                    return _serviceProvider.GetService(uowType) as IWriteUnitOfWork;
+                }
+            }
+            // Identity module commands
+            else if (namespaceName.Contains("Axon.Modules.Identity"))
+            {
+                var identityModuleType = Type.GetType("Axon.Modules.Identity.Application.Common.Models.IdentityModule, Axon.Modules.Identity.Application");
+                if (identityModuleType != null)
+                {
+                    var uowType = typeof(IWriteUnitOfWork<>).MakeGenericType(identityModuleType);
+                    return _serviceProvider.GetService(uowType) as IWriteUnitOfWork;
+                }
+            }
+
+            _logger.LogWarning("Unknown module for command {Command} with namespace {Namespace}",
+                requestType.Name, namespaceName);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve UnitOfWork for command {Command}", requestType.Name);
+            return null;
+        }
     }
 
     /// <summary>

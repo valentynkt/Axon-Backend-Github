@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using BuildingBlocks.Application;
@@ -36,14 +37,14 @@ public static class InfrastructureDIValidation
             TestServiceResolution<IAxonPrincipalReadRepository>(serviceProvider, errors, "IAxonPrincipalReadRepository");
             TestServiceResolution<IWalletReadRepository>(serviceProvider, errors, "IWalletReadRepository");
             
-            // Unit of Work validation
-            TestServiceResolution<IWriteUnitOfWork>(serviceProvider, errors, "IWriteUnitOfWork");
+            // Unit of Work validation - module-specific
+            TestServiceResolution<IWriteUnitOfWork<IdentityModule>>(serviceProvider, errors, "IWriteUnitOfWork<IdentityModule>");
             
             // Validate Unit of Work is properly wrapped
-            var unitOfWork = serviceProvider.GetService<IWriteUnitOfWork>();
+            var unitOfWork = serviceProvider.GetService<IWriteUnitOfWork<IdentityModule>>();
             if (unitOfWork != null && !unitOfWork.GetType().Name.Contains("EfUnitOfWork", StringComparison.Ordinal))
             {
-                errors.Add($"CRITICAL: IWriteUnitOfWork resolves to {unitOfWork.GetType().Name} instead of EfUnitOfWork wrapper. Transaction management not properly configured!");
+                errors.Add($"CRITICAL: IWriteUnitOfWork<IdentityModule> resolves to {unitOfWork.GetType().Name} instead of EfUnitOfWork wrapper. Transaction management not properly configured!");
             }
             
         }

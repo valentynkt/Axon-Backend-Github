@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using BuildingBlocks.Application;
 using BuildingBlocks.Primitives.Ids;
@@ -12,5 +13,5 @@ public interface IConversationRepository : IWriteRepository<Conversation, Conver
     /// <summary>
     /// Gets the associated unit of work for transaction management
     /// </summary>
-    IWriteUnitOfWork UnitOfWork { get; }
+    IWriteUnitOfWork<ChatModule> UnitOfWork { get; }
 }

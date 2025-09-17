@@ -1,3 +1,4 @@
+using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.AI;
 using Axon.Modules.Chat.Application.DTOs.Responses;
 
@@ -22,7 +23,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     protected IMessageProcessingOrchestrator MockOrchestrator { get; private set; } = null!;
     protected TimeProvider MockTimeProvider { get; private set; } = null!;
     protected ILogger<THandler> MockHandlerLogger { get; private set; } = null!;
-    protected IWriteUnitOfWork MockUnitOfWork { get; private set; } = null!;
+    protected IWriteUnitOfWork<ChatModule> MockUnitOfWork { get; private set; } = null!;
     
     // Store the default user ID to ensure consistency across mocks
     protected UserId DefaultUserId { get; private set; } = default!;
@@ -68,7 +69,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     /// </summary>
     protected void SetupUnitOfWork()
     {
-        MockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        MockUnitOfWork = Substitute.For<IWriteUnitOfWork<ChatModule>>();
         MockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(1));
         MockRepository.UnitOfWork.Returns(MockUnitOfWork);
     }

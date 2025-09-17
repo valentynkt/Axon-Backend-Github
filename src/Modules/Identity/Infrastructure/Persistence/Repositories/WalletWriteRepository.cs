@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.ValueObjects;
@@ -10,14 +11,14 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
 public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>, IWalletWriteRepository
 {
-    private readonly IWriteUnitOfWork _unitOfWork;
+    private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
-    public WalletWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork unitOfWork) : base(context)
+    public WalletWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
     }
 
-    public IWriteUnitOfWork UnitOfWork => _unitOfWork;
+    public IWriteUnitOfWork<IdentityModule> UnitOfWork => _unitOfWork;
 
     private DbSet<Wallet> GetWalletWithIncludes()
     {

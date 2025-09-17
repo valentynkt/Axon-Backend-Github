@@ -177,8 +177,8 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
 
         var userMessageId = userMessageResult.Value.Id;
 
-        // Persist the message
-        await Repository.UpdateAsync(conversation, cancellationToken);
+        // Save aggregate changes - EF Core change tracking automatically handles
+        // both new aggregates (Added state) and existing aggregates (Modified state)
         var saveResult = await SaveChangesAsync(cancellationToken);
         if (saveResult.IsFailure)
             return Result.Failure<ProcessMessageResponse, Error>(saveResult.Error);
