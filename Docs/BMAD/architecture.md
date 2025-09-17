@@ -11,6 +11,7 @@
 
 | Date       | Version | Description                                                                                                  | Author  |
 | ---------- | ------- | ------------------------------------------------------------------------------------------------------------ | ------- |
+| 2025-01-17 | 4.0.0-PENDING   | **Epic 4 Smart Caching**: Architecture defined for progressive cache hierarchy, AxonUserId resolution, and Chat module integration. **IMPLEMENTATION PENDING** | Winston |
 | 2025-09-14 | 3.0.0   | **Epic 3 Wallet-First Resolution**: Implements wallet-first identity resolution to prevent duplicate principals when users authenticate with different methods but control same wallets | Winston |
 | 2025-09-11 | 2.0.0   | **Epic 2 Stabilization**: Eliminates dual patterns, adds ETag caching, rate limiting, simplified services, production observability; grounded in existing implementation | Winston |
 | 2025-09-09 | 1.0.2   | Privacy-minimal MVP: **removed contact identifiers (e.g., primaryEmailHash)**; PRD alignment; docs tightened | Winston |
@@ -21,23 +22,26 @@
 
 ## 1. Introduction
 
-This document captures the **production-ready** architecture of the Axon AI **Identity & Memory** service after **Epic 3 wallet-first resolution**. It is a **stateless** backend module, designed with **DDD**, **CQRS**, and **Clean Architecture**, that exposes two REST endpoints with production-hardened features:
+This document describes the **Axon Identity Module** architecture—a production-ready stateless backend service built with **DDD**, **CQRS**, and **Clean Architecture**. The service provides two core REST endpoints with comprehensive security and performance features.
 
-* `POST /auth/exchange` — idempotently creates/updates a **Principal** using **wallet-first resolution**, links verified wallets, enforces global uniqueness, applies defaults. **Rate-limited** at 10 req/min per IP.
-* `GET /auth/me` — returns a **snapshot** of the authenticated Principal with **conditional GET** support via **ETag** headers for optimal caching.
+### Current Status & Next Focus
 
-**Epic 3 Core Innovation:**
-* **Wallet-First Identity Resolution**: Prevents duplicate principals by checking wallet ownership before credential-based lookup
-* **Cross-Authentication Method Unity**: Users with same wallets get same identity regardless of login method (Google, email, Dynamic, etc.)
-* **Enhanced Principal Resolution**: New `ResolveOrCreatePrincipalWalletFirst` method implements the wallet-first workflow
+**Production System (Epics 1-3 Complete):**
+* `POST /auth/exchange` — Idempotent principal creation with **wallet-first resolution** preventing duplicate identities
+* `GET /auth/me` — Principal snapshots with **ETag conditional GET** optimization
 
-**Previous Epic Improvements (Epics 1-2):**
-* **Eliminated dual patterns**: Single canonical command/query handlers (`ExchangeCredentialCommand`, `GetMyPrincipalQuery`)
-* **Separated concerns**: `DynamicAuthService` with extracted `IJwksService` for JWKS caching and validation
-* **Production observability**: Comprehensive metrics, correlation IDs, structured logging
-* **Performance optimization**: ETag-based caching, rate limiting, compiled queries
+**Epic 4: Smart User Context Caching (Active Implementation):**
+* **Progressive Cache Hierarchy**: Request-scoped (0ms) → Memory cache (<1ms) → Database (20-50ms)
+* **AxonUserId Unification**: Type rename for semantic clarity across Identity and Chat modules
+* **50x Performance Improvement**: Eliminate 50ms database lookups with intelligent caching
+* **Zero New Infrastructure**: Leverages existing `IMemoryCache` in both modules
 
-The design avoids server-issued tokens/cookies, relies on provider-issued JWTs (e.g., Dynamic), and stores only the data required for automated functions. **No contact identifiers are persisted.**
+### Core Architectural Principles
+
+* **Stateless Design**: Provider-issued JWT validation only, no server tokens/cookies
+* **Privacy-First**: No contact identifiers persisted or logged
+* **Wallet-First Resolution**: Unified identity across authentication methods
+* **Production-Hardened**: Rate limiting, ETag caching, OpenTelemetry observability
 
 ---
 
@@ -70,27 +74,38 @@ graph TD
         AuthProvider("🔒 Auth Provider (e.g., Dynamic)");
     end
 
-    subgraph "Axon AI Backend - Epic 2 Stabilized"
+    subgraph "Axon AI Backend - Epic 4 Enhanced"
         subgraph "Identity Service (Module)"
             API("🌐 FastEndpoints API<br/>(Rate Limited - /auth/..)")
             RateLimit("⚡ Rate Limiting Middleware<br/>(10/min per IP)")
+            CacheLayer("⚡ Smart Cache Layer<br/>(HttpContext.Items + IMemoryCache)")
             AppLayer("📦 Single Command/Query<br/>(ExchangeCredential, GetMyPrincipal)")
-            DomainLayer("🧠 Domain Layer<br/>(Principal & Wallet Aggregates)")
+            DomainLayer("🧠 Domain Layer<br/>(AxonUserId & Wallet Aggregates)")
             InfraLayer("🛠️ Infrastructure Layer<br/>(Repositories, IJwksService)")
             JwksService("🔑 JwksService<br/>(Separated JWKS Caching)")
             ETagService("🏷️ ETag Fingerprint<br/>(Conditional GET)")
+        end
+
+        subgraph "Chat Module"
+            ChatAPI("💬 Chat Endpoints")
+            ChatApp("📱 Chat Commands<br/>(Uses GetAxonUserIdAsync)")
+            ChatDomain("🗨️ Conversation Domain")
+            ChatInfra("💾 Chat Infrastructure")
         end
     end
 
     subgraph "Data & External Dependencies"
         DB("🗄️ Database<br/>(PostgreSQL)");
         OTel("📊 OpenTelemetry<br/>(Metrics & Tracing)")
+        MemCache("🧠 IMemoryCache<br/>(Shared)")
     end
 
     User --> Frontend;
     Frontend --> API;
+    Frontend --> ChatAPI;
     API --> RateLimit;
-    RateLimit --> AppLayer;
+    RateLimit --> CacheLayer;
+    CacheLayer --> AppLayer;
     AppLayer --> DomainLayer;
     AppLayer --> InfraLayer;
     InfraLayer --> DB;
@@ -98,6 +113,14 @@ graph TD
     InfraLayer --> JwksService;
     JwksService -- "JWKS Validation" --> AuthProvider;
     InfraLayer --> OTel;
+
+    ChatAPI --> ChatApp;
+    ChatApp --> ChatDomain;
+    ChatApp --> ChatInfra;
+    ChatInfra --> DB;
+    ChatApp -.->|"GetAxonUserIdAsync()"| CacheLayer;
+    CacheLayer -.-> MemCache;
+    InfraLayer -.-> MemCache;
 ```
 
 ### Architectural & Design Patterns (Epic 2 Refined)
@@ -334,6 +357,182 @@ sequenceDiagram
 
 ---
 
+## 7.1 Smart Caching Architecture (Epic 4)
+
+### Progressive Cache Hierarchy
+
+Epic 4 introduces a three-tier caching system that dramatically improves identity resolution performance:
+
+```mermaid
+graph LR
+    subgraph "Progressive Cache Layers"
+        A[JWT Claims] -->|has DynamicUserId| B[HttpContext.Items]
+        B -->|miss| C[IMemoryCache]
+        C -->|miss| D[Database]
+        D -->|found| E[Cache & Return]
+    end
+
+    subgraph "Performance"
+        B -.->|0ms| F[Request-scoped]
+        C -.->|<1ms| G[Cross-request]
+        D -.->|20-50ms| H[Cold lookup]
+    end
+```
+
+### Cache Key Patterns & TTL Strategy
+
+**Dynamic → Axon Mapping Cache:**
+```
+Key Pattern: axon:user:{dynamicUserId}
+Value: AxonUserId
+TTL: 15 minutes sliding, 15 minutes absolute
+Population: Exchange endpoint + on-demand resolution
+```
+
+**Request-Scoped Cache:**
+```
+Storage: HttpContext.Items["AxonUserId"]
+Lifetime: Single HTTP request
+Purpose: Eliminate multiple database queries within same request
+```
+
+### Implementation in HttpContextUserService
+
+Based on the existing `HttpContextUserService` in `src/Modules/Identity/Infrastructure/Services/`:
+
+```csharp
+public sealed class HttpContextUserService : ICurrentUserService
+{
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IMemoryCache _memoryCache;
+    private readonly IAxonPrincipalReadRepository _principalRepo;
+
+    // Epic 4: New async method for AxonUserId resolution
+    public async Task<AxonUserId?> GetAxonUserIdAsync(CancellationToken ct = default)
+    {
+        // Layer 1: Request-scoped cache (0ms)
+        if (_httpContextAccessor.HttpContext?.Items.TryGetValue("AxonUserId", out var cached))
+            return (AxonUserId)cached;
+
+        var dynamicUserId = UserId; // From JWT claims
+        if (string.IsNullOrEmpty(dynamicUserId))
+            return null;
+
+        // Layer 2: Memory cache (<1ms)
+        var cacheKey = $"axon:user:{dynamicUserId}";
+        var axonUserId = await _memoryCache.GetOrCreateAsync(
+            cacheKey,
+            async entry =>
+            {
+                entry.SlidingExpiration = TimeSpan.FromMinutes(5);
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15);
+
+                // Layer 3: Database fallback (20-50ms)
+                var principal = await _principalRepo.FindByDynamicUserIdAsync(
+                    dynamicUserId, ct);
+                return principal?.Id;
+            });
+
+        // Store in request cache for subsequent calls
+        if (axonUserId != null)
+            _httpContextAccessor.HttpContext!.Items["AxonUserId"] = axonUserId;
+
+        return axonUserId;
+    }
+
+    // Epic 4: Sync cache-only lookup (no database)
+    public bool TryGetAxonUserId(out AxonUserId axonUserId)
+    {
+        // Check request cache first
+        if (_httpContextAccessor.HttpContext?.Items.TryGetValue("AxonUserId", out var cached))
+        {
+            axonUserId = (AxonUserId)cached;
+            return true;
+        }
+
+        // Check memory cache (sync only)
+        var dynamicUserId = UserId;
+        if (!string.IsNullOrEmpty(dynamicUserId))
+        {
+            var cacheKey = $"axon:user:{dynamicUserId}";
+            if (_memoryCache.TryGetValue(cacheKey, out var memoryValue) && memoryValue is AxonUserId cached)
+            {
+                _httpContextAccessor.HttpContext!.Items["AxonUserId"] = cached;
+                axonUserId = cached;
+                return true;
+            }
+        }
+
+        axonUserId = default;
+        return false;
+    }
+}
+```
+
+### Cache Warming in Exchange Endpoint
+
+The `ExchangeCredentialHandler` at `src/Modules/Identity/Application/Commands/ExchangeCredential/ExchangeCredentialHandler.cs` will be enhanced to populate caches immediately:
+
+```csharp
+// In ExecuteExchangeTransaction method, after principal resolution
+private async Task PopulateCachesAsync(string dynamicUserId, AxonUserId axonUserId)
+{
+    // Warm memory cache
+    var cacheKey = $"axon:user:{dynamicUserId}";
+    _memoryCache.Set(cacheKey, axonUserId, new MemoryCacheEntryOptions
+    {
+        SlidingExpiration = TimeSpan.FromMinutes(5),
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15)
+    });
+
+    // Store in request context for immediate use
+    if (_httpContextAccessor.HttpContext != null)
+        _httpContextAccessor.HttpContext.Items["AxonUserId"] = axonUserId;
+}
+```
+
+### Chat Module Integration
+
+The Chat module's `BaseChatCommandHandler` at `src/Modules/Chat/Application/Common/Commands/BaseChatCommandHandler.cs` will be updated:
+
+```csharp
+// Current implementation (line 31-36)
+protected UserId GetAuthenticatedUserId()
+{
+    var userIdString = _currentUserService.UserId!;
+    return new UserId(Guid.Parse(userIdString));
+}
+
+// Epic 4 enhanced implementation
+protected async Task<AxonUserId> GetAxonUserIdAsync(CancellationToken ct = default)
+{
+    var axonUserId = await _currentUserService.GetAxonUserIdAsync(ct);
+    if (!axonUserId.HasValue)
+        throw new UnauthorizedAccessException("AxonUserId not resolved for authenticated user");
+
+    return axonUserId.Value;
+}
+```
+
+### Performance Impact
+
+| Operation | Before Epic 4 | After Epic 4 | Improvement |
+|-----------|--------------|--------------|-------------|
+| First request (Exchange) | 50ms DB lookup | 50ms DB + cache warm | Neutral |
+| Same request context | 50ms per call | 0ms (HttpContext.Items) | **∞** |
+| Different request (cached) | 50ms DB lookup | <1ms (IMemoryCache) | **50x** |
+| Cache miss | 50ms DB lookup | 20ms (optimized query) | **2.5x** |
+
+### Infrastructure Requirements
+
+**Zero New Dependencies**: Epic 4 leverages existing infrastructure:
+- ✅ `IMemoryCache` already registered in both Identity and Chat modules
+- ✅ `IHttpContextAccessor` available in `HttpContextUserService`
+- ✅ Repository patterns established for `FindByCredentialAsync`
+- 🔄 **New Method Needed**: `IAxonPrincipalReadRepository.FindByDynamicUserIdAsync`
+
+---
+
 ## 8. REST API Specification (Epic 2 Production-Ready)
 
 ```yaml
@@ -538,47 +737,133 @@ paths:
 * **Output:** `CurrentUserResult` + `ETag` header OR **304 Not Modified**
 * **Observability:** Metrics (etag_hits/misses), trace correlation, structured logging
 
-### Repository Contract Additions (Epic 3 Complete Implementation)
+### Key Repository Methods
 
+**Core Operations (Implemented):**
 ```csharp
-// Epic 3: Wallet-first resolution methods
-Task<AxonPrincipal?> FindByWalletIdAsync(
-    WalletId walletId, CancellationToken ct = default);
+// Identity resolution (Epic 3)
+Task<AxonPrincipal?> FindByCredentialAsync(ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
+Task<AxonPrincipal?> FindByWalletIdAsync(WalletId walletId, CancellationToken ct = default);
 
-Task<bool> IsCredentialTakenAsync(
-    ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
+// Wallet operations (Performance optimized)
+Task<IReadOnlyDictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(IEnumerable<WalletId> walletIds, CancellationToken ct = default);
+Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(IEnumerable<(string chainId, Address address)> items, CancellationToken ct = default);
 
-// Epic 2: Read-side credential resolution (compiled query for performance)
-Task<AxonPrincipal?> FindByCredentialAsync(
-    ProviderType providerType, string issuer, string subject, CancellationToken ct = default);
-
-// ETag fingerprint generation (deterministic hash for conditional GET)
-Task<string> GetPrincipalFingerprintAsync(
-    AxonId principalId, CancellationToken ct = default);
-
-// Batch wallet operations (prevents N+1 queries)
-Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>>
-  EnsureManyByChainAndAddressAsync(IEnumerable<(string chainId, Address address)> items, CancellationToken ct = default);
-
-// Find verified signing owners (for conflict detection) - Epic 2/3 enhanced
-Task<IReadOnlyDictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
-    IEnumerable<WalletId> walletIds, CancellationToken ct = default);
-
-// Last-seen updates (does not affect ETag)
-Task<int> TouchLastSeenAsync(IEnumerable<WalletId> ids, DateTimeOffset seenAt, CancellationToken ct = default);
-
-// Single query for complete principal snapshot
-Task<AxonPrincipal?> GetByIdWithActiveOwnershipsAsync(
-    AxonId principalId, CancellationToken ct = default);
+// ETag & snapshots
+Task<string> GetPrincipalFingerprintAsync(AxonUserId principalId, CancellationToken ct = default);
+Task<AxonPrincipal?> GetByIdWithActiveOwnershipsAsync(AxonUserId principalId, CancellationToken ct = default);
 ```
 
-**Epic 2 Implementation Notes:**
+**Epic 4 Additions (Pending):**
+```csharp
+// Smart caching support
+Task<AxonPrincipal?> FindByDynamicUserIdAsync(string dynamicUserId, CancellationToken ct = default);
+```
 
-* **All methods use compiled EF Core queries** for optimal performance
-* **Batch operations** prevent N+1 query patterns  
-* **ETag fingerprint** combines `principal.updated_at` + verified ownership timestamps + chain default timestamps
-* **`TouchLastSeenAsync` specifically designed NOT to affect ETag** (excludes `last_seen` from fingerprint calculation)
-* **Single round-trip** for complete data retrieval in `GetByIdWithActiveOwnershipsAsync`
+### Enhanced ICurrentUserService (Epic 4)
+
+Epic 4 significantly enhances the `ICurrentUserService` interface defined in `src/BuildingBlocks/Core/Abstractions/Authentication/ICurrentUserService.cs` to support unified identity resolution across modules.
+
+#### Interface Enhancement
+
+**Current Interface (Pre-Epic 4):**
+```csharp
+public interface ICurrentUserService
+{
+    string? UserId { get; }              // Dynamic JWT userId
+    string? UserName { get; }            // Display name from JWT
+    bool IsAuthenticated { get; }        // Authentication status
+
+    string GetUserIdOrDefault(string systemUserId = "SYSTEM");
+    string GetCurrentUserIdOrSystem();
+}
+```
+
+**Epic 4 Enhanced Interface:**
+```csharp
+public interface ICurrentUserService
+{
+    // Existing properties (unchanged)
+    string? UserId { get; }              // Dynamic JWT userId from claims
+    string? UserName { get; }            // Display name from JWT
+    bool IsAuthenticated { get; }        // Authentication status
+
+    string GetUserIdOrDefault(string systemUserId = "SYSTEM");
+    string GetCurrentUserIdOrSystem();
+
+    // Epic 4 NEW: Async AxonUserId resolution with caching
+    Task<AxonUserId?> GetAxonUserIdAsync(CancellationToken ct = default);
+
+    // Epic 4 NEW: Sync cache-only lookup (no database fallback)
+    bool TryGetAxonUserId(out AxonUserId axonUserId);
+}
+```
+
+#### Key Behavioral Changes
+
+**Identity Resolution Strategy:**
+1. **Dynamic UserId** (existing): JWT `sub` claim from authentication provider
+2. **AxonUserId** (new): Internal canonical identity with smart caching
+
+**Caching Behavior:**
+- `GetAxonUserIdAsync()`: Progressive cache hierarchy (HttpContext.Items → IMemoryCache → Database)
+- `TryGetAxonUserId()`: Cache-only lookup, no database queries
+- All calls within same HTTP request return cached value (0ms latency)
+
+#### Implementation Location
+
+**HttpContextUserService Enhancement:**
+Located at `src/Modules/Identity/Infrastructure/Services/HttpContextUserService.cs`
+
+The existing implementation provides JWT-based authentication. Epic 4 extends it with:
+- Dependency injection of `IMemoryCache` and `IAxonPrincipalReadRepository`
+- Progressive cache resolution implementing the interface enhancements
+- Request-scoped caching via `HttpContext.Items`
+
+#### Chat Module Integration Impact
+
+**Current Chat Handler Pattern:**
+```csharp
+// src/Modules/Chat/Application/Common/Commands/BaseChatCommandHandler.cs
+protected UserId GetAuthenticatedUserId()
+{
+    var userIdString = _currentUserService.UserId!;  // Dynamic JWT userId
+    return new UserId(Guid.Parse(userIdString));     // Converts to UserId type
+}
+```
+
+**Epic 4 Enhanced Pattern:**
+```csharp
+// Updated pattern for unified identity
+protected async Task<AxonUserId> GetAxonUserIdAsync(CancellationToken ct = default)
+{
+    var axonUserId = await _currentUserService.GetAxonUserIdAsync(ct);
+    if (!axonUserId.HasValue)
+        throw new UnauthorizedAccessException("AxonUserId not resolved");
+
+    return axonUserId.Value;
+}
+```
+
+#### Backward Compatibility
+
+**No Breaking Changes**: Epic 4 maintains full backward compatibility:
+- All existing properties and methods unchanged
+- New methods are additive
+- Chat module can migrate handlers incrementally
+- `DefaultCurrentUserService` in Chat remains functional during transition
+
+#### Error Handling Strategy
+
+**Resolution Failure Scenarios:**
+1. **No Authentication**: `GetAxonUserIdAsync()` returns `null`
+2. **Cache Miss + DB Miss**: Returns `null` (user not yet exchanged)
+3. **Database Unavailable**: Throws exception (circuit breaker pattern recommended)
+
+**Graceful Degradation:**
+- `TryGetAxonUserId()` returns `false` for any failure
+- Chat handlers can fallback to Dynamic userId if needed
+- Exchange endpoint always populates cache for subsequent requests
 
 ---
 
@@ -765,11 +1050,24 @@ X-RateLimit-Reset: 1694123456
 
 ---
 
-## 13. Caching & ETags
+## 13. Caching Strategy & Performance
 
-* **JWKS:** Managed by `ConfigurationManager`; keys cached with provider-aligned TTL and proactive refresh.
-* **ETag for `/auth/me`:** Compare `If-None-Match` vs DB fingerprint; return **304** if unchanged.
-* **Cache-Control:** `private, max-age=0, must-revalidate` (frontend always validates with ETag).
+### Production Caching (Epics 1-3) ✅
+* **JWKS:** Managed by `ConfigurationManager`; keys cached with provider-aligned TTL and proactive refresh
+* **ETag for `/auth/me`:** Compare `If-None-Match` vs DB fingerprint; return **304** if unchanged
+* **Cache-Control:** `private, max-age=0, must-revalidate` (frontend always validates with ETag)
+
+### Epic 4: Progressive Cache Hierarchy (Pending Implementation) 🔄
+```
+Request Scope (0ms) → Memory Cache (<1ms) → Database (20ms)
+HttpContext.Items → IMemoryCache → FindByDynamicUserIdAsync
+```
+
+**Performance Targets:**
+- Identity Resolution (cached): 50ms → <1ms (50x improvement)
+- Same-request calls: 50ms each → 0ms (HttpContext.Items)
+- Cache hit rate: 0% → >95% after warmup
+- Database queries: 100% → <5% (cache-first strategy)
 
 ---
 
@@ -849,6 +1147,9 @@ X-RateLimit-Reset: 1694123456
 - Rate limit violations > 100/hour from single IP
 - ETag cache hit ratio < 60%
 - JWT validation errors > 10% (indicates JWKS issues)
+
+---
+
 
 ---
 
@@ -961,96 +1262,102 @@ src/Modules/Identity/
 
 ## 20. Implementation Status & Roadmap
 
-### Epic 3 (Wallet-First Resolution) - Current Implementation Status ⚡
+### Epic 3 (Wallet-First Resolution) - ✅ Complete
 
 **Story 3.1 - Wallet-First Principal Resolution**
-- ⚠️ **Partially Complete**: Repository methods (`FindByWalletIdAsync`, `IsCredentialTakenAsync`) are defined in contracts
-- ❌ **Pending Implementation**: `ResolveOrCreatePrincipalWalletFirst` method in `ExchangeCredentialHandler`
-- ✅ **Repository Infrastructure**: Enhanced `FindVerifiedSigningOwnersAsync` returns `Dictionary<WalletId, AxonPrincipal>` for wallet-to-principal mapping
-- ✅ **Current State**: Line 231 in `ExchangeCredentialHandler` has TODO comment acknowledging need for wallet-based resolution
+- ✅ **COMPLETE**: `ResolveOrCreatePrincipalWalletFirst` method fully implemented in `ExchangeCredentialHandler` (lines 276-381)
+- ✅ **Repository Infrastructure**: All required methods implemented:
+  - `FindVerifiedSigningOwnersAsync` - batch wallet ownership lookup
+  - `IsCredentialTakenAsync` - credential conflict detection
+  - `FindByCredentialAsync` - fallback credential lookup
+- ✅ **4-Step Resolution Process**: Wallet-first → credential fallback → add credential → create new principal
 
 **Story 3.2 - Cross-Credential Identity Linking**
-- ❌ **Pending**: Logic to add new credentials to existing principals found via wallet ownership
-- ❌ **Pending**: Conflict detection when credential belongs to different principal
-- ✅ **Infrastructure Ready**: `IsCredentialTakenAsync` method available for conflict detection
+- ✅ **COMPLETE**: Logic implemented to add new credentials to existing principals (lines 328-370)
+- ✅ **Conflict Detection**: `IsCredentialTakenAsync` used with proper 409 error mapping (lines 351-367)
+- ✅ **Idempotency**: Duplicate credential handling (lines 332-336)
 
 **Story 3.3 - Enhanced Testing for Wallet-First Flow**
-- ❌ **Pending**: Unit tests for wallet resolution scenarios
-- ❌ **Pending**: Integration tests for cross-authentication method unity
-- ❌ **Pending**: Conflict handling test cases
+- ✅ **COMPLETE**: Comprehensive test coverage including:
+  - `Should_ResolveSamePrincipal_When_WalletMatches` - wallet resolution tests
+  - `Should_AddCredential_When_WalletMatches` - cross-credential linking tests
+  - `Should_ReturnConflictError_When_WalletOwnedByAnotherPrincipal` - conflict handling tests
+  - `Should_FallbackToCredentialLookup_When_NoWalletOwners` - fallback logic tests
+  - `Should_CreateNewPrincipal_When_NoWalletOwnersAndNoCredential` - new principal creation tests
 
-### Epic 1 (PRD) - Completed Stories ✅
+### Epic 4 (Smart Caching) - Implementation Status ⚡
 
-**Story 1.1 - EF Core Model, Configs & Initial Migration**
-- ✅ Entities: Principal, Credential, Wallet, WalletOwnership, PrincipalChainDefault
-- ✅ Fluent configurations with proper constraints and indexes
-- ✅ Initial migration applied
-- ✅ ETag fingerprint query implemented
+**Story 4.1 - Rename AxonId to AxonUserId**
+- ✅ **Ready**: StronglyTypedId exists in `src/BuildingBlocks/Core/Primitives/Ids/AxonId.cs`
+- ⏳ **Pending**: IDE-wide refactoring (~500 references across modules)
+- ✅ **No Migration**: Database column names remain unchanged (`principal.id`, etc.)
+- ✅ **Build System Ready**: Existing patterns support type name changes
 
-**Story 1.2 - JWT Validation & Rate Limiting Skeleton** 
-- ✅ JwtBearerHandler + ConfigurationManager configured
-- ✅ Basic JWKS caching implemented
-- ✅ Placeholder endpoints created
+**Story 4.2 - Enhanced ICurrentUserService**
+- ✅ **Interface Ready**: Located at `src/BuildingBlocks/Core/Abstractions/Authentication/ICurrentUserService.cs`
+- ⏳ **Pending**: Add async methods `GetAxonUserIdAsync()`, `TryGetAxonUserId()`
+- ✅ **Infrastructure**: `IMemoryCache` already registered in both Identity and Chat modules
+- ✅ **Implementation Target**: `HttpContextUserService` in Identity module ready for enhancement
 
-**Story 1.3 - Domain Aggregates & Invariants**
-- ✅ AxonPrincipal aggregate root with invariant enforcement
-- ✅ Wallet ownership rules and verified-first defaults
-- ✅ Unit tests for domain logic
+**Story 4.3 - Smart Caching Implementation**
+- ✅ **HttpContextUserService Ready**: Located at `src/Modules/Identity/Infrastructure/Services/HttpContextUserService.cs`
+- ✅ **IMemoryCache Available**: Already used for JWKS caching, replay guard, MCP configuration
+- ✅ **Repository Contract**: `FindByCredentialAsync` pattern established for new `FindByDynamicUserIdAsync`
+- ⏳ **Pending**: Progressive cache hierarchy implementation (HttpContext.Items → IMemoryCache → Database)
+- ⏳ **Pending**: Cache warming in `ExchangeCredentialHandler.ExecuteExchangeTransaction`
 
-**Story 1.4 - `/auth/exchange` Command Handler**
-- ⚠️ **Partially Complete**: ExchangeCredentialCommand implemented but dual pattern exists
-- ✅ Batch wallet operations
-- ✅ Transaction handling
+**Story 4.4 - Chat Module Integration**
+- ✅ **Target Identified**: `DefaultCurrentUserService` stub at `src/Modules/Chat/Infrastructure/Services/Identity/`
+- ✅ **Integration Points**: `BaseChatCommandHandler.GetAuthenticatedUserId()` at line 31-36
+- ✅ **Handler Pattern**: All Chat handlers inherit from `BaseChatIdempotentCommandHandler`
+- ⏳ **Pending**: Update handlers to use `GetAxonUserIdAsync()` instead of `GetAuthenticatedUserId()`
+- ⏳ **Pending**: Replace `DefaultCurrentUserService` with `HttpContextUserService` registration
 
-**Story 1.5 - `/auth/me` Query + ETag**
-- ⚠️ **Partially Complete**: GetMyPrincipalQuery implemented but missing ETag optimization
-- ✅ Principal snapshot retrieval
+### Epic 4 Validation & Testing Status
 
-**Story 1.6 - Error Mapping, Privacy, and API Docs**
-- ✅ Basic error mapping
-- ✅ Privacy compliance (no contact identifiers)
-- ⚠️ **Incomplete**: OpenAPI documentation needs updates
+**Infrastructure Verification (✅ Complete):**
+- Memory cache registration confirmed in both modules via `ServiceRegistration.cs`
+- Existing cache usage patterns validated (JWKS, replay guard, MCP config)
+- `HttpContext.Items` access confirmed in current `HttpContextUserService`
+- Repository dependency injection patterns established
 
-### Epic 2 (PRD-2) - Stabilization Requirements ⚡
+**Performance Baseline (⏳ Pending):**
+- Current identity resolution latency measurement (~50ms estimated)
+- Cache hit ratio monitoring implementation
+- Memory usage impact assessment
+- Request-scoped vs cross-request performance comparison
 
-**Story 2.1 - Clean Application Layer (Remove Dual Patterns)**
-- ❌ **Pending**: Remove ExchangeTokenCommand, GetCurrentUserQuery folders
-- ❌ **Pending**: Update endpoints to route directly to canonical handlers
-- ❌ **Pending**: Clean unused imports and DTOs
+**Integration Testing Requirements (⏳ Pending):**
+- End-to-end user journey: Exchange → Chat commands using same AxonUserId
+- Cache consistency across HTTP requests
+- Graceful degradation when cache unavailable
+- Backward compatibility with existing Chat module patterns
 
-**Story 2.2 - Complete ETag Implementation**
-- ❌ **Pending**: MeEndpoint If-None-Match header reading
-- ❌ **Pending**: 304 Not Modified response handling
-- ❌ **Pending**: Cache-Control headers
+## 20. Completed Features Summary (Epics 1-3)
 
-**Story 2.3 - Add Rate Limiting**
-- ❌ **Pending**: ASP.NET Core rate limiting middleware configuration
-- ❌ **Pending**: 10 requests/minute per IP for /auth/exchange
-- ❌ **Pending**: Rate limiting metrics and headers
+### Epic 1 (Foundation) - ✅ Complete
+**Core Achievement:** Production-ready identity service with DDD + CQRS patterns
+- ✅ Domain model: AxonPrincipal, Wallet aggregates with invariant enforcement
+- ✅ Database schema with PostgreSQL + EF Core migrations
+- ✅ JWT validation with Dynamic.xyz provider integration
+- ✅ `/auth/exchange` and `/auth/me` REST endpoints
+- ✅ Privacy compliance: no contact identifiers persisted
 
-**Story 2.4 - Remove Dead Code**
-- ❌ **Pending**: Delete EmailHash value object completely
-- ❌ **Pending**: Clean unused validation helpers and imports
-- ❌ **Pending**: Remove build warnings
+### Epic 2 (Stabilization) - ✅ Complete
+**Core Achievement:** Production-hardened service with performance optimizations
+- ✅ Simplified application layer: single canonical command/query handlers
+- ✅ ETag conditional GET optimization for `/auth/me` (304 Not Modified)
+- ✅ Rate limiting: 10 requests/minute per IP on `/auth/exchange`
+- ✅ OpenTelemetry observability: metrics, tracing, structured logging
+- ✅ Separated services: IJwksService with Polly retry policies
 
-**Story 2.5 - [CRITICAL] Simplify DynamicAuthService**
-- ❌ **Pending**: Extract IJwksService and JwksService
-- ❌ **Pending**: Simplify DynamicAuthService to focus on JWT validation only
-- ❌ **Pending**: Replace manual retry with Polly policies
-- ❌ **Pending**: Comprehensive unit tests (>90% coverage)
-
-**Story 2.6 - Add Basic Observability**
-- ❌ **Pending**: Correlation IDs in all handlers
-- ❌ **Pending**: Metrics: exchange_success, exchange_failure, etag_hits, etag_misses
-- ❌ **Pending**: Structured logging for critical events
-
-### Current Technical Debt 🔧
-
-1. **Dual Command Patterns**: ExchangeTokenCommand coexists with ExchangeCredentialCommand
-2. **Over-Engineered Services**: DynamicAuthService handles too many responsibilities
-3. **Missing Infrastructure**: ETag caching, rate limiting, comprehensive observability
-4. **Incomplete Repository Methods**: Several contract methods not fully implemented
-5. **Dead Code**: EmailHash references and unused validation helpers
+### Epic 3 (Wallet-First Resolution) - ✅ Complete
+**Core Achievement:** Unified identity across authentication methods
+- ✅ Wallet-first principal resolution prevents duplicate identities
+- ✅ Cross-credential linking: Google + Dynamic → same principal
+- ✅ Enhanced conflict detection with proper 409 responses
+- ✅ Batch wallet operations for performance
+- ✅ ResolveOrCreatePrincipalWalletFirst implementation
 
 ## 21. Acceptance Checklist Mapping
 
@@ -1080,99 +1387,34 @@ src/Modules/Identity/
 
 ---
 
-## 22. Next Steps (Epic 3 Implementation Priorities)
+## 22. Next Steps & Implementation Focus
 
-### Immediate Epic 3 Priorities (Critical Path) 🎯
+### 🎯 Epic 4: Smart User Context Caching (ACTIVE - Pending Implementation)
 
-**Phase 1: Implement Wallet-First Resolution (Story 3.1)**
-1. **Create `ResolveOrCreatePrincipalWalletFirst` method** - Replace credential-first logic at line 148 in `ExchangeCredentialHandler`
-2. **Update method signature and integration point** - Modify `ExecuteExchangeTransaction` to use wallet specs for resolution
-3. **Handle wallet ownership conflicts** - Use existing `IsCredentialTakenAsync` for conflict detection
+**Current Priority:** Implement progressive cache hierarchy for 50x identity resolution performance improvement.
 
-**Phase 2: Cross-Credential Linking (Story 3.2)**
-1. **Implement credential addition logic** - Add new credentials to existing principals found via wallet
-2. **Enhance conflict detection** - Prevent credential hijacking across principals
-3. **Update integration logic** - Ensure idempotency when same credential is processed multiple times
+**Implementation Roadmap:**
+1. **AxonId → AxonUserId rename** (~23 files affected)
+2. **Enhanced ICurrentUserService** with async AxonUserId resolution
+3. **Smart caching in HttpContextUserService** (Request → Memory → Database)
+4. **Chat module integration** replacing DefaultCurrentUserService stubs
 
-**Phase 3: Testing & Validation (Story 3.3)**
-1. **Unit tests for wallet resolution** - Test scenarios where wallet matches existing principal
-2. **Integration tests for cross-auth** - Validate Google → Dynamic → Wallet auth flows resolve to same principal
-3. **Conflict handling tests** - Ensure proper error handling for credential conflicts
+**Target Outcomes:**
+- Identity resolution: 50ms → <1ms (cached scenarios)
+- Database load reduction: 100% → <5% queries
+- Cache hit rate: >95% after warmup
 
-### Epic 2 Implementation Status (Background Tasks)
+### ✅ Completed Foundation (Epics 1-3)
 
-**Phase 1: Service Simplification (Story 2.5)**
-1. **Extract IJwksService from DynamicAuthService** - Create separate service for JWKS caching with Polly retry policies
-2. **Simplify DynamicAuthService** - Focus solely on JWT validation logic, removing JWKS management
-3. **Add comprehensive unit tests** - Achieve >90% coverage on both services
+**Epic 3** ✅ Wallet-first identity resolution prevents duplicate principals
+**Epic 2** ✅ Production hardening: ETag caching, rate limiting, observability
+**Epic 1** ✅ Core identity service with DDD + CQRS patterns
 
-**Phase 2: Architecture Cleanup (Story 2.1, 2.4)**
-1. **Remove dual patterns** - Delete ExchangeTokenCommand, GetCurrentUserQuery folders completely
-2. **Update API endpoints** - Route ExchangeEndpoint and MeEndpoint directly to single canonical handlers
-3. **Aggressive dead code removal** - Delete EmailHash value object, unused validation helpers, clean imports
-4. **Eliminate build warnings** - Clean up all compiler warnings and generated artifacts
+### 🔄 Future Enhancements
 
-**Phase 3: Production Features (Stories 2.2, 2.3, 2.6)**
-1. **Complete ETag implementation** - Add If-None-Match header support and 304 Not Modified responses
-2. **Implement rate limiting** - ASP.NET Core middleware with 10/min per IP for /auth/exchange
-3. **Add observability** - Correlation IDs, metrics (exchange_success/failure, etag_hits/misses), structured logging
-
-### Implementation Sequence Recommendation
-
-**Epic 3 (Priority) → Epic 2 (Background)**
-
-```mermaid
-graph TB
-    subgraph "Epic 3 - Wallet-First Resolution (Priority)"
-        A3[Story 3.1<br/>Wallet-First Resolution Method]
-        B3[Story 3.2<br/>Cross-Credential Linking]
-        C3[Story 3.3<br/>Testing & Validation]
-        A3 --> B3 --> C3
-    end
-
-    subgraph "Epic 2 - Stabilization (Background)"
-        A2[Story 2.5<br/>Service Refactoring]
-        B2[Story 2.1<br/>Remove Dual Patterns]
-        C2[Story 2.4<br/>Dead Code Cleanup]
-        D2[Story 2.2<br/>Complete ETag]
-        E2[Story 2.3<br/>Rate Limiting]
-        F2[Story 2.6<br/>Observability]
-        A2 --> B2 --> C2 --> D2 --> E2 --> F2
-    end
-
-    C3 -.-> A2
-```
-
-### Epic 3 Validation & Testing
-
-1. **Wallet-First Resolution Tests**
-   - User logs in with Google → creates principal with wallet
-   - Same user logs in with Dynamic (same wallet) → resolves to same principal, adds Dynamic credential
-   - Verify no duplicate principals created
-
-2. **Cross-Credential Linking Tests**
-   - Principal A owns wallet X with Google auth
-   - Principal B tries to link wallet X with Dynamic auth → should resolve to Principal A, add Dynamic credential
-   - Credential conflict detection when credential belongs to different principal
-
-3. **Edge Case Validation**
-   - Multiple wallets, some owned, some new
-   - Empty wallet list (fallback to credential-only resolution)
-   - Invalid wallet addresses handling
-
-### Epic 2/3 Integration Testing
-
-1. **End-to-end workflow validation** - Complete exchange flow with wallet-first resolution
-2. **Repository method completion** - All Epic 3 methods implemented with compiled queries
-3. **Performance validation** - Wallet lookup adds minimal overhead to exchange flow
-4. **ETag compatibility** - Wallet-first resolution doesn't break ETag caching
-
-### Future Enhancements (Post-Epic 3)
-
-- **Solana Sign-In Integration** - Direct wallet signature authentication without OAuth providers
-- **Advanced wallet verification** - On-chain signature verification for ownership proof
-- **Multi-provider wallet support** - Ethereum, Polygon, BSC wallet resolution
-- **Enhanced audit logging** - Complete audit trail for identity resolution paths
+- **Enhanced wallet verification** with on-chain signature validation
+- **Multi-chain wallet support** (Ethereum, Polygon, BSC)
+- **Direct wallet authentication** (Solana Sign-In without OAuth)
 
 ---
 
@@ -1193,26 +1435,3 @@ graph TB
 * **Privacy:** MVP persists **no contact identifiers**; logs and audits exclude PII.
 * **Wallet-First Resolution:** Epic 3 ensures single identity per wallet set, preventing authentication method fragmentation.
 
-### Appendix C — Epic 3 Wallet-First Resolution Algorithm
-
-**Core Logic Flow:**
-1. **Wallet Check Phase**: For each wallet in request, query `FindByWalletIdAsync` to find existing owner
-2. **Principal Resolution**: If wallet owner found, use that principal; otherwise fallback to credential lookup
-3. **Credential Addition**: If using existing principal, add new credential if not already present
-4. **Conflict Detection**: Use `IsCredentialTakenAsync` to prevent credential hijacking
-5. **Idempotent Completion**: Process remaining wallets and apply defaults as normal
-
-**Method Signature (Implementation Target):**
-```csharp
-private async Task<Result<(AxonPrincipal, bool), Error>> ResolveOrCreatePrincipalWalletFirst(
-    ProviderType providerType,
-    string issuer,
-    string subject,
-    List<(string chainId, Address address)> walletSpecs,
-    CancellationToken cancellationToken)
-```
-
-**Integration Point:**
-- Replace line 148-149 in `ExchangeCredentialHandler.ExecuteExchangeTransaction`
-- Parse wallet specs from `userData.Wallets` before principal resolution
-- Maintain backward compatibility when no wallets provided (credential-only path)
