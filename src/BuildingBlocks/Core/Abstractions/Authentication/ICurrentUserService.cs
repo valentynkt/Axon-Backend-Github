@@ -1,3 +1,5 @@
+using BuildingBlocks.Primitives.Ids;
+
 namespace BuildingBlocks.Core.Abstractions.Authentication;
 
 /// <summary>
@@ -37,4 +39,22 @@ public interface ICurrentUserService
     /// </summary>
     /// <returns>Current user ID or "SYSTEM"</returns>
     string GetCurrentUserIdOrSystem();
+
+    /// <summary>
+    /// Gets the current authenticated user's internal AxonUserId with smart caching.
+    /// Progressive cache hierarchy: HttpContext.Items (0ms) → IMemoryCache (1ms) → Database (20-50ms)
+    /// Cache key pattern: axon:user:{dynamicUserId} with 15min sliding, 30min absolute TTL
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for database fallback operations</param>
+    /// <returns>AxonUserId if user is authenticated and found, null otherwise</returns>
+    Task<AxonUserId?> GetAxonUserIdAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Attempts to get AxonUserId from cache only (no database fallback).
+    /// Used for sync contexts where database queries are not acceptable.
+    /// Checks HttpContext.Items (0ms) → IMemoryCache (1ms) hierarchy only.
+    /// </summary>
+    /// <param name="axonUserId">The cached AxonUserId if found</param>
+    /// <returns>True if AxonUserId found in cache, false if cache miss or not authenticated</returns>
+    bool TryGetAxonUserId(out AxonUserId axonUserId);
 }
