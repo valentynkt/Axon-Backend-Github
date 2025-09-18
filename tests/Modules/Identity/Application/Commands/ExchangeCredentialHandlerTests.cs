@@ -12,6 +12,8 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Shouldly;
@@ -25,6 +27,8 @@ public class ExchangeCredentialHandlerTests
     private IAxonPrincipalWriteRepository _principalRepository = null!;
     private IWalletWriteRepository _walletRepository = null!;
     private IExchangeMetricsService _metricsService = null!;
+    private IMemoryCache _memoryCache = null!;
+    private IHttpContextAccessor _httpContextAccessor = null!;
     private ILogger<ExchangeCredentialHandler> _logger = null!;
     private IWriteUnitOfWork<IdentityModule> _unitOfWork = null!;
     private ExchangeCredentialHandler _handler = null!;
@@ -37,6 +41,8 @@ public class ExchangeCredentialHandlerTests
         _principalRepository = Substitute.For<IAxonPrincipalWriteRepository>();
         _walletRepository = Substitute.For<IWalletWriteRepository>();
         _metricsService = Substitute.For<IExchangeMetricsService>();
+        _memoryCache = Substitute.For<IMemoryCache>();
+        _httpContextAccessor = Substitute.For<IHttpContextAccessor>();
         _logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
         _unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
 
@@ -47,6 +53,8 @@ public class ExchangeCredentialHandlerTests
             _principalRepository,
             _walletRepository,
             _metricsService,
+            _memoryCache,
+            _httpContextAccessor,
             _logger);
     }
 

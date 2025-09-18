@@ -5,6 +5,7 @@ using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Primitives.Ids;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NUnit.Framework;
@@ -17,6 +18,7 @@ public class HttpContextUserServiceTests
 {
     private HttpContextUserService _service;
     private IHttpContextAccessor _httpContextAccessor;
+    private IMemoryCache _memoryCache;
     private IAxonPrincipalReadRepository _principalRepository;
     private ILogger<HttpContextUserService> _logger;
     private HttpContext _httpContext;
@@ -26,16 +28,17 @@ public class HttpContextUserServiceTests
     public void Setup()
     {
         _httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        _memoryCache = Substitute.For<IMemoryCache>();
         _principalRepository = Substitute.For<IAxonPrincipalReadRepository>();
         _logger = Substitute.For<ILogger<HttpContextUserService>>();
 
         _httpContext = new DefaultHttpContext();
         _claimsPrincipal = new ClaimsPrincipal();
         _httpContext.User = _claimsPrincipal;
-        
+
         _httpContextAccessor.HttpContext.Returns(_httpContext);
 
-        _service = new HttpContextUserService(_httpContextAccessor, _principalRepository, _logger);
+        _service = new HttpContextUserService(_httpContextAccessor, _memoryCache, _principalRepository, _logger);
     }
 
     [Test]
@@ -262,5 +265,139 @@ public class HttpContextUserServiceTests
         // Act & Assert
         await Should.ThrowAsync<InvalidOperationException>(
             () => _service.GetAxonUserIdAsync());
+    }
+
+    [Test]
+    public async Task GetAxonUserIdAsync_WhenMemoryCacheHit_ShouldReturnCachedValueAndPopulateRequestCache()
+    {
+        // Arrange
+        var dynamicUserId = "test-user-123";
+        var axonUserId = AxonUserId.New();
+        var cacheKey = $"axon:user:{dynamicUserId}";
+
+        _claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, dynamicUserId)
+        }, "test"));
+        _httpContext.User = _claimsPrincipal;
+
+        // Setup memory cache to return cached value
+        _memoryCache.GetOrCreateAsync(cacheKey, Arg.Any<Func<ICacheEntry, Task<AxonUserId?>>>())
+            .Returns(axonUserId);
+
+        // Act
+        var result = await _service.GetAxonUserIdAsync();
+
+        // Assert
+        result.ShouldBe(axonUserId);
+        _httpContext.Items["AxonUserId"].ShouldBe(axonUserId);
+
+        // Database should not be called on memory cache hit
+        await _principalRepository.DidNotReceive().FindByCredentialAsync(
+            Arg.Any<ProviderType>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetAxonUserIdAsync_WhenMemoryCacheMiss_ShouldFetchFromDatabaseAndCacheInMemory()
+    {
+        // Arrange
+        var dynamicUserId = "test-user-123";
+        var axonUserId = AxonUserId.New();
+        var cacheKey = $"axon:user:{dynamicUserId}";
+
+        _claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, dynamicUserId)
+        }, "test"));
+        _httpContext.User = _claimsPrincipal;
+
+        var principal = Substitute.For<AxonPrincipal>();
+        principal.Id.Returns(axonUserId);
+
+        _principalRepository.FindByCredentialAsync(
+            ProviderType.Dynamic,
+            "https://app.dynamic.xyz",
+            dynamicUserId,
+            Arg.Any<CancellationToken>())
+            .Returns(principal);
+
+        // Setup memory cache to execute factory function (cache miss)
+        _memoryCache.GetOrCreateAsync(cacheKey, Arg.Any<Func<ICacheEntry, Task<AxonUserId?>>>())
+            .Returns(async callInfo =>
+            {
+                var factory = callInfo.Arg<Func<ICacheEntry, Task<AxonUserId?>>>();
+                var entry = Substitute.For<ICacheEntry>();
+                return await factory(entry);
+            });
+
+        // Act
+        var result = await _service.GetAxonUserIdAsync();
+
+        // Assert
+        result.ShouldBe(axonUserId);
+        _httpContext.Items["AxonUserId"].ShouldBe(axonUserId);
+
+        await _principalRepository.Received(1).FindByCredentialAsync(
+            ProviderType.Dynamic,
+            "https://app.dynamic.xyz",
+            dynamicUserId,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void TryGetAxonUserId_WhenMemoryCacheHit_ShouldReturnTrueAndPopulateRequestCache()
+    {
+        // Arrange
+        var dynamicUserId = "test-user-123";
+        var axonUserId = AxonUserId.New();
+        var cacheKey = $"axon:user:{dynamicUserId}";
+
+        _claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, dynamicUserId)
+        }, "test"));
+        _httpContext.User = _claimsPrincipal;
+
+        // Setup memory cache hit
+        _memoryCache.TryGetValue(cacheKey, out Arg.Any<object?>())
+            .Returns(callInfo =>
+            {
+                callInfo[1] = axonUserId;
+                return true;
+            });
+
+        // Act
+        var result = _service.TryGetAxonUserId(out var resultUserId);
+
+        // Assert
+        result.ShouldBeTrue();
+        resultUserId.ShouldBe(axonUserId);
+        _httpContext.Items["AxonUserId"].ShouldBe(axonUserId);
+    }
+
+    [Test]
+    public void TryGetAxonUserId_WhenMemoryCacheMiss_ShouldReturnFalse()
+    {
+        // Arrange
+        var dynamicUserId = "test-user-123";
+        var cacheKey = $"axon:user:{dynamicUserId}";
+
+        _claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, dynamicUserId)
+        }, "test"));
+        _httpContext.User = _claimsPrincipal;
+
+        // Setup memory cache miss
+        _memoryCache.TryGetValue(cacheKey, out Arg.Any<object?>())
+            .Returns(false);
+
+        // Act
+        var result = _service.TryGetAxonUserId(out var resultUserId);
+
+        // Assert
+        result.ShouldBeFalse();
+        resultUserId.ShouldBe(default(AxonUserId));
+        _httpContext.Items.ContainsKey("AxonUserId").ShouldBeFalse();
     }
 }

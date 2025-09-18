@@ -12,8 +12,11 @@ using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using CSharpFunctionalExtensions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 
@@ -34,19 +37,34 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     private readonly IAxonPrincipalWriteRepository _principalWriteRepository;
     private readonly IWalletWriteRepository _walletRepository;
     private readonly IExchangeMetricsService _metricsService;
+    private readonly IMemoryCache _memoryCache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<ExchangeCredentialHandler> _logger;
+
+    // OpenTelemetry metrics for cache warming monitoring
+    private static readonly Meter Meter = new("Axon.Identity.Exchange");
+    private static readonly Counter<long> CacheWarmingSuccessCounter =
+        Meter.CreateCounter<long>("axon.identity.cache_warming_success", description: "Number of successful cache warming operations");
+    private static readonly Counter<long> CacheWarmingFailureCounter =
+        Meter.CreateCounter<long>("axon.identity.cache_warming_failures", description: "Number of failed cache warming operations");
+    private static readonly Histogram<double> CacheWarmingLatency =
+        Meter.CreateHistogram<double>("axon.identity.cache_warming_duration_ms", description: "Cache warming operation latency in milliseconds");
 
     public ExchangeCredentialHandler(
         ICurrentUserService currentUserService,
         IAxonPrincipalWriteRepository principalRepository,
         IWalletWriteRepository walletRepository,
         IExchangeMetricsService metricsService,
+        IMemoryCache memoryCache,
+        IHttpContextAccessor httpContextAccessor,
         ILogger<ExchangeCredentialHandler> logger)
         : base(currentUserService)
     {
         _principalWriteRepository = principalRepository;
         _walletRepository = walletRepository;
         _metricsService = metricsService;
+        _memoryCache = memoryCache;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -134,6 +152,68 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         }
     }
 
+    /// <summary>
+    /// Warms both memory cache and request-scoped cache for AxonUserId resolution.
+    /// Populates caches with user identity mapping to enable >95% cache hit rate for subsequent requests.
+    /// Cache warming failures are handled gracefully and don't disrupt the exchange flow.
+    /// </summary>
+    /// <param name="dynamicUserId">The Dynamic user ID from JWT token</param>
+    /// <param name="axonUserId">The resolved internal AxonUserId</param>
+    /// <returns>Task representing the async cache warming operation</returns>
+    private async Task WarmUserContextCaches(string dynamicUserId, AxonUserId axonUserId)
+    {
+        using var activity = Activity.Current?.Source.StartActivity("WarmUserContextCaches");
+        activity?.SetTag("dynamic_user_id", dynamicUserId);
+        activity?.SetTag("axon_user_id", axonUserId.Value);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            // Warm memory cache for cross-request access
+            var cacheKey = $"axon:user:{dynamicUserId}";
+            _memoryCache.Set(cacheKey, axonUserId, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(15),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
+                Priority = CacheItemPriority.High
+            });
+
+            // Warm request-scoped cache for immediate use
+            if (_httpContextAccessor.HttpContext != null)
+            {
+                _httpContextAccessor.HttpContext.Items["AxonUserId"] = axonUserId;
+            }
+
+            stopwatch.Stop();
+
+            // Record success metrics
+            CacheWarmingSuccessCounter.Add(1);
+            CacheWarmingLatency.Record(stopwatch.ElapsedMilliseconds);
+
+            _logger.LogInformation("User context cache warmed: {DynamicUserId} -> {AxonUserId}, Duration: {Duration}ms",
+                dynamicUserId, axonUserId.Value, stopwatch.ElapsedMilliseconds);
+                
+            activity?.SetTag("cache_warming_status", "success");
+            activity?.SetTag("cache_warming_duration_ms", stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+
+            // Record failure metrics
+            CacheWarmingFailureCounter.Add(1);
+            CacheWarmingLatency.Record(stopwatch.ElapsedMilliseconds);
+
+            // Cache warming failures should not break exchange flow
+            _logger.LogWarning(ex, "Cache warming failed for user {DynamicUserId}, Duration: {Duration}ms", 
+                dynamicUserId, stopwatch.ElapsedMilliseconds);
+            activity?.SetTag("cache_warming_status", "failure");
+            activity?.SetTag("cache_warming_duration_ms", stopwatch.ElapsedMilliseconds);
+        }
+
+        await Task.CompletedTask;
+    }
 
     private async Task<Result<ExchangeOutcome, Error>> ExecuteExchangeTransaction(
         ExchangeUserData userData,
@@ -186,7 +266,10 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             "DefaultsApplied={DefaultsApplied}, FinalChainDefaultsCount={FinalChainDefaultsCount}",
             principal.Id.Value, saveResult, defaultsApplied, principal.PrincipalChainDefaults.Count);
 
-        // Step 6: Return stable metrics
+        // Step 6: Warm user context caches for subsequent identity resolution
+        await WarmUserContextCaches(userData.UserId, principal.Id);
+
+        // Step 7: Return stable metrics
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
             AxonUserId: principal.Id,
             Created: isNewPrincipal,
