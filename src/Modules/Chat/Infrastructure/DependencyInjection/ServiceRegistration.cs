@@ -7,7 +7,7 @@ using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI;
 using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.MCP;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
-using Axon.Modules.Chat.Infrastructure.Services.Identity;
+
 using Axon.Modules.Chat.Infrastructure.Services.Telemetry;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Abstractions.Authentication;

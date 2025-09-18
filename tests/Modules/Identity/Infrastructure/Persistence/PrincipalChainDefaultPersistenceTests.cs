@@ -26,7 +26,7 @@ public class PrincipalChainDefaultPersistenceTests
 {
     private IdentityWriteDbContext _dbContext = null!;
     private AxonPrincipalWriteRepository _repository = null!;
-    private IWriteUnitOfWork<IdentityModule> _unitOfWork = null!;
+    private EfUnitOfWork<IdentityWriteDbContext, IdentityModule> _unitOfWork = null!;
 
     [SetUp]
     public async Task SetUp()
@@ -48,6 +48,8 @@ public class PrincipalChainDefaultPersistenceTests
     public async Task TearDown()
     {
         await _dbContext.Database.EnsureDeletedAsync();
+        _unitOfWork?.Dispose();
+        _repository?.Dispose();
         await _dbContext.DisposeAsync();
     }
 
