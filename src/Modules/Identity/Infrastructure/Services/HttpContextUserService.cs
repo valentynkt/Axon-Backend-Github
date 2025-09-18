@@ -1,6 +1,12 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Security.Claims;
+using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Authentication;
+using BuildingBlocks.Primitives.Ids;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Infrastructure.Services;
 
@@ -11,10 +17,26 @@ namespace Axon.Modules.Identity.Infrastructure.Services;
 public sealed class HttpContextUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
-    
-    public HttpContextUserService(IHttpContextAccessor httpContextAccessor)
+    private readonly IAxonPrincipalReadRepository _principalRepository;
+    private readonly ILogger<HttpContextUserService> _logger;
+
+    // OpenTelemetry metrics for identity resolution performance
+    private static readonly Meter Meter = new("Axon.Identity", "1.0");
+    private static readonly Counter<long> CacheHitCounter =
+        Meter.CreateCounter<long>("axon.identity.cache_hits", description: "Identity cache hits by source");
+    private static readonly Counter<long> CacheMissCounter =
+        Meter.CreateCounter<long>("axon.identity.cache_misses", description: "Identity cache misses by source");
+    private static readonly Histogram<double> ResolutionLatency =
+        Meter.CreateHistogram<double>("axon.identity.resolution_duration_ms", unit: "ms", description: "Identity resolution latency");
+
+    public HttpContextUserService(
+        IHttpContextAccessor httpContextAccessor,
+        IAxonPrincipalReadRepository principalRepository,
+        ILogger<HttpContextUserService> logger)
     {
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _principalRepository = principalRepository ?? throw new ArgumentNullException(nameof(principalRepository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -133,5 +155,129 @@ public sealed class HttpContextUserService : ICurrentUserService
 
         var newUserClaim = httpContext.User.FindFirst("is_new_user");
         return newUserClaim != null && bool.TryParse(newUserClaim.Value, out var isNew) && isNew;
+    }
+
+    /// <summary>
+    /// Gets the current authenticated user's internal AxonUserId with smart caching.
+    /// Progressive cache hierarchy: HttpContext.Items (0ms) → Database (20-50ms)
+    /// Cache key pattern: "AxonUserId" in HttpContext.Items for request-scoped caching
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for database fallback operations</param>
+    /// <returns>AxonUserId if user is authenticated and found, null otherwise</returns>
+    public async Task<AxonUserId?> GetAxonUserIdAsync(CancellationToken cancellationToken = default)
+    {
+        using var activity = Activity.Current?.Source.StartActivity("GetAxonUserIdAsync");
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            // Layer 1: Request-scoped cache (0ms)
+            if (_httpContextAccessor.HttpContext?.Items.TryGetValue("AxonUserId", out var cached) == true && cached is AxonUserId cachedUserId)
+            {
+                _logger.LogDebug("AxonUserId cache hit (request-scoped)");
+                CacheHitCounter.Add(1, new KeyValuePair<string, object?>("source", "request"));
+                activity?.SetTag("cache_source", "request");
+                activity?.SetTag("cache_hit", true);
+
+                stopwatch.Stop();
+                ResolutionLatency.Record(stopwatch.Elapsed.TotalMilliseconds,
+                    new KeyValuePair<string, object?>("source", "request"));
+
+                return cachedUserId;
+            }
+
+            var dynamicUserId = UserId;
+            if (string.IsNullOrEmpty(dynamicUserId))
+            {
+                _logger.LogDebug("No authenticated user found");
+                activity?.SetTag("authenticated", false);
+                return null;
+            }
+
+            activity?.SetTag("dynamic_user_id", dynamicUserId);
+            activity?.SetTag("authenticated", true);
+
+            _logger.LogDebug("AxonUserId cache miss, fetching from database for {DynamicUserId}", dynamicUserId);
+            CacheMissCounter.Add(1, new KeyValuePair<string, object?>("source", "request"));
+
+            // Layer 3: Database fallback (Phase 1 implementation - no memory cache yet)
+            var principal = await _principalRepository.FindByCredentialAsync(
+                ProviderType.Dynamic,
+                "https://app.dynamic.xyz",
+                dynamicUserId,
+                cancellationToken);
+
+            var axonUserId = principal?.Id;
+
+            // Store in request cache for subsequent calls
+            if (axonUserId.HasValue && _httpContextAccessor.HttpContext != null)
+            {
+                _httpContextAccessor.HttpContext.Items["AxonUserId"] = axonUserId.Value;
+                _logger.LogDebug("AxonUserId cached for request: {AxonUserId}", axonUserId.Value);
+                activity?.SetTag("axon_user_id", axonUserId.Value.ToString());
+                activity?.SetTag("cache_populated", true);
+            }
+            else
+            {
+                activity?.SetTag("cache_populated", false);
+                activity?.SetTag("principal_found", principal != null);
+            }
+
+            stopwatch.Stop();
+            ResolutionLatency.Record(stopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("source", "database"));
+
+            return axonUserId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resolving AxonUserId for {DynamicUserId}", UserId);
+            activity?.SetTag("error", true);
+            activity?.SetTag("error.message", ex.Message);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Attempts to get AxonUserId from cache only (no database fallback).
+    /// Used for sync contexts where database queries are not acceptable.
+    /// Checks HttpContext.Items (0ms) only.
+    /// </summary>
+    /// <param name="axonUserId">The cached AxonUserId if found</param>
+    /// <returns>True if AxonUserId found in cache, false if cache miss or not authenticated</returns>
+    public bool TryGetAxonUserId(out AxonUserId axonUserId)
+    {
+        using var activity = Activity.Current?.Source.StartActivity("TryGetAxonUserId");
+        var stopwatch = Stopwatch.StartNew();
+
+        // Request cache check only (no database fallback in sync method)
+        if (_httpContextAccessor.HttpContext?.Items.TryGetValue("AxonUserId", out var cached) == true && cached is AxonUserId cachedUserId)
+        {
+            axonUserId = cachedUserId;
+            _logger.LogDebug("AxonUserId sync cache hit: {AxonUserId}", axonUserId);
+
+            CacheHitCounter.Add(1, new KeyValuePair<string, object?>("source", "request_sync"));
+            activity?.SetTag("cache_source", "request_sync");
+            activity?.SetTag("cache_hit", true);
+            activity?.SetTag("axon_user_id", axonUserId.ToString());
+
+            stopwatch.Stop();
+            ResolutionLatency.Record(stopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("source", "request_sync"));
+
+            return true;
+        }
+
+        axonUserId = default;
+        _logger.LogDebug("AxonUserId sync cache miss");
+
+        CacheMissCounter.Add(1, new KeyValuePair<string, object?>("source", "request_sync"));
+        activity?.SetTag("cache_hit", false);
+
+        stopwatch.Stop();
+        ResolutionLatency.Record(stopwatch.Elapsed.TotalMilliseconds,
+            new KeyValuePair<string, object?>("source", "request_sync"));
+
+        return false;
     }
 }
