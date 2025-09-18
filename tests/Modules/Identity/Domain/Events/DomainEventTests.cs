@@ -21,7 +21,7 @@ public class DomainEventTests : IdentityTestBase
         public void PrincipalChangedEvent_WithRequiredParameters_Should_CreateEventCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var propertyChanged = "RiskTier";
             var oldValue = "Low";
             var newValue = "Medium";
@@ -45,7 +45,7 @@ public class DomainEventTests : IdentityTestBase
         public void PrincipalChangedEvent_WithMetadata_Should_IncludeMetadata()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var propertyChanged = "ChainDefault.ethereum-mainnet";
             var metadata = new Dictionary<string, string>
             {
@@ -67,7 +67,7 @@ public class DomainEventTests : IdentityTestBase
         {
             // Arrange
             var beforeCreation = DateTime.UtcNow;
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
 
             // Act
             var eventObj = new PrincipalChangedEvent(principalId, "TestProperty");
@@ -87,7 +87,7 @@ public class DomainEventTests : IdentityTestBase
             string property, string oldValue, string newValue)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
 
             // Act
             var eventObj = new PrincipalChangedEvent(principalId, property, oldValue, newValue);
@@ -104,7 +104,7 @@ public class DomainEventTests : IdentityTestBase
         public void PrincipalChangedEvent_WithNullValues_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
 
             // Act
             var eventObj = new PrincipalChangedEvent(principalId, "TestProperty", null, null);
@@ -120,7 +120,7 @@ public class DomainEventTests : IdentityTestBase
         public void PrincipalChangedEvent_Should_BeRecord()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var property = "RiskTier";
 
             // Act
@@ -146,7 +146,7 @@ public class DomainEventTests : IdentityTestBase
         public void CredentialChangedEvent_WithRequiredParameters_Should_CreateEventCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var credentialId = IdentityCredentialId.New();
             var changeType = "added";
             var provider = "dynamic";
@@ -173,7 +173,7 @@ public class DomainEventTests : IdentityTestBase
         public void CredentialChangedEvent_WithDifferentChangeTypes_Should_CaptureCorrectly(string changeType)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var credentialId = IdentityCredentialId.New();
 
             // Act
@@ -191,7 +191,7 @@ public class DomainEventTests : IdentityTestBase
         public void CredentialChangedEvent_WithDifferentProviders_Should_CaptureCorrectly(string provider)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var credentialId = IdentityCredentialId.New();
 
             // Act
@@ -205,7 +205,7 @@ public class DomainEventTests : IdentityTestBase
         public void CredentialChangedEvent_WithMetadata_Should_IncludeMetadata()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var credentialId = IdentityCredentialId.New();
             var metadata = new Dictionary<string, string>
             {
@@ -226,7 +226,7 @@ public class DomainEventTests : IdentityTestBase
         public void CredentialChangedEvent_WithoutOptionalParameters_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var credentialId = IdentityCredentialId.New();
 
             // Act
@@ -251,7 +251,7 @@ public class DomainEventTests : IdentityTestBase
         public void OwnershipChangedEvent_WithRequiredParameters_Should_CreateEventCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
             var changeType = "linked";
             var accessMode = "Signing";
@@ -282,7 +282,7 @@ public class DomainEventTests : IdentityTestBase
         public void OwnershipChangedEvent_WithDifferentChangeTypes_Should_CaptureCorrectly(string changeType)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -298,7 +298,7 @@ public class DomainEventTests : IdentityTestBase
         public void OwnershipChangedEvent_WithDifferentAccessModes_Should_CaptureCorrectly(string accessMode)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -315,7 +315,7 @@ public class DomainEventTests : IdentityTestBase
         public void OwnershipChangedEvent_WithDifferentStatuses_Should_CaptureCorrectly(string status)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -329,7 +329,7 @@ public class DomainEventTests : IdentityTestBase
         public void OwnershipChangedEvent_WithMetadata_Should_IncludeMetadata()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
             var metadata = new Dictionary<string, string>
             {
@@ -350,7 +350,7 @@ public class DomainEventTests : IdentityTestBase
         public void OwnershipChangedEvent_ForRemoval_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -500,9 +500,9 @@ public class DomainEventTests : IdentityTestBase
         public void AllEvents_Should_InheritFromDomainEvent()
         {
             // Arrange & Act
-            var principalEvent = new PrincipalChangedEvent(AxonId.New(), "TestProp");
-            var credentialEvent = new CredentialChangedEvent(AxonId.New(), IdentityCredentialId.New(), "added");
-            var ownershipEvent = new OwnershipChangedEvent(AxonId.New(), WalletId.New(), "linked");
+            var principalEvent = new PrincipalChangedEvent(AxonUserId.New(), "TestProp");
+            var credentialEvent = new CredentialChangedEvent(AxonUserId.New(), IdentityCredentialId.New(), "added");
+            var ownershipEvent = new OwnershipChangedEvent(AxonUserId.New(), WalletId.New(), "linked");
             var walletEvent = new WalletChangedEvent(WalletId.New(), "ownership");
 
             // Assert
@@ -522,9 +522,9 @@ public class DomainEventTests : IdentityTestBase
         public void AllEvents_Should_BeRecords()
         {
             // All events should be record types for immutability and value equality
-            var principalEvent = new PrincipalChangedEvent(AxonId.New(), "TestProp");
-            var credentialEvent = new CredentialChangedEvent(AxonId.New(), IdentityCredentialId.New(), "added");
-            var ownershipEvent = new OwnershipChangedEvent(AxonId.New(), WalletId.New(), "linked");
+            var principalEvent = new PrincipalChangedEvent(AxonUserId.New(), "TestProp");
+            var credentialEvent = new CredentialChangedEvent(AxonUserId.New(), IdentityCredentialId.New(), "added");
+            var ownershipEvent = new OwnershipChangedEvent(AxonUserId.New(), WalletId.New(), "linked");
             var walletEvent = new WalletChangedEvent(WalletId.New(), "ownership");
 
             // Records should have ToString implementations
@@ -541,9 +541,9 @@ public class DomainEventTests : IdentityTestBase
             var specificTime = new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
             // Act
-            var principalEvent = new PrincipalChangedEvent(AxonId.New(), "TestProp", eventOccurredAt: specificTime);
-            var credentialEvent = new CredentialChangedEvent(AxonId.New(), IdentityCredentialId.New(), "added", eventOccurredAt: specificTime);
-            var ownershipEvent = new OwnershipChangedEvent(AxonId.New(), WalletId.New(), "linked", eventOccurredAt: specificTime);
+            var principalEvent = new PrincipalChangedEvent(AxonUserId.New(), "TestProp", eventOccurredAt: specificTime);
+            var credentialEvent = new CredentialChangedEvent(AxonUserId.New(), IdentityCredentialId.New(), "added", eventOccurredAt: specificTime);
+            var ownershipEvent = new OwnershipChangedEvent(AxonUserId.New(), WalletId.New(), "linked", eventOccurredAt: specificTime);
             var walletEvent = new WalletChangedEvent(WalletId.New(), "ownership", occurredAt: specificTime);
 
             // Assert
@@ -575,7 +575,7 @@ public class DomainEventTests : IdentityTestBase
             };
 
             // Act
-            var principalEvent = new PrincipalChangedEvent(AxonId.New(), "RiskTier", metadata: complexMetadata);
+            var principalEvent = new PrincipalChangedEvent(AxonUserId.New(), "RiskTier", metadata: complexMetadata);
 
             // Assert
             principalEvent.Metadata.ShouldNotBeNull();
@@ -591,7 +591,7 @@ public class DomainEventTests : IdentityTestBase
             var emptyMetadata = new Dictionary<string, string>();
 
             // Act
-            var ownershipEvent = new OwnershipChangedEvent(AxonId.New(), WalletId.New(), "linked", metadata: emptyMetadata);
+            var ownershipEvent = new OwnershipChangedEvent(AxonUserId.New(), WalletId.New(), "linked", metadata: emptyMetadata);
 
             // Assert
             ownershipEvent.Metadata.ShouldNotBeNull();
@@ -611,7 +611,7 @@ public class DomainEventTests : IdentityTestBase
             };
 
             // Act
-            var credentialEvent = new CredentialChangedEvent(AxonId.New(), IdentityCredentialId.New(), "added", metadata: specialMetadata);
+            var credentialEvent = new CredentialChangedEvent(AxonUserId.New(), IdentityCredentialId.New(), "added", metadata: specialMetadata);
 
             // Assert
             credentialEvent.Metadata.ShouldNotBeNull();

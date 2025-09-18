@@ -14,7 +14,7 @@ public sealed record CurrentUserResult(
 /// User profile information for the current authenticated user.
 /// </summary>
 public sealed record UserProfile(
-    string AxonId,
+    string AxonUserId,
     string Subject,
     string RiskTier);
 

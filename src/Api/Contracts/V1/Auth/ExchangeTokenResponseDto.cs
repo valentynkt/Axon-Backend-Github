@@ -4,7 +4,7 @@ namespace Axon.Api.Contracts.V1.Auth;
 /// Response for successful token exchange
 /// </summary>
 public sealed record ExchangeTokenResponseDto(
-    string AxonId,
+    string AxonUserId,
     bool Created,
     int WalletsProcessed,
     int WalletsLinked,

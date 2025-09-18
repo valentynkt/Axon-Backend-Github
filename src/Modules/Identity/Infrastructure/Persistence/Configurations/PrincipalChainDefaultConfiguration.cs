@@ -18,7 +18,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
             .HasDatabaseName("ix_principal_chain_default_unique");
         
         builder.Property(d => d.PrincipalId)
-            .HasConversion(id => id.Value, value => new AxonId(value))
+            .HasConversion(id => id.Value, value => new AxonUserId(value))
             .HasColumnName("principal_id")
             .HasColumnType("uuid");
 

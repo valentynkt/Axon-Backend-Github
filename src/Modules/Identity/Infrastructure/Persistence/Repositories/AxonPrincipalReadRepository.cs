@@ -75,9 +75,9 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     /// <summary>
     /// Compiled query for getting principal fingerprint data - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, AxonId, Task<FingerprintData?>>
+    private static readonly Func<IdentityReadDbContext, AxonUserId, Task<FingerprintData?>>
         GetPrincipalFingerprintDataCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, AxonId principalId) =>
+            (IdentityReadDbContext context, AxonUserId principalId) =>
                 context.Set<AxonPrincipal>()
                     .Where(p => p.Id == principalId)
                     .Select(p => new FingerprintData
@@ -173,12 +173,12 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     }
 
     public async Task<AxonPrincipal?> GetByIdWithActiveOwnershipsAsync(
-        AxonId axonId,
+        AxonUserId AxonUserId,
         CancellationToken cancellationToken = default)
     {
         // Use EF Core to get principal with active wallet ownerships and chain defaults in single query
         return await _identityDbContext.Set<AxonPrincipal>()
-            .Where(p => p.Id == axonId)
+            .Where(p => p.Id == AxonUserId)
             .Include(p => p.WalletOwnerships.Where(wo => wo.Status == OwnershipStatus.Verified))
             .Include(p => p.PrincipalChainDefaults)
             .AsNoTracking()
@@ -195,7 +195,7 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     }
 
     public async Task<string> GetPrincipalFingerprintAsync(
-        AxonId principalId,
+        AxonUserId principalId,
         CancellationToken cancellationToken = default)
     {
         var data = await GetPrincipalFingerprintDataCompiled(_identityDbContext, principalId);

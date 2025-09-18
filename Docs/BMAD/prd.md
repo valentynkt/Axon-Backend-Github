@@ -1,422 +1,267 @@
-# Axon AI Identity & Memory — Brownfield Enhancement PRD (Final)
+# Product Requirements Document: Identity Performance Optimization Initiative
 
-**Date:** 2025-09-09
-**Module:** Identity (Principal, Credentials, Wallets)
-**Owner:** Product (BMAD PM)
-**Architecture Reference:** “Axon AI Identity & Memory — Backend Architecture Document (Final), v1.0, 2025-09-09 (Winston)”
-
----
-
-## 0. Executive Summary (TL;DR)
-
-Deliver a **minimal, stateless identity layer** that unifies a user’s multiple credentials and wallets into a canonical **Principal**, exposes exactly **two API endpoints** (`POST /auth/exchange`, `GET /auth/me`), enforces **global wallet uniqueness** with **no silent reassignment**, and provides a deterministic **ETag** snapshot for fast client rehydration. The system is designed for **simplicity, security, and future-proofing**, aligning 1:1 with the backend architecture (C#/.NET, FastEndpoints, EF Core, Postgres, Azure, OTel).
-**MVP persists only “minimal memory”: per-chain default wallet and a global risk posture — no contact identifiers (e.g., email hashes) are stored.**
-
-**Key invariants:**
-
-* Global wallet uniqueness; one **verified & signing** owner per wallet.
-* **No silent reassignments** (conflicts surface as HTTP **409**).
-* **Verified-first defaults** (defaults must reference verified & signing wallets).
-* **Idempotent exchange** (safe retries).
-* **ETag determinism** (changes only on risk tier change, verified & signing ownership change, or default change).
+**Document Version**: 2.0
+**Created**: 2025-01-18
+**Last Updated**: 2025-01-18
 
 ---
 
-## 1. Scope & Non-Goals
+## 🎯 Executive Summary
 
-**In scope (MVP):**
+### Business Problem
+Axon's Solana Co-Pilot AI platform suffers from identity resolution bottlenecks that create noticeable delays in user interactions. Every chat message and API call requires a 50ms database lookup to resolve user identity, resulting in sluggish user experience and limiting our ability to scale cost-effectively.
 
-* Canonical **Principal** model unifying credentials and wallets.
-* Two endpoints only: `POST /auth/exchange` (idempotent identity resolution) and `GET /auth/me` (snapshot + ETag).
-* Enforced invariants: global wallet uniqueness; **one verified & signing owner** per wallet; **no silent reassignments**.
-* Minimal “memory”: per-chain default wallet; global risk posture.
-* Observability (OTel) and rate limiting (10 rpm/IP on `exchange`).
-* **Code-first** EF Core: entities, fluent configs, migrations (no standalone DB schema doc).
+**Current State**: Chat feels slow, platform can't handle growth, developers confused by inconsistent identity patterns.
 
-**Out of scope (MVP):**
+### Solution Overview
+Implement a progressive 3-phase identity optimization that eliminates performance bottlenecks while establishing clear, consistent identity management:
 
-* Server-issued tokens, sessions, cookies.
-* Free-form profile metadata (names, locales, labels, etc.).
-* Admin tooling for ownership revocation / dispute back-office.
-* Additional endpoints beyond `/auth/exchange` and `/auth/me`.
-* End-to-end rollout gating story (removed per direction).
+1. **Semantic Foundation** - Clear naming eliminates confusion
+2. **Smart Caching** - 50x performance improvement (50ms → <1ms)
+3. **Platform Integration** - Unified experience across all features
 
----
-
-## 2. Goals & Success Metrics
-
-**Product goals:**
-
-* Provide a single, stable **Principal** across credentials and wallets.
-* Guarantee **wallet ownership safety**: prevent hijacks via global uniqueness + explicit `409` conflicts.
-* Keep the API **minimal and stateless**, while supporting future providers/chains without endpoint changes.
-
-**User/API success metrics:**
-
-* A new user can `exchange` to create/resolve Principal; wallets linked; defaults/risk set once.
-* `exchange` is idempotent (repeat produces no dupes); `me` returns ETag; unchanged → **304**.
-* Cross-credential linking works; conflicts surface as **409** without reassignments.
-
-**KPIs (instrumented):**
-
-* Endpoint latency & uptime; `exchange_success/failure` rate; `401` and `409` rates; `etag_hits/misses` ratio; rate limiter events.
+### Business Value
+- **Instant User Experience**: Chat and API interactions feel immediate
+- **Cost-Effective Growth**: Support 10x users without infrastructure expansion
+- **Developer Productivity**: Clear patterns accelerate feature development
+- **Competitive Advantage**: Fastest response times in Web3 tooling space
 
 ---
 
-## 3. Non-Negotiable Invariants
+## 🏢 Business Context
 
-* **Global wallet uniqueness** by `(chainId, address)`.
-* **One verified & signing owner** per wallet (partial-unique enforced via EF Core fluent config → generated index).
-* **No silent reassignments**: conflicting link attempts return **409** with privacy-safe details; never reassign.
-* **Verified-first defaults**: chain default must reference a **verified & signing** wallet.
-* **Idempotent exchange**: replays produce stable state and counts.
+### Why This Matters for Axon
+Axon's mission is to be the fastest, most reliable Solana Co-Pilot AI platform. Our competitive advantage depends on providing instant, seamless blockchain interactions that feel natural to users.
 
----
+**Current Reality**: Users notice delays. Developers get confused. Growth is limited by performance ceilings.
 
-## 4. Requirements (Locked v0.4)
+### User Impact Examples
+- **Trader Alex**: "Chat queries about market conditions feel slow during volatile periods"
+- **Bot Developer Sam**: "Identity lookups slow down my algorithmic trading strategies"
+- **Internal Dev Jordan**: "I keep mixing up AxonId vs UserId - which one should I use?"
 
-### 4.1 Functional Requirements (FR)
-
-* **FR1 — Exchange & Upsert:** `POST /auth/exchange` validates provider JWT (JWKS), resolves/creates Principal, ensures wallets by `(chainId, address)`, links **verified & signing** ownerships, applies **verified-first** chain defaults **atomically** in one transaction.
-* **FR2 — Idempotency:** Replaying an equivalent `exchange` produces no duplicates (Principal, wallets, ownerships, defaults) and stable counts in `ExchangeDynamicTokenResponse`.
-* **FR3 — Global Uniqueness:** If a wallet already has a **verified & signing** owner for another Principal, return **409** (no reassignment, no side-effects).
-* **FR4 — Cross-Credential Linking:** Credential uniqueness `(provider, issuer, subject)` guarantees repeat recognition and linking to the same Principal when proofs match.
-* **FR5 — Wallet States:** Ownership status supports `pending | verified | revoked`; only **verified & signing** may be a chain default. `pending→verified` occurs on proof via `exchange`; `revoked`/downgrades are **post-MVP/admin**.
-* **FR6 — Default Changes:** Defaults can be set/changed **only** to a **verified & signing** wallet of the **same** Principal, via an explicit `exchange` request field.
-* **FR7 — Me Snapshot + Caching:** `GET /auth/me` returns `CurrentUserResult` (principal id, risk tier; wallets with `chainId/address/accessMode/isVerified`; `chainDefaults`) and **ETag**; `If-None-Match` short-circuits with **304** if unchanged. **404 MAY** be returned if caller has not completed a successful `exchange` yet.
-* **FR8 — Error Semantics + Privacy:** `400/401` (JWT/validation), `409` (ownership conflict), `422` (domain rule), `429` (rate limit), `500` (unexpected). **409 must not expose the other Principal’s id**; details include only `{ chainId, address }`.
-* **FR9 — Rate Limiting:** `/auth/exchange` limited to **10 rpm/IP**, returning `Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
-* **FR10 — Observability & Auditing:** OTel traces/metrics/logs + structured audit events for identity-affecting ops (who/what/when/why; no secrets).
-* **FR11 — Normalization:** Normalize `chainId` and address before persistence; optionally update `last_seen` without affecting ETag.
-* **FR12 — Minimal Data + Risk Tier:** Persist only Principal, Credentials (minimal), Wallets, Ownerships, ChainDefaults, RiskTier. **No email hash or profile fields in MVP.** **Wire enum**: `low | medium | high`; product terms map `conservative→low`, `balanced→medium`, `aggressive→high`.
-* **FR13 — ETag Determinism:** ETag changes **only** when: (a) risk tier changes, (b) a **verified & signing** ownership is added/removed, or (c) a chain default changes. Pure reads, `last_seen` updates, **pending-only ownership changes**, and **no-op writes** (e.g., setting the same default or the same risk tier) **must not** change ETag.
-
-### 4.2 Non-Functional Requirements (NFR)
-
-* **NFR1 — Statelessness:** No server tokens/cookies; each call validates provider JWT (`iss`, `aud` (if set), `sub`, exp, signature, skew).
-* **NFR2 — Performance:** `/auth/me` optimized for ETag short-circuit; `exchange` optimized for idempotent retries and batch wallet “ensure” to avoid N+1.
-* **NFR3 — Reliability:** Transactional writes; partial-unique constraint ensures single verified & signing owner; safe to retry `exchange`.
-* **NFR4 — Security:** JWKS via `ConfigurationManager`; HTTPS/HSTS; security headers; secrets in Azure Key Vault.
-
-  * **JWKS caching:** Keys cached with provider-aligned TTL and proactive refresh to tolerate rotations/outages.
-  * **CORS:** Restricted to Axon frontend origins; partner origins added via configuration.
-* **NFR5 — Privacy/Minimalism:** Minimal data only; immutable audit trail; **no contact identifiers (including email hashes)**; no free-form profiles or ownership labels.
-* **NFR6 — Observability:** OTel metrics for `exchange_success/failure`, `wallet_conflicts`, `etag_hits/misses`; validator→DB spans; structured logs with correlation.
-* **NFR7 — Extensibility:** Provider-agnostic validator; adding **SIWS** or new chains **does not** change `/auth/*`.
-* **NFR8 — Operations:** Rate limiter configured; Swagger + Scalar enabled; forward-only migrations.
-* **NFR9 — Read Model Compatibility:** Read models may include `watchOnly`; **MVP** does not create watch-only via `exchange`.
-
-### 4.3 Compatibility Requirements (CR)
-
-* **CR1 — API Stability:** Identity remains encapsulated behind `/auth/*`; no breaking changes to other Axon public APIs.
-* **CR2 — Schema Safety:** Additive/migration-safe changes; `updated_at` + EF concurrency tokens.
-* **CR3 — UI Contract:** Conflicts are explicit via **409**; backend never reassigns silently.
-* **CR4 — Integrations:** Dynamic now; **SIWS post-MVP** via adapter; Azure deployment aligned with Axon-Backend conventions.
+### Business Constraints
+1. **Performance Ceiling**: Every user interaction = 50ms delay
+2. **Scale Limitation**: Database load grows linearly with users
+3. **Developer Friction**: Inconsistent identity patterns slow feature delivery
 
 ---
 
-## 5. Architecture Summary (for PRD readers)
+## 🔗 Business-to-Technical Solution Mapping
 
-* **Module:** Identity inside Axon-Backend modular monolith.
-* **Style/Patterns:** Clean Architecture; DDD aggregates (Principal, Wallet); CQRS (write=`exchange`, read=`me`).
-* **Auth:** Provider-issued JWT only; `JwtBearerHandler` + `ConfigurationManager` for JWKS & rotation; in-process cache.
-* **Persistence:** EF Core code-first to Postgres 16; unique constraints for credentials and wallets; **partial unique** for one verified & signing owner.
-* **Caching:** ETag (DB-derived fingerprint) on `/auth/me` with `If-None-Match` support.
-* **Observability:** OTel traces/logs/metrics → OTLP collector; dashboards for latency and 401/409/429.
-* **Hosting:** Azure App Service / Container Apps; Key Vault for secrets.
+### Business Need → Technical Solution → Implementation
 
----
+| Business Problem | Technical Solution | Epic Implementation |
+|-------------------|-------------------|-------------------|
+| **Developer Confusion** | Semantic naming clarity | **Epic 4a**: Rename `AxonId` → `AxonUserId` |
+| "Which ID type should I use?" | Single, clear identity type | Eliminate ambiguity in 51 files |
+| **User Experience Lag** | Smart caching hierarchy | **Epic 4b**: 3-tier caching system |
+| "Chat feels slow" | Request → Memory → Database | 50x performance improvement |
+| **Platform Inconsistency** | Unified identity resolution | **Epic 4c**: Chat module integration |
+| "Different modules behave differently" | Shared caching across modules | Consistent performance everywhere |
 
-## 6. API Contracts (MVP, minimal)
-
-> The service is **stateless**. Authentication via `Authorization: Bearer <provider-JWT>` on every request. No server-issued tokens or cookies.
-
-### 6.1 `POST /auth/exchange`
-
-**Purpose:** Validate provider JWT, resolve/create Principal, ensure/link **verified & signing** ownerships, enforce invariants, apply defaults; return operation counts.
-
-**Headers:**
-
-* `Authorization: Bearer <JWT>`
-
-**Body (optional — preferences):**
-
-```json
-{
-  "desiredDefaults": {
-    "solana": { "chainId": "solana", "address": "<base58 address>" }
-  },
-  "riskTier": "low"
-}
-```
-
-**Notes:**
-
-* Body is **optional**. By default, defaults follow **verified-first**. Provide `desiredDefaults` to explicitly change to another **verified & signing** wallet owned by the same Principal.
-* `riskTier` is optional; wire enum `low|medium|high` (product mapping documented below).
-* **No-op semantics:** If `desiredDefaults` equals current defaults and/or `riskTier` equals current value, the operation **MUST** avoid writes that would change `updated_at` or ETag.
-
-**Response 200 — ExchangeDynamicTokenResponse:**
-
-```json
-{
-  "axonId": "01JJ8Z3W1W0Q9QYJYF3EG2H20X",
-  "created": true,
-  "walletsProcessed": 1,
-  "walletsLinked": 1,
-  "defaultsApplied": 1,
-  "skipped": 0,
-  "conflicts": 0
-}
-```
-
-**Error responses:**
-
-* `400/401` invalid/malformed/expired JWT.
-* `409` wallet ownership conflict →
-
-```json
-{ "code": "WALLET_OWNERSHIP_CONFLICT", "message": "wallet already owned", "details": { "chainId": "solana", "address": "..." } }
-```
-
-* `422` domain rule violation (non-conflict).
-* `429` rate limit with `Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers.
-
-### 6.2 `GET /auth/me`
-
-**Purpose:** Return current Principal snapshot with ETag for conditional GET.
-
-**Headers:**
-
-* `Authorization: Bearer <JWT>`
-* Optional `If-None-Match: "<etag>"`
-
-**Response 200 (with `ETag` header):**
-
-```json
-{
-  "profile": { "axonId": "01JJ8Z3W1W0Q9QYJYF3EG2H20X", "riskTier": "medium" },
-  "wallets": [
-    { "walletId": "01JJ8Z3X...", "chainId": "solana", "address": "...", "accessMode": "signing", "isVerified": true }
-  ],
-  "chainDefaults": { "solana": "01JJ8Z3X..." }
-}
-```
-
-**Response 304:** no body when `If-None-Match` matches server fingerprint.
-**Response 404:** MAY be returned if the caller has not completed a successful `exchange` yet (no Principal exists).
-**Cache-Control:** `private, max-age=0, must-revalidate`.
+### Expected Outcomes
+- **Phase 1 (Epic 4a)**: Clean foundation, zero confusion
+- **Phase 2 (Epic 4b)**: 50x faster identity resolution
+- **Phase 3 (Epic 4c)**: Unified experience across all features
 
 ---
 
-## 7. Data Model (Conceptual)
+## 🎯 Business Objectives
 
-* **Principal (Aggregate Root):** ULID id; type (Human/Service); **no contact identifiers persisted in MVP**; risk tier (`low|medium|high`); collections: Credentials, WalletOwnerships, PrincipalChainDefaults.
-* **Credential:** Unique by `(provider, issuer, subject)`; belongs to Principal.
-* **Wallet:** Globally unique `(chainId, address)`; catalog entry until linked.
-* **WalletOwnership:** `(principalId, walletId)` unique; fields: `accessMode (signing|watchOnly)`, `status (pending|verified|revoked)`; **partial unique** index ensures one **verified & signing** owner per wallet.
-* **PrincipalChainDefault:** Composite `(principalId, chainId)` → walletId; must point to **verified & signing** wallet.
+### Primary Business Goals
 
----
+#### 1. **Enhance User Experience** (Priority: P0)
+**Objective**: Eliminate perceptible latency in user-facing operations
+**Success Criteria**:
+- Chat message latency < 100ms end-to-end (current: 200ms+)
+- Identity-dependent operations feel "instant" to users
+- Zero user complaints about platform sluggishness
 
-## 8. Observability & Rate Limiting
+**Business Value**: Increased user satisfaction and platform stickiness
 
-* **Metrics:** `exchange_success/failure`, `wallet_conflicts`, `etag_hits/misses`, latency histograms per endpoint, rate limiter counters.
-* **Tracing:** Spans across validator → DB; correlation IDs flow end-to-end.
-* **Logging:** Structured JSON; include requestId/traceId; **never log secrets/PII; no contact identifiers are persisted or logged.**
-* **Rate limiting:** `/auth/exchange` at **10 rpm/IP**; surfaced via headers.
+#### 2. **Enable Cost-Effective Scaling** (Priority: P0)
+**Objective**: Support 10x user growth without proportional infrastructure investment
+**Success Criteria**:
+- Database load reduction of 95% for identity operations
+- Linear (not superlinear) infrastructure cost scaling
+- Support 1,000+ concurrent users on current infrastructure
 
----
+**Business Value**: Improved unit economics and sustainable growth
 
-## 9. Risks & Mitigations
+#### 3. **Accelerate Development Velocity** (Priority: P1)
+**Objective**: Reduce development friction and improve code maintainability
+**Success Criteria**:
+- New developer onboarding time reduced by 30%
+- Identity-related bugs reduced to near-zero
+- Consistent patterns across all modules
 
-* **Wallet uniqueness contention:** Use batch ensure + compiled queries; future read replicas for `/auth/me` if needed.
-* **Provider dependency (JWKS):** `ConfigurationManager` handles key rotation; cache with provider-aligned TTL & proactive refresh; return clear 401s on failures.
-* **Conflict UX burden:** Frontend owns dispute flows; backend stays explicit (`409`), auditable.
-* **Enum drift:** Central mapping for product terms ↔ wire values; unit tests.
-* **Operational misconfig:** Startup health checks for issuer/audience, JWKS endpoint, DB connectivity; IaC defaults.
+**Business Value**: Faster time-to-market for new features
 
----
+### Secondary Business Goals
 
-## 10. Epic & Stories (Final)
+#### 4. **Operational Excellence** (Priority: P1)
+**Objective**: Establish foundation for enterprise-grade reliability
+**Success Criteria**:
+- System remains responsive under peak load
+- Clear monitoring and alerting for identity performance
+- Rapid rollback capabilities for risk mitigation
 
-### Epic — Identity & Memory (Principal, Credentials, Wallets) — Brownfield Enhancement
-
-**Goal:** Deliver the minimal, stateless Identity & Memory module with enforced invariants, two endpoints, ETag caching, observability, and rate limiting.
-**Integration Requirements:** Axon-Backend module; C#/.NET 10; FastEndpoints; EF Core (code-first); Postgres; Azure; OTel; rate limiting; Swagger/Scalar.
-
-#### Story 1.1 — EF Core Model, Configs & Initial Migration (Code-First)
-
-**As** a backend engineer, **I want** code-first entity models and fluent configurations (plus initial migration), **so that** invariants are enforced by the generated schema with no separate DB schema doc.
-
-**Acceptance Criteria**
-
-* Entities/VOs: Principal, Credential, Wallet, WalletOwnership, PrincipalChainDefault; ULID ids; enums (risk `low|medium|high`, access `signing|watchOnly`, status `pending|verified|revoked`).
-* Fluent configs enforce:
-
-  * Credential unique `(provider, issuer, subject)`.
-  * Wallet unique `(chain_id, address)`.
-  * WalletOwnership unique `(principal_id, wallet_id)` **and** **partial unique** for one **verified & signing** owner per wallet.
-  * PrincipalChainDefault composite key `(principal_id, chain_id)` with FK to a **verified & signing** wallet.
-  * `updated_at` concurrency tokens on write tables.
-* ETag fingerprint implemented as compiled query combining principal/ownership/default timestamps; returns hex string.
-* Initial migration generated and applied locally (dev/test) via EF migrations.
-
-**Integration Verification**
-
-* IV1: Namespacing confined to Identity; no collisions.
-* IV2: Constraint tests (Testcontainers) validate uniqueness + partial-unique.
-* IV3: Compiled queries avoid N+1 on hot paths.
+**Business Value**: Enterprise customer confidence and reduced operational risk
 
 ---
 
-#### Story 1.2 — JWT Validation & Rate Limiting Skeleton
+## 👥 User Personas & Use Cases
 
-**As** a platform engineer, **I want** JWT validation (JWKS rotation) and rate-limited API skeleton, **so that** calls are authenticated and `/auth/exchange` is protected from abuse.
+### Primary Persona: Active Trader "Alex"
+**Profile**: Experienced DeFi trader using Axon for rapid decision-making
+**Current Pain**: Chat queries about market conditions feel slow during volatile periods
+**Desired Outcome**: Instant responses to enable split-second trading decisions
+**Business Impact**: High-value user retention and word-of-mouth growth
 
-**Acceptance Criteria**
+### Secondary Persona: Integration Developer "Sam"
+**Profile**: Building custom trading bots on Axon platform
+**Current Pain**: Identity resolution delays impact bot performance
+**Desired Outcome**: Predictable, fast identity resolution for algorithmic trading
+**Business Impact**: Developer ecosystem growth and API usage revenue
 
-* `JwtBearerHandler` + `ConfigurationManager` wired; issuer/audience, signature, expiry, skew enforced; JWKS cache with sensible TTL.
-* ASP.NET Core RateLimiter: `/auth/exchange` at **10 rpm/IP** returning `Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
-* Placeholder endpoints secured: **401** without token; **200** on mock handler with valid token.
-
-**Integration Verification**
-
-* IV1: Global headers/security unaffected for existing modules.
-* IV2: Auth failures logged safely; no secrets.
-* IV3: Limiter overhead negligible at low QPS.
-
----
-
-#### Story 1.3 — Domain Aggregates & Invariants (Unit-Level)
-
-**As** a domain engineer, **I want** aggregates and VOs enforcing invariants, **so that** business rules are explicit and testable without infra.
-
-**Acceptance Criteria**
-
-* Aggregates enforce: one verified & signing owner; verified-first defaults; idempotent link/update semantics; risk tier mapping (product ↔ wire).
-* **No-op guard:** Reapplying the same `riskTier` or the same default **MUST NOT** persist changes (no `updated_at` bump; ETag unchanged).
-* Unit tests cover linking, idempotency, default assignment/change, conflict detection, and no-op behavior.
-
-**Integration Verification**
-
-* IV1: No EF types leak into domain/app layers.
-* IV2: Result pattern for expected failures (no exceptions for control flow).
-* IV3: Branch coverage ≥80% on invariants.
+### Internal Persona: Platform Developer "Jordan"
+**Profile**: Building new features on Axon backend
+**Current Pain**: Confused by multiple identity patterns, slower development
+**Desired Outcome**: Clear, consistent identity patterns across all modules
+**Business Impact**: Faster feature delivery and reduced technical debt
 
 ---
 
-#### Story 1.4 — `/auth/exchange` Command Handler (Create/Resolve & Link)
+## 🔧 Functional Requirements
 
-**As** an application engineer, **I want** a command that validates, normalizes, batch-ensures wallets, links **verified & signing** ownerships, applies defaults, and persists atomically, **so that** `exchange` is safe to retry and enforces invariants.
+### Core Features
 
-**Acceptance Criteria**
+#### F1: **Semantic Identity Clarity** (Epic 4a)
+**Business Requirement**: Eliminate developer confusion and technical debt
+**Functional Specification**:
+- Single, clear identity type (`AxonUserId`) across all modules
+- Zero ambiguity in code about user vs. entity identification
+- Backward compatibility with existing data and APIs
 
-* `ExchangeCredentialCommand` implements sequence with a **single transaction**.
-* Batch `EnsureManyByChainAndAddressAsync` prevents N+1; optional `TouchLastSeenAsync` does not affect ETag.
-* Returns `ExchangeDynamicTokenResponse` with stable counts.
-* **409** on conflicting verified owner; `ApiError { code, message, details:{ chainId,address } }`; never exposes other principal id.
+**Business Value**: Reduced development time and bug frequency
 
-**Integration Verification**
+#### F2: **Progressive Performance Optimization** (Epic 4b)
+**Business Requirement**: Achieve instant identity resolution
+**Functional Specification**:
+- 3-tier caching hierarchy: Request (0ms) → Memory (<1ms) → Database (backup)
+- 95%+ cache hit rate after initial user authentication
+- Graceful degradation to current behavior if caching fails
 
-* IV1: Endpoint isolated under `/auth` and does not impact other APIs.
-* IV2: 409 path validated via partial-unique index in integration tests.
-* IV3: p50/p95 within acceptable dev/test bounds.
+**Business Value**: 50x performance improvement enabling superior UX
 
----
+#### F3: **Unified Identity Integration** (Epic 4c)
+**Business Requirement**: Consistent performance across all user interactions
+**Functional Specification**:
+- All modules (Chat, Identity, future modules) use shared caching
+- Elimination of module-specific identity stubs
+- Consistent async patterns for identity resolution
 
-#### Story 1.5 — `/auth/me` Query + Deterministic ETag
+**Business Value**: Uniform experience and reduced maintenance overhead
 
-**As** a frontend-facing engineer, **I want** `GET /auth/me` to return a snapshot with a deterministic ETag and `If-None-Match` support, **so that** clients rehydrate cheaply.
+### Non-Functional Requirements
 
-**Acceptance Criteria**
+#### Performance
+- **Identity Resolution**: <1ms P95 latency for cached lookups
+- **Cache Hit Rate**: >95% after authentication flow
+- **Memory Usage**: <10MB additional memory for caching
+- **Database Load**: 95% reduction in identity-related queries
 
-* `GetMyPrincipalQuery` resolves by credential.
-* DB fingerprint used as ETag; **304** when `If-None-Match` matches.
-* **ETag invariants:** ETag changes only on (a) riskTier change, (b) **verified & signing** ownership add/remove, (c) chain default change.
-* Pending-only ownership changes, `last_seen` touches, and no-op writes **DO NOT** change ETag.
-* **404** MAY be returned if no Principal exists yet (pre-exchange).
+#### Reliability
+- **Availability**: 99.9% uptime maintained during implementation
+- **Rollback Time**: <5 minutes to revert any changes
+- **Data Integrity**: Zero data loss or corruption risk
+- **Backward Compatibility**: 100% API compatibility preserved
 
-**Integration Verification**
-
-* IV1: ETag changes only on specified events.
-* IV2: Cache-Control set to `private, max-age=0, must-revalidate`.
-* IV3: No sensitive data leakage.
-
----
-
-#### Story 1.6 — Error Mapping, Privacy, and API Docs
-
-**As** a developer advocate, **I want** canonical error mapping and documented schemas, **so that** clients integrate quickly and safely.
-
-**Acceptance Criteria**
-
-* Map: `400/401/409/422/429/500` to `ApiError` envelopes.
-* **409** excludes owner principal id; includes only `{ chainId, address }`.
-* Swagger & Scalar serve OpenAPI with `bearerAuth` and examples.
-
-**Integration Verification**
-
-* IV1: API discovery unaffected for other modules.
-* IV2: Contract tests confirm error envelopes & enums.
-* IV3: Security headers preserved.
+#### Scalability
+- **Concurrent Users**: Support 1,000+ simultaneous users
+- **Peak Load**: Handle 10x traffic spikes without degradation
+- **Memory Efficiency**: Bounded cache size with intelligent eviction
+- **Horizontal Scaling**: Prepared for future multi-instance deployment
 
 ---
 
-#### Story 1.7 — Observability & Audit Events
+## 📊 Success Metrics
 
-**As** an SRE-minded engineer, **I want** OTel tracing/metrics/logging and structured audit events, **so that** we can operate and investigate the service.
+### Before vs After Performance
 
-**Acceptance Criteria**
+| Metric | Current State | Target State | Improvement |
+|--------|---------------|--------------|------------|
+| **Identity Resolution** | 50ms database lookup | <1ms cached lookup | 50x faster |
+| **Chat Response Time** | 200ms+ end-to-end | <100ms end-to-end | 2x faster |
+| **Database Load** | 100% of requests | 5% of requests | 95% reduction |
+| **Developer Clarity** | Multiple ID types | Single `AxonUserId` | Zero confusion |
 
-* Spans across validator → DB; correlation IDs flow end-to-end.
-* Metrics: `exchange_success/failure`, `wallet_conflicts`, `etag_hits/misses`, latency distributions.
-* Audit logs for identity-affecting operations (who/what/when/why) without secrets.
-
-**Integration Verification**
-
-* IV1: OTLP export aligns with the existing collector.
-* IV2: Dashboards created/updated (latency, 401/409/429, DB).
-* IV3: Log volume within budget at expected QPS.
-
----
-
-## 11. Definition of Done (Epic)
-
-* Stories **1.1–1.7** pass ACs and IVs.
-* Invariants enforced at both domain and persistence layers (via code-first configs).
-* `/auth/exchange` and `/auth/me` fully functional, rate-limited, and documented; `/auth/me` 200→304 ETag flow validated by unit/integration tests.
-* OTel metrics/traces/logs and structured audit events live; dashboards/alerts created.
-* No regressions in Axon-Backend services.
+### Key Success Indicators
+1. **User Experience**: Chat feels instant, no perceived delays
+2. **System Scale**: Support 10x users without infrastructure changes
+3. **Developer Velocity**: New developers productive faster
+4. **Performance**: 95%+ cache hit rate after user authentication
 
 ---
 
-## 12. Appendices
+## 🗓️ Implementation Roadmap
 
-### 12.1 Risk Posture Mapping (Product ↔ Wire)
+### Phase 1: Semantic Foundation (Epic 4a)
+**Goal**: Eliminate developer confusion, establish clear naming
+**Implementation**: Rename `AxonId` → `AxonUserId` across 51 files
+**Business Value**: Clear foundation, no more identity type confusion
+**Timeline**: 3 days
 
-* Product terms: `conservative | balanced | aggressive`.
-* **Wire enum:** `low | medium | high`.
-* Mapping: `conservative→low`, `balanced→medium`, `aggressive→high`.
+### Phase 2: Smart Caching (Epic 4b)
+**Goal**: Achieve 50x performance improvement
+**Implementation**: 3-tier caching (Request → Memory → Database)
+**Business Value**: Instant user experience, 95% database load reduction
+**Timeline**: 5 days
 
-### 12.2 Error Code Glossary
+### Phase 3: Platform Integration (Epic 4c)
+**Goal**: Unified performance across all features
+**Implementation**: Integrate Chat module with enhanced identity services
+**Business Value**: Consistent instant experience everywhere
+**Timeline**: 4 days
 
-* `400/401`: Malformed/invalid/expired JWT.
-* `409`: Wallet ownership conflict (no reassignment). Details include only `(chainId, address)`.
-* `422`: Domain rule violation (non-conflict).
-* `429`: Too many requests (rate limit); includes retry headers.
-* `500`: Unexpected error.
-
-### 12.3 ETag Fingerprint (Concept)
-
-* Deterministic hash over: `principal.updated_at` + **max of active verified & signing** `wallet_ownership.updated_at` + max of `principal_chain_default.updated_at`.
-* Pure reads, `last_seen` touches, **pending-only ownership changes**, and **no-op writes** **must not** change the ETag.
-
-### 12.4 Test Strategy (Unit/Integration)
-
-* **Unit:** Domain invariants; handler idempotency; error mapping; risk tier mapping; **no-op write guards**.
-* **Integration:** EF + Postgres (Testcontainers); unique + partial-unique index behavior; JWKS validation; `/auth/me` ETag 200→304; rate limiter headers; **pending-only change does not alter ETag**.
+### Total Timeline: 12 days
+**Progressive Value**: Each phase delivers independent business value while building toward complete solution.
 
 ---
 
-**End of PRD**
+## 🚨 Risk Management
+
+### Primary Risks & Mitigations
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **Cache memory pressure** | System stability | Built-in memory limits and intelligent eviction |
+| **Performance doesn't improve UX** | User satisfaction | Phased rollout with user feedback |
+| **Integration complexity** | Development delays | Incremental integration with rollback capability |
+
+### Rollback Strategy
+Each phase can be independently rolled back within 5 minutes if issues arise. No database schema changes means zero migration risk.
+
+---
+
+## 🏁 Definition of Success
+
+### Must Achieve
+- ✅ 50x performance improvement in identity resolution
+- ✅ Zero breaking changes to existing functionality
+- ✅ 95%+ cache hit rate after user authentication
+- ✅ Clear, consistent identity patterns across platform
+
+### Measures Success
+- **User Experience**: Chat interactions feel instant
+- **System Performance**: Support 10x growth without infrastructure scaling
+- **Developer Productivity**: Clear patterns, faster onboarding
+- **Competitive Position**: Fastest Web3 platform for blockchain interactions
+
+---
+
+## 📝 Summary
+
+This PRD establishes the foundation for transforming Axon from a performance-limited platform to the fastest, most scalable Solana Co-Pilot AI in the market. The 3-phase approach delivers progressive business value while maintaining system stability and zero downtime.
+
+**Next Step**: Proceed with Epic 4a implementation to establish the semantic foundation for performance optimization.

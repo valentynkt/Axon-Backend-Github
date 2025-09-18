@@ -19,7 +19,7 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasColumnType("uuid");
 
         builder.Property(o => o.PrincipalId)
-            .HasConversion(id => id.Value, value => new AxonId(value))
+            .HasConversion(id => id.Value, value => new AxonUserId(value))
             .HasColumnName("principal_id")
             .HasColumnType("uuid")
             .IsRequired();

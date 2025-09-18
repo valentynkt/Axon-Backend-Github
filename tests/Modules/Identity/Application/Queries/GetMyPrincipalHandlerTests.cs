@@ -91,7 +91,7 @@ public class GetMyPrincipalHandlerTests
                 TestProviderType, TestIssuer, TestSubject, Arg.Any<CancellationToken>());
 
             await _principalRepository.DidNotReceive().GetPrincipalFingerprintAsync(
-                Arg.Any<AxonId>(), Arg.Any<CancellationToken>());
+                Arg.Any<AxonUserId>(), Arg.Any<CancellationToken>());
         }
     }
 
@@ -237,7 +237,7 @@ public class GetMyPrincipalHandlerTests
             var userResult = result.Value;
 
             userResult.ShouldSatisfyAllConditions(
-                r => r.Profile.AxonId.ShouldBe(principal.Id.Value.ToString()),
+                r => r.Profile.AxonUserId.ShouldBe(principal.Id.Value.ToString()),
                 r => r.Profile.Subject.ShouldBe(TestSubject),
                 r => r.Profile.RiskTier.ShouldBe("low"),
                 r => r.ETag.ShouldBe(etag),
@@ -247,7 +247,7 @@ public class GetMyPrincipalHandlerTests
         }
 
         [Test]
-        public async Task Handle_WithValidPrincipal_Should_ReturnDifferentSubjectAndAxonId()
+        public async Task Handle_WithValidPrincipal_Should_ReturnDifferentSubjectAndAxonUserId()
         {
             // Arrange
             var principal = CreateTestPrincipalWithOwnerships();
@@ -263,10 +263,10 @@ public class GetMyPrincipalHandlerTests
             result.IsSuccess.ShouldBeTrue();
             var userResult = result.Value;
 
-            // Verify that Subject and AxonId are different values
+            // Verify that Subject and AxonUserId are different values
             userResult.Profile.Subject.ShouldBe(TestSubject);
-            userResult.Profile.AxonId.ShouldBe(principal.Id.Value.ToString());
-            userResult.Profile.Subject.ShouldNotBe(userResult.Profile.AxonId);
+            userResult.Profile.AxonUserId.ShouldBe(principal.Id.Value.ToString());
+            userResult.Profile.Subject.ShouldNotBe(userResult.Profile.AxonUserId);
         }
 
         [Test]

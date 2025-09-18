@@ -41,7 +41,7 @@ public class DomainSecurityTests
             
             // Verify no sensitive information is exposed
             errorMessage.ShouldNotContain(_principal.Id.Value.ToString());
-            errorMessage.ShouldNotContain("AxonId");
+            errorMessage.ShouldNotContain("AxonUserId");
             errorCode.ShouldNotBeNull();
             errorCode.ShouldBe(IdentityDomainErrors.Wallet.NotOwnedByPrincipalCode);
         }
@@ -112,7 +112,7 @@ public class DomainSecurityTests
         {
             // Arrange - Given operations that will fail
             var sensitiveWalletId = WalletId.New();
-            var sensitivePrincipalId = AxonId.New();
+            var sensitivePrincipalId = AxonUserId.New();
 
             // Act - When operations fail
             var results = new[]
@@ -133,7 +133,7 @@ public class DomainSecurityTests
                 errorMessage.ShouldNotMatch(@"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
                 
                 // Should not contain sensitive keywords
-                errorMessage.ShouldNotContain("axonid");
+                errorMessage.ShouldNotContain("AxonUserId");
                 errorMessage.ShouldNotContain("walletid");
                 errorMessage.ShouldNotContain("principal");
                 errorMessage.ShouldNotContain("guid");
@@ -287,7 +287,7 @@ public class DomainSecurityTests
             _principal.GetDefaultWalletForChain("solana-mainnet").ShouldBe(_walletId);
             
             // No corruption of IDs
-            _principal.Id.ShouldNotBe(default(AxonId));
+            _principal.Id.ShouldNotBe(default(AxonUserId));
             _walletId.ShouldNotBe(default(WalletId));
         }
 

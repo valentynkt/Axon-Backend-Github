@@ -33,7 +33,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
 
         // Assert
         principal.ShouldNotBeNull();
-        principal.Id.ShouldNotBe(default(AxonId));
+        principal.Id.ShouldNotBe(default(AxonUserId));
         principal.Type.ShouldBe(type);
         principal.RiskTier.ShouldBe(RiskTier.Low);
         principal.Credentials.ShouldBeEmpty();

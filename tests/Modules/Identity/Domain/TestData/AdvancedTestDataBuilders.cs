@@ -21,7 +21,7 @@ public static class AdvancedTestDataBuilders
     /// </summary>
     public class AxonPrincipalBuilder
     {
-        private AxonId? _id;
+        private AxonUserId? _id;
         private PrincipalType _type = PrincipalType.Human;
         private RiskTier _riskTier = RiskTier.Low;
         private readonly List<IdentityCredential> _credentials = new();
@@ -30,7 +30,7 @@ public static class AdvancedTestDataBuilders
 
         public static AxonPrincipalBuilder Create() => new();
 
-        public AxonPrincipalBuilder WithId(AxonId id)
+        public AxonPrincipalBuilder WithId(AxonUserId id)
         {
             _id = id;
             return this;
@@ -56,7 +56,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithDynamicCredential(string issuer = "app.dynamicauth.com/test-env", string subject = "test-user-123")
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var credential = IdentityCredential.Create(principalId, "dynamic", issuer, subject);
             _credentials.Add(credential);
             return this;
@@ -64,7 +64,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithGitHubCredential(string username = "testuser")
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var credential = IdentityCredential.Create(principalId, "github", "github.com", username);
             _credentials.Add(credential);
             return this;
@@ -72,7 +72,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithCustomCredential(string provider, string issuer, string subject)
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var credential = IdentityCredential.Create(principalId, provider, issuer, subject);
             _credentials.Add(credential);
             return this;
@@ -80,7 +80,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithVerifiedEthereumWallet()
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var walletId = WalletId.New();
             var ownership = WalletOwnership.Create(principalId, walletId, AccessMode.Signing, OwnershipStatus.Verified);
             _ownerships.Add(ownership);
@@ -89,7 +89,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithPendingSolanaWallet()
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var walletId = WalletId.New();
             var ownership = WalletOwnership.Create(principalId, walletId, AccessMode.Signing, OwnershipStatus.Pending);
             _ownerships.Add(ownership);
@@ -98,7 +98,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithWatchOnlyWallet(WalletId? walletId = null)
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var effectiveWalletId = walletId ?? WalletId.New();
             var ownership = WalletOwnership.Create(principalId, effectiveWalletId, AccessMode.WatchOnly, OwnershipStatus.Verified);
             _ownerships.Add(ownership);
@@ -107,7 +107,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithCustomOwnership(WalletId walletId, AccessMode accessMode, OwnershipStatus status)
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var ownership = WalletOwnership.Create(principalId, walletId, accessMode, status);
             _ownerships.Add(ownership);
             return this;
@@ -115,7 +115,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipalBuilder WithChainDefault(string chainId, WalletId? walletId = null)
         {
-            var principalId = _id ?? AxonId.New();
+            var principalId = _id ?? AxonUserId.New();
             var effectiveWalletId = walletId ?? _ownerships.FirstOrDefault()?.WalletId ?? WalletId.New();
             var chainDefault = PrincipalChainDefault.Create(principalId, chainId, effectiveWalletId);
             _chainDefaults.Add(chainDefault);
@@ -133,7 +133,7 @@ public static class AdvancedTestDataBuilders
 
         public AxonPrincipal Build()
         {
-            var effectiveId = _id ?? AxonId.New();
+            var effectiveId = _id ?? AxonUserId.New();
 
             var principal = _type switch
             {

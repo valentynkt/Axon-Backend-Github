@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
-public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincipal, AxonId>, IAxonPrincipalWriteRepository
+public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincipal, AxonUserId>, IAxonPrincipalWriteRepository
 {
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
@@ -31,7 +31,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
             .Include(p => p.PrincipalChainDefaults);
     }
 
-    public override async Task<AxonPrincipal?> GetByIdAsync(AxonId id, CancellationToken ct = default)
+    public override async Task<AxonPrincipal?> GetByIdAsync(AxonUserId id, CancellationToken ct = default)
     {
         return await GetPrincipalWithIncludes()
             .FirstOrDefaultAsync(p => p.Id == id, ct);

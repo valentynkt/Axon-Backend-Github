@@ -53,7 +53,7 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
     /// Excludes soft-deleted principals and ownerships.
     /// </summary>
     Task<AxonPrincipal?> GetByIdWithActiveOwnershipsAsync(
-        AxonId axonId,
+        AxonUserId AxonUserId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -72,7 +72,7 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
     /// Used for efficient cache validation with If-None-Match header.
     /// </summary>
     Task<string> GetPrincipalFingerprintAsync(
-        AxonId principalId,
+        AxonUserId principalId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

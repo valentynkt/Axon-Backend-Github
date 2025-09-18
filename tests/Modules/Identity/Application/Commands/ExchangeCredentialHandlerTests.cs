@@ -131,7 +131,7 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeTrue();
-        result.Value.AxonId.Value.ShouldNotBe(Guid.Empty);
+        result.Value.AxonUserId.Value.ShouldNotBe(Guid.Empty);
 
         await _principalRepository.Received(1)
             .AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
@@ -164,7 +164,7 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse();
-        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
 
         await _principalRepository.Received(1)
             .UpdateAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
@@ -472,7 +472,7 @@ public class ExchangeCredentialHandlerTests
         // Assert: Same principal returned, not a new one
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse();
-        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
 
         // Verify wallet ownership relationships are correct
         await _principalRepository.Received().FindVerifiedSigningOwnersAsync(
@@ -524,7 +524,7 @@ public class ExchangeCredentialHandlerTests
         // Assert: Principal resolved and credential added
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse();
-        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
 
         // Verify credential count increased by 1
         existingPrincipal.Credentials.Count.ShouldBe(initialCredentialCount + 1);
@@ -628,7 +628,7 @@ public class ExchangeCredentialHandlerTests
         // Assert: Existing principal found via credential fallback
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse();
-        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
 
         // Verify both wallet-first and credential fallback were attempted
         await _principalRepository.Received(2) // Called twice: once for wallet-first resolution, once for wallet processing
@@ -668,7 +668,7 @@ public class ExchangeCredentialHandlerTests
         // Assert: New principal created
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeTrue();
-        result.Value.AxonId.Value.ShouldNotBe(Guid.Empty);
+        result.Value.AxonUserId.Value.ShouldNotBe(Guid.Empty);
 
         // Verify both lookups were attempted before creating new
         await _principalRepository.Received(2) // Called twice: once for wallet-first resolution, once for wallet processing
@@ -709,7 +709,7 @@ public class ExchangeCredentialHandlerTests
         // Assert: Success without attempting to add duplicate credential
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse();
-        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
 
         // Should not check if credential is taken (idempotency skip)
         await _principalRepository.DidNotReceive()
@@ -868,7 +868,7 @@ public class ExchangeCredentialHandlerTests
         // Assert: Verify operation succeeded
         result.IsSuccess.ShouldBeTrue();
         result.Value.Created.ShouldBeFalse(); // Existing principal
-        result.Value.AxonId.ShouldBe(existingPrincipal.Id);
+        result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
         result.Value.DefaultsApplied.ShouldBe(2); // 2 chains should have defaults applied
         result.Value.WalletsLinked.ShouldBe(2);
 

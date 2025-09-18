@@ -45,7 +45,7 @@ public abstract class IdentityTestBase
     /// <summary>
     /// Creates a principal with specified type and optional custom ID.
     /// </summary>
-    protected static AxonPrincipal CreatePrincipal(PrincipalType type = PrincipalType.Human, AxonId? customId = null)
+    protected static AxonPrincipal CreatePrincipal(PrincipalType type = PrincipalType.Human, AxonUserId? customId = null)
     {
         return type switch
         {
@@ -115,13 +115,13 @@ public abstract class IdentityTestBase
     /// Creates wallet ownership with specified parameters.
     /// </summary>
     protected WalletOwnership CreateOwnership(
-        AxonId? principalId = null,
+        AxonUserId? principalId = null,
         WalletId? walletId = null,
         AccessMode accessMode = AccessMode.Signing,
         OwnershipStatus status = OwnershipStatus.Verified)
     {
         return WalletOwnership.Create(
-            principalId ?? DefaultPrincipal?.Id ?? AxonId.New(),
+            principalId ?? DefaultPrincipal?.Id ?? AxonUserId.New(),
             walletId ?? DefaultWalletId,
             accessMode,
             status);
@@ -153,14 +153,14 @@ public abstract class IdentityTestBase
     /// Creates an identity credential with test defaults.
     /// </summary>
     protected static IdentityCredential CreateCredential(
-        AxonId? principalId = null,
+        AxonUserId? principalId = null,
         string provider = "dynamic",
         string issuer = "test-issuer",
         string subject = "test-subject",
         DateTime? timestamp = null)
     {
         return IdentityCredential.Create(
-            principalId ?? AxonId.New(),
+            principalId ?? AxonUserId.New(),
             provider,
             issuer,
             subject,
@@ -201,7 +201,7 @@ public abstract class IdentityTestBase
         Assert.Multiple(() =>
         {
             Assert.That(principal, Is.Not.Null);
-            Assert.That(principal.Id, Is.Not.EqualTo(default(AxonId)));
+            Assert.That(principal.Id, Is.Not.EqualTo(default(AxonUserId)));
             Assert.That(principal.Type, Is.EqualTo(expectedType));
             Assert.That(principal.RiskTier, Is.EqualTo(RiskTier.Low));
             Assert.That(principal.Credentials, Is.Empty);

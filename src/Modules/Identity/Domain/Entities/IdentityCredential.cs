@@ -7,7 +7,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// </summary>
 public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCredentialId>
 {
-    public AxonId PrincipalId { get; private set; }
+    public AxonUserId PrincipalId { get; private set; }
     public string Provider { get; private set; } = string.Empty;
     public string Issuer { get; private set; } = string.Empty;
     public string Subject { get; private set; } = string.Empty;
@@ -16,7 +16,7 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
     // EF Core constructor
     private IdentityCredential() { }
 
-    private IdentityCredential(IdentityCredentialId id, AxonId principalId, string provider, string issuer, string subject, DateTime timestamp) : base(id)
+    private IdentityCredential(IdentityCredentialId id, AxonUserId principalId, string provider, string issuer, string subject, DateTime timestamp) : base(id)
     {
         PrincipalId = principalId;
         Provider = provider;
@@ -25,7 +25,7 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
         LastSeenAt = timestamp;
     }
 
-    public static IdentityCredential Create(AxonId principalId, string provider, string issuer, string subject, DateTime? timestamp = null)
+    public static IdentityCredential Create(AxonUserId principalId, string provider, string issuer, string subject, DateTime? timestamp = null)
     {
         var effectiveTimestamp = timestamp ?? DateTime.UtcNow;
         return new IdentityCredential(IdentityCredentialId.New(), principalId, provider, issuer, subject, effectiveTimestamp);

@@ -21,7 +21,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_WithValidParameters_Should_CreateDefaultWithCorrectProperties()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
@@ -43,7 +43,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_ShouldGenerateVersion7Guid()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
@@ -61,7 +61,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_ShouldGenerateUniqueIds()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
@@ -83,7 +83,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_WithDifferentChainIds_Should_AcceptAllValidChains(string chainId)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -97,7 +97,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_WithEmptyChainId_Should_AllowEmptyValue()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "";
             var walletId = WalletId.New();
 
@@ -114,8 +114,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             // Different principals can have the same wallet as default for the same chain
             // This might represent shared wallets or multi-sig scenarios
             // Arrange
-            var principalId1 = AxonId.New();
-            var principalId2 = AxonId.New();
+            var principalId1 = AxonUserId.New();
+            var principalId2 = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
@@ -142,7 +142,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void UpdateWallet_WithNewWalletId_Should_UpdateWalletId()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var originalWalletId = WalletId.New();
             var newWalletId = WalletId.New();
@@ -162,7 +162,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void UpdateWallet_WithSameWalletId_Should_AllowIdempotentUpdate()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
@@ -179,7 +179,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void UpdateWallet_MultipleUpdates_Should_KeepLatestValue()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var originalWalletId = WalletId.New();
             var walletId1 = WalletId.New();
@@ -201,7 +201,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void UpdateWallet_Should_NotAffectOtherProperties()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var originalWalletId = WalletId.New();
             var newWalletId = WalletId.New();
@@ -237,7 +237,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_WithSpecialCharactersInChainId_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "test-chain-123_special.chars@domain";
             var walletId = WalletId.New();
 
@@ -252,7 +252,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_WithUnicodeChainId_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "测试链-🚀";
             var walletId = WalletId.New();
 
@@ -267,7 +267,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void Create_WithVeryLongChainId_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = new string('a', 1000);
             var walletId = WalletId.New();
 
@@ -283,7 +283,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         {
             // This test simulates concurrent updates to verify behavior
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var originalWalletId = WalletId.New();
             var chainDefault = PrincipalChainDefault.Create(principalId, chainId, originalWalletId);
@@ -326,7 +326,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             foreach (var chainId in testnetChains)
             {
                 // Arrange
-                var principalId = AxonId.New();
+                var principalId = AxonUserId.New();
                 var walletId = WalletId.New();
 
                 // Act
@@ -351,7 +351,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             // Even with same principal and chain, they are different entities with different IDs
             // This represents the case where defaults might be updated over time
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId1 = WalletId.New();
             var walletId2 = WalletId.New();
@@ -372,8 +372,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void ChainDefaults_WithDifferentPrincipals_Should_BeDifferentEntities()
         {
             // Arrange
-            var principalId1 = AxonId.New();
-            var principalId2 = AxonId.New();
+            var principalId1 = AxonUserId.New();
+            var principalId2 = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
@@ -390,7 +390,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void ChainDefaults_WithDifferentChains_Should_BeDifferentEntities()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -414,7 +414,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void PrincipalChainDefault_Should_InheritFromAuditableDeletableEntity()
         {
             // Arrange & Act
-            var chainDefault = PrincipalChainDefault.Create(AxonId.New(), "ethereum-mainnet", WalletId.New());
+            var chainDefault = PrincipalChainDefault.Create(AxonUserId.New(), "ethereum-mainnet", WalletId.New());
 
             // Assert - Verify auditable properties are available
             var now = DateTimeOffset.UtcNow;
@@ -430,7 +430,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void PrincipalChainDefault_Should_UseGuidAsId()
         {
             // Arrange & Act
-            var chainDefault = PrincipalChainDefault.Create(AxonId.New(), "ethereum-mainnet", WalletId.New());
+            var chainDefault = PrincipalChainDefault.Create(AxonUserId.New(), "ethereum-mainnet", WalletId.New());
 
             // Assert
             chainDefault.Id.ShouldBeOfType<Guid>();
@@ -452,7 +452,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             // then later changes to a different wallet
 
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var initialWalletId = WalletId.New();
             var newWalletId = WalletId.New();
@@ -478,7 +478,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             // Scenario: A principal has default wallets for multiple chains
 
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var ethereumWalletId = WalletId.New();
             var polygonWalletId = WalletId.New();
             var solanaWalletId = WalletId.New();

@@ -10,7 +10,7 @@ public sealed partial class Wallet
     /// <summary>
     /// Gets the current owner ID of the wallet.
     /// </summary>
-    public AxonId? CurrentOwnerId => _currentOwnerId;
+    public AxonUserId? CurrentOwnerId => _currentOwnerId;
 
     /// <summary>
     /// Gets the current access mode of the wallet ownership.
@@ -46,7 +46,7 @@ public sealed partial class Wallet
     /// <summary>
     /// Checks if the wallet is currently owned by a specific principal.
     /// </summary>
-    public bool IsOwnedBy(AxonId principalId)
+    public bool IsOwnedBy(AxonUserId principalId)
     {
         return _currentOwnerId == principalId;
     }
@@ -100,7 +100,7 @@ public sealed partial class Wallet
     /// <summary>
     /// Validates if the wallet can be set as a default for a principal.
     /// </summary>
-    public bool CanBeSetAsDefault(AxonId principalId)
+    public bool CanBeSetAsDefault(AxonUserId principalId)
     {
         return IsOwnedBy(principalId) && HasVerifiedSigningOwnership();
     }

@@ -27,12 +27,12 @@ public abstract class BaseIdentityCommandHandler<TCommand, TResponse> : IRequest
     /// Gets the authenticated user ID from the current user service.
     /// This method assumes authentication has been validated by AuthenticationBehavior.
     /// </summary>
-    /// <returns>The authenticated user's AxonId</returns>
-    protected AxonId GetAuthenticatedAxonId()
+    /// <returns>The authenticated user's AxonUserId</returns>
+    protected AxonUserId GetAuthenticatedAxonUserId()
     {
         // AuthenticationBehavior ensures UserId is not null for authenticated requests
         var userIdString = _currentUserService.UserId!;
-        return new AxonId(Guid.Parse(userIdString));
+        return new AxonUserId(Guid.Parse(userIdString));
     }
 
     /// <summary>

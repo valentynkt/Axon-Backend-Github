@@ -165,7 +165,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
             var accessMode = AccessMode.Signing;
             var status = OwnershipStatus.Verified;
 
@@ -197,7 +197,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
             var accessMode = AccessMode.Signing;
             var status = OwnershipStatus.Verified;
 
@@ -221,7 +221,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> hasConflict =
                 (_, _, _) => Result.Success<bool, Error>(true);
@@ -240,7 +240,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> errorCheck =
                 (_, _, _) => Result.Failure<bool, Error>(Error.Failure("Database error", "DB_ERROR"));
@@ -258,7 +258,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             // Mock that would fail if called for signing access
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> conflictCheck =
@@ -278,7 +278,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             // Mock that would fail if called for verified signing
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> conflictCheck =
@@ -299,7 +299,7 @@ public class WalletTests : IdentityTestBase
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-5);
             var wallet = CreateWallet(timestamp: initialTimestamp);
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -325,7 +325,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -355,8 +355,8 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var actualOwnerId = AxonId.New();
-            var wrongOwnerId = AxonId.New();
+            var actualOwnerId = AxonUserId.New();
+            var wrongOwnerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -376,7 +376,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             // Act
             var result = wallet.UnlinkFromOwner(ownerId);
@@ -392,7 +392,7 @@ public class WalletTests : IdentityTestBase
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-5);
             var wallet = CreateWallet(timestamp: initialTimestamp);
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -420,7 +420,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -463,7 +463,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -487,7 +487,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -514,7 +514,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -557,7 +557,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);
@@ -580,7 +580,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var wallet = CreateWallet();
-            var ownerId = AxonId.New();
+            var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
                 (_, _, _) => Result.Success<bool, Error>(false);

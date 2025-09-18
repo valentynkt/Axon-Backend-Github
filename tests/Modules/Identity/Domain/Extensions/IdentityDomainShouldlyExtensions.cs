@@ -221,7 +221,7 @@ public static class IdentityDomainShouldlyExtensions
     public static AxonPrincipal ShouldBeValidPrincipal(this AxonPrincipal principal, PrincipalType expectedType, RiskTier expectedRiskTier = RiskTier.Low)
     {
         principal.ShouldNotBeNull("Principal should not be null");
-        principal.Id.ShouldNotBe(default(AxonId), "Principal should have a valid ID");
+        principal.Id.ShouldNotBe(default(AxonUserId), "Principal should have a valid ID");
         principal.Type.ShouldBe(expectedType, $"Principal type should be {expectedType}");
         principal.RiskTier.ShouldBe(expectedRiskTier, $"Principal risk tier should be {expectedRiskTier}");
         return principal;
@@ -345,7 +345,7 @@ public static class IdentityDomainShouldlyExtensions
     /// Asserts that a WalletOwnership has the expected properties.
     /// </summary>
     public static WalletOwnership ShouldBeValidOwnership(this WalletOwnership ownership, 
-        AxonId expectedPrincipalId, WalletId expectedWalletId, 
+        AxonUserId expectedPrincipalId, WalletId expectedWalletId, 
         AccessMode expectedMode, OwnershipStatus expectedStatus)
     {
         ownership.ShouldNotBeNull("Ownership should not be null");

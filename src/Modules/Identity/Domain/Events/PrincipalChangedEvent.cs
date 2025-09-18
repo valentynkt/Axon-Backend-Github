@@ -9,14 +9,14 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record PrincipalChangedEvent : DomainEvent
 {
-    public AxonId PrincipalId { get; init; }
+    public AxonUserId PrincipalId { get; init; }
     public string PropertyChanged { get; init; }
     public string? OldValue { get; init; }
     public string? NewValue { get; init; }
     public Dictionary<string, string>? Metadata { get; init; }
 
     public PrincipalChangedEvent(
-        AxonId principalId,
+        AxonUserId principalId,
         string propertyChanged,
         string? oldValue = null,
         string? newValue = null,

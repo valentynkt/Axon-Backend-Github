@@ -9,7 +9,7 @@ namespace Axon.Modules.Identity.Domain.Events;
 /// </summary>
 public sealed record OwnershipChangedEvent : DomainEvent
 {
-    public AxonId PrincipalId { get; init; }
+    public AxonUserId PrincipalId { get; init; }
     public WalletId WalletId { get; init; }
     public string ChangeType { get; init; } // "linked", "removed", "verified", "access_mode_updated", "status_updated"
     public string? AccessMode { get; init; }
@@ -17,7 +17,7 @@ public sealed record OwnershipChangedEvent : DomainEvent
     public Dictionary<string, string>? Metadata { get; init; }
 
     public OwnershipChangedEvent(
-        AxonId principalId,
+        AxonUserId principalId,
         WalletId walletId,
         string changeType,
         string? accessMode = null,

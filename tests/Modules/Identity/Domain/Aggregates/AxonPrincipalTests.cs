@@ -45,7 +45,7 @@ public class AxonPrincipalTests : IdentityTestBase
         public void CreateHuman_WithCustomId_Should_UseProvidedId()
         {
             // Arrange
-            var customId = AxonId.New();
+            var customId = AxonUserId.New();
 
             // Act
             var principal = AxonPrincipal.CreateHuman(customId);
@@ -80,7 +80,7 @@ public class AxonPrincipalTests : IdentityTestBase
         public void CreateService_WithCustomId_Should_UseProvidedId()
         {
             // Arrange
-            var customId = AxonId.New();
+            var customId = AxonUserId.New();
 
             // Act
             var principal = AxonPrincipal.CreateService(customId);
@@ -128,7 +128,7 @@ public class AxonPrincipalTests : IdentityTestBase
         public void CreateWithDynamicCredential_WithCustomId_Should_UseProvidedId()
         {
             // Arrange
-            var customId = AxonId.New();
+            var customId = AxonUserId.New();
             var providerType = ProviderType.Create("dynamic").Value;
             var issuer = "test-issuer";
             var subject = "test-subject";

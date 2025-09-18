@@ -21,7 +21,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_WithValidParameters_Should_CreateCredentialWithCorrectProperties()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var provider = "dynamic";
             var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
@@ -48,7 +48,7 @@ public class IdentityCredentialTests : IdentityTestBase
         {
             // Arrange
             var beforeCreation = DateTime.UtcNow;
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var provider = "dynamic";
             var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
@@ -66,7 +66,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_ShouldGenerateUniqueIds()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var provider = "dynamic";
             var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
@@ -87,7 +87,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_WithDifferentProviders_Should_AcceptAllValidProviders(string provider)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var issuer = $"{provider}:test-env";
             var subject = "test-user-123";
 
@@ -102,7 +102,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_WithEmptyStrings_Should_AllowEmptyValues()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
 
             // Act
             var credential = IdentityCredential.Create(principalId, "", "", "");
@@ -129,7 +129,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-10);
             var credential = IdentityCredential.Create(
-                AxonId.New(), "dynamic", "issuer", "subject", initialTimestamp);
+                AxonUserId.New(), "dynamic", "issuer", "subject", initialTimestamp);
             var newerTimestamp = DateTime.UtcNow;
 
             // Act
@@ -145,7 +145,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var recentTimestamp = DateTime.UtcNow;
             var credential = IdentityCredential.Create(
-                AxonId.New(), "dynamic", "issuer", "subject", recentTimestamp);
+                AxonUserId.New(), "dynamic", "issuer", "subject", recentTimestamp);
             var olderTimestamp = recentTimestamp.AddMinutes(-5);
 
             // Act
@@ -161,7 +161,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var timestamp = DateTime.UtcNow;
             var credential = IdentityCredential.Create(
-                AxonId.New(), "dynamic", "issuer", "subject", timestamp);
+                AxonUserId.New(), "dynamic", "issuer", "subject", timestamp);
 
             // Act
             credential.UpdateLastSeen(timestamp);
@@ -175,7 +175,7 @@ public class IdentityCredentialTests : IdentityTestBase
         {
             // Arrange
             var credential = IdentityCredential.Create(
-                AxonId.New(), "dynamic", "issuer", "subject");
+                AxonUserId.New(), "dynamic", "issuer", "subject");
 
             // Act
             credential.UpdateLastSeen(DateTime.MaxValue);
@@ -190,7 +190,7 @@ public class IdentityCredentialTests : IdentityTestBase
             // Arrange
             var baseTime = DateTime.UtcNow;
             var credential = IdentityCredential.Create(
-                AxonId.New(), "dynamic", "issuer", "subject", baseTime);
+                AxonUserId.New(), "dynamic", "issuer", "subject", baseTime);
 
             var time1 = baseTime.AddMinutes(1);
             var time2 = baseTime.AddMinutes(2);
@@ -217,8 +217,8 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Credentials_WithSameProviderIssuerSubject_Should_BeConsideredEquivalent()
         {
             // Arrange
-            var principalId1 = AxonId.New();
-            var principalId2 = AxonId.New();
+            var principalId1 = AxonUserId.New();
+            var principalId2 = AxonUserId.New();
             var provider = "dynamic";
             var issuer = "app.dynamicauth.com/test-env";
             var subject = "test-user-123";
@@ -243,7 +243,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Credentials_WithDifferentSubjects_Should_BeDifferent()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var provider = "dynamic";
             var issuer = "app.dynamicauth.com/test-env";
 
@@ -267,7 +267,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_WithVeryLongStrings_Should_HandleLargeValues()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var longString = new string('a', 1000);
 
             // Act
@@ -285,7 +285,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_WithSpecialCharacters_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var specialChars = "!@#$%^&*()_+-=[]{}|;:,.<>?/~`";
 
             // Act
@@ -303,7 +303,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void Create_WithUnicodeCharacters_Should_HandleCorrectly()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var unicode = "测试用户🚀💯";
 
             // Act
@@ -322,7 +322,7 @@ public class IdentityCredentialTests : IdentityTestBase
         {
             // This test simulates concurrent updates to verify thread safety logic
             // Arrange
-            var credential = IdentityCredential.Create(AxonId.New(), "dynamic", "issuer", "subject");
+            var credential = IdentityCredential.Create(AxonUserId.New(), "dynamic", "issuer", "subject");
             var baseTime = DateTime.UtcNow;
 
             // Act - Simulate concurrent updates with varying timestamps
@@ -359,7 +359,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void IdentityCredential_Should_InheritFromAuditableDeletableEntity()
         {
             // Arrange & Act
-            var credential = IdentityCredential.Create(AxonId.New(), "dynamic", "issuer", "subject");
+            var credential = IdentityCredential.Create(AxonUserId.New(), "dynamic", "issuer", "subject");
 
             // Assert - Verify auditable properties are available
             var now = DateTimeOffset.UtcNow;
@@ -375,7 +375,7 @@ public class IdentityCredentialTests : IdentityTestBase
         public void IdentityCredential_Should_HaveUniquelyTypedId()
         {
             // Arrange & Act
-            var credential = IdentityCredential.Create(AxonId.New(), "dynamic", "issuer", "subject");
+            var credential = IdentityCredential.Create(AxonUserId.New(), "dynamic", "issuer", "subject");
 
             // Assert
             credential.Id.ShouldBeOfType<IdentityCredentialId>();

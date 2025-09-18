@@ -18,7 +18,7 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
             .HasColumnType("uuid");
 
         builder.Property(c => c.PrincipalId)
-            .HasConversion(id => id.Value, value => new AxonId(value))
+            .HasConversion(id => id.Value, value => new AxonUserId(value))
             .HasColumnName("principal_id")
             .HasColumnType("uuid")
             .IsRequired();

@@ -188,7 +188,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         // Step 6: Return stable metrics
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
-            AxonId: principal.Id,
+            AxonUserId: principal.Id,
             Created: isNewPrincipal,
             WalletsProcessed: walletMetrics.Processed,
             WalletsLinked: walletMetrics.Linked,
@@ -223,7 +223,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         await Task.CompletedTask;
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
-            AxonId: default!,
+            AxonUserId: default!,
             Created: false,
             WalletsProcessed: 0,
             WalletsLinked: 0,

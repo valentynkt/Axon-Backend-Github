@@ -23,9 +23,9 @@ public static class TestConstants
     public const string EthereumChain = "ethereum-mainnet";
     
     // Test IDs (generated once, reused)
-    public static readonly AxonId TestPrincipalId = AxonId.New();
-    public static readonly AxonId TestWalletId = AxonId.New();
-    public static readonly AxonId AnotherPrincipalId = AxonId.New();
+    public static readonly AxonUserId TestPrincipalId = AxonUserId.New();
+    public static readonly AxonUserId TestWalletId = AxonUserId.New();
+    public static readonly AxonUserId AnotherPrincipalId = AxonUserId.New();
     
     // Timestamps
     public static readonly DateTimeOffset TestTimestamp = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);

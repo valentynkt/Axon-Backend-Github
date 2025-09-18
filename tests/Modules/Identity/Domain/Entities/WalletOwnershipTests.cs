@@ -24,7 +24,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void Create_WithDefaultParameters_Should_CreatePendingSigningOwnership()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -47,7 +47,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void Create_WithExplicitParameters_Should_UseProvidedValues()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
             var accessMode = AccessMode.WatchOnly;
             var status = OwnershipStatus.Verified;
@@ -70,7 +70,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void Create_WithDifferentAccessModes_Should_AcceptAllValidModes(AccessMode accessMode)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -87,7 +87,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void Create_WithDifferentStatuses_Should_AcceptAllValidStatuses(OwnershipStatus status)
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -101,7 +101,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void Create_ShouldGenerateUniqueIds()
         {
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -124,7 +124,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_FromPendingToVerified_Should_SucceedAndSetTimestamp()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Pending);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Pending);
             var beforeUpdate = DateTime.UtcNow;
 
             // Act
@@ -144,7 +144,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_FromPendingToRevoked_Should_SucceedAndSetTimestamp()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Pending);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Pending);
             var beforeUpdate = DateTime.UtcNow;
 
             // Act
@@ -163,7 +163,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_FromVerifiedToRevoked_Should_SucceedAndUpdateTimestamp()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Verified);
             var beforeUpdate = DateTime.UtcNow;
 
             // Act
@@ -182,7 +182,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_FromRevokedToVerified_Should_SucceedAndClearRevokedTimestamp()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Revoked);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Revoked);
             var beforeUpdate = DateTime.UtcNow;
 
             // Act
@@ -202,7 +202,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_WithSameStatus_Should_BeIdempotent()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Verified);
             var originalVerifiedAt = ownership.VerifiedAt;
 
             // Act
@@ -222,7 +222,7 @@ public class WalletOwnershipTests : IdentityTestBase
             // All transitions are currently allowed, but this tests the framework
 
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Pending);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Pending);
 
             // Act & Assert - All transitions should succeed based on current business rules
             var pendingToVerified = ownership.UpdateStatus(OwnershipStatus.Verified);
@@ -239,7 +239,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_MultipleTransitions_Should_TrackCorrectly()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Pending);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Pending);
 
             // Act & Assert - Pending -> Verified -> Revoked -> Verified
             ownership.UpdateStatus(OwnershipStatus.Verified);
@@ -268,7 +268,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateAccessMode_WithValidOwnership_Should_UpdateMode()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
 
             // Act
             var result = ownership.UpdateAccessMode(AccessMode.WatchOnly);
@@ -282,7 +282,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateAccessMode_WithRevokedOwnership_Should_ReturnFailure()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Revoked);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Revoked);
 
             // Act
             var result = ownership.UpdateAccessMode(AccessMode.WatchOnly);
@@ -297,7 +297,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateAccessMode_WithSameMode_Should_BeIdempotent()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
 
             // Act
             var result = ownership.UpdateAccessMode(AccessMode.Signing);
@@ -313,7 +313,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateAccessMode_WithNonRevokedStatus_Should_AllowUpdate(OwnershipStatus status)
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, status);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, status);
 
             // Act
             var result = ownership.UpdateAccessMode(AccessMode.WatchOnly);
@@ -327,7 +327,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateAccessMode_FromWatchOnlyToSigning_Should_Succeed()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.WatchOnly, OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.WatchOnly, OwnershipStatus.Verified);
 
             // Act
             var result = ownership.UpdateAccessMode(AccessMode.Signing);
@@ -349,7 +349,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void IsVerifiedSigning_WithVerifiedSigningOwnership_Should_ReturnTrue()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
 
             // Act & Assert
             ownership.IsVerifiedSigning.ShouldBeTrue();
@@ -365,7 +365,7 @@ public class WalletOwnershipTests : IdentityTestBase
             AccessMode accessMode, OwnershipStatus status)
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), accessMode, status);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), accessMode, status);
 
             // Act & Assert
             ownership.IsVerifiedSigning.ShouldBeFalse();
@@ -375,7 +375,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void CanBeDefault_WithVerifiedSigningOwnership_Should_ReturnTrue()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
 
             // Act & Assert
             ownership.CanBeDefault.ShouldBeTrue();
@@ -389,7 +389,7 @@ public class WalletOwnershipTests : IdentityTestBase
             AccessMode accessMode, OwnershipStatus status)
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), accessMode, status);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), accessMode, status);
 
             // Act & Assert
             ownership.CanBeDefault.ShouldBeFalse();
@@ -401,7 +401,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void IsActive_WithNonRevokedStatus_Should_ReturnTrue(OwnershipStatus status)
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: status);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: status);
 
             // Act & Assert
             ownership.IsActive.ShouldBeTrue();
@@ -411,7 +411,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void IsActive_WithRevokedStatus_Should_ReturnFalse()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Revoked);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Revoked);
 
             // Act & Assert
             ownership.IsActive.ShouldBeFalse();
@@ -430,7 +430,7 @@ public class WalletOwnershipTests : IdentityTestBase
         {
             // This might be needed for different access modes or historical tracking
             // Arrange
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
             var walletId = WalletId.New();
 
             // Act
@@ -448,7 +448,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateStatus_RapidSuccessiveUpdates_Should_HandleCorrectly()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Pending);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Pending);
 
             // Act - Rapid successive updates
             var result1 = ownership.UpdateStatus(OwnershipStatus.Verified);
@@ -466,7 +466,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void UpdateAccessMode_MultipleUpdates_Should_TrackCorrectly()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
 
             // Act
             var result1 = ownership.UpdateAccessMode(AccessMode.WatchOnly);
@@ -484,7 +484,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void TimestampTracking_Should_BeAccurate()
         {
             // Arrange
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), status: OwnershipStatus.Pending);
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), status: OwnershipStatus.Pending);
 
             // Act - Update to verified, then revoked, then verified again
             var time1 = DateTime.UtcNow;
@@ -524,7 +524,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void WalletOwnership_Should_InheritFromAuditableDeletableEntity()
         {
             // Arrange & Act
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New());
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New());
 
             // Assert - Verify auditable properties are available
             var now = DateTimeOffset.UtcNow;
@@ -540,7 +540,7 @@ public class WalletOwnershipTests : IdentityTestBase
         public void WalletOwnership_Should_HaveUniquelyTypedId()
         {
             // Arrange & Act
-            var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New());
+            var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New());
 
             // Assert
             ownership.Id.ShouldBeOfType<WalletOwnershipId>();

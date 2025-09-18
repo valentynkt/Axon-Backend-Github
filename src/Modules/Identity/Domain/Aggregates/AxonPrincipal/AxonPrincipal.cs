@@ -10,7 +10,7 @@ namespace Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 /// <summary>
 /// AxonPrincipal aggregate root representing a subject (human or service).
 /// </summary>
-public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
+public sealed partial class AxonPrincipal : AggregateRoot<AxonUserId>
 {
     private readonly List<IdentityCredential> _credentials = [];
     private readonly List<WalletOwnership> _walletOwnerships = [];
@@ -26,20 +26,20 @@ public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
     // EF Core constructor
     private AxonPrincipal() { }
 
-    private AxonPrincipal(AxonId id, PrincipalType type) : base(id)
+    private AxonPrincipal(AxonUserId id, PrincipalType type) : base(id)
     {
         Type = type;
         RiskTier = RiskTier.Low;
     }
 
-    public static AxonPrincipal CreateHuman(AxonId? id = null)
+    public static AxonPrincipal CreateHuman(AxonUserId? id = null)
     {
-        return new AxonPrincipal(id ?? AxonId.New(), PrincipalType.Human);
+        return new AxonPrincipal(id ?? AxonUserId.New(), PrincipalType.Human);
     }
 
-    public static AxonPrincipal CreateService(AxonId? id = null)
+    public static AxonPrincipal CreateService(AxonUserId? id = null)
     {
-        return new AxonPrincipal(id ?? AxonId.New(), PrincipalType.Service);
+        return new AxonPrincipal(id ?? AxonUserId.New(), PrincipalType.Service);
     }
 
     /// <summary>
@@ -50,9 +50,9 @@ public sealed partial class AxonPrincipal : AggregateRoot<AxonId>
         ProviderType providerType,
         string issuer,
         string subject,
-        AxonId? id = null)
+        AxonUserId? id = null)
     {
-        var principal = new AxonPrincipal(id ?? AxonId.New(), PrincipalType.Human);
+        var principal = new AxonPrincipal(id ?? AxonUserId.New(), PrincipalType.Human);
 
         // Create Dynamic credential
         var credential = IdentityCredential.Create(

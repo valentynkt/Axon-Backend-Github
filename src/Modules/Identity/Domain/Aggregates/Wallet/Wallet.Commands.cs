@@ -12,7 +12,7 @@ namespace Axon.Modules.Identity.Domain.Aggregates.Wallet;
 /// </summary>
 public sealed partial class Wallet
 {
-    private AxonId? _currentOwnerId;
+    private AxonUserId? _currentOwnerId;
     private AccessMode? _currentAccessMode;
     private OwnershipStatus? _currentOwnershipStatus;
 
@@ -23,7 +23,7 @@ public sealed partial class Wallet
     /// Links the wallet to an owner with validation.
     /// </summary>
     public Result<Unit, Error> LinkToOwner(
-        AxonId ownerId,
+        AxonUserId ownerId,
         AccessMode accessMode,
         OwnershipStatus status,
         Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> checkConflictingOwnershipFunc)
@@ -76,7 +76,7 @@ public sealed partial class Wallet
     /// <summary>
     /// Unlinks the wallet from its current owner.
     /// </summary>
-    public Result<Unit, Error> UnlinkFromOwner(AxonId ownerId)
+    public Result<Unit, Error> UnlinkFromOwner(AxonUserId ownerId)
     {
         if (_currentOwnerId != ownerId)
             return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());

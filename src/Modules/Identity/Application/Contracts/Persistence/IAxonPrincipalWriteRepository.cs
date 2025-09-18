@@ -9,7 +9,7 @@ namespace Axon.Modules.Identity.Application.Contracts.Persistence;
 /// <summary>
 /// Write repository contract for AxonPrincipal aggregate persistence operations.
 /// </summary>
-public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal, AxonId>
+public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal, AxonUserId>
 {
     /// <summary>
     /// Gets the associated unit of work for transaction management.

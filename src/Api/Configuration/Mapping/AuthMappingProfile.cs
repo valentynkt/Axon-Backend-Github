@@ -34,7 +34,7 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
     {
         // ExchangeOutcome -> ExchangeTokenResponseDto
         config.NewConfig<ExchangeOutcome, ExchangeTokenResponseDto>()
-            .Map(dest => dest.AxonId, src => src.AxonId)
+            .Map(dest => dest.AxonUserId, src => src.AxonUserId)
             .Map(dest => dest.WalletsProcessed, src => src.WalletsProcessed)
             .Map(dest => dest.WalletsLinked, src => src.WalletsLinked)
             .Map(dest => dest.DefaultsApplied, src => src.DefaultsApplied)
@@ -44,7 +44,7 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
         // CurrentUserResult -> GetCurrentUserResponseDto
         // Map from new CurrentUserResult structure to existing API contract
         config.NewConfig<CurrentUserResult, GetCurrentUserResponseDto>()
-            .Map(dest => dest.AxonId, src => src.Profile.AxonId)
+            .Map(dest => dest.AxonUserId, src => src.Profile.AxonUserId)
             .Map(dest => dest.Subject, src => src.Profile.Subject) // Use actual subject from JWT
             .Map(dest => dest.IsAuthenticated, src => true) // Always true if we have a result
             .Map(dest => dest.Claims, src => new Dictionary<string, object>

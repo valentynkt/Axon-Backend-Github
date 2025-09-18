@@ -15,7 +15,7 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
         builder.HasKey(p => p.Id);
         
         builder.Property(p => p.Id)
-            .HasConversion(id => id.Value, value => new AxonId(value))
+            .HasConversion(id => id.Value, value => new AxonUserId(value))
             .HasColumnName("id")
             .HasColumnType("uuid");
 

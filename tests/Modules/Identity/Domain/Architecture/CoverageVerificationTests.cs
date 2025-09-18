@@ -103,13 +103,13 @@ public class CoverageVerificationTests
         {
             // Arrange - Given wallet
             var wallet = Wallet.Create(WalletId.New(), "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
-            var principalId = AxonId.New();
+            var principalId = AxonUserId.New();
 
             // Act - Exercise both conflict and no-conflict paths
             var noConflictResult = wallet.LinkToOwner(principalId, AccessMode.Signing, OwnershipStatus.Verified,
                 (wId, mode, status) => Result.Success<bool, Error>(false)); // No conflict
 
-            var conflictResult = wallet.LinkToOwner(AxonId.New(), AccessMode.Signing, OwnershipStatus.Verified,
+            var conflictResult = wallet.LinkToOwner(AxonUserId.New(), AccessMode.Signing, OwnershipStatus.Verified,
                 (wId, mode, status) => Result.Success<bool, Error>(true)); // Conflict detected
 
             // Assert - Both branches should be exercised  
@@ -352,7 +352,7 @@ public class CoverageVerificationTests
             
             foreach (var accessMode in accessModes)
             {
-                var result = wallet.LinkToOwner(AxonId.New(), accessMode, OwnershipStatus.Verified,
+                var result = wallet.LinkToOwner(AxonUserId.New(), accessMode, OwnershipStatus.Verified,
                     (wId, mode, status) => Result.Success<bool, Error>(false));
                 result.IsSuccess.ShouldBeTrue();
             }
@@ -361,7 +361,7 @@ public class CoverageVerificationTests
             var ownershipStatuses = Enum.GetValues<OwnershipStatus>();
             foreach (var status in ownershipStatuses)
             {
-                var ownership = WalletOwnership.Create(AxonId.New(), WalletId.New(), AccessMode.Signing, status);
+                var ownership = WalletOwnership.Create(AxonUserId.New(), WalletId.New(), AccessMode.Signing, status);
                 ownership.Status.ShouldBe(status);
             }
 
@@ -395,7 +395,7 @@ public class CoverageVerificationTests
                 (wId, mode, status) => Result.Success<bool, Error>(true));
             errorResults.Add(result3.IsSuccess ? Result.Success<object, Error>(new object()) : Result.Failure<object, Error>(result3.Error)); // Duplicate owner
             
-            var result4 = wallet.LinkToOwner(AxonId.New(), AccessMode.Signing, OwnershipStatus.Verified,
+            var result4 = wallet.LinkToOwner(AxonUserId.New(), AccessMode.Signing, OwnershipStatus.Verified,
                 (wId, mode, status) => Result.Success<bool, Error>(true));
             errorResults.Add(result4.IsSuccess ? Result.Success<object, Error>(new object()) : Result.Failure<object, Error>(result4.Error)); // Already owned
 

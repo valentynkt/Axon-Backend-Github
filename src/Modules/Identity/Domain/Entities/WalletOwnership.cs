@@ -11,7 +11,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// </summary>
 public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipId>
 {
-    public AxonId PrincipalId { get; private set; }
+    public AxonUserId PrincipalId { get; private set; }
     public WalletId WalletId { get; private set; }
     public AccessMode AccessMode { get; private set; }
     public OwnershipStatus Status { get; private set; }
@@ -23,7 +23,7 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
 
     private WalletOwnership(
         WalletOwnershipId id, 
-        AxonId principalId, 
+        AxonUserId principalId, 
         WalletId walletId, 
         AccessMode accessMode, 
         OwnershipStatus status) : base(id)
@@ -35,7 +35,7 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     }
 
     public static WalletOwnership Create(
-        AxonId principalId, 
+        AxonUserId principalId, 
         WalletId walletId, 
         AccessMode accessMode = AccessMode.Signing, 
         OwnershipStatus status = OwnershipStatus.Pending)

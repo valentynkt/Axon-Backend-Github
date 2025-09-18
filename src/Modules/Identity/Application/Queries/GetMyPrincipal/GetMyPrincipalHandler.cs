@@ -119,7 +119,7 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
     {
         // Build user profile
         var profile = new UserProfile(
-            AxonId: principal.Id.Value.ToString(),
+            AxonUserId: principal.Id.Value.ToString(),
             Subject: subject,
             RiskTier: CurrentUserResultMapper.MapRiskTierToWire(principal.RiskTier));
 

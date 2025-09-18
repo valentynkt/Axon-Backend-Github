@@ -35,14 +35,14 @@ public static class Builders
 
     // Entity builders
     public static IdentityCredential CreateIdentityCredential(
-        AxonId? principalId = null,
+        AxonUserId? principalId = null,
         string provider = "dynamic",
         string issuer = "issuer",
         string subject = "subject",
         DateTime? timestamp = null)
     {
         return IdentityCredential.Create(
-            principalId ?? AxonId.New(),
+            principalId ?? AxonUserId.New(),
             provider,
             issuer,
             subject,
@@ -51,13 +51,13 @@ public static class Builders
     }
 
     public static WalletOwnership CreateWalletOwnership(
-        AxonId? principalId = null,
+        AxonUserId? principalId = null,
         WalletId? walletId = null,
         AccessMode accessMode = AccessMode.Signing,
         OwnershipStatus status = OwnershipStatus.Pending)
     {
         return WalletOwnership.Create(
-            principalId ?? AxonId.New(),
+            principalId ?? AxonUserId.New(),
             walletId ?? WalletId.New(),
             accessMode,
             status
@@ -65,12 +65,12 @@ public static class Builders
     }
 
     public static PrincipalChainDefault CreatePrincipalChainDefault(
-        AxonId? principalId = null,
+        AxonUserId? principalId = null,
         string chainId = "solana-mainnet",
         WalletId? walletId = null)
     {
         return PrincipalChainDefault.Create(
-            principalId ?? AxonId.New(),
+            principalId ?? AxonUserId.New(),
             chainId,
             walletId ?? WalletId.New()
         );
