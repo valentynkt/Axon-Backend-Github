@@ -27,7 +27,7 @@ public class RateLimitingTests
     public void Setup()
     {
         _mockCurrentUserService = Substitute.For<ICurrentUserService>();
-        _mockCurrentUserService.UserId.Returns("test-user-id");
+        _mockCurrentUserService.AxonUserId.Returns("test-user-id");
         
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>

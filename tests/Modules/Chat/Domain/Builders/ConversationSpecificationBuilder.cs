@@ -9,7 +9,7 @@ namespace Axon.Modules.Chat.Domain.Tests.Builders;
 /// </summary>
 public class ConversationSpecificationBuilder
 {
-    private UserId? _ownerId;
+    private AxonUserId? _ownerId;
     private ConversationStatus? _status;
     private string? _titleContains;
     private string? _searchTerm;
@@ -26,7 +26,7 @@ public class ConversationSpecificationBuilder
     /// <summary>
     /// Creates a specification builder for active conversations by a specific owner.
     /// </summary>
-    public static ConversationSpecificationBuilder ActiveByOwner(UserId ownerId) => 
+    public static ConversationSpecificationBuilder ActiveByOwner(AxonUserId ownerId) => 
         new ConversationSpecificationBuilder()
             .ForOwner(ownerId)
             .WithStatus(ConversationStatus.Active);
@@ -40,7 +40,7 @@ public class ConversationSpecificationBuilder
     /// <summary>
     /// Sets the owner filter.
     /// </summary>
-    public ConversationSpecificationBuilder ForOwner(UserId ownerId)
+    public ConversationSpecificationBuilder ForOwner(AxonUserId ownerId)
     {
         _ownerId = ownerId;
         return this;

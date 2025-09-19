@@ -66,7 +66,7 @@ public class DynamicClaimNormalizerTests
         var result = _normalizer.NormalizeClaimsPrincipal(principal);
 
         // Assert
-        result.UserId.Should().Be("user-123");
+        result.AxonUserId.Should().Be("user-123");
         result.Email.Should().Be("user@example.com");
         result.EnvironmentId.Should().Be("env-123");
         result.SessionPublicKey.Should().Be("session-key-abc");
@@ -523,7 +523,7 @@ public class DynamicClaimNormalizerTests
         var result = _normalizer.NormalizeClaimsPrincipal(principal);
 
         // Assert - Should not throw, should have sensible defaults
-        result.UserId.Should().Be("user-123");
+        result.AxonUserId.Should().Be("user-123");
         result.Email.Should().BeEmpty();
         result.EnvironmentId.Should().Be("test-environment-id"); // From fallback
         result.FirstVisitUtc.Should().BeNull();
@@ -551,7 +551,7 @@ public class DynamicClaimNormalizerTests
         var result = _normalizer.NormalizeClaimsPrincipal(principal);
 
         // Assert - Should use mapped claims as fallback
-        result.UserId.Should().Be("mapped-user-123");
+        result.AxonUserId.Should().Be("mapped-user-123");
         result.Email.Should().Be("mapped@example.com");
         result.EnvironmentId.Should().Be("mapped-env-123");
     }
@@ -574,7 +574,7 @@ public class DynamicClaimNormalizerTests
         var result = _normalizer.NormalizeClaimsPrincipal(principal);
 
         // Assert - Should prefer JWT claims over mapped claims
-        result.UserId.Should().Be("jwt-user-123");
+        result.AxonUserId.Should().Be("jwt-user-123");
         result.Email.Should().Be("jwt@example.com");
     }
 

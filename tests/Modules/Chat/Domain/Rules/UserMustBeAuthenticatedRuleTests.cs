@@ -11,7 +11,7 @@ public class UserMustBeAuthenticatedRuleTests : DomainTestBase
     public class IsBrokenTests : UserMustBeAuthenticatedRuleTests
     {
         [Test]
-        public void IsBroken_WithAuthenticatedUserAndValidUserId_ShouldReturnFalse()
+        public void IsBroken_WithAuthenticatedUserAndValidAxonUserId_ShouldReturnFalse()
         {
             // Arrange
             var userId = Guid.NewGuid().ToString();
@@ -39,7 +39,7 @@ public class UserMustBeAuthenticatedRuleTests : DomainTestBase
         }
 
         [Test]
-        public void IsBroken_WithAuthenticatedUserButNullUserId_ShouldReturnTrue()
+        public void IsBroken_WithAuthenticatedUserButNullAxonUserId_ShouldReturnTrue()
         {
             // Arrange
             var rule = new UserMustBeAuthenticatedRule(isAuthenticated: true, userId: null);
@@ -52,7 +52,7 @@ public class UserMustBeAuthenticatedRuleTests : DomainTestBase
         }
 
         [Test]
-        public void IsBroken_WithAuthenticatedUserButEmptyUserId_ShouldReturnTrue()
+        public void IsBroken_WithAuthenticatedUserButEmptyAxonUserId_ShouldReturnTrue()
         {
             // Arrange
             var rule = new UserMustBeAuthenticatedRule(isAuthenticated: true, userId: string.Empty);
@@ -65,7 +65,7 @@ public class UserMustBeAuthenticatedRuleTests : DomainTestBase
         }
 
         [Test]
-        public void IsBroken_WithAuthenticatedUserButWhitespaceUserId_ShouldReturnTrue()
+        public void IsBroken_WithAuthenticatedUserButWhitespaceAxonUserId_ShouldReturnTrue()
         {
             // Arrange
             var rule = new UserMustBeAuthenticatedRule(isAuthenticated: true, userId: "   ");
@@ -124,7 +124,7 @@ public class UserMustBeAuthenticatedRuleTests : DomainTestBase
     public class EdgeCaseTests : UserMustBeAuthenticatedRuleTests
     {
         [Test]
-        public void IsBroken_WithBothUnauthenticatedAndNullUserId_ShouldReturnTrue()
+        public void IsBroken_WithBothUnauthenticatedAndNullAxonUserId_ShouldReturnTrue()
         {
             // Arrange
             var rule = new UserMustBeAuthenticatedRule(isAuthenticated: false, userId: null);
@@ -137,7 +137,7 @@ public class UserMustBeAuthenticatedRuleTests : DomainTestBase
         }
 
         [Test]
-        public void IsBroken_WithValidGuidUserId_ShouldReturnFalse()
+        public void IsBroken_WithValidGuidAxonUserId_ShouldReturnFalse()
         {
             // Arrange
             var userId = Guid.NewGuid().ToString();

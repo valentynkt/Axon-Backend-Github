@@ -82,11 +82,11 @@ public class ExchangeCredentialHandlerTests
     }
 
     [Test]
-    public async Task Should_ReturnFailure_When_UserIdIsEmpty()
+    public async Task Should_ReturnFailure_When_AxonUserIdIsEmpty()
     {
         // Arrange
         var userData = CreateTestUserData();
-        var command = new ExchangeCredentialCommand(userData with { UserId = "" });
+        var command = new ExchangeCredentialCommand(userData with { AxonUserId = "" });
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -330,7 +330,7 @@ public class ExchangeCredentialHandlerTests
     private static ExchangeUserData CreateTestUserData()
     {
         return new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
@@ -343,7 +343,7 @@ public class ExchangeCredentialHandlerTests
     private static ExchangeUserData CreateTestUserDataWithMultipleWallets()
     {
         return new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
@@ -357,7 +357,7 @@ public class ExchangeCredentialHandlerTests
     private static ExchangeUserData CreateTestUserDataWithInvalidWallet()
     {
         return new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
@@ -370,7 +370,7 @@ public class ExchangeCredentialHandlerTests
     private static ExchangeUserData CreateTestUserDataWithEmptyWallets()
     {
         return new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>()
@@ -430,7 +430,7 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsSuccess.ShouldBeTrue();
         _metricsService.Received(1).RecordExchangeSuccess(
-            userData.UserId,
+            userData.AxonUserId,
             Arg.Any<bool>(),
             Arg.Any<int>(),
             Arg.Any<int>(),
@@ -542,7 +542,7 @@ public class ExchangeCredentialHandlerTests
         var addedCredential = existingPrincipal.Credentials.FirstOrDefault(c =>
             c.Provider == "dynamic" &&
             c.Issuer == expectedIssuer &&
-            c.Subject == userData.UserId);
+            c.Subject == userData.AxonUserId);
         addedCredential.ShouldNotBeNull();
 
         // Verify wallet ownership relationships are correct
@@ -730,7 +730,7 @@ public class ExchangeCredentialHandlerTests
     {
         // Arrange: Create exchange data with wallets from different chains
         var userData = new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
@@ -821,7 +821,7 @@ public class ExchangeCredentialHandlerTests
     {
         // Arrange: Existing principal with wallets linked but no chain defaults
         var userData = new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
@@ -908,7 +908,7 @@ public class ExchangeCredentialHandlerTests
         var result = AxonPrincipal.CreateWithDynamicCredential(
             TestProviderType,
             $"app.dynamicauth.com/{userData.EnvironmentId}",
-            userData.UserId);
+            userData.AxonUserId);
         return result.Value;
     }
 }

@@ -15,7 +15,7 @@ public class ConversationStartedEventTests : EventTestBase
     {
         // Arrange
         var conversationId = CreateConversationId();
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var title = TestConstants.Conversations.DefaultTitle;
         var startedAt = CurrentTime;
 
@@ -40,7 +40,7 @@ public class ConversationStartedEventTests : EventTestBase
     {
         // Act
         var domainEvent = new ConversationStartedEvent(
-            CreateConversationId(), CreateUserId(), title, CurrentTime);
+            CreateConversationId(), CreateAxonUserId(), title, CurrentTime);
 
         // Assert
         domainEvent.Title.ShouldBe(title);
@@ -52,7 +52,7 @@ public class ConversationStartedEventTests : EventTestBase
         // Arrange
         var eventId = Guid.NewGuid();
         var conversationId = CreateConversationId();
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var title = TestConstants.Conversations.DefaultTitle;
         var startedAt = TestConstants.DateTimes.DefaultTestTime;
 
@@ -69,7 +69,7 @@ public class ConversationStartedEventTests : EventTestBase
     public void Events_WithDifferentIds_ShouldNotBeEqual()
     {
         // Arrange
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var title = TestConstants.Conversations.DefaultTitle;
         var startedAt = TestConstants.DateTimes.DefaultTestTime;
 
@@ -88,7 +88,7 @@ public class ConversationStartedEventTests : EventTestBase
     {
         // Arrange
         var conversationId = CreateConversationId();
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var startedAt = TestConstants.DateTimes.DefaultTestTime;
 
         // Act
@@ -107,7 +107,7 @@ public class ConversationStartedEventTests : EventTestBase
     {
         // Arrange
         var conversationId = CreateConversationId();
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var startedAt = TestConstants.DateTimes.DefaultTestTime;
         var originalEvent = new ConversationStartedEvent(conversationId, ownerId, title, startedAt);
 
@@ -128,7 +128,7 @@ public class ConversationStartedEventTests : EventTestBase
 
         // Act
         var domainEvent = new ConversationStartedEvent(
-            CreateConversationId(), CreateUserId(), longTitle, CurrentTime);
+            CreateConversationId(), CreateAxonUserId(), longTitle, CurrentTime);
 
         // Assert
         domainEvent.Title.ShouldBe(longTitle);
@@ -140,7 +140,7 @@ public class ConversationStartedEventTests : EventTestBase
     {
         // Arrange - Business scenario: User starts a new conversation
         var conversationId = CreateConversationId();
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var title = "DDD Architecture Discussion";
         var startedAt = TestConstants.DateTimes.DefaultTestTime;
 

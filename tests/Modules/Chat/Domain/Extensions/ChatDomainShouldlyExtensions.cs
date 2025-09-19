@@ -39,7 +39,7 @@ public static class ChatDomainShouldlyExtensions
     /// <summary>
     /// Asserts that a conversation belongs to the expected owner.
     /// </summary>
-    public static void ShouldBelongTo(this Conversation conversation, UserId expectedOwner)
+    public static void ShouldBelongTo(this Conversation conversation, AxonUserId expectedOwner)
     {
         conversation.OwnerId.ShouldBe(expectedOwner, 
             $"Conversation should belong to {expectedOwner} but belongs to {conversation.OwnerId}");

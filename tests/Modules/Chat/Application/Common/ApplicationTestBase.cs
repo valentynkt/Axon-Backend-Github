@@ -54,9 +54,11 @@ public abstract class ApplicationTestBase : DomainTestBase
         MockLogger = Substitute.For<ILogger>();
 
         // Configure default behaviors
-        var testUserId = CreateUserId();
-        
-        MockCurrentUserService.UserId.Returns(testUserId.Value.ToString());
+        var testAxonUserId = CreateAxonUserId();
+
+        MockCurrentUserService.AxonUserId.Returns(testAxonUserId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(testAxonUserId);
 
         MockTelemetry.StartActivity(Arg.Any<string>())
             .Returns((Activity?)null);
@@ -157,7 +159,7 @@ public abstract class ApplicationTestBase : DomainTestBase
     /// </summary>
     protected void AssertAuthenticationCalled()
     {
-        var _ = MockCurrentUserService.Received(1).UserId;
+        var _ = MockCurrentUserService.Received(1).AxonUserId;
     }
 
     /// <summary>

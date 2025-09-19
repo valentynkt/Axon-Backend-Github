@@ -32,7 +32,7 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     private IConversationReadRepository _mockConversationRepository = null!;
 
     // Test data
-    private UserId _testUserId;
+    private AxonUserId _testAxonUserId;
     private List<ConversationListItem> _testConversations = null!;
     
     // Query tracking for pagination simulation
@@ -50,15 +50,17 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         _mockConversationRepository = Substitute.For<IConversationReadRepository>();
 
         // Setup test data
-        _testUserId = UserId.New();
+        _testAxonUserId = AxonUserId.New();
         _testConversations = CreateTestConversations();
 
         // Configure basic default behavior
         ConfigureDefaultMocks();
         
         // Override authentication to use our test user
-        MockCurrentUserService.UserId
-            .Returns(_testUserId.Value.ToString());
+        MockCurrentUserService.AxonUserId
+            .Returns(_testAxonUserId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(_testAxonUserId);
     }
     
     /// <summary>
@@ -81,8 +83,10 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     {
         // Configure auth service to throw OperationCanceledException for cancellation tests
         // This simulates the scenario where cancellation is properly handled
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns<string?>(_ => throw new OperationCanceledException());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns<AxonUserId?>(_ => throw new OperationCanceledException());
     }
     
     /// <summary>
@@ -239,15 +243,17 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         // Arrange
         var query = CreateValidQuery();
 
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns((string?)null);
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns((AxonUserId?)null);
 
         // Act
         var result = await ExecuteQuery(query);
 
         // Assert
         result.ShouldFailWithErrorType(ErrorType.Unauthorized);
-        result.Error.Code.ShouldBe("Chat.Auth.Unauthenticated");
+        result.Error.Code.ShouldBe("AUTH.USER_ID_NOT_RESOLVED");
     }
 
     [TestCaseSource(nameof(GetInvalidPaginationScenarios))]
@@ -257,8 +263,10 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
         string _)
     {
         // Arrange
-        MockCurrentUserService.UserId
-            .Returns(_testUserId.Value.ToString());
+        MockCurrentUserService.AxonUserId
+            .Returns(_testAxonUserId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(_testAxonUserId);
 
         // Act
         var result = await ExecuteQuery(query);

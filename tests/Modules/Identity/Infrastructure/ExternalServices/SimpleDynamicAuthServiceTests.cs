@@ -100,7 +100,7 @@ public class SimpleDynamicAuthServiceTests
         // Arrange
         var token = "test.jwt.token";
         var cachedUserData = new DynamicUserData(
-            UserId: "test-user-id",
+            AxonUserId: "test-user-id",
             Email: "test@example.com",
             EnvironmentId: "test-env",
             Wallets: new List<WalletData>(),
@@ -160,7 +160,7 @@ public class SimpleDynamicAuthServiceTests
         // Arrange
         var token = "test.jwt.token";
         var cachedUserData = new DynamicUserData(
-            UserId: "test-user-id",
+            AxonUserId: "test-user-id",
             Email: "test@example.com",
             EnvironmentId: "test-env",
             Wallets: new List<WalletData>(),
@@ -224,7 +224,7 @@ public class SimpleDynamicAuthServiceTests
 
         // Mock the claim normalizer
         var userData = new DynamicUserData(
-            UserId: "test-user-id",
+            AxonUserId: "test-user-id",
             Email: "test@example.com",
             EnvironmentId: "test-env",
             Wallets: new List<WalletData>(),

@@ -32,7 +32,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var actualOwnerId = TestConstants.Users.DefaultOwnerId;
-            var differentOwnerId = UserId.New();
+            var differentOwnerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(actualOwnerId)
                 .Build();
@@ -54,7 +54,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var actualOwnerId = TestConstants.Users.DefaultOwnerId;
-            var differentOwnerId = UserId.New();
+            var differentOwnerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(actualOwnerId)
                 .Build();
@@ -77,7 +77,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var conversation = ConversationBuilder.New().Build();
-            var ownerId = UserId.New();
+            var ownerId = AxonUserId.New();
             var rule = new ConversationMustBelongToOwnerRule(conversation, ownerId);
 
             // Act & Assert
@@ -89,7 +89,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var conversation = ConversationBuilder.New().Build();
-            var ownerId = UserId.New();
+            var ownerId = AxonUserId.New();
             var rule = new ConversationMustBelongToOwnerRule(conversation, ownerId);
 
             // Act & Assert
@@ -124,7 +124,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var actualOwnerId = TestConstants.Users.DefaultOwnerId;
-            var differentOwnerId = UserId.New();
+            var differentOwnerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(actualOwnerId)
                 .WithUserMessage("First message")
@@ -148,7 +148,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var actualOwnerId = TestConstants.Users.DefaultOwnerId;
-            var differentOwnerId = UserId.New();
+            var differentOwnerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(actualOwnerId)
                 .Build();
@@ -163,7 +163,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var actualOwnerId = TestConstants.Users.DefaultOwnerId;
-            var differentOwnerId = UserId.New();
+            var differentOwnerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(actualOwnerId)
                 .Build();
@@ -181,7 +181,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         public void IsBroken_WithSameOwnerIds_ShouldReturnFalse()
         {
             // Arrange
-            var ownerId = UserId.New();
+            var ownerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(ownerId)
                 .Build();
@@ -198,8 +198,8 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         public void IsBroken_WithDifferentOwnerIds_ShouldReturnTrue()
         {
             // Arrange
-            var owner1 = UserId.New();
-            var owner2 = UserId.New();
+            var owner1 = AxonUserId.New();
+            var owner2 = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(owner1)
                 .Build();
@@ -221,7 +221,7 @@ public class ConversationMustBelongToOwnerRuleTests : DomainTestBase
         {
             // Arrange
             var ownerId = TestConstants.Users.DefaultOwnerId;
-            var differentOwnerId = UserId.New();
+            var differentOwnerId = AxonUserId.New();
             var conversation = ConversationBuilder.New()
                 .WithOwner(ownerId)
                 .Build();

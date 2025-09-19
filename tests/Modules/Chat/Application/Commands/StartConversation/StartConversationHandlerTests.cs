@@ -52,11 +52,13 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         string _)
     {
         // Arrange
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
         var conversationId = ConversationId.New();
         
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         SetupOrchestratorSuccess(conversationId, "Assistant response to your message");
 
         // Act
@@ -80,11 +82,13 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
     {
         // Arrange
         var command = CreateValidCommand();
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
         var orchestratorError = Error.Failure("AI processing failed", "AI_PROCESSING_ERROR");
 
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         SetupOrchestratorFailure(orchestratorError);
 
         // Act
@@ -105,10 +109,12 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
     {
         // Arrange
         var command = CreateValidCommand();
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
 
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         MockRepository.AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<Conversation>(new InvalidOperationException("Database connection failed")));
 

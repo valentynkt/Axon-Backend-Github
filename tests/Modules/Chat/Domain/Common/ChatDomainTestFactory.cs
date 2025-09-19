@@ -41,7 +41,7 @@ public static class ChatDomainTestFactory
         /// <summary>
         /// Creates a conversation with specific owner for ownership testing.
         /// </summary>
-        public static Conversation CreateWithOwner(UserId ownerId)
+        public static Conversation CreateWithOwner(AxonUserId ownerId)
         {
             return ConversationBuilder.New()
                 .WithOwner(ownerId)
@@ -124,11 +124,11 @@ public static class ChatDomainTestFactory
         /// <summary>
         /// Creates conversations with different owners for multi-tenant scenarios.
         /// </summary>
-        public static Dictionary<UserId, Conversation> CreateForDifferentOwners(int ownerCount = 3)
+        public static Dictionary<AxonUserId, Conversation> CreateForDifferentOwners(int ownerCount = 3)
         {
             return Enumerable.Range(0, ownerCount)
                 .ToDictionary(
-                    i => UserId.New(),
+                    i => AxonUserId.New(),
                     i => ConversationBuilder.New()
                         .WithTitle($"Conversation for Owner {i + 1}")
                         .WithUserMessage($"Message from owner {i + 1}")
@@ -317,15 +317,15 @@ public static class Collections
     /// <summary>
     /// Creates conversations with different owners for multi-tenant testing.
     /// </summary>
-    public static Dictionary<UserId, List<Conversation>> CreateMultiOwnerConversations(
+    public static Dictionary<AxonUserId, List<Conversation>> CreateMultiOwnerConversations(
         int ownerCount = 5, 
         int conversationsPerOwner = 3)
     {
-        var result = new Dictionary<UserId, List<Conversation>>();
+        var result = new Dictionary<AxonUserId, List<Conversation>>();
 
         for (int i = 0; i < ownerCount; i++)
         {
-            var owner = UserId.New();
+            var owner = AxonUserId.New();
             var conversations = Enumerable.Range(0, conversationsPerOwner)
                 .Select(_ => ConversationBuilder.New()
                     .WithOwner(owner)

@@ -31,9 +31,12 @@ public class PrincipalChainDefaultPersistenceTests
     [SetUp]
     public async Task SetUp()
     {
-        // Create an in-memory database for testing
+        // Create an in-memory database for testing with a unique name per test run
+        // This ensures complete isolation between tests and prevents ID conflicts
+        var databaseName = $"PrincipalChainDefaultTests_{Guid.NewGuid():N}_{DateTime.UtcNow.Ticks}";
         var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(databaseName: databaseName)
+            .EnableSensitiveDataLogging() // For debugging
             .Options;
 
         _dbContext = new IdentityWriteDbContext(options);
@@ -47,6 +50,10 @@ public class PrincipalChainDefaultPersistenceTests
     [TearDown]
     public async Task TearDown()
     {
+        // Clear change tracker to prevent any conflicts
+        _dbContext.ChangeTracker.Clear();
+
+        // Clean up resources in proper order
         await _dbContext.Database.EnsureDeletedAsync();
         _unitOfWork?.Dispose();
         _repository?.Dispose();
@@ -100,7 +107,7 @@ public class PrincipalChainDefaultPersistenceTests
         reloadedPrincipal.PrincipalChainDefaults.ShouldContain(pcd => pcd.ChainId == "1" && pcd.WalletId == wallet1.Id);
         reloadedPrincipal.PrincipalChainDefaults.ShouldContain(pcd => pcd.ChainId == "137" && pcd.WalletId == wallet2.Id);
 
-        // Step 4: Update and save (this is where the bug occurred)
+        // Step 4: Update and save (fixed tracking issue by ensuring proper state management)
         await _repository.UpdateAsync(reloadedPrincipal);
         var rowsAffected = await _unitOfWork.SaveChangesAsync();
 

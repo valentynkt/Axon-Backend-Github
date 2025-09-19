@@ -14,8 +14,8 @@ public class UserIdMustBeValidFormatRuleTests : DomainTestBase
         public void IsBroken_WithValidGuid_ShouldReturnFalse()
         {
             // Arrange
-            var validUserId = Guid.NewGuid().ToString();
-            var rule = new UserIdMustBeValidFormatRule(validUserId);
+            var validAxonUserId = Guid.NewGuid().ToString();
+            var rule = new UserIdMustBeValidFormatRule(validAxonUserId);
 
             // Act
             var result = rule.IsBroken();
@@ -25,7 +25,7 @@ public class UserIdMustBeValidFormatRuleTests : DomainTestBase
         }
 
         [Test]
-        public void IsBroken_WithNullUserId_ShouldReturnTrue()
+        public void IsBroken_WithNullAxonUserId_ShouldReturnTrue()
         {
             // Arrange
             var rule = new UserIdMustBeValidFormatRule(null);
@@ -84,8 +84,8 @@ public class UserIdMustBeValidFormatRuleTests : DomainTestBase
         public async Task IsBrokenAsync_ShouldReturnSameResultAsIsBroken()
         {
             // Arrange
-            var validUserId = Guid.NewGuid().ToString();
-            var rule = new UserIdMustBeValidFormatRule(validUserId);
+            var validAxonUserId = Guid.NewGuid().ToString();
+            var rule = new UserIdMustBeValidFormatRule(validAxonUserId);
 
             // Act
             var syncResult = rule.IsBroken();
@@ -127,8 +127,8 @@ public class UserIdMustBeValidFormatRuleTests : DomainTestBase
         public void IsBroken_WithGuidInUpperCase_ShouldReturnFalse()
         {
             // Arrange
-            var validUserId = Guid.NewGuid().ToString().ToUpperInvariant();
-            var rule = new UserIdMustBeValidFormatRule(validUserId);
+            var validAxonUserId = Guid.NewGuid().ToString().ToUpperInvariant();
+            var rule = new UserIdMustBeValidFormatRule(validAxonUserId);
 
             // Act
             var result = rule.IsBroken();
@@ -141,8 +141,8 @@ public class UserIdMustBeValidFormatRuleTests : DomainTestBase
         public void IsBroken_WithGuidWithHyphens_ShouldReturnFalse()
         {
             // Arrange
-            var validUserId = Guid.NewGuid().ToString("D"); // Default format with hyphens
-            var rule = new UserIdMustBeValidFormatRule(validUserId);
+            var validAxonUserId = Guid.NewGuid().ToString("D"); // Default format with hyphens
+            var rule = new UserIdMustBeValidFormatRule(validAxonUserId);
 
             // Act
             var result = rule.IsBroken();

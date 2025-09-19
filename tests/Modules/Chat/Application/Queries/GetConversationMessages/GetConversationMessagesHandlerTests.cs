@@ -34,7 +34,7 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     private IMessageReadRepository _mockMessageRepository = null!;
 
     // Test data
-    private UserId _testUserId;
+    private AxonUserId _testAxonUserId;
     private ConversationId _testConversationId;
     private List<ConversationMessageItem> _testMessages = null!;
     
@@ -55,7 +55,7 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         _mockMessageRepository = Substitute.For<IMessageReadRepository>();
 
         // Setup test data
-        _testUserId = UserId.New();
+        _testAxonUserId = AxonUserId.New();
         _testConversationId = ConversationId.New();
         _testMessages = CreateTestMessages();
 
@@ -63,8 +63,10 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         ConfigureDefaultMocks();
         
         // Override authentication to use our test user
-        MockCurrentUserService.UserId
-            .Returns(_testUserId.Value.ToString());
+        MockCurrentUserService.AxonUserId
+            .Returns(_testAxonUserId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(_testAxonUserId);
     }
     
     /// <summary>
@@ -210,11 +212,17 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     {
         // Arrange - Create a separate handler with fresh mocks for this test
         var query = CreateValidQuery();
-        
+
+        // Set up authentication to return a valid user ID
+        MockCurrentUserService.AxonUserId
+            .Returns(_testAxonUserId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(_testAxonUserId);
+
         // Create fresh mocks specifically for this test
         var mockConversationRepo = Substitute.For<IConversationReadRepository>();
         var mockMessageRepo = Substitute.For<IMessageReadRepository>();
-        
+
         // Set up the conversation repository to deny access - using ReturnsForAnyArgs to prevent spec execution
         mockConversationRepo.AnyAsync(default!, default)
             .ReturnsForAnyArgs(false);
@@ -240,8 +248,10 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
         string _)
     {
         // Arrange
-        MockCurrentUserService.UserId
-            .Returns(_testUserId.Value.ToString());
+        MockCurrentUserService.AxonUserId
+            .Returns(_testAxonUserId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(_testAxonUserId);
 
         // Act
         var result = await ExecuteQuery(query);

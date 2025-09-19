@@ -130,7 +130,7 @@ public static class DomainEventTestHelpers
     {
         public static ConversationStartedEvent CreateConversationStarted(
             ConversationId? conversationId = null,
-            UserId? ownerId = null,
+            AxonUserId? ownerId = null,
             string? title = null,
             DateTimeOffset? occurredOn = null)
         {

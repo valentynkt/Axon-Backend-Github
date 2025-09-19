@@ -9,7 +9,7 @@ namespace Axon.Modules.Chat.Domain.Tests.Common;
 public sealed record TestableConversationStartedEvent(
     Guid EventId,
     ConversationId ConversationId,
-    UserId OwnerId,
+    AxonUserId OwnerId,
     string Title,
     DateTimeOffset StartedAt
 ) : DomainEvent(EventId, StartedAt.UtcDateTime);

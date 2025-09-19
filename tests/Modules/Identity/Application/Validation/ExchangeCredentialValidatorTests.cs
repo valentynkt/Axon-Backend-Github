@@ -65,49 +65,49 @@ public class ExchangeCredentialValidatorTests
         [TestCase("")]
         [TestCase("   ")]
         [TestCase(null)]
-        public void Validate_WithInvalidUserId_Should_HaveValidationError(string? userId)
+        public void Validate_WithInvalidAxonUserId_Should_HaveValidationError(string? userId)
         {
             // Arrange
-            var userData = CreateValidExchangeUserData() with { UserId = userId! };
+            var userData = CreateValidExchangeUserData() with { AxonUserId = userId! };
             var command = new ExchangeCredentialCommand(userData);
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor("UserData.UserId")
+            result.ShouldHaveValidationErrorFor("UserData.AxonUserId")
                 .WithErrorMessage("User ID is required");
         }
 
         [Test]
-        public void Validate_WithTooLongUserId_Should_HaveValidationError()
+        public void Validate_WithTooLongAxonUserId_Should_HaveValidationError()
         {
             // Arrange
-            var longUserId = new string('a', 257); // Exceeds 256 character limit
-            var userData = CreateValidExchangeUserData() with { UserId = longUserId };
+            var longAxonUserId = new string('a', 257); // Exceeds 256 character limit
+            var userData = CreateValidExchangeUserData() with { AxonUserId = longAxonUserId };
             var command = new ExchangeCredentialCommand(userData);
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor("UserData.UserId")
+            result.ShouldHaveValidationErrorFor("UserData.AxonUserId")
                 .WithErrorMessage("User ID must not exceed 256 characters");
         }
 
         [Test]
-        public void Validate_WithMaxLengthUserId_Should_NotHaveValidationError()
+        public void Validate_WithMaxLengthAxonUserId_Should_NotHaveValidationError()
         {
             // Arrange
-            var maxLengthUserId = new string('a', 256);
-            var userData = CreateValidExchangeUserData() with { UserId = maxLengthUserId };
+            var maxLengthAxonUserId = new string('a', 256);
+            var userData = CreateValidExchangeUserData() with { AxonUserId = maxLengthAxonUserId };
             var command = new ExchangeCredentialCommand(userData);
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldNotHaveValidationErrorFor("UserData.UserId");
+            result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
         }
 
         [Test]
@@ -556,7 +556,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var userData = CreateValidExchangeUserData() with
             {
-                UserId = "user-123_test.special+chars",
+                AxonUserId = "user-123_test.special+chars",
                 Email = "user.name+tag@example-domain.com",
                 EnvironmentId = "env-123_test-special"
             };
@@ -575,7 +575,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var userData = CreateValidExchangeUserData() with
             {
-                UserId = "用户123",
+                AxonUserId = "用户123",
                 Email = "test@example.com", // Keep email ASCII for validity
                 EnvironmentId = "环境123"
             };
@@ -585,7 +585,7 @@ public class ExchangeCredentialValidatorTests
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldNotHaveValidationErrorFor("UserData.UserId");
+            result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
             result.ShouldNotHaveValidationErrorFor("UserData.EnvironmentId");
         }
 
@@ -595,7 +595,7 @@ public class ExchangeCredentialValidatorTests
             // Test exactly at the limits
             var userData = CreateValidExchangeUserData() with
             {
-                UserId = new string('a', 256), // Exactly at limit
+                AxonUserId = new string('a', 256), // Exactly at limit
                 Email = $"{new string('a', 307)}@example.com", // Exactly at 320 limit (307 + 13 = 320)
                 EnvironmentId = new string('a', 256) // Exactly at limit
             };
@@ -624,7 +624,7 @@ public class ExchangeCredentialValidatorTests
             // Test potential injection attempts in various fields
             var userData = CreateValidExchangeUserData() with
             {
-                UserId = "<script>alert('xss')</script>",
+                AxonUserId = "<script>alert('xss')</script>",
                 EnvironmentId = "'; DROP TABLE users; --"
             };
             var command = new ExchangeCredentialCommand(userData);
@@ -635,7 +635,7 @@ public class ExchangeCredentialValidatorTests
             // Assert
             // Should pass validation since these are just strings being validated for length/format
             // The actual security protection happens at other layers
-            result.ShouldNotHaveValidationErrorFor("UserData.UserId");
+            result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
             result.ShouldNotHaveValidationErrorFor("UserData.EnvironmentId");
         }
     }
@@ -647,7 +647,7 @@ public class ExchangeCredentialValidatorTests
     private static ExchangeUserData CreateValidExchangeUserData()
     {
         return new ExchangeUserData(
-            UserId: "test-user-123",
+            AxonUserId: "test-user-123",
             Email: "test@example.com",
             EnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>

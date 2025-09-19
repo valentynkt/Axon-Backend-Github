@@ -2,6 +2,7 @@ using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
@@ -26,23 +27,98 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
     {
         ArgumentNullException.ThrowIfNull(aggregate);
 
-        // Override the base UpdateAsync to handle the navigation properties correctly
-        // The base implementation has issues with duplicate entity tracking for PrincipalChainDefaults
-        var entry = DbContext.Entry(aggregate);
+        // Step 1: Completely clear all tracked entities first to avoid any conflicts
+        DbContext.ChangeTracker.Clear();
 
-        if (entry.State == EntityState.Detached)
+        // Step 2: Find the existing principal in the database and update its properties
+        var existingPrincipal = DbContext.Set<AxonPrincipal>().Find(aggregate.Id);
+        if (existingPrincipal != null)
         {
-            // For detached entities, use Update() which handles the entire graph
-            DbSet.Update(aggregate);
+            // Update principal properties
+            DbContext.Entry(existingPrincipal).CurrentValues.SetValues(aggregate);
+
+            // Step 3: Handle navigation properties manually
+            await HandleNavigationPropertiesForExistingPrincipal(existingPrincipal, aggregate);
         }
         else
         {
-            // For tracked entities, just mark as modified - EF Core will handle navigation changes automatically
-            entry.State = EntityState.Modified;
+            // This shouldn't happen in UpdateAsync, but handle it gracefully
+            throw new InvalidOperationException($"Principal with ID {aggregate.Id} not found in database during update.");
         }
 
         return aggregate;
     }
+    
+
+    /// <summary>
+    /// Handles navigation properties for an existing tracked principal by synchronizing
+    /// with the new aggregate data.
+    /// </summary>
+    private async Task HandleNavigationPropertiesForExistingPrincipal(AxonPrincipal existingPrincipal, AxonPrincipal newAggregate)
+    {
+        // Handle PrincipalChainDefaults - clear existing and add new ones
+        var existingDefaults = DbContext.Set<PrincipalChainDefault>()
+            .Where(pcd => pcd.PrincipalId == existingPrincipal.Id)
+            .ToList();
+
+        // Remove existing defaults
+        DbContext.Set<PrincipalChainDefault>().RemoveRange(existingDefaults);
+
+        // Force save removal before adding new entities to prevent ID conflicts
+        await DbContext.SaveChangesAsync();
+
+        // Create fresh entities to avoid any tracking conflicts with domain entities
+        foreach (var chainDefault in newAggregate.PrincipalChainDefaults)
+        {
+            // Create a new instance to avoid any tracking conflicts
+            var newDefault = PrincipalChainDefault.Create(
+                chainDefault.PrincipalId,
+                chainDefault.ChainId,
+                chainDefault.WalletId);
+
+            DbContext.Set<PrincipalChainDefault>().Add(newDefault);
+        }
+
+        // Handle WalletOwnerships - clear existing and add new ones
+        var existingOwnerships = DbContext.Set<WalletOwnership>()
+            .Where(wo => wo.PrincipalId == existingPrincipal.Id)
+            .ToList();
+
+        // Remove existing ownerships
+        DbContext.Set<WalletOwnership>().RemoveRange(existingOwnerships);
+
+        // Force save removal before adding new entities to prevent ID conflicts
+        await DbContext.SaveChangesAsync();
+
+        // Add new ownerships from the aggregate
+        foreach (var ownership in newAggregate.WalletOwnerships)
+        {
+            // Create a new instance to avoid any tracking conflicts
+            var newOwnership = WalletOwnership.Create(
+                ownership.PrincipalId,
+                ownership.WalletId,
+                ownership.AccessMode,
+                ownership.Status);
+
+            DbContext.Set<WalletOwnership>().Add(newOwnership);
+        }
+
+        // Handle IdentityCredentials - clear existing and add new ones
+        var existingCredentials = DbContext.Set<IdentityCredential>()
+            .Where(ic => ic.PrincipalId == existingPrincipal.Id)
+            .ToList();
+
+        // Remove existing credentials
+        DbContext.Set<IdentityCredential>().RemoveRange(existingCredentials);
+
+        // Add the actual entities from the aggregate (preserving their domain-created IDs)
+        foreach (var credential in newAggregate.Credentials)
+        {
+            // Add the entity as-is from the domain to preserve its ID
+            DbContext.Set<IdentityCredential>().Add(credential);
+        }
+    }
+
 
     private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
     {

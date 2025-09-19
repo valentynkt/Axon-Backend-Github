@@ -4,7 +4,7 @@ namespace Axon.Modules.Chat.Domain.Tests.Rules;
 
 /// <summary>
 /// Tests for ConversationMustHaveOwnerRule that ensures conversations have a valid owner.
-/// Tests owner validation and empty UserId detection.
+/// Tests owner validation and empty AxonUserId detection.
 /// </summary>
 [TestFixture]
 public class ConversationMustHaveOwnerRuleTests : DomainTestBase
@@ -30,7 +30,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         public void IsBroken_WithEmptyOwnerId_ShouldReturnTrue()
         {
             // Arrange
-            var emptyOwnerId = new UserId(Guid.Empty);
+            var emptyOwnerId = new AxonUserId(Guid.Empty);
             var rule = new ConversationMustHaveOwnerRule(emptyOwnerId);
 
             // Act
@@ -41,17 +41,17 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         }
 
         [Test]
-        public void IsBroken_WithDefaultUserId_ShouldReturnTrue()
+        public void IsBroken_WithDefaultAxonUserId_ShouldReturnTrue()
         {
             // Arrange
-            var defaultUserId = default(UserId);
-            var rule = new ConversationMustHaveOwnerRule(defaultUserId);
+            var defaultAxonUserId = default(AxonUserId);
+            var rule = new ConversationMustHaveOwnerRule(defaultAxonUserId);
 
             // Act
             var result = rule.IsBroken();
 
             // Assert
-            result.ShouldBeTrue("Rule should be broken with default UserId");
+            result.ShouldBeTrue("Rule should be broken with default AxonUserId");
         }
 
         [Test]
@@ -63,7 +63,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
                 TestConstants.Users.DefaultOwnerId,
                 TestConstants.Users.AlternativeOwnerId,
                 TestConstants.Users.ThirdOwnerId,
-                UserId.New()
+                AxonUserId.New()
             };
 
             foreach (var ownerId in validOwnerIds)
@@ -86,7 +86,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         public async Task IsBrokenAsync_ShouldReturnSameResultAsIsBroken()
         {
             // Arrange
-            var emptyOwnerId = new UserId(Guid.Empty);
+            var emptyOwnerId = new AxonUserId(Guid.Empty);
             var rule = new ConversationMustHaveOwnerRule(emptyOwnerId);
 
             // Act
@@ -153,7 +153,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         public void Constructor_WithEmptyOwnerId_ShouldCreateRule()
         {
             // Arrange & Act
-            var rule = new ConversationMustHaveOwnerRule(new UserId(Guid.Empty));
+            var rule = new ConversationMustHaveOwnerRule(new AxonUserId(Guid.Empty));
 
             // Assert
             rule.ShouldNotBeNull();
@@ -168,7 +168,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         public void IsBroken_WithNewlyGeneratedOwnerId_ShouldReturnFalse()
         {
             // Arrange
-            var newOwnerId = UserId.New();
+            var newOwnerId = AxonUserId.New();
             var rule = new ConversationMustHaveOwnerRule(newOwnerId);
 
             // Act
@@ -176,7 +176,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
 
             // Assert
             result.ShouldBeFalse("Rule should not be broken with newly generated owner ID");
-            newOwnerId.Value.ShouldNotBe(Guid.Empty, "Newly generated UserId should not be empty");
+            newOwnerId.Value.ShouldNotBe(Guid.Empty, "Newly generated AxonUserId should not be empty");
         }
     }
 
@@ -187,7 +187,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         public void IsBroken_CalledMultipleTimes_ShouldReturnConsistentResults()
         {
             // Arrange
-            var emptyOwnerId = new UserId(Guid.Empty);
+            var emptyOwnerId = new AxonUserId(Guid.Empty);
             var rule = new ConversationMustHaveOwnerRule(emptyOwnerId);
 
             // Act & Assert
@@ -198,7 +198,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
         public void Rule_ShouldProvideMeaningfulErrorMessage()
         {
             // Arrange
-            var emptyOwnerId = new UserId(Guid.Empty);
+            var emptyOwnerId = new AxonUserId(Guid.Empty);
             var rule = new ConversationMustHaveOwnerRule(emptyOwnerId);
 
             // Act & Assert
@@ -215,15 +215,15 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
             // Test data
             var validCases = new[]
             {
-                UserId.New(),
+                AxonUserId.New(),
                 TestConstants.Users.DefaultOwnerId,
-                new UserId(Guid.NewGuid())
+                new AxonUserId(Guid.NewGuid())
             };
 
             var invalidCases = new[]
             {
-                new UserId(Guid.Empty),
-                default(UserId)
+                new AxonUserId(Guid.Empty),
+                default(AxonUserId)
             };
 
             // Test valid cases
@@ -254,7 +254,7 @@ public class ConversationMustHaveOwnerRuleTests : DomainTestBase
             // Every conversation must have a valid owner to ensure proper access control
 
             // Arrange - Simulate creating conversation without owner
-            var noOwnerRule = new ConversationMustHaveOwnerRule(new UserId(Guid.Empty));
+            var noOwnerRule = new ConversationMustHaveOwnerRule(new AxonUserId(Guid.Empty));
             
             // Act & Assert - Should prevent creation
             noOwnerRule.IsBroken().ShouldBeTrue(

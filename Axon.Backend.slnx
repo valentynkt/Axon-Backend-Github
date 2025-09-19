@@ -33,6 +33,9 @@
     <Project Path="src/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/" />
+  <Folder Name="/tests/Api/">
+    <Project Path="tests/Api/Axon.Api.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Modules/" />
   <Folder Name="/tests/Modules/Chat/" />
   <Folder Name="/tests/Modules/Chat/Domain/">

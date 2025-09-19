@@ -58,7 +58,7 @@ public class ExchangeTokenEndpointTests
     public async Task HandleAsync_WhenAuthenticated_Returns200WithUserData()
     {
         // Arrange
-        _mockCurrentUserService.UserId.Returns("test-user-id");
+        _mockCurrentUserService.AxonUserId.Returns("test-user-id");
 
         // Act
         var response = await _client.PostAsync("/api/v1/auth/exchange", null);
@@ -73,7 +73,7 @@ public class ExchangeTokenEndpointTests
         });
 
         exchangeResponse.ShouldNotBeNull();
-        exchangeResponse.UserId.ShouldBe("test-user-id");
+        exchangeResponse.AxonUserId.ShouldBe("test-user-id");
         exchangeResponse.Email.ShouldBe("test@example.com");
         exchangeResponse.Wallets.ShouldHaveSingleItem();
         exchangeResponse.Wallets[0].Address.ShouldBe("Sol1234567890");
@@ -82,10 +82,10 @@ public class ExchangeTokenEndpointTests
     }
 
     [Test]
-    public async Task HandleAsync_WhenUserIdMissing_Returns500()
+    public async Task HandleAsync_WhenAxonUserIdMissing_Returns500()
     {
         // Arrange
-        _mockCurrentUserService.UserId.Returns((string?)null);
+        _mockCurrentUserService.AxonUserId.Returns((string?)null);
 
         // Act
         var response = await _client.PostAsync("/api/v1/auth/exchange", null);
@@ -95,7 +95,7 @@ public class ExchangeTokenEndpointTests
     }
 
     private record ExchangeTokenResponse(
-        string UserId,
+        string AxonUserId,
         string Email,
         List<WalletInfo> Wallets
     );

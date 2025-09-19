@@ -22,7 +22,7 @@ public class ConversationAggregateTests : DomainTestBase
     public void StartNewConversation_WithValidInputs_CreatesConversation()
     {
         // Arrange
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var title = "Test Conversation";
 
         // Act
@@ -44,7 +44,7 @@ public class ConversationAggregateTests : DomainTestBase
     public void StartNewConversation_WithInvalidTitle_UsesDefaultTitle(string? invalidTitle)
     {
         // Arrange
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
 
         // Act
         var result = Conversation.StartNewConversation(ownerId, invalidTitle, TimeProvider);
@@ -59,7 +59,7 @@ public class ConversationAggregateTests : DomainTestBase
     public void StartNewConversation_TitleValidation(bool isValid)
     {
         // Arrange
-        var ownerId = CreateUserId();
+        var ownerId = CreateAxonUserId();
         var title = isValid ? TestConstants.EdgeCases.ExactMaxTitle : TestConstants.EdgeCases.OneOverMaxTitle;
 
         // Act
@@ -429,8 +429,8 @@ public class ConversationAggregateTests : DomainTestBase
     public void BelongsTo_WithOwnerId_ReturnsExpectedResult(bool useSameOwnerId)
     {
         // Arrange
-        var ownerId = CreateUserId();
-        var testOwnerId = useSameOwnerId ? ownerId : CreateUserId();
+        var ownerId = CreateAxonUserId();
+        var testOwnerId = useSameOwnerId ? ownerId : CreateAxonUserId();
         var conversation = _builder.WithOwner(ownerId).WithUserMessage().Build();
 
         // Act & Assert

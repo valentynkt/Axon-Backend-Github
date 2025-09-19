@@ -14,9 +14,9 @@ public static class TestConstants
     /// </summary>
     public static class Users
     {
-        public static readonly UserId DefaultOwnerId = UserId.New();
-        public static readonly UserId AlternativeOwnerId = UserId.New();
-        public static readonly UserId ThirdOwnerId = UserId.New();
+        public static readonly AxonUserId DefaultOwnerId = AxonUserId.New();
+        public static readonly AxonUserId AlternativeOwnerId = AxonUserId.New();
+        public static readonly AxonUserId ThirdOwnerId = AxonUserId.New();
         
         public const string DefaultOwnerIdString = "test-user-1";
         public const string AlternativeOwnerIdString = "test-user-2";

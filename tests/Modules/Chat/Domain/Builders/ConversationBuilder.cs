@@ -11,7 +11,7 @@ namespace Axon.Modules.Chat.Domain.Tests.Builders;
 /// </summary>
 public class ConversationBuilder
 {
-    private UserId _ownerId = TestConstants.Users.DefaultOwnerId;
+    private AxonUserId _ownerId = TestConstants.Users.DefaultOwnerId;
     private string? _title = TestConstants.Conversations.DefaultTitle;
     private readonly List<(MessageRole role, string content, AiResponseId? aiResponseId)> _messages = [];
     private readonly List<string> _expectedDomainEvents = [];
@@ -34,14 +34,14 @@ public class ConversationBuilder
 
     /// <summary>
     /// Creates a new ConversationBuilder for an invalid scenario.
-    /// Default: Conversation with invalid owner (empty UserId).
+    /// Default: Conversation with invalid owner (empty AxonUserId).
     /// </summary>
-    public static ConversationBuilder Invalid() => new ConversationBuilder().WithOwner(default(UserId));
+    public static ConversationBuilder Invalid() => new ConversationBuilder().WithOwner(default(AxonUserId));
 
     /// <summary>
     /// Sets the conversation owner.
     /// </summary>
-    public ConversationBuilder WithOwner(UserId ownerId)
+    public ConversationBuilder WithOwner(AxonUserId ownerId)
     {
         _ownerId = ownerId;
         return this;
@@ -287,7 +287,7 @@ public class ConversationBuilder
     /// </summary>
     public ConversationBuilder WithInvalidData()
     {
-        return this.WithOwner(new UserId(Guid.Empty))
+        return this.WithOwner(new AxonUserId(Guid.Empty))
                   .WithTitle(TestConstants.EdgeCases.OneOverMaxTitle);
     }
 }

@@ -268,10 +268,10 @@ public static class AdvancedTestDataBuilders
         /// </summary>
         public static AxonPrincipal NewUserWithDynamicAndPendingWallet(string? userId = null)
         {
-            var effectiveUserId = userId ?? $"user-{Guid.NewGuid():N}";
+            var effectiveAxonUserId = userId ?? $"user-{Guid.NewGuid():N}";
             return AxonPrincipalBuilder.Create()
                 .AsHuman()
-                .WithDynamicCredential("dynamic:prod", effectiveUserId)
+                .WithDynamicCredential("dynamic:prod", effectiveAxonUserId)
                 .WithPendingSolanaWallet()
                 .Build();
         }
@@ -370,27 +370,27 @@ public static class AdvancedTestDataBuilders
         /// </summary>
         public static List<AxonPrincipal> UserJourneyProgression()
         {
-            var baseUserId = $"user-journey-{Guid.NewGuid():N}";
+            var baseAxonUserId = $"user-journey-{Guid.NewGuid():N}";
 
             return new List<AxonPrincipal>
             {
                 // Day 1: Signup with Dynamic
                 AxonPrincipalBuilder.Create()
                     .AsHuman()
-                    .WithDynamicCredential("dynamic:prod", baseUserId)
+                    .WithDynamicCredential("dynamic:prod", baseAxonUserId)
                     .Build(),
 
                 // Day 2: Connected first wallet (pending)
                 AxonPrincipalBuilder.Create()
                     .AsHuman()
-                    .WithDynamicCredential("dynamic:prod", baseUserId)
+                    .WithDynamicCredential("dynamic:prod", baseAxonUserId)
                     .WithPendingSolanaWallet()
                     .Build(),
 
                 // Day 5: Verified wallet and added Ethereum
                 AxonPrincipalBuilder.Create()
                     .AsHuman()
-                    .WithDynamicCredential("dynamic:prod", baseUserId)
+                    .WithDynamicCredential("dynamic:prod", baseAxonUserId)
                     .WithCustomOwnership(WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified)
                     .WithVerifiedEthereumWallet()
                     .WithChainDefault("solana-mainnet")
@@ -400,8 +400,8 @@ public static class AdvancedTestDataBuilders
                 AxonPrincipalBuilder.Create()
                     .AsHuman()
                     .WithRiskTier(RiskTier.Medium)
-                    .WithDynamicCredential("dynamic:prod", baseUserId)
-                    .WithGitHubCredential($"{baseUserId}-github")
+                    .WithDynamicCredential("dynamic:prod", baseAxonUserId)
+                    .WithGitHubCredential($"{baseAxonUserId}-github")
                     .WithVerifiedEthereumWallet()
                     .WithCustomOwnership(WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified)
                     .WithWatchOnlyWallet()

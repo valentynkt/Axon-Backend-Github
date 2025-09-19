@@ -26,7 +26,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     protected IWriteUnitOfWork<ChatModule> MockUnitOfWork { get; private set; } = null!;
     
     // Store the default user ID to ensure consistency across mocks
-    protected UserId DefaultUserId { get; private set; } = default!;
+    protected AxonUserId DefaultAxonUserId { get; private set; } = default!;
 
     protected override void OnApplicationSetUp()
     {
@@ -52,7 +52,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     protected virtual void SetupCommonCommandMocks()
     {
         // Create a consistent default user ID for all mocks
-        DefaultUserId = CreateUserId();
+        DefaultAxonUserId = CreateAxonUserId();
         
         MockRepository = Substitute.For<IConversationRepository>();
         MockOrchestrator = Substitute.For<IMessageProcessingOrchestrator>();
@@ -77,11 +77,13 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     /// <summary>
     /// Sets up default authentication behavior
     /// </summary>
-    protected void SetupDefaultAuthentication(UserId? userId = null)
+    protected void SetupDefaultAuthentication(AxonUserId? userId = null)
     {
-        var userIdToUse = userId ?? DefaultUserId;
-        MockCurrentUserService.UserId
+        var userIdToUse = userId ?? DefaultAxonUserId;
+        MockCurrentUserService.AxonUserId
             .Returns(userIdToUse.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userIdToUse);
     }
 
     /// <summary>
@@ -90,7 +92,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     protected virtual void SetupDefaultOrchestratorBehavior()
     {
         // Use the consistent default user ID
-        var placeholderConversation = ConversationBuilder.New().WithOwner(DefaultUserId).Build();
+        var placeholderConversation = ConversationBuilder.New().WithOwner(DefaultAxonUserId).Build();
         var placeholderMessageContent = MessageContent.Create("placeholder").Value;
         var placeholderMessageId = MessageId.New();
 
@@ -121,7 +123,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
             MessageId.New(),
             assistantMessage);
 
-        var placeholderConversation = ChatDomainTestFactory.Conversations.CreateWithOwner(DefaultUserId);
+        var placeholderConversation = ChatDomainTestFactory.Conversations.CreateWithOwner(DefaultAxonUserId);
         var placeholderMessageContent = MessageContent.Create("placeholder").Value;
         var placeholderMessageId = MessageId.New();
 
@@ -135,7 +137,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     /// </summary>
     protected void SetupOrchestratorFailure(Error error)
     {
-        var placeholderConversation = ChatDomainTestFactory.Conversations.CreateWithOwner(DefaultUserId);
+        var placeholderConversation = ChatDomainTestFactory.Conversations.CreateWithOwner(DefaultAxonUserId);
         var placeholderMessageContent = MessageContent.Create("placeholder").Value;
         var placeholderMessageId = MessageId.New();
 
@@ -151,7 +153,7 @@ public abstract class CommandHandlerTestBase<TCommand, TResult, THandler> : Appl
     {
         // If no conversation provided, create one with the default user as owner
         var conversationToReturn = conversation ?? ConversationBuilder.New()
-            .WithOwner(DefaultUserId)
+            .WithOwner(DefaultAxonUserId)
             .WithUserMessage("Test message")
             .WithAssistantMessage("Test response", new AiResponseId("test-ai"))
             .Build();

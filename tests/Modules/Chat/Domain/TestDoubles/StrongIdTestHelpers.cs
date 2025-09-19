@@ -29,12 +29,12 @@ public static class StrongIdTestHelpers
     }
 
     /// <summary>
-    /// Creates a sequence of unique UserIds for testing.
+    /// Creates a sequence of unique AxonUserIds for testing.
     /// </summary>
-    public static List<UserId> CreateUserIds(int count)
+    public static List<AxonUserId> CreateAxonUserIds(int count)
     {
         return Enumerable.Range(0, count)
-            .Select(_ => UserId.New())
+            .Select(_ => AxonUserId.New())
             .ToList();
     }
 
@@ -68,12 +68,12 @@ public static class StrongIdTestHelpers
     }
 
     /// <summary>
-    /// Creates deterministic UserIds for reproducible tests.
+    /// Creates deterministic AxonUserIds for reproducible tests.
     /// </summary>
-    public static UserId CreateDeterministicUserId(int seed = 1)
+    public static AxonUserId CreateDeterministicAxonUserId(int seed = 1)
     {
         var deterministicGuid = CreateDeterministicGuid(seed + 2000);
-        return new UserId(deterministicGuid);
+        return new AxonUserId(deterministicGuid);
     }
 
     /// <summary>
@@ -113,13 +113,13 @@ public static class StrongIdTestHelpers
     /// </summary>
     public static class Users
     {
-        public static readonly UserId Owner = TestConstants.Users.DefaultOwnerId;
-        public static readonly UserId AlternativeUser = TestConstants.Users.AlternativeOwnerId;
-        public static readonly UserId ThirdUser = TestConstants.Users.ThirdOwnerId;
+        public static readonly AxonUserId Owner = TestConstants.Users.DefaultOwnerId;
+        public static readonly AxonUserId AlternativeUser = TestConstants.Users.AlternativeOwnerId;
+        public static readonly AxonUserId ThirdUser = TestConstants.Users.ThirdOwnerId;
         
-        public static UserId CreateRandomUser() => UserId.New();
+        public static AxonUserId CreateRandomUser() => AxonUserId.New();
         
-        public static List<UserId> CreateUserGroup(int count) => CreateUserIds(count);
+        public static List<AxonUserId> CreateUserGroup(int count) => CreateAxonUserIds(count);
     }
 
     /// <summary>
@@ -127,7 +127,7 @@ public static class StrongIdTestHelpers
     /// </summary>
     public static class Conversations
     {
-        public static ConversationId CreateForUser(UserId userId)
+        public static ConversationId CreateForUser(AxonUserId userId)
         {
             // Create a conversation ID that's deterministically linked to the user
             // This can be useful for testing relationships

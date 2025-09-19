@@ -118,9 +118,9 @@ public abstract class DomainTestBase
     }
 
     /// <summary>
-    /// Creates a valid UserId for testing.
+    /// Creates a valid AxonUserId for testing.
     /// </summary>
-    protected static UserId CreateUserId() => UserId.New();
+    protected static AxonUserId CreateAxonUserId() => AxonUserId.New();
 
     /// <summary>
     /// Creates a valid ConversationId for testing.

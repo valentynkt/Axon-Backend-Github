@@ -49,7 +49,7 @@ public static class TestDataGenerator
     /// <summary>
     /// Generates a realistic user ID string.
     /// </summary>
-    public static string GenerateUserId()
+    public static string GenerateAxonUserId()
     {
         return $"user-{_faker.Random.Guid().ToString("N")[..12]}";
     }

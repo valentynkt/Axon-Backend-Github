@@ -36,9 +36,9 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
                 }
                 
                 // Create a proper conversation that ends with an assistant message (so user can append)
-                // Use the consistent DefaultUserId from the base class
+                // Use the consistent DefaultAxonUserId from the base class
                 var conversation = ConversationBuilder.New()
-                    .WithOwner(DefaultUserId)
+                    .WithOwner(DefaultAxonUserId)
                     .WithUserMessage("Initial user message")
                     .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-base-test"))
                     .Build();
@@ -96,7 +96,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     {
         // Arrange
         var command = CreateValidCommand();
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
         
         // Create conversation that ends with assistant message so user can append next
         var conversation = ConversationBuilder.New()
@@ -105,8 +105,10 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-1"))
             .Build();
         
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         SetupRepositoryGetById(command.ConversationId, conversation);
         SetupOrchestratorSuccess(command.ConversationId);
         
@@ -126,7 +128,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         string _)
     {
         // Arrange
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
         
         // Create conversation that ends with assistant message so user can append next
         var conversation = ConversationBuilder.New()
@@ -135,8 +137,10 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-1"))
             .Build();
         
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         SetupRepositoryGetById(command.ConversationId, conversation);
         SetupOrchestratorSuccess(command.ConversationId, "Assistant response to your message");
 
@@ -180,12 +184,14 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         else
         {
             // For Forbidden test, override authentication to use a different user
-            var differentUserId = CreateUserId();
-            MockCurrentUserService.UserId
-                .Returns(differentUserId.Value.ToString());
-            
-            // Use the base helper method which will create a conversation with DefaultUserId
-            // This will cause a mismatch with the differentUserId we set above
+            var differentAxonUserId = CreateAxonUserId();
+            MockCurrentUserService.AxonUserId
+                .Returns(differentAxonUserId.Value.ToString());
+            MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+                .Returns(differentAxonUserId);
+
+            // Use the base helper method which will create a conversation with DefaultAxonUserId
+            // This will cause a mismatch with the differentAxonUserId we set above
             SetupRepositoryGetById(command.ConversationId, conversation);
         }
 
@@ -204,10 +210,12 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     {
         // Arrange
         var command = CreateValidCommand();
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
 
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
 
         // Create a conversation in a completed state to trigger domain rule violation
         var completedConversation = ConversationBuilder.New()
@@ -215,17 +223,33 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .WithUserMessage("Initial user message")
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-completed"))
             .Build();
-        
+
         // Simulate completing the conversation to trigger business rule violation
         var completeResult = completedConversation.Complete(MockTimeProvider);
         completeResult.ShouldBeSuccess(); // Ensure completion worked
+
+        // Ensure the conversation has the same ID as the command (using reflection like in ConfigureHandlerDependencies)
+        var idField = completedConversation.GetType().GetField("_id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (idField != null)
+        {
+            idField.SetValue(completedConversation, command.ConversationId);
+        }
+        else
+        {
+            // Try property approach if field doesn't work
+            var idProperty = completedConversation.GetType().GetProperty("Id", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (idProperty != null && idProperty.CanWrite)
+            {
+                idProperty.SetValue(completedConversation, command.ConversationId);
+            }
+        }
 
         SetupRepositoryGetById(command.ConversationId, completedConversation);
 
         // Act
         var result = await ExecuteCommand(command);
 
-        // Assert
+        // Assert - when trying to append to a completed conversation, it should return BusinessRule error
         result.ShouldFailWithErrorType(ErrorType.BusinessRule);
         result.Error.Message.ShouldContain("active");
         
@@ -241,16 +265,34 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     {
         // Arrange
         var command = CreateValidCommand();
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
         var conversation = ConversationBuilder.New()
             .WithOwner(userId)
             .WithUserMessage("Initial user message")
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-orchestrator-test"))
             .Build();
+
+        // Ensure the conversation has the same ID as the command
+        var idField = conversation.GetType().GetField("_id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (idField != null)
+        {
+            idField.SetValue(conversation, command.ConversationId);
+        }
+        else
+        {
+            var idProperty = conversation.GetType().GetProperty("Id", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (idProperty != null && idProperty.CanWrite)
+            {
+                idProperty.SetValue(conversation, command.ConversationId);
+            }
+        }
+
         var orchestratorError = Error.Failure("AI processing failed", "AI_PROCESSING_ERROR");
 
-        MockCurrentUserService.UserId
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         SetupRepositoryGetById(command.ConversationId, conversation);
         SetupOrchestratorFailure(orchestratorError);
 
@@ -271,15 +313,32 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
     {
         // Arrange
         var command = CreateValidCommand();
-        var userId = CreateUserId();
+        var userId = CreateAxonUserId();
         var conversation = ConversationBuilder.New()
             .WithOwner(userId)
             .WithUserMessage("Initial user message")
             .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-repo-failure"))
             .Build();
 
-        MockCurrentUserService.UserId
+        // Ensure the conversation has the same ID as the command
+        var idField = conversation.GetType().GetField("_id", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (idField != null)
+        {
+            idField.SetValue(conversation, command.ConversationId);
+        }
+        else
+        {
+            var idProperty = conversation.GetType().GetProperty("Id", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (idProperty != null && idProperty.CanWrite)
+            {
+                idProperty.SetValue(conversation, command.ConversationId);
+            }
+        }
+
+        MockCurrentUserService.AxonUserId
             .Returns(userId.Value.ToString());
+        MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
+            .Returns(userId);
         SetupRepositoryGetById(command.ConversationId, conversation);
         MockRepository.UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<Conversation>(new InvalidOperationException("Database connection failed")));
@@ -320,7 +379,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
 
     private static IEnumerable<TestCaseData> GetConversationValidationScenarios()
     {
-        var wrongUserId = UserId.New();
+        var wrongAxonUserId = AxonUserId.New();
 
         yield return new TestCaseData(
             null,
@@ -330,7 +389,7 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
 
         yield return new TestCaseData(
             ConversationBuilder.New()
-                .WithOwner(wrongUserId)
+                .WithOwner(wrongAxonUserId)
                 .WithUserMessage("Initial user message")
                 .WithAssistantMessage("Initial assistant response", new AiResponseId("ai-wrong-user"))
                 .Build(),

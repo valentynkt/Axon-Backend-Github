@@ -349,14 +349,14 @@ public class SecurityTests : IdentityTestBase
             {
                 // Arrange
                 var userData = new ExchangeUserData(
-                    UserId: maliciousInput,
+                    AxonUserId: maliciousInput,
                     Email: "test@example.com", // Keep email valid
                     EnvironmentId: maliciousInput,
                     Wallets: new List<ExchangeWalletData>()
                 );
 
                 // Act & Assert - Domain should handle these as regular strings
-                userData.UserId.ShouldBe(maliciousInput);
+                userData.AxonUserId.ShouldBe(maliciousInput);
                 userData.EnvironmentId.ShouldBe(maliciousInput);
                 // Security protection happens at validation and persistence layers
             }
