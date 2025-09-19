@@ -12,17 +12,17 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 /// </summary>
 public static class ChatConversationSpecs
 {
-    public static ISpecification<Conversation> ActiveByOwner(UserId ownerId)
+    public static ISpecification<Conversation> ActiveByOwner(AxonUserId ownerId)
         => new ActiveByOwnerSpec(ownerId);
 
-    public static ISpecification<Conversation> RecentlyUpdatedByOwner(UserId ownerId, DateTimeOffset sinceUtc)
+    public static ISpecification<Conversation> RecentlyUpdatedByOwner(AxonUserId ownerId, DateTimeOffset sinceUtc)
         => new RecentlyUpdatedByOwnerSpec(ownerId, sinceUtc);
 
-    public static ISpecification<Conversation> CreatedInRangeByOwner(UserId ownerId, DateTimeOffset fromUtc, DateTimeOffset toUtc)
+    public static ISpecification<Conversation> CreatedInRangeByOwner(AxonUserId ownerId, DateTimeOffset fromUtc, DateTimeOffset toUtc)
         => new ConversationsCreatedBetweenForOwnerSpec(ownerId, fromUtc, toUtc);
 
     public static ISpecification<Conversation> Search(
-        UserId ownerId,
+        AxonUserId ownerId,
         string? term = null,
         ConversationStatus? status = null,
         DateTimeOffset? from = null,

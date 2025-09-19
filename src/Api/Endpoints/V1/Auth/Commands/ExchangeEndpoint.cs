@@ -132,7 +132,7 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
         }
 
         return new ExchangeUserData(
-            UserId: dynamicUserData.UserId,
+            AxonUserId: dynamicUserData.AxonUserId,
             Email: dynamicUserData.Email,
             EnvironmentId: dynamicUserData.EnvironmentId,
             Wallets: exchangeWallets,

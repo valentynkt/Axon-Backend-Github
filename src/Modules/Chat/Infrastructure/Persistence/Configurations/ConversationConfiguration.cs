@@ -20,7 +20,7 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .IsRequired();
 
         builder.Property(c => c.OwnerId)
-            .HasConversion(new UserId.EfCoreValueConverter())
+            .HasConversion(new AxonUserId.EfCoreValueConverter())
             .IsRequired();
 
         builder.Property(c => c.Title)

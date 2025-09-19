@@ -16,7 +16,7 @@ public sealed record DomainEventMetadata
     public string? TenantId { get; init; }
 
     /// <summary>Actor context, if you capture it in the domain.</summary>
-    public string? UserId { get; init; }
+    public string? AxonUserId { get; init; }
 
     /// <summary>Lightweight, serializable ad-hoc headers (avoid PII here).</summary>
     public IReadOnlyDictionary<string, string>? Headers { get; init; }

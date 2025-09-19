@@ -37,7 +37,7 @@ public sealed class AuthenticationBehavior<TRequest, TResponse> : IPipelineBehav
         }
 
         // Check if user is authenticated
-        if (string.IsNullOrEmpty(_currentUserService.UserId))
+        if (string.IsNullOrEmpty(_currentUserService.AxonUserId))
         {
             return Result.Failure<TResponse, Error>(
                 Error.Unauthorized("User must be authenticated to access this resource.", "Chat.Auth.Unauthenticated"));

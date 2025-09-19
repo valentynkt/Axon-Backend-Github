@@ -16,7 +16,7 @@ public interface IConversationReadRepository : ISpecificationReadRepository<Conv
     /// Should be used for the most common GetConversations scenarios.
     /// </summary>
     Task<IReadOnlyList<ConversationListItem>> GetConversationsForOwnerOptimizedAsync(
-        UserId ownerId, 
+        AxonUserId ownerId, 
         int skip, 
         int take,
         CancellationToken cancellationToken = default);
@@ -25,14 +25,14 @@ public interface IConversationReadRepository : ISpecificationReadRepository<Conv
     /// Optimized method for counting conversations by owner using compiled queries.
     /// </summary>
     Task<int> CountConversationsForOwnerOptimizedAsync(
-        UserId ownerId, 
+        AxonUserId ownerId, 
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Optimized method for counting conversations with title filter using compiled queries.
     /// </summary>
     Task<int> CountConversationsWithTitleOptimizedAsync(
-        UserId ownerId, 
+        AxonUserId ownerId, 
         string titleContains,
         CancellationToken cancellationToken = default);
 }

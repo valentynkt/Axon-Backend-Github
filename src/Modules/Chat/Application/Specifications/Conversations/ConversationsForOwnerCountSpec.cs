@@ -11,7 +11,7 @@ namespace Axon.Modules.Chat.Application.Specifications.Conversations;
 public sealed class ConversationsForOwnerCountSpec : Specification<Conversation>
 {
     public ConversationsForOwnerCountSpec(
-        UserId ownerId,
+        AxonUserId ownerId,
         string? titleContains = null)
     {
         // Apply AsNoTracking for read-only count query

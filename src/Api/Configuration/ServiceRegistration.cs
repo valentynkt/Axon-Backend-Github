@@ -150,6 +150,10 @@ public static class ServiceRegistration
         // Register pipeline behaviors once for all modules
         services.AddApplicationServices();
 
+        // CRITICAL FIX: Register outbox facade services (includes IEnvelopeContextAccessor)
+        // This ensures all required services for MassTransitIntegrationEventPublisher are available
+        services.AddOutboxFacade();
+
         // Configure Mapster with profiles and validation
         services.AddMapsterWithProfiles(Assembly.GetExecutingAssembly());
 

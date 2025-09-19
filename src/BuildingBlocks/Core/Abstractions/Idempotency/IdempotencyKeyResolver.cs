@@ -64,8 +64,8 @@ public sealed class IdempotencyKeyResolver
         // 4) Generic, deterministic fallback (prefix + type + optional user + optional payload hash)
         var parts = new List<string> { _options.Value.KeyPrefix, typeof(TRequest).FullName ?? typeof(TRequest).Name };
 
-        if (_options.Value.IncludeUserInKey && _currentUser?.UserId is { Length: > 0 })
-            parts.Add(_currentUser.UserId);
+        if (_options.Value.IncludeUserInKey && _currentUser?.AxonUserId is { Length: > 0 })
+            parts.Add(_currentUser.AxonUserId);
 
         if (_options.Value.IncludePayloadHash)
         {

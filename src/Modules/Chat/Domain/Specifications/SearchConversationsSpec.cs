@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 public sealed class SearchConversationsSpec : Specification<Conversation>
 {
     public SearchConversationsSpec(
-        UserId ownerId,
+        AxonUserId ownerId,
         string? term,
         ConversationStatus? status,
         DateTimeOffset? from,

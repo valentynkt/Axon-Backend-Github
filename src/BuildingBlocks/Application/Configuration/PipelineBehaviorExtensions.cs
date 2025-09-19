@@ -54,7 +54,7 @@ public static class PipelineBehaviorExtensions
         // 2) Register IdempotencyBehavior dependencies
         services.Configure<IdempotencyOptions>(options => { }); // Use default configuration
         services.AddHttpContextAccessor(); // For HTTP header-based idempotency keys
-        services.AddSingleton<IdempotencyKeyResolver>();
+        services.AddScoped<IdempotencyKeyResolver>();
 
         // 3) MediatR pipeline (outer → inner)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));

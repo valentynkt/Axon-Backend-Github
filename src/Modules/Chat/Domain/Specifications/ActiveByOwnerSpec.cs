@@ -9,7 +9,7 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 
 public sealed class ActiveByOwnerSpec : Specification<Conversation>
 {
-    public ActiveByOwnerSpec(UserId ownerId)
+    public ActiveByOwnerSpec(AxonUserId ownerId)
     {
         Query.Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active);
     }

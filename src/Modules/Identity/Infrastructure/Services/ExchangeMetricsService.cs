@@ -92,7 +92,7 @@ public sealed class ExchangeMetricsService : IExchangeMetricsService, IDisposabl
         _exchangeSuccessCounter.Add(1, new KeyValuePair<string, object?>("created", created.ToString().ToLowerInvariant()));
         _exchangeProcessingTime.Record(processingTimeMs, new KeyValuePair<string, object?>("status", "success"));
 
-        _logger.LogDebug("Exchange success recorded: UserId={UserId}, Created={Created}, WalletsProcessed={WalletsProcessed}, WalletsLinked={WalletsLinked}, Conflicts={Conflicts}, Duration={Duration}ms",
+        _logger.LogDebug("Exchange success recorded: AxonUserId={AxonUserId}, Created={Created}, WalletsProcessed={WalletsProcessed}, WalletsLinked={WalletsLinked}, Conflicts={Conflicts}, Duration={Duration}ms",
             userId, created, walletsProcessed, walletsLinked, conflicts, processingTimeMs);
     }
 

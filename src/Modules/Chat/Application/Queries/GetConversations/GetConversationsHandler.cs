@@ -32,30 +32,32 @@ public sealed class GetConversationsHandler : BaseChatQueryHandler<GetConversati
         CancellationToken cancellationToken)
     {
         // Authentication and pagination validation handled by pipeline behaviors
-        try 
+        try
         {
-            var userId = GetAuthenticatedUserId();
-            
+            var authResult = await GetAuthenticatedAxonUserIdAsync(cancellationToken);
+            if (authResult.IsFailure)
+                return Result.Failure<Paged<ConversationListItem>, Error>(authResult.Error);
+
             var pageResult = Page.Sanitize(request.PageNumber, request.PageSize);
             if (pageResult.IsFailure)
                 return Result.Failure<Paged<ConversationListItem>, Error>(pageResult.Error);
-            
+
             var page = pageResult.Value;
 
             // Build specifications using fluent builders
             var dataSpec = ConversationSpecs.ForOwner(
-                userId, 
-                page, 
-                request.SortBy, 
-                request.SortDirection, 
+                authResult.Value,
+                page,
+                request.SortBy,
+                request.SortDirection,
                 request.TitleContains);
 
             // For count, we need to create a simpler specification without pagination and projections
             var conversationsForOwnerSpec = new ConversationsForOwnerSpec(
-                userId, 
+                authResult.Value,
                 new Page(1, int.MaxValue), // Large page size for counting
-                request.SortBy, 
-                request.SortDirection, 
+                request.SortBy,
+                request.SortDirection,
                 request.TitleContains);
 
             // Execute queries

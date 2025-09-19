@@ -9,7 +9,7 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 
 public sealed class RecentlyUpdatedByOwnerSpec : Specification<Conversation>
 {
-    public RecentlyUpdatedByOwnerSpec(UserId ownerId, DateTimeOffset sinceUtc)
+    public RecentlyUpdatedByOwnerSpec(AxonUserId ownerId, DateTimeOffset sinceUtc)
     {
         var since = sinceUtc;
         Query.Where(c =>

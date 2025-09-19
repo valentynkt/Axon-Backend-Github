@@ -15,7 +15,7 @@ namespace Axon.Modules.Chat.Application.Specifications.Conversations;
 public sealed class ConversationsForOwnerSpec : PagedSpecification<Conversation, ConversationListItem>
 {
     public ConversationsForOwnerSpec(
-        UserId ownerId,
+        AxonUserId ownerId,
         Page page,
         ConversationSortBy sortBy = ConversationSortBy.UpdatedAt,
         SortDirection sortDirection = SortDirection.Desc,

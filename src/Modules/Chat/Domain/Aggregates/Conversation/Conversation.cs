@@ -32,7 +32,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     public IReadOnlyCollection<Message> Messages => _messages;
 
     // Core state
-    public UserId OwnerId { get; private set; }
+    public AxonUserId OwnerId { get; private set; }
     public ConversationStatus Status { get; private set; }
     public string? Title { get; private set; }
 
@@ -53,7 +53,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     // EF Core parameterless ctor
     private Conversation() : base() { }
 
-    private Conversation(ConversationId id, UserId ownerId, string? title)
+    private Conversation(ConversationId id, AxonUserId ownerId, string? title)
         : base(id)
     {
         OwnerId = ownerId;
@@ -65,7 +65,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     /// Starts a new conversation with the specified owner.
     /// </summary>
     public static Result<Conversation, Error> StartNewConversation(
-        UserId ownerId,
+        AxonUserId ownerId,
         string? titleOrNull,
         TimeProvider timeProvider)
     {
@@ -249,17 +249,17 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     }
 
     /// <summary>Checks if the conversation belongs to a specific user.</summary>
-    public bool BelongsTo(UserId userId) => OwnerId == userId;
+    public bool BelongsTo(AxonUserId axonAxonUserId) => OwnerId == axonAxonUserId;
 
     /// <summary>
     /// Validates that the conversation can be accessed by the specified user.
     /// Returns a Result to maintain consistency with other domain operations.
     /// </summary>
-    public Result<Unit, Error> ValidateAccess(UserId userId)
+    public Result<Unit, Error> ValidateAccess(AxonUserId axonAxonUserId)
     {
         try
         {
-            CheckRule(new ConversationMustBelongToOwnerRule(this, userId));
+            CheckRule(new ConversationMustBelongToOwnerRule(this, axonAxonUserId));
             return Result.Success<Unit, Error>(Unit.Value);
         }
         catch (BusinessRuleException ex)

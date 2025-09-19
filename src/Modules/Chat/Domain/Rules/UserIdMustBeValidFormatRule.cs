@@ -4,7 +4,7 @@ using Axon.Modules.Chat.Domain.Errors;
 namespace Axon.Modules.Chat.Domain.Rules;
 
 /// <summary>
-/// Business rule that ensures a UserId string can be parsed to a valid Guid.
+/// Business rule that ensures a AxonUserId string can be parsed to a valid Guid.
 /// </summary>
 internal sealed class UserIdMustBeValidFormatRule : BusinessRule
 {

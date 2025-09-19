@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Application.DTOs.Exchange;
 /// This DTO bridges the gap between Infrastructure (Dynamic service) and Application (command processing).
 /// Contains only the essential data needed for principal and wallet operations.
 /// </summary>
-/// <param name="UserId">The Dynamic user's unique identifier (subject claim)</param>
+/// <param name="AxonUserId">The Dynamic user's unique identifier (subject claim)</param>
 /// <param name="Email">The user's email address, if provided in the JWT</param>
 /// <param name="EnvironmentId">The Dynamic environment ID for issuer validation</param>
 /// <param name="Wallets">List of connected wallets from the JWT claims</param>
@@ -14,7 +14,7 @@ namespace Axon.Modules.Identity.Application.DTOs.Exchange;
 /// <param name="IsNewUser">Whether this is the user's first authentication with Dynamic</param>
 /// <param name="AdditionalMetadata">Optional metadata like session keys or verified credentials</param>
 public sealed record ExchangeUserData(
-    string UserId,
+    string AxonUserId,
     string Email,
     string EnvironmentId,
     List<ExchangeWalletData> Wallets,

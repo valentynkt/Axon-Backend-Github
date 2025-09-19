@@ -12,7 +12,7 @@ public interface ICurrentUserService
     /// Gets the current authenticated user's unique identifier
     /// Returns null if no user is authenticated or in system context
     /// </summary>
-    string? UserId { get; }
+    string? AxonUserId { get; }
 
     /// <summary>
     /// Gets the current authenticated user's display name
@@ -29,16 +29,16 @@ public interface ICurrentUserService
     /// Gets the current user ID or returns a default system user identifier
     /// Useful for audit trails when operations are performed by the system
     /// </summary>
-    /// <param name="systemUserId">Default system user ID to use when no user is authenticated</param>
+    /// <param name="systemAxonUserId">Default system user ID to use when no user is authenticated</param>
     /// <returns>Current user ID or the provided system user ID</returns>
-    string GetUserIdOrDefault(string systemUserId = "SYSTEM");
+    string GetAxonUserIdOrDefault(string systemAxonUserId = "SYSTEM");
 
     /// <summary>
     /// Gets the current user ID or returns "SYSTEM" for system operations
     /// Used by SPARC Event Sourcing infrastructure for domain event metadata
     /// </summary>
     /// <returns>Current user ID or "SYSTEM"</returns>
-    string GetCurrentUserIdOrSystem();
+    string GetCurrentAxonUserIdOrSystem();
 
     /// <summary>
     /// Gets the current authenticated user's internal AxonUserId with smart caching.

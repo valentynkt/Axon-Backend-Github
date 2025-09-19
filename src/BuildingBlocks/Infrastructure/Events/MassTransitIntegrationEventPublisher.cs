@@ -82,10 +82,10 @@ public sealed class MassTransitIntegrationEventPublisher : IIntegrationEventPubl
                     if (!string.IsNullOrWhiteSpace(meta.TenantId))
                         send.Headers.Set(CustomHeaders.TenantId, meta.TenantId);
 
-                    // Check for user-id in metadata (since IntegrationEnvelopeContext doesn't have UserId property yet)
-                    // TODO: Once INF-04 adds UserId to envelope, prefer that over metadata
+                    // Check for user-id in metadata (since IntegrationEnvelopeContext doesn't have AxonUserId property yet)
+                    // TODO: Once INF-04 adds AxonUserId to envelope, prefer that over metadata
                     if (meta.Metadata?.TryGetValue("user-id", out var userId) == true && userId is not null)
-                        send.Headers.Set(CustomHeaders.UserId, userId);
+                        send.Headers.Set(CustomHeaders.AxonUserId, userId);
 
                     // Add any additional metadata
                     if (meta.Metadata is not null)

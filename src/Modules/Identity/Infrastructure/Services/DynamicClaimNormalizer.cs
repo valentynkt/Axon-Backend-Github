@@ -37,7 +37,7 @@ public sealed class DynamicClaimNormalizer : IDynamicClaimNormalizer
         var claimsMultimap = BuildClaimMultimap(claims);
 
         // Extract all data using field resolvers
-        var userId = ResolveUserId(claimsMultimap);
+        var userId = ResolveAxonUserId(claimsMultimap);
         var email = ResolveEmail(claimsMultimap);
         var environmentId = ResolveEnvironmentId(claimsMultimap);
         var sessionPublicKey = ResolveSessionPublicKey(claimsMultimap);
@@ -119,7 +119,7 @@ public sealed class DynamicClaimNormalizer : IDynamicClaimNormalizer
     /// 1. "sub" claim (JWT standard)
     /// 2. ClaimTypes.NameIdentifier (ASP.NET mapped claim)
     /// </summary>
-    private static string ResolveUserId(ILookup<string, string> claimsMultimap)
+    private static string ResolveAxonUserId(ILookup<string, string> claimsMultimap)
     {
         // Try "sub" claim first (JWT standard)
         var userId = claimsMultimap[JwtRegisteredClaimNames.Sub].FirstOrDefault();

@@ -10,7 +10,7 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 /// </summary>
 public sealed class ConversationAccessSpec : Specification<Conversation>
 {
-    public ConversationAccessSpec(ConversationId conversationId, UserId ownerId)
+    public ConversationAccessSpec(ConversationId conversationId, AxonUserId ownerId)
     {
         Query
             .Where(c => c.Id == conversationId && c.OwnerId == ownerId)

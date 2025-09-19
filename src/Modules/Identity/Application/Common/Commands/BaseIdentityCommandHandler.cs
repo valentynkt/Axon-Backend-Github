@@ -30,8 +30,8 @@ public abstract class BaseIdentityCommandHandler<TCommand, TResponse> : IRequest
     /// <returns>The authenticated user's AxonUserId</returns>
     protected AxonUserId GetAuthenticatedAxonUserId()
     {
-        // AuthenticationBehavior ensures UserId is not null for authenticated requests
-        var userIdString = _currentUserService.UserId!;
+        // AuthenticationBehavior ensures AxonUserId is not null for authenticated requests
+        var userIdString = _currentUserService.AxonUserId!;
         return new AxonUserId(Guid.Parse(userIdString));
     }
 

@@ -80,13 +80,13 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         {
             ["CorrelationId"] = correlationId,
             ["Provider"] = "dynamic",
-            ["UserId"] = command.UserData?.UserId ?? "unknown",
+            ["AxonUserId"] = command.UserData?.AxonUserId ?? "unknown",
             ["EnvironmentId"] = command.UserData?.EnvironmentId ?? "unknown",
             ["WalletCount"] = command.UserData?.Wallets?.Count ?? 0
         });
 
-        _logger.LogInformation("Exchange credential operation started for user {UserId} with {WalletCount} wallets",
-            command.UserData?.UserId, command.UserData?.Wallets?.Count ?? 0);
+        _logger.LogInformation("Exchange credential operation started for user {AxonUserId} with {WalletCount} wallets",
+            command.UserData?.AxonUserId, command.UserData?.Wallets?.Count ?? 0);
 
         // Validate input data structure
         var validationResult = await ValidateCommand(command);
@@ -114,7 +114,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             {
                 var outcome = result.Value;
                 _metricsService.RecordExchangeSuccess(
-                    command.UserData!.UserId,
+                    command.UserData!.AxonUserId,
                     outcome.Created,
                     outcome.WalletsProcessed,
                     outcome.WalletsLinked,
@@ -157,22 +157,22 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     /// Populates caches with user identity mapping to enable >95% cache hit rate for subsequent requests.
     /// Cache warming failures are handled gracefully and don't disrupt the exchange flow.
     /// </summary>
-    /// <param name="dynamicUserId">The Dynamic user ID from JWT token</param>
-    /// <param name="axonUserId">The resolved internal AxonUserId</param>
+    /// <param name="dynamicAxonUserId">The Dynamic user ID from JWT token</param>
+    /// <param name="axonAxonUserId">The resolved internal AxonUserId</param>
     /// <returns>Task representing the async cache warming operation</returns>
-    private async Task WarmUserContextCaches(string dynamicUserId, AxonUserId axonUserId)
+    private async Task WarmUserContextCaches(string dynamicAxonUserId, AxonUserId axonAxonUserId)
     {
         using var activity = Activity.Current?.Source.StartActivity("WarmUserContextCaches");
-        activity?.SetTag("dynamic_user_id", dynamicUserId);
-        activity?.SetTag("axon_user_id", axonUserId.Value);
+        activity?.SetTag("dynamic_user_id", dynamicAxonUserId);
+        activity?.SetTag("axon_user_id", axonAxonUserId.Value);
 
         var stopwatch = Stopwatch.StartNew();
 
         try
         {
             // Warm memory cache for cross-request access
-            var cacheKey = $"axon:user:{dynamicUserId}";
-            _memoryCache.Set(cacheKey, axonUserId, new MemoryCacheEntryOptions
+            var cacheKey = $"axon:user:{dynamicAxonUserId}";
+            _memoryCache.Set(cacheKey, axonAxonUserId, new MemoryCacheEntryOptions
             {
                 SlidingExpiration = TimeSpan.FromMinutes(15),
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
@@ -182,7 +182,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             // Warm request-scoped cache for immediate use
             if (_httpContextAccessor.HttpContext != null)
             {
-                _httpContextAccessor.HttpContext.Items["AxonUserId"] = axonUserId;
+                _httpContextAccessor.HttpContext.Items["AxonUserId"] = axonAxonUserId;
             }
 
             stopwatch.Stop();
@@ -191,8 +191,8 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             CacheWarmingSuccessCounter.Add(1);
             CacheWarmingLatency.Record(stopwatch.ElapsedMilliseconds);
 
-            _logger.LogInformation("User context cache warmed: {DynamicUserId} -> {AxonUserId}, Duration: {Duration}ms",
-                dynamicUserId, axonUserId.Value, stopwatch.ElapsedMilliseconds);
+            _logger.LogInformation("User context cache warmed: {DynamicAxonUserId} -> {AxonUserId}, Duration: {Duration}ms",
+                dynamicAxonUserId, axonAxonUserId.Value, stopwatch.ElapsedMilliseconds);
                 
             activity?.SetTag("cache_warming_status", "success");
             activity?.SetTag("cache_warming_duration_ms", stopwatch.ElapsedMilliseconds);
@@ -206,8 +206,8 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             CacheWarmingLatency.Record(stopwatch.ElapsedMilliseconds);
 
             // Cache warming failures should not break exchange flow
-            _logger.LogWarning(ex, "Cache warming failed for user {DynamicUserId}, Duration: {Duration}ms", 
-                dynamicUserId, stopwatch.ElapsedMilliseconds);
+            _logger.LogWarning(ex, "Cache warming failed for user {DynamicAxonUserId}, Duration: {Duration}ms", 
+                dynamicAxonUserId, stopwatch.ElapsedMilliseconds);
             activity?.SetTag("cache_warming_status", "failure");
             activity?.SetTag("cache_warming_duration_ms", stopwatch.ElapsedMilliseconds);
         }
@@ -267,7 +267,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             principal.Id.Value, saveResult, defaultsApplied, principal.PrincipalChainDefaults.Count);
 
         // Step 6: Warm user context caches for subsequent identity resolution
-        await WarmUserContextCaches(userData.UserId, principal.Id);
+        await WarmUserContextCaches(userData.AxonUserId, principal.Id);
 
         // Step 7: Return stable metrics
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
@@ -287,7 +287,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     /// <param name="command">The exchange command to validate</param>
     /// <returns>Success result with dummy outcome if validation passes, or failure with validation error</returns>
     /// <remarks>
-    /// Validates that UserData, UserId, and EnvironmentId are provided and non-empty.
+    /// Validates that UserData, AxonUserId, and EnvironmentId are provided and non-empty.
     /// This method performs structural validation only - business rule validation occurs later in the flow.
     /// </remarks>
     private static async Task<Result<ExchangeOutcome, Error>> ValidateCommand(ExchangeCredentialCommand command)
@@ -296,7 +296,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Validation("User data is required", "EXCHANGE.USER_DATA_REQUIRED"));
 
-        if (string.IsNullOrWhiteSpace(userData.UserId))
+        if (string.IsNullOrWhiteSpace(userData.AxonUserId))
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Validation("User ID is required", "EXCHANGE.USER_ID_REQUIRED"));
 
@@ -333,7 +333,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         // Log which issuer source was used for debugging
         var issuerSource = userData.AdditionalMetadata?.ContainsKey(JwtIssuerMetadataKey) == true ? "JWT claim" : "constructed";
         System.Diagnostics.Debug.WriteLine($"Using issuer from {issuerSource}: {issuer}");
-        var subject = userData.UserId;
+        var subject = userData.AxonUserId;
 
         return Result.Success<(ProviderType, string, string), Error>((providerResult.Value, issuer, subject));
     }

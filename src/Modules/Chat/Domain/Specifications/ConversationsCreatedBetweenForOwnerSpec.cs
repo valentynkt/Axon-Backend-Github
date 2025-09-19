@@ -8,7 +8,7 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 
 public sealed class ConversationsCreatedBetweenForOwnerSpec : Specification<Conversation>
 {
-    public ConversationsCreatedBetweenForOwnerSpec(UserId ownerId, DateTimeOffset fromUtc, DateTimeOffset toUtc)
+    public ConversationsCreatedBetweenForOwnerSpec(AxonUserId ownerId, DateTimeOffset fromUtc, DateTimeOffset toUtc)
     {
         if (fromUtc > toUtc) (fromUtc, toUtc) = (toUtc, fromUtc);
         var from = fromUtc;

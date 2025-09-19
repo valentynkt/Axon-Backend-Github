@@ -26,7 +26,7 @@ public static class ConversationSpecs
     /// <param name="titleContains">Optional text filter for conversation titles</param>
     /// <returns>Paged specification for conversations owned by the user</returns>
     public static ISpecification<Conversation, ConversationListItem> ForOwner(
-        UserId ownerId,
+        AxonUserId ownerId,
         Page page,
         ConversationSortBy sortBy = ConversationSortBy.UpdatedAt,
         SortDirection sortDirection = SortDirection.Desc,
@@ -42,7 +42,7 @@ public static class ConversationSpecs
     /// <param name="conversationId">The conversation ID to check access for</param>
     /// <param name="userId">The user ID to verify ownership</param>
     /// <returns>Specification for conversation access verification</returns>
-    public static ISpecification<Conversation> AccessCheck(ConversationId conversationId, UserId userId)
+    public static ISpecification<Conversation> AccessCheck(ConversationId conversationId, AxonUserId userId)
     {
         return new ConversationAccessSpec(conversationId, userId);
     }
@@ -53,7 +53,7 @@ public static class ConversationSpecs
     /// </summary>
     private sealed class ConversationAccessSpec : Specification<Conversation>
     {
-        public ConversationAccessSpec(ConversationId conversationId, UserId userId)
+        public ConversationAccessSpec(ConversationId conversationId, AxonUserId userId)
         {
             Query
                 .AsNoTracking()

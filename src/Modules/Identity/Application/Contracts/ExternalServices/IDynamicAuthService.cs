@@ -31,7 +31,7 @@ public interface IDynamicAuthService
 /// Validated user data from Dynamic.xyz JWT token
 /// </summary>
 public record DynamicUserData(
-    string UserId,
+    string AxonUserId,
     string Email,
     string EnvironmentId,
     List<WalletData> Wallets,

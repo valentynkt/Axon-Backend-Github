@@ -58,9 +58,9 @@ public static class CacheKeyBuilder
     /// </summary>
     private static string GetTenantPartition(ICurrentUserService? currentUserService)
     {
-        // For now, since ICurrentUserService doesn't expose TenantId, use UserId as tenant proxy
+        // For now, since ICurrentUserService doesn't expose TenantId, use AxonUserId as tenant proxy
         // This should be updated when ITenantService or enhanced ICurrentUserService is available
-        var userId = currentUserService?.UserId;
+        var userId = currentUserService?.AxonUserId;
         return string.IsNullOrEmpty(userId) ? "global" : $"tenant:{userId}";
     }
 
@@ -69,7 +69,7 @@ public static class CacheKeyBuilder
     /// </summary>
     private static string GetUserPartition(ICurrentUserService? currentUserService)
     {
-        var userId = currentUserService?.UserId;
+        var userId = currentUserService?.AxonUserId;
         return string.IsNullOrEmpty(userId) ? "global" : $"user:{userId}";
     }
 

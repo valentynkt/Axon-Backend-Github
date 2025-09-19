@@ -8,7 +8,7 @@ namespace Axon.Modules.Chat.Domain.Events;
 /// </summary>
 public sealed record ConversationStartedEvent(
     ConversationId ConversationId,
-    UserId OwnerId,
+    AxonUserId OwnerId,
     string? Title,
     DateTimeOffset StartedAt
 ) : DomainEvent;

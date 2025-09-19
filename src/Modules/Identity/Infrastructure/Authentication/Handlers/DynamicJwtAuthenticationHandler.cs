@@ -94,7 +94,7 @@ public sealed class DynamicJwtAuthenticationHandler : AuthenticationHandler<Dyna
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
-            Logger.LogInformation("Successfully authenticated user {UserId}", userData.UserId);
+            Logger.LogInformation("Successfully authenticated user {AxonUserId}", userData.AxonUserId);
             return AuthenticateResult.Success(ticket);
         }
         catch (OperationCanceledException)
@@ -129,8 +129,8 @@ public sealed class DynamicJwtAuthenticationHandler : AuthenticationHandler<Dyna
     private static void AddSupplementaryClaims(ClaimsIdentity identity, DynamicUserData userData)
     {
         // Add ASP.NET Core standard claims for compatibility (only if not already present)
-        if (!identity.HasClaim(ClaimTypes.NameIdentifier, userData.UserId))
-            identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userData.UserId));
+        if (!identity.HasClaim(ClaimTypes.NameIdentifier, userData.AxonUserId))
+            identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userData.AxonUserId));
 
         if (!string.IsNullOrWhiteSpace(userData.Email) && !identity.HasClaim(ClaimTypes.Email, userData.Email))
             identity.AddClaim(new Claim(ClaimTypes.Email, userData.Email));

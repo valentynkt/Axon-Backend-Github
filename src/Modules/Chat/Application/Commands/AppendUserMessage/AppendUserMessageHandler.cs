@@ -43,9 +43,13 @@ public sealed class AppendUserMessageHandler : BaseChatIdempotentCommandHandler<
         Logger.LogDebug("Processing append user message command for conversation {ConversationId}",
             command.ConversationId.Value);
 
+        var authResult = await GetAuthenticatedAxonUserIdAsync(cancellationToken);
+        if (authResult.IsFailure)
+            return Result.Failure<ProcessMessageResponse, Error>(authResult.Error);
+
         var conversationResult = await LoadAndValidateConversationAsync(
-            command.ConversationId, 
-            GetAuthenticatedUserId(), 
+            command.ConversationId,
+            authResult.Value,
             cancellationToken);
 
         return await conversationResult

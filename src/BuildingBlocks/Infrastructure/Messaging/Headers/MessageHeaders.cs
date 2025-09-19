@@ -28,7 +28,7 @@ public static class MessageHeaders
     /// User identifier of the initiating user.
     /// Used for audit and authorization downstream.
     /// </summary>
-    public const string UserId = "user-id";
+    public const string AxonUserId = "user-id";
 
     /// <summary>
     /// Correlation identifier for saga/workflow orchestration.

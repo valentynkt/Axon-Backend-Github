@@ -20,9 +20,9 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// <summary>
     /// Compiled query for fetching conversations by owner with projection - hot path optimization
     /// </summary>
-    private static readonly Func<ChatReadDbContext, UserId, int, int, IAsyncEnumerable<ConversationListItem>> 
+    private static readonly Func<ChatReadDbContext, AxonUserId, int, int, IAsyncEnumerable<ConversationListItem>> 
         GetConversationsForOwnerCompiled = EF.CompileAsyncQuery(
-            (ChatReadDbContext context, UserId ownerId, int skip, int take) =>
+            (ChatReadDbContext context, AxonUserId ownerId, int skip, int take) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active)
                     .OrderByDescending(c => c.UpdatedAt)
@@ -40,9 +40,9 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// <summary>
     /// Compiled query for counting conversations by owner - optimized for count operations
     /// </summary>
-    private static readonly Func<ChatReadDbContext, UserId, Task<int>> 
+    private static readonly Func<ChatReadDbContext, AxonUserId, Task<int>> 
         CountConversationsForOwnerCompiled = EF.CompileAsyncQuery(
-            (ChatReadDbContext context, UserId ownerId) =>
+            (ChatReadDbContext context, AxonUserId ownerId) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active)
                     .Count());
@@ -50,9 +50,9 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// <summary>
     /// Compiled query for title search with count - hot path for filtered queries
     /// </summary>
-    private static readonly Func<ChatReadDbContext, UserId, string, Task<int>> 
+    private static readonly Func<ChatReadDbContext, AxonUserId, string, Task<int>> 
         CountConversationsWithTitleCompiled = EF.CompileAsyncQuery(
-            (ChatReadDbContext context, UserId ownerId, string titleLower) =>
+            (ChatReadDbContext context, AxonUserId ownerId, string titleLower) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId && 
                                c.Status == ConversationStatus.Active &&
@@ -70,7 +70,7 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// Should be used for the most common GetConversations scenarios.
     /// </summary>
     public async Task<IReadOnlyList<ConversationListItem>> GetConversationsForOwnerOptimizedAsync(
-        UserId ownerId, 
+        AxonUserId ownerId, 
         int skip, 
         int take,
         CancellationToken cancellationToken = default)
@@ -88,7 +88,7 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// Optimized method for counting conversations by owner using compiled queries.
     /// </summary>
     public Task<int> CountConversationsForOwnerOptimizedAsync(
-        UserId ownerId, 
+        AxonUserId ownerId, 
         CancellationToken cancellationToken = default)
     {
         return CountConversationsForOwnerCompiled(_chatDbContext, ownerId);
@@ -98,7 +98,7 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// Optimized method for counting conversations with title filter using compiled queries.
     /// </summary>
     public Task<int> CountConversationsWithTitleOptimizedAsync(
-        UserId ownerId, 
+        AxonUserId ownerId, 
         string titleContains,
         CancellationToken cancellationToken = default)
     {

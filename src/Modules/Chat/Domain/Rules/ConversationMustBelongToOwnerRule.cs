@@ -10,9 +10,9 @@ namespace Axon.Modules.Chat.Domain.Rules;
 internal sealed class ConversationMustBelongToOwnerRule : BusinessRule
 {
     private readonly Conversation _conversation;
-    private readonly UserId _expectedOwnerId;
+    private readonly AxonUserId _expectedOwnerId;
 
-    public ConversationMustBelongToOwnerRule(Conversation conversation, UserId expectedOwnerId)
+    public ConversationMustBelongToOwnerRule(Conversation conversation, AxonUserId expectedOwnerId)
         : base(
             message: "Conversation does not belong to the current user.",
             code: "CHAT.CONVERSATION.ACCESS_DENIED")

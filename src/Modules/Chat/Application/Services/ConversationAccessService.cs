@@ -23,7 +23,7 @@ public sealed class ConversationAccessService : IConversationAccessService
 
     public async Task<Result<bool, Error>> ValidateAccessAsync(
         ConversationId conversationId, 
-        UserId userId, 
+        AxonUserId userId, 
         CancellationToken cancellationToken = default)
     {
         var hasAccess = await CanAccessAsync(conversationId, userId, cancellationToken);
@@ -39,7 +39,7 @@ public sealed class ConversationAccessService : IConversationAccessService
 
     public async Task<bool> CanAccessAsync(
         ConversationId conversationId, 
-        UserId userId, 
+        AxonUserId userId, 
         CancellationToken cancellationToken = default)
     {
         var accessSpec = new ConversationAccessSpec(conversationId, userId);

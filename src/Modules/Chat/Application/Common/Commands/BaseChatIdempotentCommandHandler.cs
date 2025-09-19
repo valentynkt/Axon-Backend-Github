@@ -83,7 +83,7 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
     /// <returns>The validated conversation or an error</returns>
     protected async Task<Result<Conversation, Error>> LoadAndValidateConversationAsync(
         ConversationId conversationId,
-        UserId ownerId,
+        AxonUserId ownerId,
         CancellationToken cancellationToken)
     {
         // Validate conversation ID using domain rules
@@ -120,7 +120,7 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The created conversation or an error</returns>
     protected async Task<Result<Conversation, Error>> CreateConversationAsync(
-        UserId ownerId,
+        AxonUserId ownerId,
         CancellationToken cancellationToken)
     {
         // Create conversation using domain factory
@@ -133,7 +133,7 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
         // Persist the new conversation (don't save yet - will be saved after message processing)
         await Repository.AddAsync(conversation, cancellationToken);
 
-        _logger.LogInformation("New conversation {ConversationId} created for user {UserId}",
+        _logger.LogInformation("New conversation {ConversationId} created for user {AxonUserId}",
             conversation.Id.Value, ownerId.Value);
 
         return Result.Success<Conversation, Error>(conversation);

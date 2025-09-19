@@ -17,7 +17,7 @@ public sealed class ExchangeCredentialCommandValidator : AbstractValidator<Excha
 
         When(x => x.UserData != null, () =>
         {
-            RuleFor(x => x.UserData.UserId)
+            RuleFor(x => x.UserData.AxonUserId)
                 .NotEmpty()
                 .WithMessage("User ID is required")
                 .MaximumLength(256)

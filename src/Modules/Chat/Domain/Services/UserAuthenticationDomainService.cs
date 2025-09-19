@@ -14,32 +14,32 @@ namespace Axon.Modules.Chat.Domain.Services;
 public static class UserAuthenticationDomainService
 {
     /// <summary>
-    /// Validates user authentication and creates a UserId.
+    /// Validates user authentication and creates a AxonUserId.
     /// </summary>
     /// <param name="isAuthenticated">Whether the user is authenticated</param>
     /// <param name="userIdString">The user ID string from authentication</param>
-    /// <returns>Result with UserId if valid, Error if not</returns>
-    public static Result<UserId, Error> ValidateAndCreateUserId(bool isAuthenticated, string? userIdString)
+    /// <returns>Result with AxonUserId if valid, Error if not</returns>
+    public static Result<AxonUserId, Error> ValidateAndCreateAxonUserId(bool isAuthenticated, string? userIdString)
     {
         try
         {
             // Check authentication
             CheckRule(new UserMustBeAuthenticatedRule(isAuthenticated, userIdString));
             
-            // Check UserId format
+            // Check AxonUserId format
             CheckRule(new UserIdMustBeValidFormatRule(userIdString));
             
-            // Parse the UserId - we know it's valid because the rule passed
+            // Parse the AxonUserId - we know it's valid because the rule passed
             var ownerGuid = Guid.Parse(userIdString!);
-            return Result.Success<UserId, Error>(new UserId(ownerGuid));
+            return Result.Success<AxonUserId, Error>(new AxonUserId(ownerGuid));
         }
         catch (BusinessRuleException ex)
         {
             return ex.Error.Type switch
             {
-                ErrorType.Unauthorized => Result.Failure<UserId, Error>(Error.Unauthorized(ex.Message, ex.Error.Code)),
-                ErrorType.Validation => Result.Failure<UserId, Error>(Error.Validation(ex.Message, ex.Error.Code)),
-                _ => Result.Failure<UserId, Error>(Error.Validation(ex.Message, ex.Error.Code))
+                ErrorType.Unauthorized => Result.Failure<AxonUserId, Error>(Error.Unauthorized(ex.Message, ex.Error.Code)),
+                ErrorType.Validation => Result.Failure<AxonUserId, Error>(Error.Validation(ex.Message, ex.Error.Code)),
+                _ => Result.Failure<AxonUserId, Error>(Error.Validation(ex.Message, ex.Error.Code))
             };
         }
     }

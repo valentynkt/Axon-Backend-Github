@@ -9,9 +9,9 @@ namespace Axon.Modules.Chat.Domain.Rules;
 /// </summary>
 internal sealed class ConversationMustHaveOwnerRule : BusinessRule
 {
-    private readonly UserId _ownerId;
+    private readonly AxonUserId _ownerId;
 
-    public ConversationMustHaveOwnerRule(UserId ownerId)
+    public ConversationMustHaveOwnerRule(AxonUserId ownerId)
         : base(
             message: "Conversation owner must be specified.",
             code: "CHAT.CONVERSATION.OWNER.REQUIRED")

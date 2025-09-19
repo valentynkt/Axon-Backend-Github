@@ -73,7 +73,7 @@ public sealed class DynamicAuthService : IDynamicAuthService
         var cacheKey = $"dynamic_token_{GetTokenHash(token)}";
         if (_cache.TryGetValue<CachedTokenData>(cacheKey, out var cachedData) && cachedData != null)
         {
-            _logger.LogDebug("Token validation cache hit for user {UserId}", cachedData.UserData.UserId);
+            _logger.LogDebug("Token validation cache hit for user {AxonUserId}", cachedData.UserData.AxonUserId);
             return Result.Success<DynamicUserData, Error>(cachedData.UserData);
         }
 
@@ -134,9 +134,9 @@ public sealed class DynamicAuthService : IDynamicAuthService
             var tokenData = new CachedTokenData(claimsPrincipal, userData, DateTimeOffset.UtcNow);
             _cache.Set(cacheKey, tokenData, _tokenCacheExpiration);
             
-            activity?.SetTag("user_id", userData.UserId);
+            activity?.SetTag("user_id", userData.AxonUserId);
             activity?.SetTag("cache_hit", false);
-            _logger.LogInformation("Token validated successfully for user {UserId}", userData.UserId);
+            _logger.LogInformation("Token validated successfully for user {AxonUserId}", userData.AxonUserId);
             return Result.Success<DynamicUserData, Error>(userData);
         }
         catch (Exception ex)
@@ -169,7 +169,7 @@ public sealed class DynamicAuthService : IDynamicAuthService
         var cacheKey = $"dynamic_token_{GetTokenHash(token)}";
         if (_cache.TryGetValue<CachedTokenData>(cacheKey, out var cachedData) && cachedData != null)
         {
-            _logger.LogDebug("Raw claims cache hit for user {UserId}", cachedData.UserData.UserId);
+            _logger.LogDebug("Raw claims cache hit for user {AxonUserId}", cachedData.UserData.AxonUserId);
             return Result.Success<ClaimsPrincipal, Error>(cachedData.Principal);
         }
 
@@ -183,7 +183,7 @@ public sealed class DynamicAuthService : IDynamicAuthService
         // Now get from cache (should be there after validation)
         if (_cache.TryGetValue<CachedTokenData>(cacheKey, out var freshCachedData) && freshCachedData != null)
         {
-            _logger.LogDebug("Raw claims retrieved after validation for user {UserId}", freshCachedData.UserData.UserId);
+            _logger.LogDebug("Raw claims retrieved after validation for user {AxonUserId}", freshCachedData.UserData.AxonUserId);
             return Result.Success<ClaimsPrincipal, Error>(freshCachedData.Principal);
         }
 

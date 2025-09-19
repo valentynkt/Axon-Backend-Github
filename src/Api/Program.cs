@@ -57,7 +57,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // StronglyTypedId converters - one per ID type
     options.SerializerOptions.Converters.Add(new AiResponseId.AiResponseIdSystemTextJsonConverter());
     options.SerializerOptions.Converters.Add(new MessageId.MessageIdSystemTextJsonConverter());
-    options.SerializerOptions.Converters.Add(new UserId.UserIdSystemTextJsonConverter());
+    options.SerializerOptions.Converters.Add(new AxonUserId.AxonUserIdSystemTextJsonConverter());
     
     // Vogen VO converters  
     options.SerializerOptions.Converters.Add(new MessageContent.MessageContentSystemTextJsonConverter());

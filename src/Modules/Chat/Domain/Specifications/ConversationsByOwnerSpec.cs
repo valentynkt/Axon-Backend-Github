@@ -8,7 +8,7 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 
 public sealed class ConversationsByOwnerSpec : Specification<Conversation>
 {
-    public ConversationsByOwnerSpec(UserId ownerId)
+    public ConversationsByOwnerSpec(AxonUserId ownerId)
     {
         Query.Where(c => c.OwnerId == ownerId);
     }

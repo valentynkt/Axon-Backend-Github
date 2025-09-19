@@ -21,7 +21,7 @@ public interface IConversationAccessService
     /// <returns>Success if user has access, domain error otherwise</returns>
     Task<Result<bool, Error>> ValidateAccessAsync(
         ConversationId conversationId, 
-        UserId userId, 
+        AxonUserId userId, 
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -33,6 +33,6 @@ public interface IConversationAccessService
     /// <returns>True if user has access, false otherwise</returns>
     Task<bool> CanAccessAsync(
         ConversationId conversationId, 
-        UserId userId, 
+        AxonUserId userId, 
         CancellationToken cancellationToken = default);
 }

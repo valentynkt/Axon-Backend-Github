@@ -40,8 +40,12 @@ public sealed class StartConversationHandler : BaseChatIdempotentCommandHandler<
     {
         Logger.LogDebug("Processing start conversation command");
 
+        var authResult = await GetAuthenticatedAxonUserIdAsync(cancellationToken);
+        if (authResult.IsFailure)
+            return Result.Failure<ProcessMessageResponse, Error>(authResult.Error);
+
         var conversationResult = await CreateConversationAsync(
-            GetAuthenticatedUserId(), 
+            authResult.Value,
             cancellationToken);
 
         return await conversationResult

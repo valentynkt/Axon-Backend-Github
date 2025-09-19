@@ -22,6 +22,28 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
     public IWriteUnitOfWork<IdentityModule> UnitOfWork => _unitOfWork;
 
+    public override async Task<AxonPrincipal> UpdateAsync(AxonPrincipal aggregate, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+
+        // Override the base UpdateAsync to handle the navigation properties correctly
+        // The base implementation has issues with duplicate entity tracking for PrincipalChainDefaults
+        var entry = DbContext.Entry(aggregate);
+
+        if (entry.State == EntityState.Detached)
+        {
+            // For detached entities, use Update() which handles the entire graph
+            DbSet.Update(aggregate);
+        }
+        else
+        {
+            // For tracked entities, just mark as modified - EF Core will handle navigation changes automatically
+            entry.State = EntityState.Modified;
+        }
+
+        return aggregate;
+    }
+
     private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
     {
         return DbSet

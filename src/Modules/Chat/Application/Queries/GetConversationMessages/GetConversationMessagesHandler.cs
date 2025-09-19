@@ -37,7 +37,10 @@ public sealed class GetConversationMessagesHandler : BaseChatQueryHandler<GetCon
         try
         {
             // Authentication and pagination validation handled by pipeline behaviors
-            var userId = GetAuthenticatedUserId();
+            var authResult = await GetAuthenticatedAxonUserIdAsync(cancellationToken);
+            if (authResult.IsFailure)
+                return Result.Failure<Paged<ConversationMessageItem>, Error>(authResult.Error);
+
             var pageResult = Page.Sanitize(request.PageNumber, request.PageSize);
             if (pageResult.IsFailure)
             {
@@ -48,7 +51,7 @@ public sealed class GetConversationMessagesHandler : BaseChatQueryHandler<GetCon
             var conversationId = new ConversationId(request.ConversationId);
 
             // Verify conversation ownership
-            var accessSpec = ConversationSpecs.AccessCheck(conversationId, userId);
+            var accessSpec = ConversationSpecs.AccessCheck(conversationId, authResult.Value);
             var isOwned = await _conversationReadRepository.AnyAsync(accessSpec, cancellationToken);
             
             if (!isOwned)
