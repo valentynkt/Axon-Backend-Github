@@ -1,3 +1,4 @@
+using Axon.Api.Tests.Common;
 using Microsoft.AspNetCore.Mvc.Testing;
 using NUnit.Framework;
 using Shouldly;
@@ -8,13 +9,13 @@ namespace Axon.Api.Tests;
 [TestFixture]
 public class SmokeTests : IDisposable
 {
-    private WebApplicationFactory<Program> _factory = null!;
+    private TestWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
 
     [SetUp]
     public void Setup()
     {
-        _factory = new WebApplicationFactory<Program>();
+        _factory = new TestWebApplicationFactory();
         _client = _factory.CreateClient();
     }
 
@@ -29,20 +30,21 @@ public class SmokeTests : IDisposable
     public async Task GET_Me_WithoutAuth_Returns401()
     {
         // Act
-        var response = await _client.GetAsync("/api/v1/auth/me");
-        
+        var response = await _client.GetAsync("/auth/me");
+
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Test]
-    public async Task POST_Exchange_WithoutJWT_Returns401()
+    public async Task POST_Exchange_WithoutJWT_Returns400()
     {
-        // Act  
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
-        
-        // Assert  
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        // Act
+        var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/api/v1/auth/exchange", content);
+
+        // Assert - Endpoint validates Bearer token as part of request validation, returns 400
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Test]

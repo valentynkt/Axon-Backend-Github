@@ -3,6 +3,7 @@ using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Entities;
 using BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,14 +20,24 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
     public override string ModuleName => "chat";
 
     public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<Message> Messages => Set<Message>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
+
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
         // No need to duplicate schema configuration
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ChatDbContext).Assembly);
+
+        // Explicitly apply configurations to ensure they work in test contexts
+        // The assembly scan might not work correctly in some test scenarios
+        var conversationConfig = new Persistence.Configurations.ConversationConfiguration();
+        conversationConfig.Configure(modelBuilder.Entity<Conversation>());
+
+        var messageConfig = new Persistence.Configurations.MessageConfiguration();
+        messageConfig.Configure(modelBuilder.Entity<Message>());
+
         modelBuilder.ToSnakeCaseTables();
     }
 }

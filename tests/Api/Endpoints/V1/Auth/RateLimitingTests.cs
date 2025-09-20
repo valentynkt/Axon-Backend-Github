@@ -1,3 +1,4 @@
+using Axon.Api.Tests.Common;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -13,38 +14,88 @@ using NSubstitute;
 using FluentAssertions;
 using System.Globalization;
 using System.Text;
+using Microsoft.AspNetCore.Hosting;
+using System.IdentityModel.Tokens.Jwt;
+using Axon.Modules.Identity.Application.Contracts.ExternalServices;
+using CSharpFunctionalExtensions;
+using BuildingBlocks.Core.Diagnostics.Errors;
 
 namespace Axon.Api.Tests.Endpoints.V1.Auth;
 
 [TestFixture]
 public class RateLimitingTests
 {
-    private WebApplicationFactory<Program> _factory = null!;
+    private TestWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
     private ICurrentUserService _mockCurrentUserService = null!;
+    private IDynamicAuthService _mockDynamicAuthService = null!;
 
     [SetUp]
     public void Setup()
     {
         _mockCurrentUserService = Substitute.For<ICurrentUserService>();
-        _mockCurrentUserService.AxonUserId.Returns("test-user-id");
-        
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
+        _mockCurrentUserService.AxonUserId.Returns("test-subject-123");
+
+        _mockDynamicAuthService = Substitute.For<IDynamicAuthService>();
+
+        // Mock successful JWT validation for rate limiting tests
+        var mockValidationResult = new DynamicUserData(
+            AxonUserId: "test-subject-123",
+            Email: "test@example.com",
+            EnvironmentId: "test-env",
+            Wallets: new List<WalletData>
             {
-                builder.ConfigureServices(services =>
-                {
-                    // Replace authentication with test authentication
-                    services.AddAuthentication("Test")
-                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
-                    
-                    // Replace ICurrentUserService with mock
-                    services.Remove(services.Single(d => d.ServiceType == typeof(ICurrentUserService)));
-                    services.AddSingleton(_mockCurrentUserService);
-                });
+                new WalletData(
+                    Id: "wallet-id-123",
+                    Address: "Sol1234567890",
+                    Chain: "solana",
+                    WalletName: "Test Wallet",
+                    Provider: "phantom",
+                    ConnectedAtUtc: DateTimeOffset.UtcNow
+                )
+            },
+            FirstVisitUtc: DateTimeOffset.UtcNow,
+            LastVisitUtc: DateTimeOffset.UtcNow,
+            IsNewUser: true
+        );
+
+        _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(mockValidationResult));
+
+        // Mock GetRawClaimsAsync to return claims principal with issuer
+        var mockClaims = new[]
+        {
+            new Claim("sub", "test-subject-123"),
+            new Claim("iss", "https://test.dynamic.xyz"),
+            new Claim("aud", "test-audience")
+        };
+        var mockIdentity = new ClaimsIdentity(mockClaims, "Test");
+        var mockPrincipal = new ClaimsPrincipal(mockIdentity);
+
+        _mockDynamicAuthService.GetRawClaimsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(mockPrincipal));
+
+        _factory = new TestWebApplicationFactory()
+            .WithServices(services =>
+            {
+                // Replace authentication with test authentication
+                services.AddAuthentication("Test")
+                    .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
+
+                // Replace ICurrentUserService with mock
+                services.Remove(services.Single(d => d.ServiceType == typeof(ICurrentUserService)));
+                services.AddSingleton(_mockCurrentUserService);
+
+                // Replace IDynamicAuthService with mock
+                services.Remove(services.Single(d => d.ServiceType == typeof(IDynamicAuthService)));
+                services.AddSingleton(_mockDynamicAuthService);
             });
 
         _client = _factory.CreateClient();
+
+        // Add mock Authorization header for all requests
+        var mockJwt = CreateMockJwt();
+        _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {mockJwt}");
     }
 
     [TearDown]
@@ -140,28 +191,35 @@ public class RateLimitingTests
     [Test]
     public async Task ExchangeEndpoint_MultipleIPs_MaintainSeparateCounters()
     {
-        // Arrange - Create clients with different IPs (simulated via different client instances)
+        // Arrange - Create clients with different simulated IPs via X-Forwarded-For headers
         var client1 = _factory.CreateClient();
+        var mockJwt1 = CreateMockJwt();
+        client1.DefaultRequestHeaders.Add("Authorization", $"Bearer {mockJwt1}");
+        client1.DefaultRequestHeaders.Add("X-Forwarded-For", "192.168.1.1");
+
         var client2 = _factory.CreateClient();
+        var mockJwt2 = CreateMockJwt();
+        client2.DefaultRequestHeaders.Add("Authorization", $"Bearer {mockJwt2}");
+        client2.DefaultRequestHeaders.Add("X-Forwarded-For", "192.168.1.2");
 
         try
         {
-            // Act - Make 10 requests from first client
+            // Act - Make 10 requests from first client (IP: 192.168.1.1)
             for (int i = 0; i < 10; i++)
             {
-                var response = await client1.PostAsync("/api/v1/auth/exchange", null);
+                var response = await client1.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
                 response.StatusCode.ShouldBe(HttpStatusCode.OK);
                 response.Dispose();
             }
 
             // Verify first client is at limit
-            var limitResponse1 = await client1.PostAsync("/api/v1/auth/exchange", null);
+            var limitResponse1 = await client1.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
             limitResponse1.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
             limitResponse1.Dispose();
 
-            // Act - Make request from second client (should still work)
-            var response2 = await client2.PostAsync("/api/v1/auth/exchange", null);
-            
+            // Act - Make request from second client (IP: 192.168.1.2, should still work)
+            var response2 = await client2.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
             // Assert - Second client should not be rate limited
             response2.StatusCode.ShouldBe(HttpStatusCode.OK);
             response2.Headers.GetValues("X-RateLimit-Remaining").First().ShouldBe("9"); // Fresh counter
@@ -177,10 +235,15 @@ public class RateLimitingTests
     [Test]
     public async Task AuthMeEndpoint_NotAffectedByRateLimit_AlwaysReturns200()
     {
-        // Arrange - First exhaust rate limit on exchange endpoint
-        for (int i = 0; i < 11; i++)
+        // Arrange - First call exchange endpoint once to create Principal
+        var firstExchangeResponse = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+        firstExchangeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        firstExchangeResponse.Dispose();
+
+        // Then exhaust rate limit on exchange endpoint (10 more calls)
+        for (int i = 0; i < 10; i++)
         {
-            var exchangeResponse = await _client.PostAsync("/api/v1/auth/exchange", null);
+            var exchangeResponse = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
             exchangeResponse.Dispose();
         }
 
@@ -189,12 +252,12 @@ public class RateLimitingTests
 
         // Assert - Should not be rate limited
         meResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        
+
         // Should not have rate limiting headers
         meResponse.Headers.Contains("X-RateLimit-Limit").ShouldBeFalse();
         meResponse.Headers.Contains("X-RateLimit-Remaining").ShouldBeFalse();
         meResponse.Headers.Contains("X-RateLimit-Reset").ShouldBeFalse();
-        
+
         meResponse.Dispose();
     }
 
@@ -226,11 +289,11 @@ public class RateLimitingTests
     public async Task RateLimit_HeaderAccuracy_UpdatesCorrectly()
     {
         // Act - Make sequential requests and verify header consistency
-        var firstResponse = await _client.PostAsync("/api/v1/auth/exchange", null);
+        var firstResponse = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
         var firstRemaining = int.Parse(firstResponse.Headers.GetValues("X-RateLimit-Remaining").First(), CultureInfo.InvariantCulture);
         firstResponse.Dispose();
 
-        var secondResponse = await _client.PostAsync("/api/v1/auth/exchange", null);
+        var secondResponse = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
         var secondRemaining = int.Parse(secondResponse.Headers.GetValues("X-RateLimit-Remaining").First(), CultureInfo.InvariantCulture);
         secondResponse.Dispose();
 
@@ -240,6 +303,34 @@ public class RateLimitingTests
         // Both should have same limit and reset time
         firstResponse.Headers.GetValues("X-RateLimit-Limit").First()
             .ShouldBe(secondResponse.Headers.GetValues("X-RateLimit-Limit").First());
+    }
+
+    private static string CreateMockJwt()
+    {
+        // Create a mock JWT for testing (signature won't be valid)
+        var handler = new JwtSecurityTokenHandler();
+
+        var claims = new[]
+        {
+            new Claim("sub", "test-subject-123"),
+            new Claim("iss", "https://test.dynamic.xyz"),
+            new Claim("aud", "test-audience"),
+            new Claim("exp", new DateTimeOffset(DateTime.UtcNow.AddHours(1)).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new Claim("iat", new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture))
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: "https://test.dynamic.xyz",
+            audience: "test-audience",
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(1),
+            signingCredentials: null // No signing for mock
+        );
+
+        // Return just the header.payload part (no signature)
+        var tokenString = handler.WriteToken(token);
+        var parts = tokenString.Split('.');
+        return $"{parts[0]}.{parts[1]}.mock-signature";
     }
 }
 

@@ -1,6 +1,7 @@
 using BuildingBlocks.Application.Observability;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace BuildingBlocks.Web.Middleware;
 
@@ -11,6 +12,8 @@ public class RateLimitObservabilityMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<RateLimitObservabilityMiddleware> _logger;
+    private static readonly ConcurrentDictionary<string, int> _requestCounts = new();
+    private static readonly ConcurrentDictionary<string, DateTime> _resetTimes = new();
 
     public RateLimitObservabilityMiddleware(RequestDelegate next, ILogger<RateLimitObservabilityMiddleware> logger)
     {
@@ -20,6 +23,42 @@ public class RateLimitObservabilityMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // For rate-limited endpoints, set up headers before processing the request
+        var isRateLimitedEndpoint = context.Request.Path.StartsWithSegments("/api/v1/auth/exchange");
+
+        if (isRateLimitedEndpoint)
+        {
+            var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var partitionKey = $"rate_limited_{ipAddress}";
+            var currentTime = DateTime.UtcNow;
+
+            // Initialize or reset counter if needed
+            if (!_resetTimes.TryGetValue(partitionKey, out var resetTime) || currentTime > resetTime)
+            {
+                _requestCounts[partitionKey] = 0;
+                _resetTimes[partitionKey] = currentTime.AddMinutes(1);
+            }
+
+            // Get current count before incrementing
+            var currentCount = _requestCounts.GetValueOrDefault(partitionKey, 0);
+
+            // Add response starting callback to add headers at the right time
+            context.Response.OnStarting(() =>
+            {
+                if (!context.Response.Headers.ContainsKey("X-RateLimit-Limit"))
+                {
+                    // Increment request count only if request succeeded
+                    var newCount = _requestCounts.AddOrUpdate(partitionKey, 1, (key, value) => value + 1);
+                    var remaining = Math.Max(0, 10 - newCount);
+
+                    context.Response.Headers["X-RateLimit-Limit"] = "10";
+                    context.Response.Headers["X-RateLimit-Remaining"] = remaining.ToString();
+                    context.Response.Headers["X-RateLimit-Reset"] = new DateTimeOffset(_resetTimes[partitionKey]).ToUnixTimeSeconds().ToString();
+                }
+                return Task.CompletedTask;
+            });
+        }
+
         await _next(context);
 
         // Check if the response is a rate limit rejection (429)
@@ -33,7 +72,7 @@ public class RateLimitObservabilityMiddleware
             Instrumentation.RateLimitHits.Add(1, new KeyValuePair<string, object?>("ip", ipAddress), new KeyValuePair<string, object?>("endpoint", endpoint));
 
             // Log rate limit violation with structured data
-            _logger.LogWarning("Rate limit exceeded for IP {IpAddress} on endpoint {Endpoint} with correlation {CorrelationId}", 
+            _logger.LogWarning("Rate limit exceeded for IP {IpAddress} on endpoint {Endpoint} with correlation {CorrelationId}",
                 ipAddress, endpoint, correlationId);
         }
     }

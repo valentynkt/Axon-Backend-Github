@@ -13,7 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Main application projects under test -->
+    <!-- Main projects under test -->
+    <ProjectReference Include="..\..\..\..\src\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\..\src\Modules\Chat\Application\Axon.Modules.Chat.Application.csproj" />
     <ProjectReference Include="..\..\..\..\src\Modules\Chat\Domain\Axon.Modules.Chat.Domain.csproj" />
     <ProjectReference Include="..\Domain\Axon.Modules.Chat.Domain.Tests.csproj" />
@@ -29,29 +30,38 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    
+
     <!-- Assertions - Shouldly for fluent, readable assertions -->
     <PackageReference Include="Shouldly" Version="4.3.0" />
-    
+
     <!-- Mocking - NSubstitute as preferred mocking framework -->
     <PackageReference Include="NSubstitute" Version="5.3.0" />
     <PackageReference Include="NSubstitute.Analyzers.CSharp" Version="1.0.17">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    
+
     <!-- Microsoft Test SDK -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    
+
     <!-- Time Provider for Testing -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.0.0" />
-    
-    
+
+    <!-- Entity Framework for Integration Tests -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.8" />
+
+    <!-- Testcontainers for Integration Tests -->
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.6.0" />
+
     <!-- Coverage Collection -->
     <PackageReference Include="coverlet.collector" Version="6.0.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
+
+    <!-- Functional Extensions -->
+    <PackageReference Include="CSharpFunctionalExtensions" Version="3.6.0" />
   </ItemGroup>
 
 </Project>

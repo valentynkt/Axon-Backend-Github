@@ -60,7 +60,7 @@ public class GlobalExceptionMiddlewareTests
 
         // Assert
         _httpContext.Response.StatusCode.ShouldBe(StatusCodes.Status422UnprocessableEntity); // InvalidOperationException maps to BusinessRule -> 422
-        _httpContext.Response.ContentType.ShouldBe("application/json");
+        _httpContext.Response.ContentType.ShouldStartWith("application/json");
     }
 
     [Test]
@@ -163,16 +163,24 @@ public class GlobalExceptionMiddlewareTests
     {
         // Arrange
         var exception = new InvalidOperationException("Test exception");
-        RequestDelegate next = async context =>
+        RequestDelegate next = context =>
         {
-            await context.Response.WriteAsync("Already started");
+            // Manually set response as started using reflection
+            var responseFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>();
+            if (responseFeature != null)
+            {
+                // Get the private field that tracks if response has started
+                var hasStartedField = responseFeature.GetType().GetField("_hasStarted",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                hasStartedField?.SetValue(responseFeature, true);
+            }
             throw exception;
         };
         _middleware = new GlobalExceptionMiddleware(next, _logger);
 
         // Act & Assert
         await Should.NotThrowAsync(() => _middleware.InvokeAsync(_httpContext));
-        
+
         _logger.Received().LogWarning("Cannot send error response - response has already started");
     }
 
@@ -186,7 +194,9 @@ public class GlobalExceptionMiddlewareTests
             (new UnauthorizedAccessException("Access denied"), StatusCodes.Status401Unauthorized),
             (new InvalidOperationException("Invalid operation"), StatusCodes.Status422UnprocessableEntity),
             (new TimeoutException("Operation timed out"), StatusCodes.Status500InternalServerError),
-            (new InvalidOperationException("Generic exception"), StatusCodes.Status500InternalServerError)
+#pragma warning disable CA2201 // Do not raise reserved exception types
+            (new Exception("Generic exception"), StatusCodes.Status500InternalServerError)
+#pragma warning restore CA2201 // Do not raise reserved exception types
         };
 
         foreach (var (exception, expectedStatusCode) in testCases)
@@ -223,7 +233,7 @@ public class GlobalExceptionMiddlewareTests
         await _middleware.InvokeAsync(_httpContext);
 
         // Assert
-        _httpContext.Response.ContentType.ShouldBe("application/json");
+        _httpContext.Response.ContentType.ShouldStartWith("application/json");
         _httpContext.Response.Headers.ShouldNotContainKey("Custom-Header");
     }
 

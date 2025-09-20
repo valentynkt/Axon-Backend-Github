@@ -242,7 +242,7 @@ public class CoverageVerificationTests
             riskUpdate.IsSuccess.ShouldBeTrue();
 
             // Verify final state
-            principal.WalletOwnerships.Count.ShouldBe(3); // Three ownerships: pending+verified for wallet1, verified watch-only for wallet2
+            principal.WalletOwnerships.Count.ShouldBe(2); // Two ownerships: one for wallet1 (transitioned from pending to verified), one watch-only for wallet2
             principal.GetDefaultWalletForChain("solana-mainnet").ShouldBe(wallet1);
             principal.GetDefaultWalletForChain("ethereum-mainnet").ShouldBeNull();
             principal.RiskTier.ShouldBe(RiskTier.High);

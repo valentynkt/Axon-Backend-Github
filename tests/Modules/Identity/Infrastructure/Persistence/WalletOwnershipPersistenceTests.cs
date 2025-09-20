@@ -26,10 +26,16 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         // Arrange: Create two principals and one shared wallet
         var principal1 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user1");
         var principal2 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user2");
-        var sharedWallet = CreateTestWallet("1", "0xshared");
+        var sharedWallet = CreateTestWallet("1", "0x1234567890abcdef1234567890abcdef12345678");
 
-        await SavePrincipalWithWallets(principal1, sharedWallet);
-        await SavePrincipalWithWallets(principal2);
+        // Save the shared wallet first
+        await DbContext.Wallets.AddAsync(sharedWallet);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Save both principals
+        await PrincipalRepository.AddAsync(principal1);
+        await PrincipalRepository.AddAsync(principal2);
+        await UnitOfWork.SaveChangesAsync();
 
         // Act: Give first principal verified signing ownership
         var ownership1 = CreateTestOwnership(
@@ -66,11 +72,17 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var principal1 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user1");
         var principal2 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user2");
         var principal3 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user3");
-        var sharedWallet = CreateTestWallet("1", "0xshared");
+        var sharedWallet = CreateTestWallet("1", "0x1234567890abcdef1234567890abcdef12345678");
 
-        await SavePrincipalWithWallets(principal1, sharedWallet);
-        await SavePrincipalWithWallets(principal2);
-        await SavePrincipalWithWallets(principal3);
+        // Save the shared wallet first
+        await DbContext.Wallets.AddAsync(sharedWallet);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Save all principals
+        await PrincipalRepository.AddAsync(principal1);
+        await PrincipalRepository.AddAsync(principal2);
+        await PrincipalRepository.AddAsync(principal3);
+        await UnitOfWork.SaveChangesAsync();
 
         // Act: Give all three principals watch-only ownership
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
@@ -82,10 +94,12 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         principal3.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
 
         await PrincipalRepository.UpdateAsync(principal1);
-        await PrincipalRepository.UpdateAsync(principal2);
-        await PrincipalRepository.UpdateAsync(principal3);
+        await UnitOfWork.SaveChangesAsync();
 
-        // Assert: Should succeed - multiple watch-only owners are allowed
+        await PrincipalRepository.UpdateAsync(principal2);
+        await UnitOfWork.SaveChangesAsync();
+
+        await PrincipalRepository.UpdateAsync(principal3);
         await UnitOfWork.SaveChangesAsync();
 
         // Verify all ownerships were saved
@@ -105,22 +119,31 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         // Arrange: Create two principals and one shared wallet
         var principal1 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user1");
         var principal2 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user2");
-        var sharedWallet = CreateTestWallet("1", "0xshared");
+        var sharedWallet = CreateTestWallet("1", "0x1234567890abcdef1234567890abcdef12345678");
 
-        await SavePrincipalWithWallets(principal1, sharedWallet);
-        await SavePrincipalWithWallets(principal2);
+        // Save the shared wallet first
+        await DbContext.Wallets.AddAsync(sharedWallet);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Save both principals
+        await PrincipalRepository.AddAsync(principal1);
+        await PrincipalRepository.AddAsync(principal2);
+        await UnitOfWork.SaveChangesAsync();
 
         // Act: Give both principals pending signing ownership
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
         var ownership2 = CreateTestOwnership(principal2.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
 
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult1 = principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult2 = principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+
+        linkResult1.IsSuccess.ShouldBeTrue($"First ownership link should succeed");
+        linkResult2.IsSuccess.ShouldBeTrue($"Second ownership link should succeed");
 
         await PrincipalRepository.UpdateAsync(principal1);
-        await PrincipalRepository.UpdateAsync(principal2);
+        await UnitOfWork.SaveChangesAsync();
 
-        // Assert: Should succeed - multiple pending signing owners are allowed
+        await PrincipalRepository.UpdateAsync(principal2);
         await UnitOfWork.SaveChangesAsync();
 
         ClearChangeTracker();
@@ -138,7 +161,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
     {
         // Arrange: Create principal and wallet
         var principal = CreateTestPrincipal();
-        var wallet = CreateTestWallet("1", "0xtest");
+        var wallet = CreateTestWallet("1", "0xabcdef1234567890abcdef1234567890abcdef12");
         await SavePrincipalWithWallets(principal, wallet);
 
         // Add initial ownership
@@ -169,7 +192,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
     {
         // Arrange: Create principal with pending ownership
         var principal = CreateTestPrincipal();
-        var wallet = CreateTestWallet("1", "0xtest");
+        var wallet = CreateTestWallet("1", "0xabcdef1234567890abcdef1234567890abcdef12");
         await SavePrincipalWithWallets(principal, wallet);
 
         var pendingOwnership = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
@@ -202,10 +225,16 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         // Arrange: Create two principals with same wallet
         var principal1 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user1");
         var principal2 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user2");
-        var sharedWallet = CreateTestWallet("1", "0xshared");
+        var sharedWallet = CreateTestWallet("1", "0x1234567890abcdef1234567890abcdef12345678");
 
-        await SavePrincipalWithWallets(principal1, sharedWallet);
-        await SavePrincipalWithWallets(principal2);
+        // Save the shared wallet first
+        await DbContext.Wallets.AddAsync(sharedWallet);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Save both principals
+        await PrincipalRepository.AddAsync(principal1);
+        await PrincipalRepository.AddAsync(principal2);
+        await UnitOfWork.SaveChangesAsync();
 
         // Principal1 gets verified signing ownership
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
@@ -216,6 +245,8 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
 
         await PrincipalRepository.UpdateAsync(principal1);
+        await UnitOfWork.SaveChangesAsync();
+
         await PrincipalRepository.UpdateAsync(principal2);
         await UnitOfWork.SaveChangesAsync();
 
@@ -238,10 +269,16 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         // Arrange: Create two principals with same wallet
         var principal1 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user1");
         var principal2 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user2");
-        var sharedWallet = CreateTestWallet("1", "0xshared");
+        var sharedWallet = CreateTestWallet("1", "0x1234567890abcdef1234567890abcdef12345678");
 
-        await SavePrincipalWithWallets(principal1, sharedWallet);
-        await SavePrincipalWithWallets(principal2);
+        // Save the shared wallet first
+        await DbContext.Wallets.AddAsync(sharedWallet);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Save both principals
+        await PrincipalRepository.AddAsync(principal1);
+        await PrincipalRepository.AddAsync(principal2);
+        await UnitOfWork.SaveChangesAsync();
 
         // Both get ownership, but only principal1 is verified
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
@@ -251,6 +288,8 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
 
         await PrincipalRepository.UpdateAsync(principal1);
+        await UnitOfWork.SaveChangesAsync();
+
         await PrincipalRepository.UpdateAsync(principal2);
         await UnitOfWork.SaveChangesAsync();
 
@@ -296,7 +335,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         // Arrange: Create two principals and a wallet
         var principal1 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user1");
         var principal2 = CreateTestPrincipal("https://app.dynamic.xyz/test", "user2");
-        var wallet = CreateTestWallet("1", "0xtest");
+        var wallet = CreateTestWallet("1", "0xabcdef1234567890abcdef1234567890abcdef12");
 
         await SavePrincipalWithWallets(principal1, wallet);
         await SavePrincipalWithWallets(principal2);
@@ -370,6 +409,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         }
         await UnitOfWork.SaveChangesAsync();
 
+
         // Assert: All ownerships should be cascade deleted
         ClearChangeTracker();
         var remainingOwnerships = await DbContext.WalletOwnerships
@@ -386,7 +426,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
     {
         // Arrange: Create principal with ownership
         var principal = CreateTestPrincipal();
-        var wallet = CreateTestWallet("1", "0xtest");
+        var wallet = CreateTestWallet("1", "0xabcdef1234567890abcdef1234567890abcdef12");
         await SavePrincipalWithWallets(principal, wallet);
 
         var ownership = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
@@ -425,7 +465,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
     {
         // Arrange: Create principal with watch-only ownership
         var principal = CreateTestPrincipal();
-        var wallet = CreateTestWallet("1", "0xtest");
+        var wallet = CreateTestWallet("1", "0xabcdef1234567890abcdef1234567890abcdef12");
         await SavePrincipalWithWallets(principal, wallet);
 
         var watchOnlyOwnership = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
@@ -442,7 +482,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Assert: Should fail at domain level
         chainDefaultResult.IsFailure.ShouldBeTrue();
-        chainDefaultResult.Error.Code.ShouldContain("WatchOnlyNotAllowedAsDefault");
+        chainDefaultResult.Error.Code.ShouldContain("IDENTITY.WALLET.WATCH_ONLY_VIOLATION");
     }
 
     #endregion

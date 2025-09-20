@@ -2,6 +2,8 @@
 #nullable enable
 using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
@@ -10,7 +12,7 @@ public sealed class ConversationsWithMinimumMessagesSpec : Specification<Convers
     public ConversationsWithMinimumMessagesSpec(int minCount)
     {
         var min = Math.Max(0, minCount);
-        // Uses the aggregate's computed MessageCount; ensure your infra can translate or map accordingly.
-        Query.Where(c => c.MessageCount >= min);
+        // Use backing field to count messages since EF Core can translate this
+        Query.Where(c => EF.Property<List<Message>>(c, "_messages").Count >= min);
     }
 }

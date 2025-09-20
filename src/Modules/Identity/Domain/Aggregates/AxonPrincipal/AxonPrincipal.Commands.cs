@@ -51,13 +51,45 @@ public sealed partial class AxonPrincipal
         ArgumentNullException.ThrowIfNull(checkExistingOwnershipFunc);
         
         // Check if we already have this exact ownership (idempotency)
-        var existingOwnership = _walletOwnerships.FirstOrDefault(o => 
+        var existingOwnership = _walletOwnerships.FirstOrDefault(o =>
             o.WalletId == ownership.WalletId &&
             o.AccessMode == ownership.AccessMode &&
             o.Status == ownership.Status);
 
         if (existingOwnership != null)
             return Result.Success<Unit, Error>(Unit.Value); // Idempotent - no change needed
+
+        // Check if we already have ANY ownership for this wallet
+        var anyExistingOwnership = _walletOwnerships.FirstOrDefault(o => o.WalletId == ownership.WalletId);
+        if (anyExistingOwnership != null)
+        {
+            // If AccessMode is different, reject - only one AccessMode per principal-wallet pair
+            if (anyExistingOwnership.AccessMode != ownership.AccessMode)
+                return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.OwnershipAlreadyExists());
+
+            // If same AccessMode but different status, update the existing ownership
+            if (anyExistingOwnership.Status != ownership.Status)
+            {
+                var updateResult = anyExistingOwnership.UpdateStatus(ownership.Status);
+                if (updateResult.IsFailure)
+                    return Result.Failure<Unit, Error>(updateResult.Error);
+
+                // Raise domain event for status update
+                RaiseDomainEvent(new OwnershipChangedEvent(
+                    Id,
+                    ownership.WalletId,
+                    "status_updated",
+                    ownership.AccessMode.ToString(),
+                    ownership.Status.ToString()
+                ));
+
+                return Result.Success<Unit, Error>(Unit.Value);
+            }
+
+            // Same AccessMode and Status - this is handled by the idempotency check above
+            // But safety fallback in case we missed something
+            return Result.Success<Unit, Error>(Unit.Value);
+        }
 
         // Check for conflicting ownership (only one verified+signing owner per wallet)
         if (ownership.IsVerifiedSigning)

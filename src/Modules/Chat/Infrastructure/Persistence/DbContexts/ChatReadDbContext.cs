@@ -1,6 +1,8 @@
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Entities;
+using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Read;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -9,15 +11,29 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 
 public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatReadDbContext
 {
-    public ChatReadDbContext(DbContextOptions<ChatReadDbContext> options, ILogger<ChatReadDbContext>? logger = null) 
-        : base(options, logger) 
+    public ChatReadDbContext(DbContextOptions<ChatReadDbContext> options, ILogger<ChatReadDbContext>? logger = null)
+        : base(options, logger)
     {
         // Additional read-specific optimizations
         Database.SetCommandTimeout(TimeSpan.FromSeconds(30)); // 30-second timeout for read operations
     }
 
     public override string ModuleName => "chat";
-    
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Apply the same entity configurations as ChatDbContext to ensure consistent schema
+        var conversationConfig = new Persistence.Configurations.ConversationConfiguration();
+        conversationConfig.Configure(modelBuilder.Entity<Conversation>());
+
+        var messageConfig = new Persistence.Configurations.MessageConfiguration();
+        messageConfig.Configure(modelBuilder.Entity<Message>());
+
+        // Apply snake_case naming convention
+        modelBuilder.ToSnakeCaseTables();
+    }
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)
     {

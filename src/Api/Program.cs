@@ -5,6 +5,7 @@ using Asp.Versioning;
 using Axon.Api.Configuration;
 using BuildingBlocks.Web.OpenApi;
 using BuildingBlocks.Web.Configuration;
+using Microsoft.AspNetCore.HttpOverrides;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.Extensions.Logging.Console;
@@ -80,15 +81,26 @@ builder.Services.AddApiVersioning(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        // Add rate limit headers when request is rejected
+        context.HttpContext.Response.Headers["X-RateLimit-Limit"] = "10";
+        context.HttpContext.Response.Headers["X-RateLimit-Remaining"] = "0";
+        context.HttpContext.Response.Headers["X-RateLimit-Reset"] = DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeSeconds().ToString();
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+
+        await Task.CompletedTask;
+    };
+
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
     {
         var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        
-        // Apply rate limiting only to /auth/exchange endpoint
+
+        // Apply rate limiting only to /api/v1/auth/exchange endpoint
         if (context.Request.Path.StartsWithSegments("/api/v1/auth/exchange"))
         {
             return RateLimitPartition.GetFixedWindowLimiter(
-                ipAddress,
+                $"rate_limited_{ipAddress}",
                 _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 10,
@@ -97,8 +109,8 @@ builder.Services.AddRateLimiter(options =>
                     QueueLimit = 0
                 });
         }
-        
-        return RateLimitPartition.GetNoLimiter(ipAddress);
+
+        return RateLimitPartition.GetNoLimiter($"no_limit_{ipAddress}");
     });
 });
 
@@ -150,9 +162,18 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// CRITICAL FIX: Enable CORS before authentication/authorization  
+// CRITICAL FIX: Enable CORS before authentication/authorization
 var corsOptions = app.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>();
 app.UseCors(corsOptions?.PolicyName ?? "DefaultPolicy");
+
+// Configure forwarded headers for test environment rate limiting
+if (app.Environment.EnvironmentName == "Test")
+{
+    app.UseForwardedHeaders(new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    });
+}
 
 // Configure rate limiting middleware with observability
 app.UseRateLimiter();

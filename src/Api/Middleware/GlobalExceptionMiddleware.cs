@@ -45,6 +45,13 @@ public sealed class GlobalExceptionMiddleware
             ? headerValue.ToString() 
             : traceId;
 
+        // Don't handle responses that have already started
+        if (context.Response.HasStarted)
+        {
+            _logger.LogWarning("Cannot send error response - response has already started");
+            return;
+        }
+
         // Convert exception to structured Error
         var error = Error.FromException(exception)
             .WithCorrelationId(correlationId)
@@ -53,15 +60,9 @@ public sealed class GlobalExceptionMiddleware
         // Log full exception details for debugging
         LogExceptionDetails(context, exception, error, correlationId);
 
-        // Don't handle responses that have already started
-        if (context.Response.HasStarted)
-        {
-            _logger.LogWarning("Cannot send error response - response has already started. TraceId: {TraceId}", traceId);
-            return;
-        }
-
-        // Clear any existing response content
+        // Clear any existing response content and headers
         context.Response.Clear();
+        context.Response.Headers.Clear();
 
         // Send structured ApiError response
         await context.SendApiErrorAsync(error);

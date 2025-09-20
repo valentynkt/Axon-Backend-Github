@@ -32,12 +32,12 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
     }
 
     public async Task<Wallet?> GetByChainAndAddressAsync(
-        ChainId chainId, 
-        Address address, 
+        ChainId chainId,
+        Address address,
         CancellationToken cancellationToken = default)
     {
         return await GetWalletWithIncludes()
-            .FirstOrDefaultAsync(w => w.ChainId == chainId && w.Address == address, cancellationToken);
+            .FirstOrDefaultAsync(w => w.ChainId == chainId.Value && w.Address == address, cancellationToken);
     }
 
     public async Task<IReadOnlyList<Wallet>> GetByIdsAsync(
@@ -73,7 +73,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         {
             // First check if the wallet is already being tracked by EF (in change tracker)
             var trackedWallet = DbSet.Local
-                .FirstOrDefault(w => w.ChainId == spec.chainId && w.Address == spec.address);
+                .FirstOrDefault(w => w.ChainId == spec.chainId && w.Address.Value == spec.address.Value);
 
             if (trackedWallet != null)
             {
@@ -104,6 +104,12 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
             var wallet = Wallet.Create(null, spec.chainId, spec.address);
             await DbSet.AddAsync(wallet, ct);
             result[spec] = wallet.Id;
+        }
+
+        // Save changes to persist new wallets to the database
+        if (missingSpecs.Count > 0)
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
         }
 
         return result;

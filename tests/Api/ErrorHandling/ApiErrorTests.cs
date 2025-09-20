@@ -152,8 +152,8 @@ public class ApiErrorTests
         apiError.Code.ShouldBe("RATE_LIMIT_EXCEEDED");
         apiError.Message.ShouldBe(message);
         
-        var details = apiError.Details.ShouldBeOfType<object>();
-        var json = JsonSerializer.Serialize(details, _jsonOptions);
+        apiError.Details.ShouldNotBeNull();
+        var json = JsonSerializer.Serialize(apiError.Details, _jsonOptions);
         var expectedJson = JsonSerializer.Serialize(new { retryAfter }, _jsonOptions);
         json.ShouldBe(expectedJson);
     }
@@ -198,9 +198,9 @@ public class ApiErrorTests
         json.ShouldContain("\"code\":");
         json.ShouldContain("\"message\":");
         json.ShouldContain("\"details\":");
-        json.ShouldNotContain("Code");
-        json.ShouldNotContain("Message");
-        json.ShouldNotContain("Details");
+        json.ShouldNotContain("Code", Case.Sensitive);
+        json.ShouldNotContain("Message", Case.Sensitive);
+        json.ShouldNotContain("Details", Case.Sensitive);
     }
 
     [Test]

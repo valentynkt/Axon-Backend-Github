@@ -44,6 +44,9 @@
   <Folder Name="/tests/Modules/Chat/Application/">
     <Project Path="tests/Modules/Chat/Application/Axon.Modules.Chat.Application.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Modules/Chat/Infrastructure/">
+    <Project Path="tests/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Modules/Identity/" />
   <Folder Name="/tests/Modules/Identity/Application/">
     <Project Path="tests/Modules/Identity/Application/Axon.Modules.Identity.Application.Tests.csproj" />

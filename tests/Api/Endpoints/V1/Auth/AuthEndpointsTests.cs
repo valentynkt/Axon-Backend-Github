@@ -1,3 +1,4 @@
+using Axon.Api.Tests.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,30 +14,15 @@ using System.Text.Json;
 namespace Axon.Api.Tests.Endpoints.V1.Auth;
 
 [TestFixture]
-public class AuthEndpointsTests
+public class AuthEndpointsTests : IDisposable
 {
-    private WebApplicationFactory<Program> _factory = null!;
+    private TestWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
 
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment("Testing");
-                builder.ConfigureServices(services =>
-                {
-                    // Override Dynamic config for testing
-                    services.Configure<Microsoft.Extensions.Configuration.IConfiguration>(config =>
-                    {
-                        config["Dynamic:JwksUri"] = "https://test.dynamic.xyz/.well-known/jwks";
-                        config["Dynamic:Issuer"] = "https://test.dynamic.xyz";
-                        config["Dynamic:Audience"] = "test-audience";
-                    });
-                });
-            });
-        
+        _factory = new TestWebApplicationFactory();
         _client = _factory.CreateClient();
     }
 
@@ -51,7 +37,7 @@ public class AuthEndpointsTests
     public async Task ExchangeEndpoint_WithoutAuthHeader_Returns400()
     {
         // Act
-        var response = await _client.PostAsync("/auth/exchange", new StringContent("", Encoding.UTF8, "application/json"));
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("", Encoding.UTF8, "application/json"));
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -64,7 +50,7 @@ public class AuthEndpointsTests
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "invalid-token");
 
         // Act
-        var response = await _client.PostAsync("/auth/exchange", new StringContent("", Encoding.UTF8, "application/json"));
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("", Encoding.UTF8, "application/json"));
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -78,7 +64,7 @@ public class AuthEndpointsTests
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", mockJwt);
 
         // Act
-        var response = await _client.PostAsync("/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
 
         // Assert - Should return 401 due to signature validation failure, which is expected
         // The new architecture should properly validate JWT signatures
@@ -117,7 +103,7 @@ public class AuthEndpointsTests
         // Act - Send 12 requests (exceeds 10 req/min limit for /auth/exchange)
         for (int i = 0; i < 12; i++)
         {
-            var task = _client.PostAsync("/auth/exchange", new StringContent("", Encoding.UTF8, "application/json"));
+            var task = _client.PostAsync("/api/v1/auth/exchange", new StringContent("", Encoding.UTF8, "application/json"));
             tasks.Add(task);
         }
 
@@ -173,5 +159,12 @@ public class AuthEndpointsTests
         var tokenString = handler.WriteToken(token);
         var parts = tokenString.Split('.');
         return $"{parts[0]}.{parts[1]}.mock-signature";
+    }
+
+    public void Dispose()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

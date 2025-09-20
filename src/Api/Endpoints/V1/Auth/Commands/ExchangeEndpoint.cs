@@ -24,7 +24,7 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
         _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
     }
 
-    protected override string GetRoute() => "/auth/exchange";
+    protected override string GetRoute() => "/api/v1/auth/exchange";
 
     protected override string GetSummary() => "Exchange Dynamic JWT for Axon identity";
 

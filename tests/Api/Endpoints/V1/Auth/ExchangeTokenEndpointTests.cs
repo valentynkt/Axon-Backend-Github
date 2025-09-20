@@ -1,3 +1,6 @@
+using Axon.Api.Tests.Common;
+using Axon.Modules.Identity.Application.Contracts.ExternalServices;
+using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
@@ -14,37 +17,85 @@ using NUnit.Framework;
 using Shouldly;
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
+using System.Text;
+using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 
 namespace Axon.Api.Tests.Endpoints.V1.Auth;
 
 [TestFixture]
 public class ExchangeTokenEndpointTests
 {
-    private WebApplicationFactory<Program> _factory = null!;
+    private TestWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
     private ICurrentUserService _mockCurrentUserService = null!;
+    private IDynamicAuthService _mockDynamicAuthService = null!;
 
     [SetUp]
     public void Setup()
     {
         _mockCurrentUserService = Substitute.For<ICurrentUserService>();
-        
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
+        _mockDynamicAuthService = Substitute.For<IDynamicAuthService>();
+
+        // Mock DynamicAuthService to return successful validation
+        var mockValidationResult = new DynamicUserData(
+            AxonUserId: "test-user-id",
+            Email: "test@example.com",
+            EnvironmentId: "test-env",
+            Wallets: new List<WalletData>
             {
-                builder.ConfigureServices(services =>
-                {
-                    // Replace authentication with test authentication
-                    services.AddAuthentication("Test")
-                        .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
-                    
-                    // Replace ICurrentUserService with mock
-                    services.Remove(services.Single(d => d.ServiceType == typeof(ICurrentUserService)));
-                    services.AddSingleton(_mockCurrentUserService);
-                });
+                new(
+                    Id: "test-wallet-id",
+                    Address: "Sol1234567890",
+                    Chain: "solana",
+                    WalletName: "Test Wallet",
+                    Provider: "phantom",
+                    ConnectedAtUtc: DateTimeOffset.UtcNow
+                )
+            },
+            FirstVisitUtc: DateTimeOffset.UtcNow,
+            LastVisitUtc: DateTimeOffset.UtcNow,
+            IsNewUser: false
+        );
+
+        _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(mockValidationResult));
+
+        // Mock GetRawClaimsAsync to return claims principal with issuer
+        var mockClaims = new[]
+        {
+            new Claim("sub", "test-subject-123"),
+            new Claim("iss", "https://test.dynamic.xyz"),
+            new Claim("aud", "test-audience")
+        };
+        var mockIdentity = new ClaimsIdentity(mockClaims, "Test");
+        var mockPrincipal = new ClaimsPrincipal(mockIdentity);
+
+        _mockDynamicAuthService.GetRawClaimsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(mockPrincipal));
+
+        _factory = new TestWebApplicationFactory()
+            .WithServices(services =>
+            {
+                // Replace authentication with test authentication
+                services.AddAuthentication("Test")
+                    .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", options => { });
+
+                // Replace ICurrentUserService with mock
+                services.Remove(services.Single(d => d.ServiceType == typeof(ICurrentUserService)));
+                services.AddSingleton(_mockCurrentUserService);
+
+                // Replace IDynamicAuthService with mock
+                services.Remove(services.Single(d => d.ServiceType == typeof(IDynamicAuthService)));
+                services.AddSingleton(_mockDynamicAuthService);
             });
 
         _client = _factory.CreateClient();
+
+        // Add mock Authorization header for all requests
+        var mockJwt = CreateMockJwt();
+        _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {mockJwt}");
     }
 
     [TearDown]
@@ -61,7 +112,7 @@ public class ExchangeTokenEndpointTests
         _mockCurrentUserService.AxonUserId.Returns("test-user-id");
 
         // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -73,68 +124,66 @@ public class ExchangeTokenEndpointTests
         });
 
         exchangeResponse.ShouldNotBeNull();
-        exchangeResponse.AxonUserId.ShouldBe("test-user-id");
-        exchangeResponse.Email.ShouldBe("test@example.com");
-        exchangeResponse.Wallets.ShouldHaveSingleItem();
-        exchangeResponse.Wallets[0].Address.ShouldBe("Sol1234567890");
-        exchangeResponse.Wallets[0].Chain.ShouldBe("solana");
-        exchangeResponse.Wallets[0].Provider.ShouldBe("phantom");
+        exchangeResponse.AxonUserId.ShouldNotBeNullOrEmpty();
+        Guid.TryParse(exchangeResponse.AxonUserId, out _).ShouldBeTrue("AxonUserId should be a valid GUID");
+        exchangeResponse.Created.ShouldBeTrue();
+        exchangeResponse.WalletsProcessed.ShouldBe(1);
+        exchangeResponse.WalletsLinked.ShouldBe(1);
+        exchangeResponse.DefaultsApplied.ShouldBe(1);
+        exchangeResponse.Skipped.ShouldBe(0);
+        exchangeResponse.Conflicts.ShouldBe(0);
     }
 
     [Test]
-    public async Task HandleAsync_WhenAxonUserIdMissing_Returns500()
+    public async Task HandleAsync_WhenJwtValidationFails_Returns400()
     {
-        // Arrange
-        _mockCurrentUserService.AxonUserId.Returns((string?)null);
+        // Arrange - Mock JWT validation to fail
+        _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<DynamicUserData, Error>(Error.Validation("Invalid JWT token")));
 
         // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", null);
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     private record ExchangeTokenResponse(
         string AxonUserId,
-        string Email,
-        List<WalletInfo> Wallets
+        bool Created,
+        int WalletsProcessed,
+        int WalletsLinked,
+        int DefaultsApplied,
+        int Skipped,
+        int Conflicts
     );
 
-    private record WalletInfo(
-        string Id,
-        string Address,
-        string Chain,
-        string Provider,
-        string? WalletName,
-        DateTime? ConnectedAt
-    );
-}
-
-/// <summary>
-/// Test authentication handler that always succeeds for testing
-/// </summary>
-public class TestAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
-{
-    public TestAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
-        ILoggerFactory logger, UrlEncoder encoder) : base(options, logger, encoder)
+    private static string CreateMockJwt()
     {
-    }
+        // Create a mock JWT for testing (signature won't be valid)
+        var handler = new JwtSecurityTokenHandler();
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
-            new Claim(ClaimTypes.Email, "test@example.com"),
-            new Claim("environment_id", "test-env"),
-            new Claim("wallet:solana", "Sol1234567890"),
-            new Claim("wallet:provider:solana", "phantom")
+            new Claim("sub", "test-subject-123"),
+            new Claim("iss", "https://test.dynamic.xyz"),
+            new Claim("aud", "test-audience"),
+            new Claim("exp", new DateTimeOffset(DateTime.UtcNow.AddHours(1)).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)),
+            new Claim("iat", new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture))
         };
 
-        var identity = new ClaimsIdentity(claims, "Test");
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, "Test");
+        var token = new JwtSecurityToken(
+            issuer: "https://test.dynamic.xyz",
+            audience: "test-audience",
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(1),
+            signingCredentials: null // No signing for mock
+        );
 
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        // Return just the header.payload part (no signature)
+        var tokenString = handler.WriteToken(token);
+        var parts = tokenString.Split('.');
+        return $"{parts[0]}.{parts[1]}.mock-signature";
     }
 }
+

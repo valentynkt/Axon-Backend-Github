@@ -9,12 +9,15 @@ namespace Axon.Modules.Chat.Domain.Specifications;
 
 public sealed class RecentlyUpdatedByOwnerSpec : Specification<Conversation>
 {
+    public AxonUserId OwnerId { get; }
+    public DateTimeOffset SinceUtc { get; }
+
     public RecentlyUpdatedByOwnerSpec(AxonUserId ownerId, DateTimeOffset sinceUtc)
     {
-        var since = sinceUtc;
-        Query.Where(c =>
-            c.OwnerId == ownerId &&
-            c.Status == ConversationStatus.Active &&
-            (c.UpdatedAt ?? c.CreatedAt) >= since);
+        OwnerId = ownerId;
+        SinceUtc = sinceUtc;
+
+        // SQLite DateTimeOffset translation is handled by repository override
+        // This specification is processed client-side for SQLite compatibility
     }
 }

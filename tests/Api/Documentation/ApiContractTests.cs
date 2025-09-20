@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Axon.Api.Contracts.Common;
 using Axon.Api.ErrorHandling;
+using Axon.Api.Tests.Common;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -18,7 +19,7 @@ namespace Axon.Api.Documentation.Tests;
 [TestFixture]
 public class ApiContractTests : IDisposable
 {
-    private WebApplicationFactory<Program> _factory = null!;
+    private TestWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -29,12 +30,7 @@ public class ApiContractTests : IDisposable
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment("Development");
-            });
-
+        _factory = new TestWebApplicationFactory();
         _client = _factory.CreateClient();
     }
 
@@ -72,9 +68,9 @@ public class ApiContractTests : IDisposable
         json.ShouldContain("\"details\":");
         
         // Should not contain Pascal case
-        json.ShouldNotContain("\"Code\":");
-        json.ShouldNotContain("\"Message\":");
-        json.ShouldNotContain("\"Details\":");
+        json.ShouldNotContain("\"Code\":", Case.Sensitive);
+        json.ShouldNotContain("\"Message\":", Case.Sensitive);
+        json.ShouldNotContain("\"Details\":", Case.Sensitive);
     }
 
     [Test]
@@ -229,7 +225,7 @@ public class ApiContractTests : IDisposable
     public async Task AuthEndpoints_WithoutBearerToken_ShouldReturn401()
     {
         // Act
-        var response = await _client.PostAsync("/auth/exchange", new StringContent("{}"));
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}"));
 
         // Assert
         response.StatusCode.ShouldBe(System.Net.HttpStatusCode.Unauthorized);
@@ -249,7 +245,7 @@ public class ApiContractTests : IDisposable
         _client.DefaultRequestHeaders.Add("Authorization", "Bearer invalid-jwt-token");
 
         // Act
-        var response = await _client.PostAsync("/auth/exchange", new StringContent("{}"));
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}"));
 
         // Assert
         response.StatusCode.ShouldBe(System.Net.HttpStatusCode.Unauthorized);

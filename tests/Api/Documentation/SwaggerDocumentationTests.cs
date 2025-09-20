@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Axon.Api.Swagger;
+using Axon.Api.Tests.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,21 +18,14 @@ namespace Axon.Api.Documentation.Tests;
 [TestFixture]
 public class SwaggerDocumentationTests : IDisposable
 {
-    private WebApplicationFactory<Program> _factory = null!;
+    private TestWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
 
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment("Development");
-                builder.ConfigureServices(services =>
-                {
-                    // Add test-specific services if needed
-                });
-            });
+        _factory = new TestWebApplicationFactory()
+            .WithEnvironment("Development");
 
         _client = _factory.CreateClient();
     }

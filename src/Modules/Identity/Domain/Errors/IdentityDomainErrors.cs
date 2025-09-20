@@ -132,6 +132,9 @@ public static class IdentityDomainErrors
         public const string WatchOnlyNotAllowedAsDefaultCode = "IDENTITY.WALLET.WATCH_ONLY_VIOLATION";
         public const string WatchOnlyNotAllowedAsDefaultMessage = "Only verified signing wallets can be set as default.";
 
+        public const string OwnershipAlreadyExistsCode = "WalletOwnership.AlreadyExists";
+        public const string OwnershipAlreadyExistsMessage = "Wallet ownership already exists for this principal.";
+
         // Error factory methods
         public static Error AlreadyOwned() => Error.Conflict(AlreadyOwnedMessage, AlreadyOwnedCode);
         public static Error AlreadyOwnedByPrincipal() => Error.BusinessRule(AlreadyOwnedByPrincipalMessage, AlreadyOwnedByPrincipalCode);
@@ -149,6 +152,7 @@ public static class IdentityDomainErrors
         public static Error DefaultNotOwned() => Error.BusinessRule(DefaultNotOwnedMessage, DefaultNotOwnedCode);
         public static Error ChainMismatch() => Error.BusinessRule(ChainMismatchMessage, ChainMismatchCode);
         public static Error WatchOnlyNotAllowedAsDefault() => Error.Validation(WatchOnlyNotAllowedAsDefaultMessage, WatchOnlyNotAllowedAsDefaultCode);
+        public static Error OwnershipAlreadyExists() => Error.BusinessRule(OwnershipAlreadyExistsMessage, OwnershipAlreadyExistsCode);
         
         // Wallet ownership conflict for exchange operations
         public static Error WalletOwnershipConflict(string chainId, string address) => Error.Conflict(
