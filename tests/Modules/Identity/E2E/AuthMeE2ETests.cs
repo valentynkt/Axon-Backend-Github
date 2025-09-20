@@ -421,7 +421,7 @@ public class AuthMeE2ETests : E2ETestBase
         };
 
         var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        var content = CreateJsonContent(json);
+        using var content = CreateJsonContent(json);
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -440,7 +440,7 @@ public class AuthMeE2ETests : E2ETestBase
         };
 
         var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        var content = CreateJsonContent(json);
+        using var content = CreateJsonContent(json);
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -462,7 +462,7 @@ public class AuthMeE2ETests : E2ETestBase
         };
 
         var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        var content = CreateJsonContent(json);
+        using var content = CreateJsonContent(json);
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -484,7 +484,7 @@ public class AuthMeE2ETests : E2ETestBase
         };
 
         var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        var content = CreateJsonContent(json);
+        using var content = CreateJsonContent(json);
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -513,8 +513,9 @@ public class AuthMeE2ETests : E2ETestBase
     /// <summary>
     /// Verifies a wallet for a principal (simulates signature verification).
     /// </summary>
-    private async Task VerifyWalletForPrincipal(string jwt)
+    private static async Task VerifyWalletForPrincipal(string jwt)
     {
+        _ = jwt; // Unused parameter placeholder
         // This would typically involve a wallet verification endpoint
         // For testing purposes, we might need to directly call the verification logic
         // or use a test-specific endpoint
@@ -524,8 +525,9 @@ public class AuthMeE2ETests : E2ETestBase
     /// <summary>
     /// Changes the default wallet for a principal.
     /// </summary>
-    private async Task ChangeDefaultWalletForPrincipal(string jwt)
+    private static async Task ChangeDefaultWalletForPrincipal(string jwt)
     {
+        _ = jwt; // Unused parameter placeholder
         // This would involve calling an endpoint to change chain defaults
         // For testing purposes, this might be a separate API call
         await Task.CompletedTask; // Placeholder

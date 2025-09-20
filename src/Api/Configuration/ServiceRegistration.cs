@@ -47,9 +47,19 @@ public static class ServiceRegistration
                 {
                     o.DocumentSettings = s =>
                     {
-                        s.Title = "Axon API";
+                        s.Title = "Axon Identity Service API";
                         s.Version = "v1";
-                        s.Description = "Axon Backend API - Modular Monolith with Clean Architecture";
+                        s.Description = "Axon Backend API - Modular Monolith with Clean Architecture. " +
+                                       "Features comprehensive Authentication, Rate Limiting, and Error Handling.";
+
+                        // Add JWT Bearer authentication security scheme
+                        s.AddAuth("bearerAuth", new()
+                        {
+                            Type = NSwag.OpenApiSecuritySchemeType.Http,
+                            Scheme = "bearer",
+                            BearerFormat = "JWT",
+                            Description = "JWT Authorization header using the Bearer scheme"
+                        });
                     };
                     // Disable auto-tagging from route segments - use manual tags only
                     o.AutoTagPathSegmentIndex = 0;

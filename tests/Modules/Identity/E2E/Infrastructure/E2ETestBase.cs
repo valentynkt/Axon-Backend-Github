@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,7 +35,7 @@ public abstract class E2ETestBase : IAsyncDisposable
     /// <summary>
     /// Test timestamp for deterministic time-based testing.
     /// </summary>
-    protected static readonly DateTime TestTime = new(2024, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+    public static readonly DateTime TestTime = new(2024, 1, 15, 12, 0, 0, DateTimeKind.Utc);
 
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
@@ -80,7 +81,10 @@ public abstract class E2ETestBase : IAsyncDisposable
         TimeProvider = new FakeTimeProvider(TestTime);
 
         // Create WebApplicationFactory with test configuration
+        // CA2000 suppressed: Factory is disposed in TearDownAsync
+        #pragma warning disable CA2000 // Dispose objects before losing scope
         Factory = new WebApplicationFactory<Program>()
+        #pragma warning restore CA2000 // Dispose objects before losing scope
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Testing");

@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
@@ -55,7 +56,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         MockNoWalletOwners(); // No conflicts
 
         // Mock UnitOfWork
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -116,7 +117,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         });
 
         // Mock UnitOfWork
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -164,7 +165,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         });
 
         // Mock UnitOfWork
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -239,7 +240,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         MockCredentialUniqueness(true); // Credential is taken
 
         // Mock UnitOfWork (won't be used due to failure)
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
         // Act: Execute exchange command
@@ -279,7 +280,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
             { (TestDataFixtures.SolanaMainnetChain, mainnetAddress), mainnetWallet.Id }
         });
 
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -334,7 +335,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         MockNoWalletOwners();
 
         // Mock UnitOfWork
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -379,7 +380,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
             { (TestDataFixtures.SolanaMainnetChain, address), walletId }
         });
 
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -425,7 +426,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
             { (TestDataFixtures.SolanaMainnetChain, address), walletId }
         });
 
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
 
@@ -464,7 +465,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         });
 
         // Mock database save failure
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork>();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromException<int>(new DbUpdateException("Simulated database error")));
         MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);

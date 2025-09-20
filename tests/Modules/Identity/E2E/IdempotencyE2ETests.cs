@@ -73,6 +73,7 @@ public class IdempotencyE2ETests : E2ETestBase
 
         // Act: Submit concurrent requests
         var tasks = new List<Task<HttpResponseMessage>>();
+        var requestContent = await requestPayload.ReadAsStringAsync();
 
         for (int i = 0; i < 5; i++)
         {
@@ -80,8 +81,11 @@ public class IdempotencyE2ETests : E2ETestBase
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", validJwt);
 
-            tasks.Add(client.PostAsync("/api/v1/auth/exchange",
-                new StringContent(await requestPayload.ReadAsStringAsync(), Encoding.UTF8, "application/json")));
+            // HttpClient.PostAsync takes ownership of the content and disposes it
+            #pragma warning disable CA2000 // Dispose objects before losing scope
+            var content = new StringContent(requestContent, Encoding.UTF8, "application/json");
+            tasks.Add(client.PostAsync("/api/v1/auth/exchange", content));
+            #pragma warning restore CA2000 // Dispose objects before losing scope
         }
 
         var responses = await Task.WhenAll(tasks);
@@ -314,7 +318,7 @@ public class IdempotencyE2ETests : E2ETestBase
     {
         // Arrange: Create valid request
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        var requestPayload = CreateExchangeRequestPayload();
+        using var requestPayload = CreateExchangeRequestPayload();
 
         // Act: Submit multiple requests
         SetAuthorizationHeader(validJwt);

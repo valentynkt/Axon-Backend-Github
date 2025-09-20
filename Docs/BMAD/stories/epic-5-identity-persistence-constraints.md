@@ -23,12 +23,14 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 ## Critical Implementation Decisions (Must Lock Before Starting)
 
-### 1. Environment Model Decision
-**Options**:
-- **Option A**: Separate `environment` column + `chain_id='solana'`
-- **Option B**: Encoded format `chain_id='solana:mainnet'` with no separate environment
+### 1. Environment Model Decision ✅ LOCKED
+**Decision**: Separate `environment` column + `chain_id='solana'` (no double-encoding)
 
-**Decision**: [TO BE DECIDED] - Apply consistently to all keys, queries, and indexes
+**Implementation**:
+- `chain_id`: Chain identifier only (e.g., 'solana', 'ethereum')
+- `environment`: Network identifier (e.g., 'mainnet', 'devnet', 'test')
+- Apply consistently to all keys, queries, indexes, and API contracts
+- Never infer environment from headers or client - require explicit in payloads
 
 ### 2. Exclusivity Transaction Semantics
 **Requirement**: Verification runs in single DB transaction
@@ -40,17 +42,20 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 ### 3. Deterministic Resolution Rules
 **Definition**: Active = `status != revoked`
-**Tie-Break Order** (when multiple active non-verified owners):
-1. `dynamic_verified` (highest authority)
-2. `direct_signature_msg`
-3. `direct_signature_tx`
+**Tie-Break Order** (applies ONLY if no verified+signing exists):
+1. `dynamic_attested` (highest authority - from Dynamic.xyz)
+2. `direct_signature_msg` (wallet signed message)
+3. `direct_signature_tx` (on-chain transaction)
 4. `watch_only` (lowest authority)
 5. Then earliest principal (by created_at)
 
+**Important**: Candidates come from Wallet found by `(environment, chain_id, address)` triple
+
 ### 4. Default Wallet Guard
-**Domain Enforcement**: Default can only point to same principal's `verified+signing` ownership
+**Domain Enforcement**: Default requires same principal's `verified+signing` ownership on that `(environment, chain_id)`
 - Reject watch-only as default (422 Unprocessable)
-- Clear default when ownership revoked
+- Clear default when ownership revoked for that environment
+- Defaults are per `(principal, environment, chain_id)` triple
 
 ### 5. Dynamic JWT Hardening
 **Requirements**:

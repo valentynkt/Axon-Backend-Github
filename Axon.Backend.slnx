@@ -57,4 +57,10 @@
   <Folder Name="/tests/Modules/Identity/Infrastructure/">
     <Project Path="tests/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Modules/Identity/E2E/">
+    <Project Path="tests/Modules/Identity/E2E/Axon.Modules.Identity.E2E.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules/Identity/Integration/">
+    <Project Path="tests/Modules/Identity/Integration/Axon.Modules.Identity.Integration.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -225,11 +225,12 @@ public class ApiContractTests : IDisposable
     public async Task AuthEndpoints_WithoutBearerToken_ShouldReturn401()
     {
         // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}"));
+        var jsonContent = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/api/v1/auth/exchange", jsonContent);
 
         // Assert
         response.StatusCode.ShouldBe(System.Net.HttpStatusCode.Unauthorized);
-        
+
         var content = await response.Content.ReadAsStringAsync();
         if (!string.IsNullOrEmpty(content))
         {
@@ -245,11 +246,12 @@ public class ApiContractTests : IDisposable
         _client.DefaultRequestHeaders.Add("Authorization", "Bearer invalid-jwt-token");
 
         // Act
-        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}"));
+        var jsonContent = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/api/v1/auth/exchange", jsonContent);
 
         // Assert
         response.StatusCode.ShouldBe(System.Net.HttpStatusCode.Unauthorized);
-        
+
         var content = await response.Content.ReadAsStringAsync();
         if (!string.IsNullOrEmpty(content))
         {

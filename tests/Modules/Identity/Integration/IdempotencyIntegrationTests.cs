@@ -5,6 +5,7 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;

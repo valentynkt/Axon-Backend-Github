@@ -194,7 +194,7 @@ public class TokenValidationE2ETests : E2ETestBase
     public async Task SignedMessage_ValidTTL_ShouldSucceed()
     {
         // Arrange: Create exchange request with valid wallet signature
-        var (message, signature, issuedAt) = JwtTestTokenFactory.WalletSignatureTestData.CreateValidSignature();
+        var (_, signature, _) = JwtTestTokenFactory.WalletSignatureTestData.CreateValidSignature();
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
         SetAuthorizationHeader(validJwt);
 
@@ -282,7 +282,7 @@ public class TokenValidationE2ETests : E2ETestBase
     public async Task SignatureReuse_WithinGuardWindow_ShouldReturn401()
     {
         // Arrange: Create first exchange request with signature
-        var (message, signature, issuedAt) = JwtTestTokenFactory.WalletSignatureTestData.CreateValidSignature();
+        var (_, signature, _) = JwtTestTokenFactory.WalletSignatureTestData.CreateValidSignature();
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
         SetAuthorizationHeader(validJwt);
 
@@ -322,7 +322,7 @@ public class TokenValidationE2ETests : E2ETestBase
     public async Task SignatureReuse_OutsideGuardWindow_ShouldSucceed()
     {
         // Arrange: Create first exchange request with signature
-        var (message, signature, issuedAt) = JwtTestTokenFactory.WalletSignatureTestData.CreateValidSignature();
+        var (_, signature, _) = JwtTestTokenFactory.WalletSignatureTestData.CreateValidSignature();
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
         SetAuthorizationHeader(validJwt);
 
