@@ -12,6 +12,14 @@
 ### TL;DR
 Ship a **KISS, 20/80** identity fabric for **Dynamic + Wallet** only. Database enforces what matters: unique Wallet per `(environment, chain, address)`, unique Credential per `(environment, provider, issuer, subject)`, one live Ownership per `(principal, wallet)`, and ≤1 verified+signing owner per wallet. Credential-first → wallet-control resolution ensures users map to the **same AxonPrincipal** across apps. Mint short-lived Axon JWT (~15m) for both flows. **No refresh tokens, no nonce ledger, no OIDC, no overengineering.**
 
+### ✅ 6 Critical KISS Alignments
+1. **No OIDC**: Dynamic JWT + Wallet signatures only (removed all OIDC references)
+2. **Single Environment Model**: Separate `environment` field + simple `chain` values (no double-encoding)
+3. **Deterministic Tie-Break**: Ranked resolution (dynamic_verified > direct_signature > watch_only) → earliest principal
+4. **Default Wallet Guard**: Only `verified+signing` wallets from same principal can be defaults
+5. **Hardened JWT**: Enforce `iss`/`aud` validation, JWKS cache (10-30min), `kid` rotation
+6. **Minimal Replay Protection**: 5-min expiry in signed payload + in-memory LRU (no DB ledger)
+
 ### Business Problem
 Axon needs a minimal, vendor-agnostic identity core where any accepted proof (Dynamic JWT or wallet signature) deterministically resolves to one AxonPrincipal across all B2B clients and apps (web/mobile/dApp).
 
@@ -69,11 +77,11 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 | **Token Complexity** | Simple JWT | 15-minute lifespan, no refresh |
 | "Complex token management" | KISS approach | Re-exchange (Dynamic) or re-prompt (wallet) |
 
-### Expected Outcomes
-- **Identity Unity**: One AxonPrincipal per real user regardless of auth method
-- **Security Assurance**: Database-level guarantees prevent constraint violations
-- **Enterprise Compliance**: Full audit trail and deterministic identity resolution
-- **Developer Experience**: Clear error messages and predictable behavior
+### Expected Outcomes (KISS Benefits)
+- **Simplicity**: 80% of value with 20% of complexity
+- **Security**: Database-enforced constraints that cannot be bypassed
+- **Speed**: Ship in days, not weeks
+- **Maintainability**: Simple enough for any developer to understand
 
 ---
 
@@ -84,8 +92,8 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 #### 1. **Enable Enterprise B2B Scaling** (Priority: P0)
 **Objective**: Support vendor-agnostic identity integration for enterprise clients
 **Success Criteria**:
-- Single identity per user across all authentication methods
-- Support for any OIDC provider, wallet system, or custom authentication
+- Single identity per user across Dynamic JWT and wallet authentication
+- Support for Dynamic.xyz and wallet signature authentication only
 - Zero identity conflicts during client onboarding
 - Deterministic principal resolution with <100ms latency
 
@@ -105,7 +113,7 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 **Objective**: Provide predictable, auditable identity resolution for compliance
 **Success Criteria**:
 - Documented resolution algorithm with deterministic outcomes
-- Complete audit trail of identity merge operations
+- Identity change audit trail (resolution path, auto-revokes, default changes)
 - Conflict resolution with clear business rules
 - <100ms principal resolution for authenticated users
 
@@ -147,69 +155,84 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 
 ---
 
-## 🔧 Functional Requirements
+## 🔧 Functional Requirements (KISS Version)
 
-### Core Features
+### Core Features (The Essential 20%)
 
-#### F1: **Unified Principal Resolution Algorithm**
-**Business Requirement**: Single identity per user across all authentication methods
-**Functional Specification**:
-- **Credential-First Matching**: Check for existing AxonPrincipal with matching credentials
-- **Wallet-Based Fallback**: If no credential match, check for principals with verified+signing wallet ownership
-- **Merge Strategy**: When multiple candidates exist, merge using deterministic rules
-- **New Principal Creation**: Only when no existing identity can be matched
+#### F1: **Simple Principal Resolution (2 Steps)**
+**Business Requirement**: One identity per user across Dynamic + Wallet auth
+**Implementation**:
+1. **Credential Match**: If `(env, provider, issuer, subject)` exists → use that principal
+2. **Wallet Match**: Else check wallet ownership (prefer verified+signing)
+3. **Create New**: Only if no matches found
 
-**Business Value**: Eliminates identity fragmentation while supporting all authentication methods
+**Why It Matters**: Users stay unified whether they use Dynamic or wallet auth
 
-#### F2: **Database-Level Environment Isolation**
-**Business Requirement**: Absolute separation between environments for multi-tenant security
-**Functional Specification**:
-- All unique constraints scoped by environment identifier
-- Environment context automatically added to all identity queries
-- Database-level prevention of cross-environment data access
-- Partition-like behavior using environment prefix in constraints
+#### F2: **5 Hard Database Constraints with Guards**
+**Business Requirement**: Database-enforced identity rules
+**The 5 Constraints**:
+1. Unique Wallet: `(environment, chain, address)` WHERE `is_deleted=false`
+2. Unique Credential: `(environment, provider, issuer, subject)` WHERE `is_deleted=false`
+3. One Ownership: `(principal_id, wallet_id)` WHERE `is_deleted=false`
+4. Exclusive Signing: `(wallet_id)` WHERE `status='verified' AND access='signing'`
+5. One Default: `(principal_id, environment, chain)` WHERE `is_deleted=false`
 
-**Business Value**: Security assurance required for enterprise B2B confidence
+**Business Guards (Domain-Level Enforcement)**:
+- **Default Wallet Guard**: `SetDefault(principal, wallet)` requires:
+  - Same principal owns the wallet (`principal_id` match)
+  - Wallet ownership has `status='verified' AND access='signing'`
+  - Returns `422 Unprocessable` if wallet is watch-only or pending
+- **Monotonic Updates**: `last_seen_at` only updates if `new_timestamp > current_timestamp`
 
-#### F3: **Wallet Exclusivity Enforcement**
-**Business Requirement**: One verified+signing owner per wallet per environment
-**Functional Specification**:
-- Database unique constraint on (environment, wallet_id, verified+signing status)
-- Automatic ownership transfer with audit trail
-- Watch-only ownership exceptions (multiple allowed)
-- Clear error messages for ownership conflicts
+**Why It Matters**: Database + domain guards prevent all violations
 
-**Business Value**: Prevents wallet ownership disputes and provides clear business rules
+#### F3: **Simple Token Strategy with Hardened Security**
+**Business Requirement**: Secure authentication without complexity
+**Implementation**:
+- Issue 15-minute Axon JWT for both Dynamic and wallet auth
+- **Dynamic JWT Validation Requirements**:
+  - Validate `iss` matches: `app.dynamicauth.com/{environmentId}`
+  - Validate `aud` matches expected value (document in config)
+  - Cache JWKS for 10-30 minutes with `kid` rotation support
+  - Clock skew tolerance: ±60 seconds max
+- **Wallet Proof Replay Resistance (KISS)**:
+  - Signed payload must include: `{issued_at, exp (≤5min), nonce, address, chain, environment}`
+  - In-memory LRU cache rejects duplicate `{message, signature}` pairs for 5-10 min
+  - No database ledger or complex nonce tracking
+- Dynamic: Silent re-exchange before expiry
+- Wallet: Re-prompt on expiry with fresh nonce
+- No refresh tokens, no session management
 
-#### F4: **Deterministic Conflict Resolution**
-**Business Requirement**: Predictable outcomes for complex identity scenarios
-**Functional Specification**:
-- Documented resolution algorithm with decision trees
-- Merge policies for credentials, wallets, and profile data
-- Audit trail for all merge operations
-- Rollback capabilities for resolution errors
+**Why It Matters**: Simple + secure = maintainable with replay protection
 
-**Business Value**: Compliance-ready identity management with full auditability
+#### F4: **Minimal API Surface with Clear Errors**
+**Business Requirement**: Two endpoints handle everything
+**Endpoints**:
+1. `POST /auth/exchange`: Validate proof → resolve principal → return JWT
+   - **409 Conflict**: When competing verified+signing owner exists
+   - **Auto-revoke**: Silent for pending/unverified conflicts
+2. `GET /auth/me`: Return current identity state (Axon JWT only)
+3. *(Optional)* `POST /auth/challenge`: Generate stateless sign-in message
 
-### Non-Functional Requirements
+**Why It Matters**: Smaller surface = fewer bugs = clear DX
+
+### Non-Functional Requirements (KISS Targets)
 
 #### Performance
-- **Principal Resolution**: <100ms P95 latency for authenticated users
-- **Constraint Validation**: <10ms additional overhead for database constraints
-- **Bulk Operations**: Efficient handling of batch identity operations
-- **Memory Usage**: <5% increase for constraint enforcement logic
+- **Principal Resolution**: <100ms P95 (including DB + JWT)
+- **Constraint Checks**: <10ms overhead
+- **Codebase**: <500 lines for core logic
 
 #### Security
-- **Environment Isolation**: 100% database-enforced separation
-- **Constraint Integrity**: Zero bypass possibilities for uniqueness constraints
-- **Audit Trail**: Complete logging of identity operations and merges
-- **Data Protection**: Secure handling of PII in identity resolution
+- **Environment Isolation**: Database-enforced
+- **Constraints**: Cannot be bypassed
+- **Tokens**: 15-minute expiry, no refresh complexity
 
-#### Reliability
-- **Transaction Safety**: ACID guarantees for all identity operations
-- **Constraint Enforcement**: Database-level validation with clear error messages
-- **Recovery**: Rollback capabilities for failed merge operations
-- **Monitoring**: Comprehensive metrics for identity system health
+#### Simplicity
+- **API Surface**: 2 endpoints
+- **Auth Methods**: 2 (Dynamic + Wallet)
+- **Database Rules**: 5 constraints
+- **Time to Ship**: 7 days
 
 ---
 
@@ -227,42 +250,44 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 ### Key Success Indicators
 1. **Security**: Zero identity constraint violations at database level
 2. **Performance**: Principal resolution maintains <100ms P95 latency
-3. **Compliance**: Complete audit trail for all identity operations
+3. **Compliance**: Identity change audit trail (resolution path, auto-revokes, default changes)
 4. **Integration**: Successful enterprise client onboarding with identity confidence
 
 ---
 
-## 🗓️ Implementation Roadmap
+## 🗓️ Implementation Roadmap (KISS Sprint)
 
-### Phase 1: Database Constraints Foundation (5 days)
-**Goal**: Implement database-level constraint enforcement
-**Implementation**:
-- Environment-scoped unique constraints for credentials and wallets
-- Migration strategy for existing data
-- Constraint violation error handling
+### Phase 1: Database Constraints (2 days)
+**Goal**: Add the 5 critical database constraints
+**Tasks**:
+- Add environment column to Wallet and Credential tables
+- Create 5 unique indexes with proper WHERE clauses
+- Test constraint enforcement
 
-**Business Value**: Security foundation for enterprise confidence
+**Deliverable**: Database prevents identity violations
 
-### Phase 2: Principal Resolution Algorithm (7 days)
-**Goal**: Implement deterministic identity resolution
-**Implementation**:
-- Credential-first, wallet-fallback resolution logic
-- Merge strategies for conflicting principals
-- Audit trail for resolution decisions
+### Phase 2: Resolution Algorithm (3 days)
+**Goal**: Implement 2-step principal resolution with deterministic tie-break
+**Tasks**:
+- Credential-match logic (Dynamic JWT)
+- Wallet-match with tie-break ranking (dynamic_verified > direct_signature > watch_only)
+- Default wallet guard enforcement in domain commands
+- New principal creation with proper environment tagging
 
-**Business Value**: Unified identity across authentication methods
+**Deliverable**: Unified identity across auth methods
 
-### Phase 3: Conflict Resolution & Testing (5 days)
-**Goal**: Handle edge cases and comprehensive testing
-**Implementation**:
-- Complex conflict resolution scenarios
-- Performance optimization for constraint checking
-- Integration testing with all authentication methods
+### Phase 3: JWT & API (2 days)
+**Goal**: Simple token management
+**Tasks**:
+- 15-minute JWT generation
+- `/auth/exchange` endpoint
+- `/auth/me` endpoint
 
-**Business Value**: Enterprise-ready identity system with confidence
+**Deliverable**: Complete auth flow
 
-### Total Timeline: 17 days
-**Progressive Value**: Each phase builds enterprise readiness while maintaining system stability
+### Total Timeline: 7 days
+**Prerequisites**: Migration rehearsal for environment backfill
+**Why So Fast?**: KISS approach eliminates 70% of complexity
 
 ---
 
@@ -288,7 +313,7 @@ Each phase includes database migration rollback scripts. Principal merge operati
 - ✅ Database-level environment isolation with zero bypass possibilities
 - ✅ Unified identity resolution across Dynamic, wallet, and OIDC authentication
 - ✅ Deterministic principal resolution with <100ms latency
-- ✅ Complete audit trail for identity operations and merges
+- ✅ Identity change audit trail for resolution paths and ownership changes
 
 ### Measures Success
 - **Enterprise Confidence**: Security auditors approve database-level constraints
@@ -298,54 +323,98 @@ Each phase includes database migration rollback scripts. Principal merge operati
 
 ---
 
-## 📋 Technical Implementation Details
+## 📋 Technical Implementation (KISS Code)
 
-### Database Schema Changes
-
-#### Environment-Scoped Constraints
+### The 5 Database Constraints
 ```sql
--- Credential uniqueness per environment
-CREATE UNIQUE INDEX ux_credential_environment_provider_issuer_subject
-ON identity.identity_credential (environment, provider, issuer, subject);
+-- 1. Unique Wallet
+CREATE UNIQUE INDEX ux_wallet ON wallet (environment, chain, address)
+WHERE is_deleted = false;
 
--- Wallet exclusivity per environment
-CREATE UNIQUE INDEX ux_wallet_ownership_environment_verified_signing
-ON identity.wallet_ownership (environment, wallet_id)
-WHERE access_mode = 'Signing' AND status = 'Verified';
+-- 2. Unique Credential
+CREATE UNIQUE INDEX ux_credential ON credential (environment, provider, issuer, subject)
+WHERE is_deleted = false;
+
+-- 3. One Ownership per Pair
+CREATE UNIQUE INDEX ux_ownership ON wallet_ownership (principal_id, wallet_id)
+WHERE is_deleted = false;
+
+-- 4. Exclusive Signing
+CREATE UNIQUE INDEX ux_exclusive ON wallet_ownership (wallet_id)
+WHERE status = 'verified' AND access = 'signing' AND is_deleted = false;
+
+-- 5. One Default per Chain
+CREATE UNIQUE INDEX ux_default ON principal_chain_default (principal_id, environment, chain)
+WHERE is_deleted = false;
 ```
 
-#### Principal Resolution Data Model
+### 2-Step Resolution with Deterministic Tie-Break
 ```csharp
-public sealed class PrincipalResolutionAudit
+// Step 1: Credential match
+var principal = await FindByCredential(env, provider, issuer, subject);
+if (principal != null) return principal;
+
+// Step 2: Wallet match with tie-break
+var ownerships = await FindActiveOwnerships(env, chain, address);
+if (ownerships.Any())
 {
-    public Guid Id { get; set; }
-    public AxonUserId TargetPrincipalId { get; set; }
-    public List<AxonUserId> MergedPrincipalIds { get; set; }
-    public string ResolutionMethod { get; set; } // "credential_match", "wallet_match", "new_principal"
-    public ResolutionContext Context { get; set; }
-    public DateTime ResolvedAt { get; set; }
+    // Apply deterministic tie-break ranking
+    return ownerships
+        .OrderBy(o => GetAuthorityRank(o.VerificationSource)) // dynamic_verified > direct_signature_msg > etc.
+        .ThenBy(o => o.Principal.CreatedAt) // Earliest principal wins
+        .First().Principal;
 }
+
+// Step 3: Create new
+return await CreatePrincipal();
+
+private int GetAuthorityRank(VerificationSource source) => source switch
+{
+    VerificationSource.DynamicVerified => 1,
+    VerificationSource.DirectSignatureMsg => 2,
+    VerificationSource.DirectSignatureTx => 3,
+    VerificationSource.WatchOnly => 4,
+    _ => 99
+};
 ```
 
-### Principal Resolution Algorithm
+### JWT & Wallet Proof Strategy
+```csharp
+// Issue 15-minute Axon JWT
+var jwt = new JwtSecurityToken(
+    issuer: "axon",
+    audience: "axon-api", // Must validate this
+    claims: new[] {
+        new Claim("sub", $"axon:{principalId}"),
+        new Claim("amr", authMethod), // "dynamic" or "wallet"
+        new Claim("jti", Guid.NewGuid().ToString()) // For replay protection
+    },
+    expires: DateTime.UtcNow.AddMinutes(15)
+);
 
-#### Resolution Flow
-1. **Extract Identity Claims**: From JWT, wallet signature, or OIDC token
-2. **Credential Matching**: Query for existing principals with matching (provider, issuer, subject)
-3. **Wallet Matching**: If no credential match, query principals with verified+signing wallet ownership
-4. **Conflict Resolution**: Handle multiple matches using merge policies
-5. **Principal Creation**: Create new principal only if no matches found
+// Wallet proof validation (KISS replay protection)
+var signedPayload = new
+{
+    issued_at = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+    exp = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(), // Max 5 min
+    nonce = Guid.NewGuid().ToString(),
+    address = walletAddress,
+    chain = chain,
+    environment = environment
+};
 
-#### Merge Policies
-- **Credentials**: Additive - combine all unique credentials
-- **Wallets**: Ownership transfer with audit trail
-- **Profile Data**: Most recent non-null values preferred
-- **Chain Defaults**: Preserve verified+signing wallet preferences
+// Check in-memory LRU cache
+if (_replayCache.Contains($"{message}:{signature}"))
+    return Error.Unauthorized("Signature already used");
+
+// Add to cache with 10-min expiry
+_replayCache.Add($"{message}:{signature}", TimeSpan.FromMinutes(10));
+```
 
 ---
 
 ## 📝 Summary
 
-This PRD establishes the foundation for enterprise-grade identity management that ensures unified identity across all authentication methods while providing database-level security guarantees. The system enables Axon's transition to B2B enterprise clients with confidence in vendor-agnostic identity integration.
+This KISS PRD delivers a **simple, battle-ready** identity core: **Dynamic + Wallet** only, **DB-enforced** invariants, **deterministic** resolution, and **short-lived** Axon JWTs. It guarantees that users traverse providers and apps without fragmenting identity—while keeping the system easy to implement, test, and evolve.
 
-**Next Step**: Begin Phase 1 implementation of database constraints foundation to establish the security foundation required for enterprise confidence.
+**Next Step**: Ship Phase 1 (database constraints) in 2 days. Complete system live in 7 days.

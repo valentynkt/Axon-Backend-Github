@@ -9,7 +9,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <LangVersion>latest</LangVersion>
     <!-- Disable some analyzers for test projects -->
-    <NoWarn>$(NoWarn);CA1707;CA1062;CA1848;CA1826;CA1860;CA1862</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1062;CA1848;CA1826;CA1860;CA1862;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +17,8 @@
     <ProjectReference Include="..\..\..\..\src\Modules\Identity\Domain\Axon.Modules.Identity.Domain.csproj" />
     <!-- BuildingBlocks for shared patterns -->
     <ProjectReference Include="..\..\..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+    <!-- Infrastructure Tests for test fixtures -->
+    <ProjectReference Include="../Infrastructure/Axon.Modules.Identity.Infrastructure.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>
