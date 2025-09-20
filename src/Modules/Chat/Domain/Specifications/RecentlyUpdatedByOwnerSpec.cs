@@ -17,7 +17,18 @@ public sealed class RecentlyUpdatedByOwnerSpec : Specification<Conversation>
         OwnerId = ownerId;
         SinceUtc = sinceUtc;
 
-        // SQLite DateTimeOffset translation is handled by repository override
-        // This specification is processed client-side for SQLite compatibility
+        // Filter by owner and status first (this works fine in SQLite)
+        Query.Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active);
+
+        // Use PostProcessingAction for date filtering since SQLite has issues with DateTimeOffset
+        Query.PostProcessingAction(conversations => conversations
+            .Where(c =>
+            {
+                var lastUpdatedUtc = c.UpdatedAt.HasValue
+                    ? c.UpdatedAt.Value.UtcDateTime
+                    : c.CreatedAt.UtcDateTime;
+                return lastUpdatedUtc >= sinceUtc.UtcDateTime;
+            })
+            .ToList());
     }
 }

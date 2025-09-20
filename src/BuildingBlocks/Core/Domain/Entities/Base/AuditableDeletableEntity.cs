@@ -33,6 +33,12 @@ public abstract class AuditableDeletableEntity<TId> : Entity<TId>, IAuditable, I
 
     protected void MarkCreated() => CreatedAt = TimeProvider.System.GetUtcNow();
 
+    /// <summary>Internal method for infrastructure to set CreatedAt with custom TimeProvider.</summary>
+    protected internal void SetCreatedAtInternal(DateTimeOffset createdAt) => CreatedAt = createdAt;
+
+    /// <summary>Internal method for infrastructure to set UpdatedAt with custom TimeProvider.</summary>
+    protected internal void SetUpdatedAtInternal(DateTimeOffset updatedAt) => UpdatedAt = updatedAt;
+
     /// <summary>Soft delete the entity.</summary>
     public virtual void SoftDelete()
     {

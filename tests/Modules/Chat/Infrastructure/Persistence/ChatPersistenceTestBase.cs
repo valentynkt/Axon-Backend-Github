@@ -79,13 +79,13 @@ public abstract class ChatPersistenceTestBase
             .UseInternalServiceProvider(serviceProvider)
             .Options;
 
-        DbContext = new ChatDbContext(writeOptions);
+        TimeProvider = new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatReadDbContext(readOptions);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
-        TimeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
 
         // Only create schema once using the write context to avoid conflicts
         await DbContext.Database.EnsureCreatedAsync();
@@ -412,11 +412,46 @@ public abstract class ChatPersistenceTestBase
         if (dateTime < TimeProvider.GetUtcNow())
         {
             TimeProvider = new FakeTimeProvider(dateTime);
+            RecreateDbContext();
         }
         else
         {
             TimeProvider.SetUtcNow(dateTime);
         }
+    }
+
+    /// <summary>
+    /// Recreates the DbContext and related components with the current TimeProvider.
+    /// Call this when the TimeProvider instance changes.
+    /// </summary>
+    protected void RecreateDbContext()
+    {
+        // Dispose existing contexts and repositories
+        UnitOfWork?.Dispose();
+        ConversationRepository?.Dispose();
+        DbContext?.Dispose();
+        ReadDbContext?.Dispose();
+
+        // Recreate write context with new TimeProvider
+        var writeOptions = new DbContextOptionsBuilder<ChatDbContext>()
+            .UseSqlite(_databaseFilePath == null ? "Data Source=:memory:" : $"Data Source={_databaseFilePath}")
+            .UseSnakeCaseNamingConvention()
+            .EnableSensitiveDataLogging()
+            .Options;
+
+        // Recreate read context with same database connection
+        var readOptions = new DbContextOptionsBuilder<ChatReadDbContext>()
+            .UseSqlite(_databaseFilePath == null ? "Data Source=:memory:" : $"Data Source={_databaseFilePath}")
+            .UseSnakeCaseNamingConvention()
+            .EnableSensitiveDataLogging()
+            .Options;
+
+        DbContext = new ChatDbContext(writeOptions, TimeProvider);
+        ReadDbContext = new ChatReadDbContext(readOptions);
+        UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
+        ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
+        ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
+        MessageReadRepository = new MessageReadRepository(ReadDbContext);
     }
 
     #endregion

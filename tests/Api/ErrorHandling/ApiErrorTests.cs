@@ -104,7 +104,7 @@ public class ApiErrorTests
         apiError.Code.ShouldBe("WALLET_OWNERSHIP_CONFLICT");
         apiError.Message.ShouldBe("wallet already owned");
         
-        var details = apiError.Details.ShouldBeOfType<object>();
+        var details = apiError.Details.ShouldNotBeNull();
         var json = JsonSerializer.Serialize(details, _jsonOptions);
         var expectedJson = JsonSerializer.Serialize(new { chainId, address }, _jsonOptions);
         json.ShouldBe(expectedJson);

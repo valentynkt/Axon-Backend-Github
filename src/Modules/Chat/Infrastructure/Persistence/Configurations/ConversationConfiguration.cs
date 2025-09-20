@@ -49,20 +49,19 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.Property(c => c.Version)
             .IsConcurrencyToken();
 
-        // Configure Messages as a navigation property
-        builder.HasMany<Message>("_messages")
+        // Configure Messages navigation property using the public property that exposes the private field
+        builder.HasMany(c => c.Messages)
             .WithOne()
-            .HasForeignKey("ConversationId")
+            .HasForeignKey(m => m.ConversationId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Configure public navigation property to map to private backing field
-        builder.Navigation("_messages")
+        // Configure the navigation to use field access for the private backing field
+        builder.Navigation(c => c.Messages)
             .EnableLazyLoading(false)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         // Ignore domain events and calculated properties in persistence
         builder.Ignore(c => c.DomainEvents);
-        builder.Ignore(c => c.Messages); // Ignore the computed property, use _messages instead
         builder.Ignore(c => c.MessagesOrdered);
         builder.Ignore(c => c.MessageCount);
         builder.Ignore(c => c.IsActive);

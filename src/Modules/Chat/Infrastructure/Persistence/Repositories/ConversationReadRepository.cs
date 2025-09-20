@@ -136,77 +136,19 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
             .CountAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Override ListAsync to handle SQLite DateTimeOffset limitations with client-side evaluation
-    /// </summary>
-    public override async Task<IReadOnlyList<Conversation>> ListAsync(ISpecification<Conversation> specification, CancellationToken cancellationToken = default)
-    {
-        // Handle specific specifications that have SQLite DateTimeOffset issues
-        switch (specification)
-        {
-            case ConversationsCreatedBetweenSpec dateSpec:
-                return await HandleConversationsCreatedBetweenSpecAsync(dateSpec, cancellationToken);
-            case RecentlyUpdatedByOwnerSpec recentSpec:
-                return await HandleRecentlyUpdatedByOwnerSpecAsync(recentSpec, cancellationToken);
-            default:
-                return await base.ListAsync(specification, cancellationToken);
-        }
-    }
-
-    private async Task<IReadOnlyList<Conversation>> HandleConversationsCreatedBetweenSpecAsync(
-        ConversationsCreatedBetweenSpec spec, CancellationToken cancellationToken)
-    {
-        // Load all conversations and filter client-side for SQLite compatibility
-        var allConversations = await _chatDbContext.Set<Conversation>()
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-        // Use proper date comparison accounting for potential timezone issues
-        var fromUtc = spec.FromUtc.UtcDateTime;
-        var toUtc = spec.ToUtc.UtcDateTime;
-
-        var filtered = allConversations
-            .Where(c => c.CreatedAt.UtcDateTime >= fromUtc && c.CreatedAt.UtcDateTime <= toUtc)
-            .ToList();
-
-        return filtered.AsReadOnly();
-    }
-
-    private async Task<IReadOnlyList<Conversation>> HandleRecentlyUpdatedByOwnerSpecAsync(
-        RecentlyUpdatedByOwnerSpec spec, CancellationToken cancellationToken)
-    {
-        // Load conversations for the owner (this can be translated by SQLite)
-        var conversationsForOwner = await _chatDbContext.Set<Conversation>()
-            .Where(c => c.OwnerId == spec.OwnerId && c.Status == ConversationStatus.Active)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-        // Apply date filtering client-side with proper UTC comparison
-        var sinceUtc = spec.SinceUtc.UtcDateTime;
-
-        var filtered = conversationsForOwner
-            .Where(c =>
-            {
-                var lastUpdatedUtc = c.UpdatedAt.HasValue
-                    ? c.UpdatedAt.Value.UtcDateTime
-                    : c.CreatedAt.UtcDateTime;
-                return lastUpdatedUtc >= sinceUtc;
-            })
-            .ToList();
-
-        return filtered.AsReadOnly();
-    }
+    // Note: RecentlyUpdatedByOwnerSpec now uses PostProcessingAction for date filtering
+    // to handle SQLite DateTimeOffset limitations, so no repository override is needed
 
     /// <summary>
-    /// GetByIdAsync implementation to properly include Messages navigation property.
+    /// Override GetByIdAsync to explicitly include Messages navigation property.
+    /// The base implementation from Ardalis.Specification doesn't automatically include navigation properties.
     /// </summary>
-    public async Task<Conversation?> GetByIdAsync(ConversationId id, CancellationToken cancellationToken = default)
+    public override async Task<Conversation?> GetByIdAsync<TId>(TId id, CancellationToken cancellationToken = default)
     {
-        var conversation = await _chatDbContext.Set<Conversation>()
-            .Include("_messages") // Include the private backing field for Messages
+        return await _chatDbContext.Set<Conversation>()
+            .Include(c => c.Messages)
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
-
-        return conversation;
+            .FirstOrDefaultAsync(c => EF.Property<object>(c, "Id").Equals(id), cancellationToken);
     }
+
 }

@@ -163,25 +163,46 @@ public class GlobalExceptionMiddlewareTests
     {
         // Arrange
         var exception = new InvalidOperationException("Test exception");
-        RequestDelegate next = context =>
-        {
-            // Manually set response as started using reflection
-            var responseFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>();
-            if (responseFeature != null)
-            {
-                // Get the private field that tracks if response has started
-                var hasStartedField = responseFeature.GetType().GetField("_hasStarted",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                hasStartedField?.SetValue(responseFeature, true);
-            }
-            throw exception;
-        };
+
+        // Mock the response to return HasStarted = true
+        var mockResponse = Substitute.For<HttpResponse>();
+        mockResponse.HasStarted.Returns(true);
+        mockResponse.StatusCode = 200;
+
+        var mockContext = Substitute.For<HttpContext>();
+        mockContext.Response.Returns(mockResponse);
+
+        // Mock request for correlation ID
+        var mockRequest = Substitute.For<HttpRequest>();
+        mockRequest.Headers.Returns(new HeaderDictionary());
+        mockContext.Request.Returns(mockRequest);
+
+        // Mock connection
+        var mockConnection = Substitute.For<ConnectionInfo>();
+        mockContext.Connection.Returns(mockConnection);
+
+        // Mock TraceIdentifier
+        mockContext.TraceIdentifier.Returns("test-trace-id");
+
+        RequestDelegate next = context => throw exception;
         _middleware = new GlobalExceptionMiddleware(next, _logger);
 
         // Act & Assert
-        await Should.NotThrowAsync(() => _middleware.InvokeAsync(_httpContext));
+        await Should.NotThrowAsync(() => _middleware.InvokeAsync(mockContext));
 
+        // Verify that response status wasn't changed (should remain 200)
+        mockResponse.StatusCode.ShouldBe(200);
+
+        // Verify warning was logged
         _logger.Received().LogWarning("Cannot send error response - response has already started");
+
+        // Verify no additional logging happened that would indicate full exception handling
+        _logger.DidNotReceive().Log(
+            LogLevel.Information,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Unhandled exception")),
+            Arg.Any<Exception>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     [Test]

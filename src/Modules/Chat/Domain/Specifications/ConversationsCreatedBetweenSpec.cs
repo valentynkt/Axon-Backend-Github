@@ -17,7 +17,10 @@ public sealed class ConversationsCreatedBetweenSpec : Specification<Conversation
         FromUtc = fromUtc;
         ToUtc = toUtc;
 
-        // SQLite DateTimeOffset translation is handled by repository override
-        // This specification is processed client-side for SQLite compatibility
+        // Use client-side evaluation due to SQLite DateTimeOffset limitations
+        Query.AsNoTracking();
+        Query.PostProcessingAction(conversations =>
+            conversations.Where(c => c.CreatedAt.UtcDateTime >= fromUtc.UtcDateTime &&
+                                   c.CreatedAt.UtcDateTime <= toUtc.UtcDateTime));
     }
 }

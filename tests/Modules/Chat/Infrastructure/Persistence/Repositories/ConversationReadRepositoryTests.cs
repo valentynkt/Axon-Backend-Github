@@ -1,9 +1,11 @@
 using Axon.Modules.Chat.Application.Queries.GetConversations;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.Specifications;
 using Axon.Modules.Chat.Infrastructure.Persistence.Builders;
 using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Time.Testing;
 using NUnit.Framework;
 using Shouldly;
 
@@ -218,10 +220,10 @@ public sealed class ConversationReadRepositoryTests : ChatPersistenceTestBase
 
         // Create conversations at different times
         SetTime(baseTime.AddDays(-10));
-        await SaveConversationAsync(CreateTestConversation(ownerId, "Old"));
+        await SaveConversationAsync(CreateTestConversation(ownerId, "Old", TimeProvider));
 
         SetTime(baseTime.AddDays(-2));
-        var recentConversation = await SaveConversationAsync(CreateTestConversation(ownerId, "Recent"));
+        var recentConversation = await SaveConversationAsync(CreateTestConversation(ownerId, "Recent", TimeProvider));
 
         var startDate = baseTime.AddDays(-5);
         var endDate = baseTime;
@@ -303,27 +305,44 @@ public sealed class ConversationReadRepositoryTests : ChatPersistenceTestBase
     [Test]
     public async Task GetAllAsync_WithRecentlyUpdatedByOwnerSpec_ShouldReturnRecentlyUpdated()
     {
-        // Arrange
+        // Arrange - use a unique owner to ensure no interference from other tests
         var ownerId = AxonUserId.New();
-        var baseTime = TimeProvider.GetUtcNow();
 
-        // Create old conversation
-        SetTime(baseTime.AddHours(-5));
-        await SaveConversationAsync(CreateTestConversation(ownerId, "Old"));
+        // Verify no existing conversations for this owner
+        var existingConversations = await ConversationReadRepository.ListAsync(new ConversationsByOwnerSpec(ownerId));
+        existingConversations.Count.ShouldBe(0, "Test setup failure: Found existing conversations for new owner");
 
-        // Create recent conversation
-        SetTime(baseTime.AddMinutes(-30));
-        var recentConversation = await SaveConversationAsync(CreateTestConversation(ownerId, "Recent"));
+        // Note: This test works around the fact that EF Core audit timestamps use system time
+        // instead of the test's FakeTimeProvider. We rely on CreatedAt for filtering since
+        // that's set by the domain model using our FakeTimeProvider.
 
+        // Start at a base time
+        var baseTime = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        // Create old conversation (will be filtered out)
+        var oldTime = baseTime.AddHours(-2); // 2 hours ago
+        SetTime(oldTime);
+        await SaveConversationAsync(CreateTestConversation(ownerId, "Old", TimeProvider));
+
+        // Create recent conversation (will be included)
+        var recentTime = baseTime.AddMinutes(-30); // 30 minutes ago
+        SetTime(recentTime);
+        var recentConversation = await SaveConversationAsync(CreateTestConversation(ownerId, "Recent", TimeProvider));
+
+        // Filter for conversations created/updated since 1 hour ago
         var since = baseTime.AddHours(-1);
         var spec = new RecentlyUpdatedByOwnerSpec(ownerId, since);
 
         // Act
         var result = await ConversationReadRepository.ListAsync(spec);
 
-        // Assert
+        // Assert - only the recent conversation should be returned
+        // The repository implementation uses CreatedAt when UpdatedAt is null, so this should work
         result.ShouldNotBeNull();
-        result.Count.ShouldBe(1);
+        result.Count.ShouldBe(1,
+            $"Expected 1 conversation created/updated since {since:yyyy-MM-dd HH:mm:ss} UTC, " +
+            $"but got {result.Count}. Recent conversation should be included (created {recentTime:yyyy-MM-dd HH:mm:ss}), " +
+            $"old conversation should be excluded (created {oldTime:yyyy-MM-dd HH:mm:ss}).");
         result.First().Id.ShouldBe(recentConversation.Id);
     }
 

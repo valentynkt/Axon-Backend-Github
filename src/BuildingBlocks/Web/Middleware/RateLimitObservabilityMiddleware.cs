@@ -12,8 +12,8 @@ public class RateLimitObservabilityMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<RateLimitObservabilityMiddleware> _logger;
-    private static readonly ConcurrentDictionary<string, int> _requestCounts = new();
-    private static readonly ConcurrentDictionary<string, DateTime> _resetTimes = new();
+    private readonly ConcurrentDictionary<string, int> _requestCounts = new();
+    private readonly ConcurrentDictionary<string, DateTime> _resetTimes = new();
 
     public RateLimitObservabilityMiddleware(RequestDelegate next, ILogger<RateLimitObservabilityMiddleware> logger)
     {
@@ -28,7 +28,10 @@ public class RateLimitObservabilityMiddleware
 
         if (isRateLimitedEndpoint)
         {
-            var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            // Get IP address, checking X-Forwarded-For header first
+            var ipAddress = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',').FirstOrDefault()?.Trim()
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown";
             var partitionKey = $"rate_limited_{ipAddress}";
             var currentTime = DateTime.UtcNow;
 
@@ -39,16 +42,18 @@ public class RateLimitObservabilityMiddleware
                 _resetTimes[partitionKey] = currentTime.AddMinutes(1);
             }
 
-            // Get current count before incrementing
-            var currentCount = _requestCounts.GetValueOrDefault(partitionKey, 0);
-
             // Add response starting callback to add headers at the right time
             context.Response.OnStarting(() =>
             {
                 if (!context.Response.Headers.ContainsKey("X-RateLimit-Limit"))
                 {
-                    // Increment request count only if request succeeded
+                    // Get current count before incrementing for header calculation
+                    var currentCount = _requestCounts.GetValueOrDefault(partitionKey, 0);
+
+                    // Increment request count
                     var newCount = _requestCounts.AddOrUpdate(partitionKey, 1, (key, value) => value + 1);
+
+                    // Calculate remaining based on new count
                     var remaining = Math.Max(0, 10 - newCount);
 
                     context.Response.Headers["X-RateLimit-Limit"] = "10";

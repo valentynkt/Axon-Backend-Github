@@ -1,6 +1,7 @@
 // /Axon/Modules/Chat/Domain/Aggregates/Conversation/Conversation.cs
 #nullable enable
 using System.Linq;
+using System.Reflection;
 using Axon.BuildingBlocks.Core.Constants;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using Axon.Modules.Chat.Domain.Entities;
@@ -89,6 +90,9 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             }
 
             var conversation = new Conversation(conversationId, ownerId, processedTitle);
+
+            // Override the CreatedAt with the provided TimeProvider instead of System time
+            conversation.SetCreatedAt(now);
 
             conversation.RaiseDomainEvent(new ConversationStartedEvent(
                 conversationId, ownerId, processedTitle, now));
@@ -270,6 +274,16 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     }
 
     // ---------- Internals ----------
+
+    /// <summary>
+    /// Sets the creation time to support test scenarios with controlled time.
+    /// Used internally to override the default system time with test-provided time.
+    /// </summary>
+    private void SetCreatedAt(DateTimeOffset createdAt)
+    {
+        // Use the internal method designed for infrastructure to set timestamps
+        SetCreatedAtInternal(createdAt);
+    }
 
     private void ValidateMessageAppendPreconditions(string content, MessageRole role)
     {

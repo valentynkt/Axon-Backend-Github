@@ -5,6 +5,7 @@ using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Entities;
 using BuildingBlocks.Infrastructure.Persistence;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -12,9 +13,15 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 
 public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDbContext
 {
-    public ChatDbContext(DbContextOptions<ChatDbContext> options, ILogger<ChatDbContext>? logger = null) 
+    private readonly TimeProvider _timeProvider;
+
+    public ChatDbContext(
+        DbContextOptions<ChatDbContext> options,
+        TimeProvider timeProvider,
+        ILogger<ChatDbContext>? logger = null)
         : base(options, logger)
     {
+        _timeProvider = timeProvider;
     }
 
     public override string ModuleName => "chat";
@@ -40,6 +47,37 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
 
         modelBuilder.ToSnakeCaseTables();
     }
+
+    protected override void ApplyAuditInformation()
+    {
+        var now = _timeProvider.GetUtcNow();
+
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.Entity is IAuditable auditableEntity)
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    // For new entities, set both CreatedAt and UpdatedAt using reflection
+                    // since we can't cast to the generic type without knowing TId
+                    SetAuditTimestamp(auditableEntity, "SetCreatedAtInternal", now);
+                    SetAuditTimestamp(auditableEntity, "SetUpdatedAtInternal", now);
+                }
+                else if (entry.State == EntityState.Modified)
+                {
+                    // For modified entities, only update UpdatedAt
+                    SetAuditTimestamp(auditableEntity, "SetUpdatedAtInternal", now);
+                }
+            }
+        }
+    }
+
+    private static void SetAuditTimestamp(IAuditable entity, string methodName, DateTimeOffset timestamp)
+    {
+        var method = entity.GetType().GetMethod(methodName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        method?.Invoke(entity, new object[] { timestamp });
+    }
 }
 
 /// <summary>
@@ -48,7 +86,7 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
 public sealed class ChatDbContextFactory : DesignTimeDbContextFactoryBase<ChatDbContext>
 {
     protected override ChatDbContext CreateNewInstance(DbContextOptions<ChatDbContext> options) =>
-        new(options);
+        new(options, TimeProvider.System);
 
     protected override void ConfigureProvider(DbContextOptionsBuilder<ChatDbContext> builder, string connectionString) =>
         builder.UseNpgsql(connectionString, opt =>

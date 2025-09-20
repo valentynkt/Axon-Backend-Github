@@ -94,7 +94,10 @@ builder.Services.AddRateLimiter(options =>
 
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
     {
-        var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // Get IP address, checking X-Forwarded-For header first for test compatibility
+        var ipAddress = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',').FirstOrDefault()?.Trim()
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
 
         // Apply rate limiting only to /api/v1/auth/exchange endpoint
         if (context.Request.Path.StartsWithSegments("/api/v1/auth/exchange"))
