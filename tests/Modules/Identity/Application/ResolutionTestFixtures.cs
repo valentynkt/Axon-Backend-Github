@@ -336,7 +336,8 @@ public static class ResolutionTestFixtures
 
             for (int i = 0; i < walletCount; i++)
             {
-                var address = $"Wallet{i:D2}Address{new string('0', 40 - i.ToString().Length - 15)}{i}";
+                // Generate valid Solana Base58 address (32-44 chars, no 0/O/I/l)
+                var address = GenerateValidSolanaAddress(i);
                 var wallet = TestDataFixtures.CreateCustomWallet(TestDataFixtures.SolanaMainnetChain, address);
                 wallets.Add(wallet);
                 walletAddresses.Add(address);
@@ -349,6 +350,28 @@ public static class ResolutionTestFixtures
             var command = ExchangeCommandBuilder.CreateWalletOnlyCommand(walletAddresses.ToArray());
 
             return (principal, wallets, command);
+        }
+
+        /// <summary>
+        /// Generates a valid Solana Base58 address for testing.
+        /// Base58 excludes: 0 (zero), O (capital o), I (capital i), l (lowercase L)
+        /// </summary>
+        public static string GenerateValidSolanaAddress(int index)
+        {
+            // Valid Base58 characters for Solana addresses
+            const string base58Chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+
+            // Create deterministic address based on index for test consistency
+            var random = new Random(index + 12345); // Seed for deterministic generation
+            var length = 44; // Standard Solana address length
+            var chars = new char[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                chars[i] = base58Chars[random.Next(base58Chars.Length)];
+            }
+
+            return new string(chars);
         }
 
         /// <summary>
@@ -422,7 +445,7 @@ public static class ResolutionTestFixtures
         {
             // Create command with more wallets than allowed (assume 10 is the limit)
             var manyAddresses = Enumerable.Range(1, 15)
-                .Select(i => $"WalletAddress{i:D2}{'0'.ToString().PadLeft(30, '0')}")
+                .Select(i => PerformanceTestData.GenerateValidSolanaAddress(i + 1000)) // Use +1000 to avoid collision with batch scenario
                 .ToArray();
 
             return ExchangeCommandBuilder.CreateWalletOnlyCommand(manyAddresses);

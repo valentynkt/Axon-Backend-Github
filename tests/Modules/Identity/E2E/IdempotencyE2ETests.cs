@@ -144,9 +144,9 @@ public class IdempotencyE2ETests : E2ETestBase
         var content2 = await response2.Content.ReadAsStringAsync();
         var content3 = await response3.Content.ReadAsStringAsync();
 
-        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions);
-        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions);
-        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions);
+        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions)!;
+        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions)!;
+        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions)!;
 
         // Same principal across time
         exchangeResponse1.AxonUserId.ShouldBe(exchangeResponse2.AxonUserId);
@@ -190,9 +190,9 @@ public class IdempotencyE2ETests : E2ETestBase
         var content2 = await response2.Content.ReadAsStringAsync();
         var content3 = await response3.Content.ReadAsStringAsync();
 
-        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions);
-        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions);
-        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions);
+        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions)!;
+        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions)!;
+        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions)!;
 
         // Same principal should be returned
         exchangeResponse1.AxonUserId.ShouldBe(exchangeResponse2.AxonUserId);
@@ -242,9 +242,9 @@ public class IdempotencyE2ETests : E2ETestBase
         var content2 = await response2.Content.ReadAsStringAsync();
         var content3 = await response3.Content.ReadAsStringAsync();
 
-        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions);
-        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions);
-        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions);
+        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions)!;
+        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions)!;
+        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions)!;
 
         // Should resolve to same principal regardless of TTL expiry
         exchangeResponse1.AxonUserId.ShouldBe(exchangeResponse2.AxonUserId);
@@ -290,9 +290,9 @@ public class IdempotencyE2ETests : E2ETestBase
         var content2 = await response2.Content.ReadAsStringAsync();
         var content3 = await response3.Content.ReadAsStringAsync();
 
-        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions);
-        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions);
-        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions);
+        var exchangeResponse1 = JsonSerializer.Deserialize<ExchangeResponse>(content1, JsonOptions)!;
+        var exchangeResponse2 = JsonSerializer.Deserialize<ExchangeResponse>(content2, JsonOptions)!;
+        var exchangeResponse3 = JsonSerializer.Deserialize<ExchangeResponse>(content3, JsonOptions)!;
 
         // All should resolve to same principal (credential takes precedence)
         exchangeResponse1.AxonUserId.ShouldBe(exchangeResponse2.AxonUserId);
@@ -377,9 +377,9 @@ public class IdempotencyE2ETests : E2ETestBase
         var content2 = await response2.Content.ReadAsStringAsync();
         var content3 = await response3.Content.ReadAsStringAsync();
 
-        var error1 = JsonSerializer.Deserialize<ErrorResponse>(content1, JsonOptions);
-        var error2 = JsonSerializer.Deserialize<ErrorResponse>(content2, JsonOptions);
-        var error3 = JsonSerializer.Deserialize<ErrorResponse>(content3, JsonOptions);
+        var error1 = JsonSerializer.Deserialize<ErrorResponse>(content1, JsonOptions)!;
+        var error2 = JsonSerializer.Deserialize<ErrorResponse>(content2, JsonOptions)!;
+        var error3 = JsonSerializer.Deserialize<ErrorResponse>(content3, JsonOptions)!;
 
         // Error codes and messages should be identical
         error1.Code.ShouldBe(error2.Code);

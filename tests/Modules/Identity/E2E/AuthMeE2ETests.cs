@@ -32,7 +32,7 @@ public class AuthMeE2ETests : E2ETestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var content = await response.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions);
+        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions)!;
 
         AuthMeResponseValidator.ValidateAuthMeResponse(
             response,
@@ -102,7 +102,7 @@ public class AuthMeE2ETests : E2ETestBase
             expectedDefaultsCount: 0);
 
         var content = await response.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions);
+        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions)!;
 
         responseData.Wallets.ShouldBeEmpty("Should have no wallets");
         responseData.ChainDefaults.ShouldBeEmpty("Should have no chain defaults");
@@ -160,7 +160,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Verify updated content
         var content = await updatedResponse.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions);
+        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions)!;
 
         responseData.Wallets.Count.ShouldBe(1, "Should now have one wallet");
     }
@@ -241,7 +241,7 @@ public class AuthMeE2ETests : E2ETestBase
         var pendingETag = AuthMeResponseValidator.ValidateAndExtractETag(pendingResponse);
 
         var pendingContent = await pendingResponse.Content.ReadAsStringAsync();
-        var pendingData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(pendingContent, JsonOptions);
+        var pendingData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(pendingContent, JsonOptions)!;
 
         pendingData.Wallets.First().Status.ShouldBe("Pending");
 
@@ -257,7 +257,7 @@ public class AuthMeE2ETests : E2ETestBase
         AuthMeResponseValidator.ValidateETagChanged(pendingETag, verifiedETag);
 
         var verifiedContent = await verifiedResponse.Content.ReadAsStringAsync();
-        var verifiedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(verifiedContent, JsonOptions);
+        var verifiedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(verifiedContent, JsonOptions)!;
 
         verifiedData.Wallets.First().Status.ShouldBe("Verified");
     }
@@ -275,7 +275,7 @@ public class AuthMeE2ETests : E2ETestBase
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         var initialContent = await initialResponse.Content.ReadAsStringAsync();
-        var initialData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(initialContent, JsonOptions);
+        var initialData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(initialContent, JsonOptions)!;
 
         var initialDefaultAddress = initialData.ChainDefaults.First().Address;
 
@@ -291,7 +291,7 @@ public class AuthMeE2ETests : E2ETestBase
         AuthMeResponseValidator.ValidateETagChanged(initialETag, updatedETag);
 
         var updatedContent = await updatedResponse.Content.ReadAsStringAsync();
-        var updatedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(updatedContent, JsonOptions);
+        var updatedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(updatedContent, JsonOptions)!;
 
         var newDefaultAddress = updatedData.ChainDefaults.First().Address;
         newDefaultAddress.ShouldNotBe(initialDefaultAddress, "Default wallet address should change");

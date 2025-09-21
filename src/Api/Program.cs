@@ -137,7 +137,11 @@ if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Local
     app.UseSwaggerGen(); // FastEndpoints Swagger generation
 }
 
-app.UseHttpsRedirection();
+// Skip HTTPS redirection in test environment to avoid redirect port configuration issues
+if (!app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+{
+    app.UseHttpsRedirection();
+}
 
 // Global exception handling middleware (first in pipeline)
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();

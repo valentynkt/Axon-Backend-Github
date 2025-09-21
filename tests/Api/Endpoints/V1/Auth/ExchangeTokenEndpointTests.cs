@@ -135,17 +135,18 @@ public class ExchangeTokenEndpointTests
     }
 
     [Test]
-    public async Task HandleAsync_WhenJwtValidationFails_Returns400()
+    public async Task HandleAsync_WhenJwtValidationFails_Returns401()
     {
-        // Arrange - Mock JWT validation to fail
+        // Arrange - Add invalid JWT token and mock validation to fail
+        _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "invalid-jwt-token");
         _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Result.Failure<DynamicUserData, Error>(Error.Validation("Invalid JWT token")));
 
         // Act
         var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
 
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // Assert - JWT validation failure returns 401 Unauthorized
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     private record ExchangeTokenResponse(

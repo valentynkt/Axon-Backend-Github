@@ -24,7 +24,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 ## Critical Implementation Decisions (Must Lock Before Starting)
 
 ### 1. Environment Model Decision ✅ LOCKED
-**Decision**: Separate `environment` column + `chain_id='solana'` (no double-encoding)
+**Decision**: Separate `environment` column + `chain_id='solana'`
 
 **Implementation**:
 - `chain_id`: Chain identifier only (e.g., 'solana', 'ethereum')
@@ -34,6 +34,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 ### 2. Exclusivity Transaction Semantics
 **Requirement**: Verification runs in single DB transaction
+- Lock wallet row first using `SELECT * FROM wallet WHERE id=:wallet_id FOR UPDATE`
 - Set candidate to `verified+signing`
 - Auto-revoke other ownerships on same wallet
 - On unique index race, retry once
@@ -50,6 +51,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 5. Then earliest principal (by created_at)
 
 **Important**: Candidates come from Wallet found by `(environment, chain_id, address)` triple
+**Cross-environment attach requires verified+signing on the other environment; watch-only never triggers attach**
 
 ### 4. Default Wallet Guard
 **Domain Enforcement**: Default requires same principal's `verified+signing` ownership on that `(environment, chain_id)`
@@ -60,32 +62,66 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 ### 5. Dynamic JWT Hardening
 **Requirements**:
 - Enforce `iss` validation: `app.dynamicauth.com/{environmentId}`
+- Map Dynamic environmentId to our environment deterministically
 - Enforce `aud` validation against configured value
-- Cache JWKS for 10-30 minutes
-- Support `kid` rotation
+- **Enforce both `exp` and `nbf` with ±60s skew**
+- Cache JWKS for 10-30 minutes with background refresh
+- Support `kid` rotation seamlessly
 - Clock skew tolerance: ±60 seconds max
+- Reject unknown environmentIds with clear error
 
-### 6. Replay Protection Strategy (Multi-Instance)
-**Options**:
-- **Option A**: In-memory LRU per instance + sticky routing + very short TTL (2-5min)
-- **Option B**: Shared Redis cache for `{message,signature}` hash (5-10min)
+### 6. Replay Protection Strategy (Multi-Instance) ✅ LOCKED
+**Decision**: Redis cache for `{message,signature}` hash (preferred)
 
-**Decision**: [TO BE DECIDED]
+**Implementation**:
+- Store hash of `api_key | environment | chain_id | address | signature | message` in Redis with 5-10min TTL
+- Signed message MUST embed `environment`, `chain_id`, `address`
+- Alternative (if Redis unavailable): In-memory LRU + sticky routing + 2-5min TTL
+- Log all replay attempts for security monitoring
 
 ### 7. Migration Deduplication Rules
-**When backfilling environment and normalizing chain_id**:
-- Keep record with oldest `first_seen_at`
-- Move all references to survivor
-- Delete duplicates
-- Generate deduplication report
+**When splitting encoded values and backfilling**:
+- Split any `chain_id='solana:mainnet'` → `chain_id='solana'`, `environment='mainnet'`
+- Keep record with oldest `first_seen_at` as survivor
+- Re-point all FKs (ownerships, defaults, credentials) to survivor
+- Delete duplicate records
+- Generate deterministic CSV/JSON report with affected records
+- Run in batches with progress logging
 
 ### 8. Test Coverage Requirements
 **Critical Scenarios** (must have explicit tests):
-- Exclusivity race: concurrent verifications → one winner
-- JWKS key rotation: `kid1` → `kid2`
-- Challenge TTL and clock skew handling
-- Default clearing on revoke
-- Environment isolation verification
+- **Environment Isolation**: Same address on mainnet vs devnet = different Wallet rows
+- **Per-Environment Exclusivity**: Two verifies on same env wallet → one winner; different env → both succeed
+- **Resolution Determinism**: Identical proof with different environment → different principals
+- **Default Guard**: Default on mainnet doesn't affect devnet
+- **JWKS Rotation**: Seamless transition from kid1 → kid2
+- **Challenge TTL**: Expiry and clock skew handling
+- **Query Plans**: EXPLAIN shows index scans for triple-key lookups
+
+### 9. Address Normalization Rules ✅ LOCKED
+**Requirement**: Chain-specific normalization before all operations
+**Implementation**:
+- **Solana**:
+  - Validate base58 encoding
+  - Length check (32 bytes decoded, 44 chars typical)
+  - Trim whitespace
+  - Store exactly as canonical base58 string
+- **EVM** (when added):
+  - Validate 0x prefix + 40 hex chars
+  - Convert to lowercase (or EIP-55 checksum consistently)
+  - Fixed length validation
+- Apply normalization at API edge before ANY database operation
+- Apply normalization before computing `(environment, chain_id, address)` keys
+
+### 10. Per-Partner Audience Configuration ✅ LOCKED
+**Requirement**: Multi-tenant B2B audience binding
+**Implementation**:
+- Each API key/partner has audience allowlist
+- Allowlists are environment-scoped
+- Dynamic JWT `aud` must match partner's allowlist
+- Wallet proof `aud` must match partner's identifier
+- Configuration stored in partner settings table
+- Cache partner config with 5-min TTL
 
 ## Current State Analysis (Brownfield)
 
@@ -110,17 +146,22 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 **PRD Requirements**: 5 Hard Database Constraints, Environment Isolation
 
 **Acceptance Criteria**:
-1. Implement environment model per decision #1 (separate column or encoded in chain_id)
+1. Implement environment model per decision #1 (separate environment column + chain_id='solana')
 2. Add 5 named partial unique indexes with CONCURRENTLY creation:
-   - `ux_wallet_env_chain_addr`: (environment, chain, address) WHERE is_deleted=false
+   - `ux_wallet_env_chain_addr`: (environment, chain_id, address) WHERE is_deleted=false
    - `ux_credential_env`: (environment, provider, issuer, subject) WHERE is_deleted=false
    - `ux_ownership_pair`: (principal_id, wallet_id) WHERE is_deleted=false
-   - `ux_exclusive_signing`: (wallet_id) WHERE status='verified' AND access='signing'
-   - `ux_chain_default`: (principal_id, environment, chain) WHERE is_deleted=false
+   - `ux_exclusive_signing`: (wallet_id) WHERE status='verified' AND access_mode='signing'
+   - `ux_chain_default`: (principal_id, environment, chain_id) WHERE is_deleted=false
+   - `idx_ownership_wallet_active`: (wallet_id) WHERE is_deleted=false
+   - `idx_ownership_principal_active`: (principal_id) WHERE is_deleted=false
 3. Implement migration deduplication per decision #7 (keep oldest, report conflicts)
 4. Validate all indexes are used in query plans (EXPLAIN ANALYZE)
 5. Performance: constraint checks <10ms, bulk operations remain efficient
-6. Create NOT VALID constraints first, then VALIDATE after backfill
+6. Use CREATE UNIQUE INDEX CONCURRENTLY for uniques, ALTER TABLE ADD CONSTRAINT NOT VALID → VALIDATE CONSTRAINT for CHECK constraints
+7. EXPLAIN shows index scans when is_deleted=false is in the WHERE clause
+8. **All write operations and hot read queries MUST include `is_deleted=false` in WHERE clause** where relevant to ensure partial index usage
+9. **All hot queries include `is_deleted=false` so partial indexes match; CI gate runs EXPLAIN and fails on seq scans**
 
 **Technical Details**:
 - Use Postgres CONCURRENTLY for zero-downtime index creation
@@ -135,17 +176,26 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 **Acceptance Criteria**:
 1. Remove all OIDC provider code while KEEPING Dynamic JWT validation
-2. `/auth/me` accepts Axon JWT only (not Dynamic JWT directly)
-3. Delete nonce database tables if they exist
-4. `/auth/challenge` remains stateless (no DB persistence)
-5. Remove refresh token infrastructure completely
-6. Update auth pipeline: Dynamic JWT → Axon JWT exchange only
-7. All tests pass with updated auth flow
+2. `/auth/me` accepts **Axon JWT only** (not Dynamic JWT directly)
+3. `/auth/exchange` (wallet path) **requires `environment` in payload AND signed message**
+4. `/auth/challenge` returns canonical message with `environment`, `chain_id`, `address` embedded
+5. Delete nonce database tables if they exist (remain stateless)
+6. Remove refresh token infrastructure completely
+7. Map Dynamic environmentId to our environment deterministically
+8. Reject tokens whose iss environmentId does not map to one of ('mainnet','devnet','test')
+9. All tests pass with updated auth flow
 
-**Important Clarifications**:
-- Dynamic JWT validation stays (it's not OIDC)
-- We're removing generic OIDC support, not Dynamic.xyz support
-- Axon JWT is the only token accepted by protected endpoints
+**API Contract Clarifications**:
+- Wallet proof payload MUST include: `{environment, chain_id, address, signature, message}`
+- Signed message MUST embed: `{environment, chain_id, address, issued_at, exp, nonce, aud}`
+- **SDKs MUST sign the canonical template v1** with strict field order: `{environment, chain_id, address, issued_at, exp, nonce, aud}`
+- **Server rejects non-canonical encodings** (e.g., different field order, extra fields, missing fields)
+- **Publish canonical template in SDK docs** and enforce byte-for-byte match
+- **Server validates `aud` against partner/client allowlist** for the API key to prevent cross-app replay
+- **Optional `domain` field** for additional binding when applicable
+- Canonicalize message bytes server-side (stable JSON or exact string template) and reject mismatched payload vs signature fields
+- Reject if environment in payload doesn't match environment in signed message
+- **Never log raw JWTs or signatures; log only stable hashes and identifiers**
 
 ### Story 5.3: Implement Deterministic Principal Resolution
 **Priority**: P0 (Core Logic)
@@ -154,19 +204,28 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 **Acceptance Criteria**:
 1. Implement 2-step resolution: credential-first → wallet-fallback → create-new
-2. Define "active ownership" as `status != revoked` (per decision #3)
-3. Implement tie-break ranking when multiple active owners:
-   - `dynamic_verified` > `direct_signature_msg` > `direct_signature_tx` > `watch_only`
+2. Define "active ownership" as `status != revoked`
+3. **Wallet lookup MUST use triple key**: `(environment, chain_id, address)`
+4. Tie-break applies **ONLY if no verified+signing exists**:
+   - `dynamic_attested` > `direct_signature_msg` > `direct_signature_tx` > `watch_only`
    - Then earliest principal (by created_at)
-4. Add resolution path audit trail for compliance
-5. Environment isolation enforced in all queries
-6. Resolution performance <100ms P95
-7. Remove all legacy `FindPrincipalBy*` methods
+5. Candidates come from Wallet found by triple, not global search
+6. Add resolution path audit trail with environment context
+7. Resolution performance <100ms P95
+8. Remove all legacy `FindPrincipalBy*` methods
+9. Log resolution_path={credential|wallet|created} and auto_revoke reason=conflict_lost with {environment, chain_id, address}
+10. IdentityCredential.last_seen_at only updates if newer (monotonic), with a unit test
+11. **Cross-environment attach rule**: If wallet proof on current environment has no local wallet row but the same (chain_id, address) has a **verified+signing** owner on another environment, resolve to that principal and link a new wallet row for the current environment; watch-only elsewhere never attaches
+12. **Late principal creation with race protection**: Upsert wallet first (INSERT ... ON CONFLICT DO NOTHING), then re-read wallet and re-resolve ownerships. Only create principal if still no candidate
+13. **Normalize addresses chain-specifically before all database operations** and key computations
+14. **Solana addresses: validate base58, trim whitespace, check length** before storing
+15. **Future EVM addresses: lowercase (or EIP-55), validate format** before storing
 
-**Implementation Details**:
-- Single `IPrincipalResolver` service replaces multiple methods
-- Resolution path logged for every authentication
-- Deterministic results - same input always yields same principal
+**Query Requirements**:
+- NEVER query ownerships directly by address
+- ALWAYS fetch Wallet by `(env, chain_id, address)` first
+- Then traverse ownerships by `wallet_id`
+- Log triple key in all resolution paths
 
 ### Story 5.4: Refactor Wallet Ownership with Transaction Guards
 **Priority**: P0 (Domain Logic)
@@ -185,9 +244,16 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
    - Clear default when ownership revoked
 4. Allow unlimited watch-only (non-blocking)
 5. Add ownership change audit trail
+6. **Verification transaction uses `SELECT ... FOR UPDATE`** on competing ownerships before updates
+7. **Consistent lock ordering (wallet_id ASC)** prevents deadlocks
+8. **Verification acquires a row lock on `wallet`** before updating any ownerships; no `SKIP LOCKED` in competing ownership load
+9. **Consistent lock ordering (by `wallet_id` ASC)** across any multi-wallet operations
 
 **Transaction Semantics**:
-- Use explicit DB transactions for verification
+- **Use explicit DB transactions with row-level locking** for verification
+- **Fetch competing ownerships using `SELECT ... FOR UPDATE`** within transaction
+- **Lock order: always lock by wallet_id ASC** to prevent deadlocks
+- **Partial-unique index remains ultimate guard** with single retry
 - Handle unique constraint violations with retry
 - Silent auto-revoke for pending/unverified only
 
@@ -198,23 +264,34 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 **Acceptance Criteria**:
 1. Issue 15-minute Axon JWT for both Dynamic and wallet auth
-2. Implement Dynamic JWT hardening (per decision #5):
+2. Implement Dynamic JWT hardening:
    - Validate `iss`: `app.dynamicauth.com/{environmentId}`
-   - Validate `aud` against configured value
-   - Cache JWKS for 10-30 minutes
-   - Support `kid` rotation
+   - Map environmentId → our environment deterministically
+   - **Validate `aud` against per-partner allowlist (env-scoped)**
+   - Cache JWKS for 10-30 minutes with background refresh
+   - Support `kid` rotation seamlessly
    - Clock skew tolerance ±60 seconds max
-3. Implement replay protection (per decision #6):
-   - For wallet signatures: 5-min max in payload
-   - Choose: in-memory LRU + sticky routing OR Redis cache
-   - Test multi-instance scenarios
+3. Implement Redis replay protection (preferred):
+   - Store hash of `{message,signature}` in Redis
+   - Signed message MUST embed `environment`, `chain_id`
+   - 5-10min TTL for replay cache
+   - Fallback: In-memory LRU if Redis unavailable
 4. Remove all refresh token code and endpoints
 5. Pre-warm JWKS cache on service startup
+6. **Define and publish canonical message template v1** with exact field order and JSON formatting
+7. **Server validates canonical byte encoding** before signature verification
+8. **Wallet signatures include `aud` (partner/client identifier)** in canonical message
+9. **Server enforces `aud` against per-API-key allowlist** to prevent cross-app replay
+10. **Maintain per-API-key audience allowlist configuration** (environment-scoped)
+11. **Enforce both `exp` and `nbf` claims with ±60s clock skew tolerance**
+12. **Replay cache key includes API key namespace**: `hash(api_key | environment | chain_id | address | signature | message)`
+13. **Log replay attempts with hashed identifiers only** (no raw bytes/tokens)
 
-**Security Hardening**:
-- Log all validation failures with detail
-- Monitor JWKS rotation events
-- Alert on replay attempts
+**Error Messages**:
+- "Wallet already verified on {environment}/{chain_id}" for 409s
+- "Unknown Dynamic environmentId: {id}" for unmapped environments
+- "Replay detected for signature on {environment}" for replays
+- "Invalid audience '{aud}' for this API key" for cross-app replay attempts
 
 ### Story 5.6: Comprehensive Testing & Validation
 **Priority**: P1 (Quality)
@@ -222,22 +299,46 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 **PRD Requirements**: Test Coverage for Critical Scenarios
 
 **Acceptance Criteria**:
-1. Add critical scenario tests (per decision #8):
-   - **Exclusivity race**: Two concurrent verifications → one winner
-   - **JWKS rotation**: Transition from kid1 → kid2
-   - **Challenge TTL**: Expiry and clock skew handling
-   - **Default guard**: Reject watch-only as default
-   - **Environment isolation**: No cross-environment leaks
-2. Add constraint violation tests for all 5 database constraints
-3. Add deterministic resolution tests with all tie-break scenarios
-4. Remove obsolete tests (OIDC, refresh tokens, sessions)
-5. Focus on Tier-A scenarios over coverage percentage
+1. **Environment Isolation Tests**:
+   - Same base58 address on mainnet vs devnet = different Wallet rows
+   - No index conflicts between environments
+   - Same (chain_id, address) across environments → same principal; wallets are env-scoped
+2. **Per-Environment Exclusivity**:
+   - Two verifies on same `(env, wallet)` → one winner
+   - Two verifies on different env wallets → both succeed
+3. **Query Performance**:
+   - EXPLAIN ANALYZE shows index scans for `(env, chain_id, addr)`
+   - EXPLAIN ANALYZE shows index scans for `(env, provider, issuer, subject)`
+4. **Default Guard Tests**:
+   - Default on mainnet doesn't affect devnet
+   - Setting default requires verified+signing on that env
+5. **Other Critical Tests**:
+   - JWKS rotation: seamless kid1 → kid2 transition
+   - Challenge TTL and clock skew handling
+   - Replay detection across instances
+6. **API Enhancement**:
+   - /auth/me returns wallets grouped or tagged by {environment, chain_id} so integrators can render per-network state easily
+7. **Query Plan Validation**:
+   - Assert all hot paths use index scans via EXPLAIN ANALYZE in CI pipeline
+   - CI gate fails if any critical query uses seq scan instead of index scan
+8. **Address Normalization Tests**:
+   - Address normalization prevents duplicates from format differences
+   - Invalid address formats rejected at API edge
+9. **Multi-Tenant B2B Security Tests**:
+   - Partner A's Dynamic token rejected for Partner B's API key
+   - Partner A's wallet signature rejected when `aud` = Partner B
+   - Same wallet can be verified by different partners (different aud)
+   - Cross-app replay prevented via audience binding
+   - **nbf/exp skew acceptance within ±60s**
+   - **Namespaced replay keys prevent cross-API-key collisions**
+   - **Cross-env attach requires verified+signing (not watch-only)**
+   - **EXPLAIN CI gate confirms index scans on all hot paths**
 
-**Test Categories**:
-- **Concurrency Tests**: Race conditions and deadlocks
-- **Security Tests**: Replay attacks, token validation
-- **Constraint Tests**: Database-level enforcement
-- **Performance Tests**: Resolution latency, constraint overhead
+**Test Implementation**:
+- Use Testcontainers for real Postgres constraints
+- Use Redis test container for replay tests
+- Mock Dynamic JWKS endpoint for rotation tests
+- Parallel test execution for race conditions
 
 ## Rollout Strategy
 
@@ -257,7 +358,9 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 - Query plan analysis for all identity queries
 - Constraint overhead measurement (<10ms target)
 - Resolution latency tracking (<100ms P95)
-- JWKS cache hit rates
+- **Track JWKS cache hit rate (target >95%)**
+- **Monitor audience-mismatch count per partner (alert on spikes)**
+- **Log format: Always include `{environment, chain_id, address}` + hashed token/sig IDs (never raw)**
 
 ## Technical Implementation Details
 
@@ -272,19 +375,85 @@ CREATE UNIQUE INDEX CONCURRENTLY ux_credential_env
   ON identity.credential (environment, provider, issuer, subject)
   WHERE is_deleted = false;
 
+CREATE UNIQUE INDEX CONCURRENTLY ux_ownership_pair
+  ON identity.wallet_ownership (principal_id, wallet_id)
+  WHERE is_deleted = false;
+
 CREATE UNIQUE INDEX CONCURRENTLY ux_exclusive_signing
   ON identity.wallet_ownership (wallet_id)
   WHERE status = 'verified' AND access_mode = 'signing' AND is_deleted = false;
+
+CREATE UNIQUE INDEX CONCURRENTLY ux_chain_default
+  ON identity.principal_chain_default (principal_id, environment, chain_id)
+  WHERE is_deleted = false;
+
+-- CHECK constraints for valid values
+ALTER TABLE identity.wallet
+  ADD CONSTRAINT check_wallet_environment
+  CHECK (environment IN ('mainnet','devnet','test'));
+
+ALTER TABLE identity.wallet
+  ADD CONSTRAINT check_wallet_chain
+  CHECK (chain_id IN ('solana','ethereum'));
+
+-- CHECK constraint for credential environment
+ALTER TABLE identity.credential
+  ADD CONSTRAINT check_credential_environment
+  CHECK (environment IN ('mainnet','devnet','test'));
+
+-- Read-path optimization indexes
+CREATE INDEX CONCURRENTLY idx_ownership_wallet_active
+  ON identity.wallet_ownership (wallet_id)
+  WHERE is_deleted = false;
+
+CREATE INDEX CONCURRENTLY idx_ownership_principal_active
+  ON identity.wallet_ownership (principal_id)
+  WHERE is_deleted = false;
 ```
 
 ### Resolution Algorithm Pseudocode
 ```csharp
-// Step 1: Credential match
+// Step 1: Credential match (already env-scoped)
 var principal = await FindByCredential(env, provider, issuer, subject);
 if (principal != null) return principal;
 
-// Step 2: Wallet match with tie-break
-var ownerships = await FindActiveOwnerships(env, chain, address);
+// Step 2: Wallet match with tie-break (MUST use triple key)
+var wallet = await FindWallet(environment, chainId, address);
+if (wallet == null)
+{
+    // Check cross-environment attach rule first
+    var crossEnvPrincipal = await FindPrincipalAcrossEnvironments(chainId, address);
+    if (crossEnvPrincipal != null)
+    {
+        // Create wallet for this environment and link to existing principal
+        await CreateWalletForEnvironment(crossEnvPrincipal.Id, environment, chainId, address);
+        return crossEnvPrincipal;
+    }
+
+    // Upsert wallet first to prevent race conditions
+    await UpsertWallet(environment, chainId, address); // INSERT ... ON CONFLICT DO NOTHING
+    wallet = await FindWallet(environment, chainId, address);
+
+    // Check if another request already linked ownership during race
+    var raceOwnerships = await FindActiveOwnerships(wallet.Id);
+    if (raceOwnerships.Any())
+    {
+        // Another request beat us, use their principal
+        return ResolveFromOwnerships(raceOwnerships);
+    }
+
+    // Still no owner, safe to create principal
+    return await CreatePrincipal();
+}
+
+var ownerships = await FindActiveOwnerships(wallet.Id);
+if (ownerships.Any(o => o.Status == "verified" && o.AccessMode == "signing"))
+{
+    // Verified+signing exists, use it
+    return ownerships.First(o => o.Status == "verified").Principal;
+}
+
+// Apply tie-break ONLY when no verified+signing (applies ONLY if no verified+signing exists)
 if (ownerships.Any())
 {
     return ownerships
@@ -293,8 +462,86 @@ if (ownerships.Any())
         .First().Principal;
 }
 
-// Step 3: Create new principal
+// Step 3: Create new principal (should rarely happen after race protection)
 return await CreatePrincipal();
+
+private int GetAuthorityRank(string source) => source switch
+{
+    "dynamic_attested" => 1,
+    "direct_signature_msg" => 2,
+    "direct_signature_tx" => 3,
+    "watch_only" => 4,
+    _ => 99
+};
+```
+
+### Verification Transaction Pseudocode (Row-Level Locking)
+```csharp
+// Wallet verification with explicit locking for exclusivity
+public async Task<Result<Principal>> VerifyWalletOwnership(Guid walletId, Guid principalId)
+{
+    using (var tx = await BeginTransactionAsync())
+    {
+        try
+        {
+            // Step 1: Lock the wallet row first to prevent split views
+            var wallet = await db.Wallets
+                .Where(w => w.Id == walletId)
+                .ForUpdate()
+                .SingleAsync();
+
+            // Step 2: Lock competing ownerships (consistent order prevents deadlocks)
+            var existingOwnerships = await db.WalletOwnerships
+                .Where(wo => wo.WalletId == walletId && !wo.IsDeleted)
+                .OrderBy(wo => wo.Id) // Consistent lock order: wallet_id ASC
+                .ForUpdate() // Row-level lock, no SKIP LOCKED for competing ownership load
+                .ToListAsync();
+
+            // Step 3: Check for existing verified+signing (business logic check)
+            var verifiedSigning = existingOwnerships
+                .FirstOrDefault(o => o.Status == "verified" && o.AccessMode == "signing");
+
+            if (verifiedSigning != null && verifiedSigning.PrincipalId != principalId)
+            {
+                await tx.RollbackAsync();
+                return Result.Error(ConflictError("Wallet already verified on {environment}/{chain_id}"));
+            }
+
+            // Step 4: Safe to proceed - set candidate to verified+signing
+            var candidateOwnership = existingOwnerships
+                .FirstOrDefault(o => o.PrincipalId == principalId);
+
+            if (candidateOwnership != null)
+            {
+                candidateOwnership.Status = "verified";
+                candidateOwnership.AccessMode = "signing";
+                candidateOwnership.VerifiedAt = DateTime.UtcNow;
+            }
+
+            // Step 5: Auto-revoke others on same wallet (silent for pending only)
+            foreach (var other in existingOwnerships.Where(o => o.Id != candidateOwnership?.Id))
+            {
+                if (other.Status == "pending" || other.Status == "unverified")
+                {
+                    other.Status = "revoked"; // Silent auto-revoke
+                    other.RevokedAt = DateTime.UtcNow;
+                    other.RevokeReason = "conflict_lost";
+                }
+            }
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return Result.Success(candidateOwnership.Principal);
+        }
+        catch (UniqueConstraintViolationException)
+        {
+            // Retry once on constraint race
+            await tx.RollbackAsync();
+            return await VerifyWalletOwnership(walletId, principalId);
+        }
+    }
+}
 ```
 
 ## Definition of Done

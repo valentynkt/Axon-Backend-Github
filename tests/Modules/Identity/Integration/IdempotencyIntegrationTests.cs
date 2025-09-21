@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
+using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -7,11 +8,16 @@ using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
+using NSubstitute;
 using NUnit.Framework;
 using Shouldly;
 
@@ -27,6 +33,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
 {
     private FakeTimeProvider _timeProvider = null!;
     private ExchangeCredentialHandler _handler = null!;
+    private MemoryCache _memoryCache = null!;
 
     #region Test Setup
 
@@ -35,17 +42,38 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         // Initialize deterministic time provider
         _timeProvider = new FakeTimeProvider(TestDataFixtures.SignatureTestVectors.TestTimestamp);
 
+        // Initialize memory cache
+        _memoryCache = new MemoryCache(new MemoryCacheOptions());
+
         // Create handler with real repositories and deterministic time
         _handler = CreateExchangeHandler();
 
         await base.SetUpDerived();
     }
 
+    protected override async Task TearDownDerived()
+    {
+        _memoryCache?.Dispose();
+        await base.TearDownDerived();
+    }
+
     private ExchangeCredentialHandler CreateExchangeHandler()
     {
-        // In a real implementation, we'd inject proper dependencies
-        // For integration tests, we can create a minimal handler setup
-        throw new NotImplementedException("Handler creation needs proper DI setup");
+        // Create mock dependencies using NSubstitute
+        var currentUserService = Substitute.For<ICurrentUserService>();
+        var metricsService = Substitute.For<IExchangeMetricsService>();
+        var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        var logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
+
+        // Use real repositories from base class for integration testing
+        return new ExchangeCredentialHandler(
+            currentUserService,
+            PrincipalRepository,  // Real repository from base class
+            WalletRepository,     // Real repository from base class
+            metricsService,
+            _memoryCache,         // Use field to avoid disposal warning
+            httpContextAccessor,
+            logger);
     }
 
     #endregion
@@ -127,7 +155,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
 
         // Verify timestamp was updated
         var updatedPrincipal = await QueryFreshAsync(async () =>
-            await PrincipalRepository.FindByIdAsync(principal.Id, CancellationToken.None));
+            await PrincipalRepository.GetByIdAsync(principal.Id, CancellationToken.None));
 
         updatedPrincipal.ShouldNotBeNull();
         var updatedCredential = updatedPrincipal.Credentials.First();
@@ -264,8 +292,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         result2.IsSuccess.ShouldBeTrue("Second execution should succeed");
 
         // Should resolve to existing principal owner
-        result1.Value.AxonUserId.ShouldBe(principal.Id.Value);
-        result2.Value.AxonUserId.ShouldBe(principal.Id.Value);
+        result1.Value.AxonUserId.Value.ShouldBe(principal.Id.Value);
+        result2.Value.AxonUserId.Value.ShouldBe(principal.Id.Value);
 
         // Neither should create new principal
         result1.Value.Created.ShouldBeFalse("Should resolve to existing principal");
@@ -311,8 +339,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         result2.IsSuccess.ShouldBeTrue("Second execution should succeed");
 
         // Should resolve to same principal
-        result1.Value.AxonUserId.ShouldBe(principal.Id.Value);
-        result2.Value.AxonUserId.ShouldBe(principal.Id.Value);
+        result1.Value.AxonUserId.Value.ShouldBe(principal.Id.Value);
+        result2.Value.AxonUserId.Value.ShouldBe(principal.Id.Value);
 
         // Verify only one ownership record exists
         await VerifyOnlyOneWalletOwnership(wallet.Id);
@@ -384,7 +412,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// <summary>
     /// Executes command within a specific database context.
     /// </summary>
-    private async Task ExecuteCommandWithContext(ExchangeCredentialCommand command, IdentityWriteDbContext context)
+    private async Task ExecuteCommandWithContext(ExchangeCredentialCommand command, IdentityWriteDbContext _)
     {
         // Implementation would use the specific context for concurrent testing
         var result = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -443,7 +471,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             .Where(o => o.WalletId == walletId)
             .CountAsync();
 
-        ownershipCount.ShouldBeLessOrEqualTo(1, "Should have at most one ownership per wallet per principal");
+        ownershipCount.ShouldBeLessThanOrEqualTo(1, "Should have at most one ownership per wallet per principal");
     }
 
     /// <summary>
@@ -452,7 +480,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     private async Task VerifyNoDuplicateCredentials()
     {
         var credentialGroups = await DbContext.Credentials
-            .GroupBy(c => new { c.ProviderType, c.Issuer, c.Subject })
+            .GroupBy(c => new { c.Provider, c.Issuer, c.Subject })
             .Where(g => g.Count() > 1)
             .CountAsync();
 

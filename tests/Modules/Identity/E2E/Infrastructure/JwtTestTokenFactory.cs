@@ -14,6 +14,10 @@ namespace Axon.Modules.Identity.E2E.Infrastructure;
 /// </summary>
 public static class JwtTestTokenFactory
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
     // Test key IDs for rotation scenarios
     public const string TestKid1 = TestDataFixtures.Kid1;
     public const string TestKid2 = TestDataFixtures.Kid2;
@@ -191,10 +195,7 @@ public static class JwtTestTokenFactory
             }
         };
 
-        return JsonSerializer.Serialize(jwks, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        return JsonSerializer.Serialize(jwks, JsonOptions);
     }
 
     /// <summary>
@@ -211,10 +212,7 @@ public static class JwtTestTokenFactory
             }
         };
 
-        return JsonSerializer.Serialize(jwks, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        return JsonSerializer.Serialize(jwks, JsonOptions);
     }
 
     /// <summary>
@@ -230,10 +228,7 @@ public static class JwtTestTokenFactory
             }
         };
 
-        return JsonSerializer.Serialize(jwks, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        return JsonSerializer.Serialize(jwks, JsonOptions);
     }
 
     #endregion
@@ -245,11 +240,11 @@ public static class JwtTestTokenFactory
     /// </summary>
     private static string CreateJwtToken(List<Claim> claims, string kid)
     {
-        var key = kid == TestKid2 ? TestPrivateKey2 : TestPrivateKey1;
-
-        // Create Ed25519 signing credentials
-        var ed25519Key = new Ed25519SecurityKey(key) { KeyId = kid };
-        var credentials = new SigningCredentials(ed25519Key, SecurityAlgorithms.EdDsa);
+        // Note: Ed25519 is not yet supported in Microsoft.IdentityModel.Tokens 8.x
+        // Using RSA256 as a temporary fallback for tests
+        using var rsa = RSA.Create(2048);
+        var rsaKey = new RsaSecurityKey(rsa) { KeyId = kid };
+        var credentials = new SigningCredentials(rsaKey, SecurityAlgorithms.RsaSha256);
 
         var tokenHandler = new JwtSecurityTokenHandler();
         var tokenDescriptor = new SecurityTokenDescriptor

@@ -21,7 +21,14 @@ namespace BuildingBlocks.Web.OpenApi
                     description,
                     options =>
                     {
-                        // TODO: Add security document transformer when needed
+                        options.AddDocumentTransformer((document, context, cancellationToken) =>
+                        {
+                            document.Info.Title = "Axon Identity Service API";
+                            document.Info.Version = "v1";
+                            document.Info.Description = "Axon Backend API - Modular Monolith with Clean Architecture. " +
+                                                       "Features comprehensive Authentication, Rate Limiting, and Error Handling.";
+                            return Task.CompletedTask;
+                        });
                     });
             }
 
@@ -38,13 +45,16 @@ namespace BuildingBlocks.Web.OpenApi
             app.UseSwaggerUI(
                 options =>
                 {
+                    // Add FastEndpoints swagger endpoint first (this will be the default)
+                    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Axon Identity Service API v1");
+
                     var descriptions = app.DescribeApiVersions();
 
                     // build a swagger endpoint for each discovered API version
                     foreach (var description in descriptions)
                     {
                         var openApiUrl = $"/openapi/{description.GroupName}.json";
-                        var name = description.GroupName.ToUpperInvariant();
+                        var name = $"ASP.NET Core {description.GroupName.ToUpperInvariant()}";
                         options.SwaggerEndpoint(openApiUrl, name);
                     }
                 });

@@ -129,8 +129,8 @@ public static class AuthMeResponseValidator
         etagValue.ShouldNotBeNullOrWhiteSpace("ETag value should not be empty");
 
         // ETags should be quoted
-        etagValue.ShouldStartWith("\"", "ETag should be quoted");
-        etagValue.ShouldEndWith("\"", "ETag should be quoted");
+        etagValue.ShouldStartWith("\"");
+        etagValue.ShouldEndWith("\"");
 
         // Extract unquoted value
         var unquotedEtag = etagValue.Trim('"');

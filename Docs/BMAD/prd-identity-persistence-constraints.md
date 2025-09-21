@@ -171,16 +171,16 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 #### F2: **5 Hard Database Constraints with Guards**
 **Business Requirement**: Database-enforced identity rules
 **The 5 Constraints**:
-1. Unique Wallet: `(environment, chain, address)` WHERE `is_deleted=false`
+1. Unique Wallet: `(environment, chain_id, address)` WHERE `is_deleted=false`
 2. Unique Credential: `(environment, provider, issuer, subject)` WHERE `is_deleted=false`
 3. One Ownership: `(principal_id, wallet_id)` WHERE `is_deleted=false`
-4. Exclusive Signing: `(wallet_id)` WHERE `status='verified' AND access='signing'`
-5. One Default: `(principal_id, environment, chain)` WHERE `is_deleted=false`
+4. Exclusive Signing: `(wallet_id)` WHERE `status='verified' AND access_mode='signing'`
+5. One Default: `(principal_id, environment, chain_id)` WHERE `is_deleted=false`
 
 **Business Guards (Domain-Level Enforcement)**:
 - **Default Wallet Guard**: `SetDefault(principal, wallet)` requires:
   - Same principal owns the wallet (`principal_id` match)
-  - Wallet ownership has `status='verified' AND access='signing'`
+  - Wallet ownership has `status='verified' AND access_mode='signing'`
   - Returns `422 Unprocessable` if wallet is watch-only or pending
 - **Monotonic Updates**: `last_seen_at` only updates if `new_timestamp > current_timestamp`
 
@@ -192,13 +192,17 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 - Issue 15-minute Axon JWT for both Dynamic and wallet auth
 - **Dynamic JWT Validation Requirements**:
   - Validate `iss` matches: `app.dynamicauth.com/{environmentId}`
+  - Map environmentId deterministically to our environment ('mainnet','devnet','test')
+  - Reject tokens whose iss environmentId does not map to one of ('mainnet','devnet','test')
   - Validate `aud` matches expected value (document in config)
   - Cache JWKS for 10-30 minutes with `kid` rotation support
   - Clock skew tolerance: ±60 seconds max
 - **Wallet Proof Replay Resistance (KISS)**:
-  - Signed payload must include: `{issued_at, exp (≤5min), nonce, address, chain, environment}`
+  - Signed payload must include: `{issued_at, exp (≤5min), nonce, address, chain_id, environment, aud}`
   - In-memory LRU cache rejects duplicate `{message, signature}` pairs for 5-10 min
   - No database ledger or complex nonce tracking
+  - Server canonicalizes message bytes (stable JSON template) and validates payload vs signature fields
+  - Server validates `aud` against per-partner allowlist to prevent cross-app replay
 - Dynamic: Silent re-exchange before expiry
 - Wallet: Re-prompt on expiry with fresh nonce
 - No refresh tokens, no session management
@@ -328,7 +332,7 @@ Each phase includes database migration rollback scripts. Principal merge operati
 ### The 5 Database Constraints
 ```sql
 -- 1. Unique Wallet
-CREATE UNIQUE INDEX ux_wallet ON wallet (environment, chain, address)
+CREATE UNIQUE INDEX ux_wallet ON wallet (environment, chain_id, address)
 WHERE is_deleted = false;
 
 -- 2. Unique Credential
@@ -336,15 +340,15 @@ CREATE UNIQUE INDEX ux_credential ON credential (environment, provider, issuer, 
 WHERE is_deleted = false;
 
 -- 3. One Ownership per Pair
-CREATE UNIQUE INDEX ux_ownership ON wallet_ownership (principal_id, wallet_id)
+CREATE UNIQUE INDEX ux_ownership_pair ON wallet_ownership (principal_id, wallet_id)
 WHERE is_deleted = false;
 
 -- 4. Exclusive Signing
 CREATE UNIQUE INDEX ux_exclusive ON wallet_ownership (wallet_id)
-WHERE status = 'verified' AND access = 'signing' AND is_deleted = false;
+WHERE status = 'verified' AND access_mode = 'signing' AND is_deleted = false;
 
 -- 5. One Default per Chain
-CREATE UNIQUE INDEX ux_default ON principal_chain_default (principal_id, environment, chain)
+CREATE UNIQUE INDEX ux_default ON principal_chain_default (principal_id, environment, chain_id)
 WHERE is_deleted = false;
 ```
 
@@ -355,17 +359,44 @@ var principal = await FindByCredential(env, provider, issuer, subject);
 if (principal != null) return principal;
 
 // Step 2: Wallet match with tie-break
-var ownerships = await FindActiveOwnerships(env, chain, address);
+var wallet = await FindWallet(env, chain_id, address);
+if (wallet == null)
+{
+    // Check cross-environment attach rule first
+    var crossEnvPrincipal = await FindPrincipalAcrossEnvironments(chain_id, address);
+    if (crossEnvPrincipal != null)
+    {
+        // Create wallet for this environment and link to existing principal
+        await CreateWalletForEnvironment(crossEnvPrincipal.Id, env, chain_id, address);
+        return crossEnvPrincipal;
+    }
+
+    // Upsert wallet first to prevent race conditions
+    await UpsertWallet(env, chain_id, address); // INSERT ... ON CONFLICT DO NOTHING
+    wallet = await FindWallet(env, chain_id, address);
+
+    // Check if another request already linked ownership during race
+    var raceOwnerships = await FindActiveOwnerships(wallet.Id);
+    if (raceOwnerships.Any())
+    {
+        return ResolveFromOwnerships(raceOwnerships);
+    }
+
+    // Still no owner, safe to create principal
+    return await CreatePrincipal();
+}
+
+var ownerships = await FindActiveOwnerships(wallet.Id);
 if (ownerships.Any())
 {
-    // Apply deterministic tie-break ranking
+    // Apply deterministic tie-break ranking (applies ONLY if no verified+signing exists)
     return ownerships
         .OrderBy(o => GetAuthorityRank(o.VerificationSource)) // dynamic_verified > direct_signature_msg > etc.
         .ThenBy(o => o.Principal.CreatedAt) // Earliest principal wins
         .First().Principal;
 }
 
-// Step 3: Create new
+// Step 3: Create new (should rarely happen after race protection)
 return await CreatePrincipal();
 
 private int GetAuthorityRank(VerificationSource source) => source switch
@@ -399,8 +430,9 @@ var signedPayload = new
     exp = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(), // Max 5 min
     nonce = Guid.NewGuid().ToString(),
     address = walletAddress,
-    chain = chain,
-    environment = environment
+    chain_id = chain_id,
+    environment = environment,
+    aud = partnerIdentifier // Bind to relying party
 };
 
 // Check in-memory LRU cache

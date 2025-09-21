@@ -37,14 +37,14 @@ public class SmokeTests : IDisposable
     }
 
     [Test]
-    public async Task POST_Exchange_WithoutJWT_Returns400()
+    public async Task POST_Exchange_WithoutJWT_Returns401()
     {
         // Act
         var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
         var response = await _client.PostAsync("/api/v1/auth/exchange", content);
 
-        // Assert - Endpoint validates Bearer token as part of request validation, returns 400
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // Assert - Endpoint requires Bearer token for authentication, returns 401
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Test]

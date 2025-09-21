@@ -71,7 +71,7 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
         {
             Logger.LogWarning("Exchange request missing Authorization header or Bearer token");
             return Result.Failure<ExchangeCredentialCommand, Error>(
-                Error.Validation("Authorization header with Bearer token is required"));
+                Error.Unauthorized("Authorization header with Bearer token is required"));
         }
 
         var jwt = authHeader["Bearer ".Length..].Trim();
@@ -79,7 +79,7 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
         {
             Logger.LogWarning("Exchange request has empty Bearer token");
             return Result.Failure<ExchangeCredentialCommand, Error>(
-                Error.Validation("Bearer token cannot be empty"));
+                Error.Unauthorized("Bearer token cannot be empty"));
         }
 
         // Validate JWT and extract user data using Dynamic service
@@ -87,7 +87,8 @@ public sealed class ExchangeEndpoint : BaseIdentityCommandEndpoint<ExchangeToken
         if (validationResult.IsFailure)
         {
             Logger.LogWarning("JWT validation failed: {Error}", validationResult.Error.Message);
-            return Result.Failure<ExchangeCredentialCommand, Error>(validationResult.Error);
+            return Result.Failure<ExchangeCredentialCommand, Error>(
+                Error.Unauthorized("Invalid JWT token"));
         }
 
         var dynamicUserData = validationResult.Value;
