@@ -87,6 +87,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 - Delete duplicate records
 - Generate deterministic CSV/JSON report with affected records
 - Run in batches with progress logging
+- **Pre-migration cross-environment conflict scan**: Before migration, scan for same (chain_id, address) with verified+signing owned by different principals across environments; generate conflict report for manual resolution before proceeding
 
 ### 8. Test Coverage Requirements
 **Critical Scenarios** (must have explicit tests):
@@ -155,6 +156,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
    - `ux_chain_default`: (principal_id, environment, chain_id) WHERE is_deleted=false
    - `idx_ownership_wallet_active`: (wallet_id) WHERE is_deleted=false
    - `idx_ownership_principal_active`: (principal_id) WHERE is_deleted=false
+   - **`idx_wallet_chain_addr_active`: (chain_id, address) WHERE is_deleted=false** (for cross-env lookups)
 3. Implement migration deduplication per decision #7 (keep oldest, report conflicts)
 4. Validate all indexes are used in query plans (EXPLAIN ANALYZE)
 5. Performance: constraint checks <10ms, bulk operations remain efficient
@@ -187,14 +189,16 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 **API Contract Clarifications**:
 - Wallet proof payload MUST include: `{environment, chain_id, address, signature, message}`
-- Signed message MUST embed: `{environment, chain_id, address, issued_at, exp, nonce, aud}`
+- **Signed message MUST embed**: `{environment, chain_id, address, issued_at, exp, nonce, aud}` where `exp = issued_at + 300s` (≤5 minutes)
 - **SDKs MUST sign the canonical template v1** with strict field order: `{environment, chain_id, address, issued_at, exp, nonce, aud}`
+- **Hard cap TTL enforcement**: Server rejects any wallet proof where `exp > issued_at + 300s`
 - **Server rejects non-canonical encodings** (e.g., different field order, extra fields, missing fields)
 - **Publish canonical template in SDK docs** and enforce byte-for-byte match
 - **Server validates `aud` against partner/client allowlist** for the API key to prevent cross-app replay
 - **Optional `domain` field** for additional binding when applicable
 - Canonicalize message bytes server-side (stable JSON or exact string template) and reject mismatched payload vs signature fields
 - Reject if environment in payload doesn't match environment in signed message
+- **Apply ±60s clock skew tolerance for `nbf`/`exp` validation**
 - **Never log raw JWTs or signatures; log only stable hashes and identifiers**
 
 ### Story 5.3: Implement Deterministic Principal Resolution
@@ -215,7 +219,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 8. Remove all legacy `FindPrincipalBy*` methods
 9. Log resolution_path={credential|wallet|created} and auto_revoke reason=conflict_lost with {environment, chain_id, address}
 10. IdentityCredential.last_seen_at only updates if newer (monotonic), with a unit test
-11. **Cross-environment attach rule**: If wallet proof on current environment has no local wallet row but the same (chain_id, address) has a **verified+signing** owner on another environment, resolve to that principal and link a new wallet row for the current environment; watch-only elsewhere never attaches
+11. **Cross-environment attach decision tree**: Run credential-first resolution; if resolves to principal **A**, check cross-env verified+signing owner **B** for (chain_id, address): if **A == B** auto-link wallet for current env; if **A != B** return 409 Conflict; if credential-first fails, attach to **B** and create env-scoped wallet row; watch-only elsewhere never blocks attach
 12. **Late principal creation with race protection**: Upsert wallet first (INSERT ... ON CONFLICT DO NOTHING), then re-read wallet and re-resolve ownerships. Only create principal if still no candidate
 13. **Normalize addresses chain-specifically before all database operations** and key computations
 14. **Solana addresses: validate base58, trim whitespace, check length** before storing
@@ -264,32 +268,44 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 **Acceptance Criteria**:
 1. Issue 15-minute Axon JWT for both Dynamic and wallet auth
-2. Implement Dynamic JWT hardening:
+2. **Implement KMS/HSM-backed JWT signing**:
+   - Use KMS/HSM for Axon JWT signing keys (not in-memory)
+   - Include `kid` in JWT header for rotation tracking
+   - Maintain old+new keys active during rotation (24-48h window)
+   - Document key rotation playbook with emergency procedures
+   - Pre-configure key rotation schedule (quarterly recommended)
+3. Implement Dynamic JWT hardening:
    - Validate `iss`: `app.dynamicauth.com/{environmentId}`
    - Map environmentId → our environment deterministically
    - **Validate `aud` against per-partner allowlist (env-scoped)**
    - Cache JWKS for 10-30 minutes with background refresh
    - Support `kid` rotation seamlessly
    - Clock skew tolerance ±60 seconds max
-3. Implement Redis replay protection (preferred):
-   - Store hash of `{message,signature}` in Redis
-   - Signed message MUST embed `environment`, `chain_id`
-   - 5-10min TTL for replay cache
+4. **Hard cap wallet-proof TTL enforcement**:
+   - Canonical message v1 MUST set `exp = issued_at + 300s` (≤5 minutes)
+   - Enforce `nbf`/`exp` with ±60s skew tolerance
+   - Add test to reject wallet proofs with >5m TTL
+   - SDK documentation must specify 5-minute maximum
+5. **Implement deterministic replay protection**:
+   - Define SHA-256 over UTF-8 bytes: `api_key | environment | chain_id | address | signature | message`
+   - Encode hash as base64url for Redis key & logs
+   - Store in Redis with 5-10min TTL
+   - Ensure cross-instance consistency via standardized hashing
    - Fallback: In-memory LRU if Redis unavailable
-4. Remove all refresh token code and endpoints
-5. Pre-warm JWKS cache on service startup
-6. **Define and publish canonical message template v1** with exact field order and JSON formatting
-7. **Server validates canonical byte encoding** before signature verification
-8. **Wallet signatures include `aud` (partner/client identifier)** in canonical message
-9. **Server enforces `aud` against per-API-key allowlist** to prevent cross-app replay
-10. **Maintain per-API-key audience allowlist configuration** (environment-scoped)
-11. **Enforce both `exp` and `nbf` claims with ±60s clock skew tolerance**
-12. **Replay cache key includes API key namespace**: `hash(api_key | environment | chain_id | address | signature | message)`
+6. Remove all refresh token code and endpoints
+7. Pre-warm JWKS cache on service startup
+8. **Define and publish canonical message template v1** with exact field order and JSON formatting
+9. **Server validates canonical byte encoding** before signature verification
+10. **Wallet signatures include `aud` (partner/client identifier)** in canonical message
+11. **Server enforces `aud` against per-API-key allowlist** to prevent cross-app replay
+12. **Maintain per-API-key audience allowlist configuration** (environment-scoped)
 13. **Log replay attempts with hashed identifiers only** (no raw bytes/tokens)
 
 **Error Messages**:
 - "Wallet already verified on {environment}/{chain_id}" for 409s
+- "Cross-environment verified+signing conflict: manual resolution required" for cross-env conflicts
 - "Unknown Dynamic environmentId: {id}" for unmapped environments
+- "Wallet proof TTL exceeds 5-minute maximum" for TTL violations
 - "Replay detected for signature on {environment}" for replays
 - "Invalid audience '{aud}' for this API key" for cross-app replay attempts
 
@@ -409,25 +425,52 @@ CREATE INDEX CONCURRENTLY idx_ownership_wallet_active
 CREATE INDEX CONCURRENTLY idx_ownership_principal_active
   ON identity.wallet_ownership (principal_id)
   WHERE is_deleted = false;
+
+-- Cross-environment lookup index for FindVerifiedSigningOwnershipAcrossEnvironments
+CREATE INDEX CONCURRENTLY idx_wallet_chain_addr_active
+  ON identity.wallet (chain_id, address)
+  WHERE is_deleted = false;
 ```
 
 ### Resolution Algorithm Pseudocode
 ```csharp
 // Step 1: Credential match (already env-scoped)
-var principal = await FindByCredential(env, provider, issuer, subject);
-if (principal != null) return principal;
+var principalA = await FindByCredential(env, provider, issuer, subject);
+if (principalA != null)
+{
+    // Credential resolved to principal A - check cross-env conflict
+    var crossEnvOwnership = await FindVerifiedSigningOwnershipAcrossEnvironments(chainId, address);
+    if (crossEnvOwnership != null)
+    {
+        var principalB = crossEnvOwnership.Principal;
+        if (principalA.Id == principalB.Id)
+        {
+            // A == B: Same principal - auto-link wallet for current env
+            await CreateWalletForEnvironment(principalA.Id, environment, chainId, address);
+            return principalA;
+        }
+        else
+        {
+            // A != B: Different principals - 409 Conflict
+            return Result.Error(ConflictError("Cross-environment verified+signing conflict: manual resolution required"));
+        }
+    }
+
+    // No cross-env owner, proceed normally with credential-resolved principal
+    return principalA;
+}
 
 // Step 2: Wallet match with tie-break (MUST use triple key)
 var wallet = await FindWallet(environment, chainId, address);
 if (wallet == null)
 {
-    // Check cross-environment attach rule first
-    var crossEnvPrincipal = await FindPrincipalAcrossEnvironments(chainId, address);
-    if (crossEnvPrincipal != null)
+    // Credential-first failed - check for cross-env attach to existing verified owner
+    var crossEnvOwnership = await FindVerifiedSigningOwnershipAcrossEnvironments(chainId, address);
+    if (crossEnvOwnership != null)
     {
-        // Create wallet for this environment and link to existing principal
-        await CreateWalletForEnvironment(crossEnvPrincipal.Id, environment, chainId, address);
-        return crossEnvPrincipal;
+        // Attach to B (existing verified+signing owner) and create env-scoped wallet
+        await CreateWalletForEnvironment(crossEnvOwnership.PrincipalId, environment, chainId, address);
+        return crossEnvOwnership.Principal;
     }
 
     // Upsert wallet first to prevent race conditions
@@ -552,13 +595,18 @@ public async Task<Result<Principal>> VerifyWalletOwnership(Guid walletId, Guid p
 - [ ] Deterministic resolution with tie-breaking active
 - [ ] Transaction-scoped exclusivity with retry logic
 - [ ] Default wallet guard enforced at domain level
+- [ ] **KMS/HSM-backed JWT signing with kid rotation support**
+- [ ] **Cross-environment verified-owner conflict gate (409 response)**
+- [ ] **Hard cap wallet-proof TTL (≤5 minutes) enforcement**
 - [ ] Dynamic JWT hardening (iss/aud/JWKS) complete
-- [ ] Replay protection strategy implemented
+- [ ] **Deterministic replay protection (SHA-256 base64url hashing)**
 - [ ] Critical scenario tests passing
 
 ### Should Complete (P1)
 - [ ] OIDC code removed (keeping Dynamic JWT)
 - [ ] Refresh tokens eliminated
+- [ ] **Pre-migration cross-environment conflict scan & report**
+- [ ] **Key rotation playbook documented**
 - [ ] Migration deduplication report generated
 - [ ] Performance targets met (<100ms resolution)
 - [ ] Audit trail for all identity changes
