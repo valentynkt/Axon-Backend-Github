@@ -4,6 +4,7 @@ using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Application.Common.Constants;
+using Axon.Modules.Identity.Infrastructure.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
@@ -16,21 +17,28 @@ namespace Axon.Api.Endpoints.V1.Auth;
 /// </summary>
 public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
 {
-    public MeEndpoint(IMediator mediator, ILogger<MeEndpoint> logger) 
+    public MeEndpoint(IMediator mediator, ILogger<MeEndpoint> logger)
         : base(mediator, logger)
     {
+    }
+
+    public override void Configure()
+    {
+        base.Configure();
+        // Use Axon JWT authentication scheme for internal token validation
+        AuthSchemes(AuthenticationSchemes.AxonJwt);
     }
 
     protected override string GetRoute() => "/auth/me";
 
     protected override string GetSummary() => "Get current user information";
 
-    protected override string GetDescription() => 
+    protected override string GetDescription() =>
         """
         Returns information about the currently authenticated user with ETag caching support.
-        
-        **Requires**: Valid JWT token in Authorization header
-        
+
+        **Requires**: Valid Axon JWT token in Authorization header (internal tokens only)
+
         **ETag Support**:
         - Server returns `ETag` header with fingerprint of user data
         - Client can send `If-None-Match` header to check for changes
