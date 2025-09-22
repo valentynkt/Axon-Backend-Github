@@ -45,13 +45,23 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
         // Map from new CurrentUserResult structure to existing API contract
         config.NewConfig<CurrentUserResult, GetCurrentUserResponseDto>()
             .Map(dest => dest.AxonUserId, src => src.Profile.AxonUserId)
-            .Map(dest => dest.Subject, src => src.Profile.Subject) // Use actual subject from JWT
             .Map(dest => dest.IsAuthenticated, src => true) // Always true if we have a result
-            .Map(dest => dest.Claims, src => new Dictionary<string, object>
+            .Map(dest => dest.Environment, src => "mainnet") // TODO: Extract from context
+            .Map(dest => dest.RiskPosture, src => src.Profile.RiskTier)
+            .Map(dest => dest.Providers, src => new ProviderLinkDto[]
             {
-                { "risk_tier", src.Profile.RiskTier },
-                { "wallet_count", src.Wallets.Count },
-                { "chain_defaults", src.ChainDefaults }
-            });
+                new("dynamic", "dynamic.xyz", src.Profile.Subject)
+            })
+            .Map(dest => dest.Wallets, src => src.Wallets.Select(w => new WalletDto(
+                w.WalletId,
+                w.ChainId,
+                w.Address,
+                w.IsVerified ? "verified" : "pending",
+                w.AccessMode,
+                null, // Provider not available in WalletInfo
+                null  // DisplayName not available in WalletInfo
+            )).ToArray())
+            .Map(dest => dest.ChainDefaults, src => src.ChainDefaults.Select(kv =>
+                new ChainDefaultDto(kv.Key, kv.Value)).ToArray());
     }
 }

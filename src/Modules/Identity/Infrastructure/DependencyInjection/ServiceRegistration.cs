@@ -134,7 +134,10 @@ public static class ServiceRegistration
         
         // Register Exchange Metrics Service
         services.AddScoped<IExchangeMetricsService, ExchangeMetricsService>();
-        
+
+        // Register new authentication services for Story 5.2
+        services.AddScoped<ICanonicalMessageService, CanonicalMessageService>();
+
         // CRITICAL FIX: Register ICurrentUserService implementation
         // This is required by all command/query handlers in the application
         services.AddHttpContextAccessor(); // Required for HttpContextUserService
