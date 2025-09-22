@@ -101,7 +101,10 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         // Create missing wallets - EF retry strategy will handle any race conditions
         foreach (var spec in missingSpecs)
         {
-            var wallet = Wallet.Create(null, spec.chainId, spec.address);
+            // TODO: Update walletSpecs to include network environment information
+            // For now, default to mainnet for production safety
+            var networkEnvironment = Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet;
+            var wallet = Wallet.Create(null, networkEnvironment, spec.chainId, spec.address);
             await DbSet.AddAsync(wallet, ct);
             result[spec] = wallet.Id;
         }

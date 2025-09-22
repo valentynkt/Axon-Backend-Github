@@ -38,4 +38,8 @@
     <PackageReference Include="Ardalis.Specification.EntityFrameworkCore" Version="9.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Persistence\Migrations\" />
+  </ItemGroup>
+
 </Project>

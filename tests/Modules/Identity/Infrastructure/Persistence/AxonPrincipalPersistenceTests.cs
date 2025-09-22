@@ -92,10 +92,10 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         // Context 1: Add BSC ownership and chain default
         var ownership3 = CreateTestOwnership(principal1.Id, bsc.Id);
         principal1.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
-        principal1.ApplyChainDefaultsBatch(new[] { ("56", bsc.Id) });
+        principal1.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("56", bsc.Id) });
 
         // Context 2: Update existing chain defaults
-        principal2.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        principal2.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("1", eth.Id), ("137", polygon.Id) });
 
         // Save context 1 first
         await PrincipalRepository.UpdateAsync(principal1);
@@ -204,7 +204,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
             ("137", polygon.Id)
         };
 
-        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(chainMappings);
+        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.Mainnet, chainMappings);
         batchResult.IsSuccess.ShouldBeTrue();
         batchResult.Value.ShouldBe(2); // Should apply 2 defaults
 
@@ -293,7 +293,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.UpdateRiskTier(RiskTier.High);
 
         // Add chain defaults (this should succeed)
-        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("1", eth.Id), ("137", polygon.Id) });
 
         // Record initial state
         var initialOwnershipCount = reloadedPrincipal.WalletOwnerships.Count;
@@ -331,7 +331,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         // Add chain defaults
-        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("1", eth.Id), ("137", polygon.Id) });
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 
@@ -392,7 +392,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         // Add chain defaults
-        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("1", eth.Id), ("137", polygon.Id) });
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 

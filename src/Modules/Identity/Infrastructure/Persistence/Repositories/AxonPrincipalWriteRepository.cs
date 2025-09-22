@@ -73,6 +73,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
             // Create a new instance to avoid any tracking conflicts
             var newDefault = PrincipalChainDefault.Create(
                 chainDefault.PrincipalId,
+                chainDefault.NetworkEnvironment,
                 chainDefault.ChainId,
                 chainDefault.WalletId);
 

@@ -85,6 +85,7 @@ public abstract class IdentityTestBase
     {
         return Wallet.Create(
             walletId,
+            NetworkEnvironment.Mainnet,
             chainId,
             address ?? Builders.SolanaAddress,
             timestamp);

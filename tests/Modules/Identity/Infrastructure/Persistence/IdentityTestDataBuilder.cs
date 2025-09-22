@@ -70,7 +70,7 @@ public class IdentityTestDataBuilder
         public PrincipalBuilder WithChainDefault(string chainId, WalletId walletId)
         {
             var principalId = _id ?? AxonUserId.New();
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
             _chainDefaults.Add(chainDefault);
             return this;
         }
@@ -111,7 +111,7 @@ public class IdentityTestDataBuilder
             if (_chainDefaults.Count > 0)
             {
                 var chainDefaultsArray = _chainDefaults.Select(cd => (cd.ChainId, cd.WalletId)).ToArray();
-                var chainDefaultsResult = principal.ApplyChainDefaultsBatch(chainDefaultsArray);
+                var chainDefaultsResult = principal.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), chainDefaultsArray);
                 if (chainDefaultsResult.IsFailure)
                 {
                     throw new InvalidOperationException($"Failed to apply chain defaults: {chainDefaultsResult.Error}");
@@ -175,7 +175,7 @@ public class IdentityTestDataBuilder
             _address ??= $"0x{_parent._random.Next():X8}{_parent._random.Next():X8}{_parent._random.Next():X8}{_parent._random.Next():X8}";
 
             var address = Address.Create(_address).Value;
-            return Domain.Aggregates.Wallet.Wallet.Create(_id, _chainId, address);
+            return Domain.Aggregates.Wallet.Wallet.Create(_id, Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet, _chainId, address);
         }
     }
 
@@ -277,7 +277,7 @@ public class IdentityTestDataBuilder
             if (_walletId == null)
                 throw new InvalidOperationException("Wallet ID is required");
 
-            return PrincipalChainDefault.Create(_principalId.Value, _chainId, _walletId.Value);
+            return PrincipalChainDefault.Create(_principalId.Value, NetworkEnvironment.From("mainnet"), _chainId, _walletId.Value);
         }
     }
 

@@ -605,14 +605,18 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         if (chainWalletMappings.Count == 0)
             return 0;
 
-        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method. " +
+        // Get network environment from the first wallet (all wallets should be from the same network)
+        var networkEnvironment = wallets[0].NetworkEnvironment;
+
+        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method for network {NetworkEnvironment}. " +
             "Chains: [{ChainDetails}], ExistingDefaults: {ExistingDefaultsCount}",
             chainWalletMappings.Count,
+            networkEnvironment.Value,
             string.Join(", ", chainWalletMappings.Select(m => $"{m.chainId}:{m.walletId.Value}")),
             principal.PrincipalChainDefaults.Count);
 
         // Use optimized batch method that handles all filtering, validation, and no-op detection internally
-        var batchResult = principal.ApplyChainDefaultsBatch(chainWalletMappings);
+        var batchResult = principal.ApplyChainDefaultsBatch(networkEnvironment, chainWalletMappings);
 
         if (batchResult.IsFailure)
         {

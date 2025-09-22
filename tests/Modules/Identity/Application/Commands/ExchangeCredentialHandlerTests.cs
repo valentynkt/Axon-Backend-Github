@@ -761,9 +761,9 @@ public class ExchangeCredentialHandlerTests
         // Mock GetByIdsAsync for chain defaults application
         var wallets = new List<Wallet>
         {
-            Wallet.Create(ethereumWalletId, "1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
-            Wallet.Create(solanaWalletId, "1399811149", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS"), DateTime.UtcNow),
-            Wallet.Create(polygonWalletId, "137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
+            Wallet.Create(ethereumWalletId, NetworkEnvironment.Mainnet, "1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
+            Wallet.Create(solanaWalletId, NetworkEnvironment.Mainnet, "1399811149", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS"), DateTime.UtcNow),
+            Wallet.Create(polygonWalletId, NetworkEnvironment.Mainnet, "137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
         };
         _walletRepository.GetByIdsAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(wallets);
@@ -859,8 +859,8 @@ public class ExchangeCredentialHandlerTests
         // Mock GetByIdsAsync for chain defaults application
         var wallets = new List<Wallet>
         {
-            Wallet.Create(ethereumWalletId, "1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
-            Wallet.Create(polygonWalletId, "137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
+            Wallet.Create(ethereumWalletId, NetworkEnvironment.Mainnet, "1", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
+            Wallet.Create(polygonWalletId, NetworkEnvironment.Mainnet, "137", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
         };
         _walletRepository.GetByIdsAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(wallets);

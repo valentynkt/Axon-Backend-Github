@@ -48,20 +48,37 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasColumnName("updated_at")
             .HasColumnType("timestamptz");
 
-        // Unique constraint for (principal_id, wallet_id)
+        // Soft delete support
+        builder.Property(o => o.IsDeleted)
+            .HasColumnName("is_deleted")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(o => o.DeletedAt)
+            .HasColumnName("deleted_at")
+            .HasColumnType("timestamptz");
+
+        // Partial unique index for ownership pair (principal_id, wallet_id)
         builder.HasIndex(o => new { o.PrincipalId, o.WalletId })
             .IsUnique()
-            .HasDatabaseName("ux_ownership_principal_wallet");
+            .HasDatabaseName("ux_ownership_pair")
+            .HasFilter("is_deleted = false");
 
-        // Partial unique index for verified & signing owners per wallet
+        // Partial unique index for exclusive signing constraint per wallet
         builder.HasIndex(o => o.WalletId)
             .IsUnique()
-            .HasDatabaseName("ux_wallet_verified_signing_owner")
-            .HasFilter("status = 'Verified' AND access_mode = 'Signing'");
+            .HasDatabaseName("ux_exclusive_signing")
+            .HasFilter("status = 'Verified' AND access_mode = 'Signing' AND is_deleted = false");
 
-        // Performance indexes
-        builder.HasIndex(o => o.PrincipalId).HasDatabaseName("ix_ownership_principal_id");
-        builder.HasIndex(o => o.WalletId).HasDatabaseName("ix_ownership_wallet_id");
-        builder.HasIndex(o => o.Status).HasDatabaseName("ix_ownership_status");
+        // Performance indexes with soft delete filters
+        builder.HasIndex(o => o.WalletId)
+            .HasDatabaseName("idx_ownership_wallet_active")
+            .HasFilter("is_deleted = false");
+
+        builder.HasIndex(o => o.PrincipalId)
+            .HasDatabaseName("idx_ownership_principal_active")
+            .HasFilter("is_deleted = false");
+
+        builder.HasIndex(o => o.Status).HasDatabaseName("idx_ownership_status");
     }
 }

@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Domain.Entities;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -22,7 +23,6 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
             .HasColumnName("principal_id")
             .HasColumnType("uuid")
             .IsRequired();
-
         builder.Property(c => c.Provider)
             .HasColumnName("provider")
             .HasMaxLength(100)
@@ -50,13 +50,24 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
             .HasColumnName("updated_at")
             .HasColumnType("timestamptz");
 
-        // Unique constraint for (provider, issuer, subject)
+        // Soft delete support
+        builder.Property(c => c.IsDeleted)
+            .HasColumnName("is_deleted")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(c => c.DeletedAt)
+            .HasColumnName("deleted_at")
+            .HasColumnType("timestamptz");
+
+        // Partial unique index for credential provider uniqueness (network-agnostic)
         builder.HasIndex(c => new { c.Provider, c.Issuer, c.Subject })
             .IsUnique()
-            .HasDatabaseName("ux_credential_provider_issuer_subject");
+            .HasDatabaseName("ux_credential_provider")
+            .HasFilter("is_deleted = false");
 
         // Performance indexes
-        builder.HasIndex(c => c.PrincipalId).HasDatabaseName("ix_credential_principal_id");
-        builder.HasIndex(c => c.Provider).HasDatabaseName("ix_credential_provider");
+        builder.HasIndex(c => c.PrincipalId).HasDatabaseName("idx_credential_principal_id");
+        builder.HasIndex(c => c.Provider).HasDatabaseName("idx_credential_provider");
     }
 }

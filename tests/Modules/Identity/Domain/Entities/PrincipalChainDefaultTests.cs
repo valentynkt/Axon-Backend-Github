@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Tests.Common;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Primitives.Ids;
 using Shouldly;
 
@@ -26,7 +27,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             chainDefault.ShouldSatisfyAllConditions(
@@ -48,7 +49,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             // Version 7 GUIDs have the version bits set to 0111 in the 13th position
@@ -66,8 +67,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault1 = PrincipalChainDefault.Create(principalId, chainId, walletId);
-            var chainDefault2 = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault1 = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, walletId);
+            var chainDefault2 = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, walletId);
 
             // Assert
             chainDefault1.Id.ShouldNotBe(chainDefault2.Id);
@@ -87,7 +88,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             chainDefault.ChainId.ShouldBe(chainId);
@@ -102,7 +103,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             chainDefault.ChainId.ShouldBe("");
@@ -120,8 +121,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault1 = PrincipalChainDefault.Create(principalId1, chainId, walletId);
-            var chainDefault2 = PrincipalChainDefault.Create(principalId2, chainId, walletId);
+            var chainDefault1 = PrincipalChainDefault.Create(principalId1, NetworkEnvironment.Mainnet, chainId, walletId);
+            var chainDefault2 = PrincipalChainDefault.Create(principalId2, NetworkEnvironment.Mainnet, chainId, walletId);
 
             // Assert
             chainDefault1.ShouldNotBe(chainDefault2);
@@ -147,7 +148,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var originalWalletId = WalletId.New();
             var newWalletId = WalletId.New();
 
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, originalWalletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, originalWalletId);
 
             // Act
             chainDefault.UpdateWallet(newWalletId);
@@ -166,7 +167,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var chainId = "ethereum-mainnet";
             var walletId = WalletId.New();
 
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Act
             chainDefault.UpdateWallet(walletId);
@@ -186,7 +187,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId2 = WalletId.New();
             var finalWalletId = WalletId.New();
 
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, originalWalletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, originalWalletId);
 
             // Act
             chainDefault.UpdateWallet(walletId1);
@@ -206,7 +207,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var originalWalletId = WalletId.New();
             var newWalletId = WalletId.New();
 
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, originalWalletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, originalWalletId);
             var originalId = chainDefault.Id;
             var originalPrincipalId = chainDefault.PrincipalId;
             var originalChainId = chainDefault.ChainId;
@@ -242,7 +243,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             chainDefault.ChainId.ShouldBe(chainId);
@@ -257,7 +258,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             chainDefault.ChainId.ShouldBe(chainId);
@@ -272,7 +273,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
             // Assert
             chainDefault.ChainId.ShouldBe(chainId);
@@ -286,7 +287,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var principalId = AxonUserId.New();
             var chainId = "ethereum-mainnet";
             var originalWalletId = WalletId.New();
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, originalWalletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, originalWalletId);
 
             var walletIds = new[]
             {
@@ -330,7 +331,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
                 var walletId = WalletId.New();
 
                 // Act
-                var chainDefault = PrincipalChainDefault.Create(principalId, chainId, walletId);
+                var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.From("mainnet"), chainId, walletId);
 
                 // Assert
                 chainDefault.ChainId.ShouldBe(chainId);
@@ -357,8 +358,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId2 = WalletId.New();
 
             // Act
-            var chainDefault1 = PrincipalChainDefault.Create(principalId, chainId, walletId1);
-            var chainDefault2 = PrincipalChainDefault.Create(principalId, chainId, walletId2);
+            var chainDefault1 = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, walletId1);
+            var chainDefault2 = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, walletId2);
 
             // Assert
             chainDefault1.ShouldNotBe(chainDefault2);
@@ -378,8 +379,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var chainDefault1 = PrincipalChainDefault.Create(principalId1, chainId, walletId);
-            var chainDefault2 = PrincipalChainDefault.Create(principalId2, chainId, walletId);
+            var chainDefault1 = PrincipalChainDefault.Create(principalId1, NetworkEnvironment.Mainnet, chainId, walletId);
+            var chainDefault2 = PrincipalChainDefault.Create(principalId2, NetworkEnvironment.Mainnet, chainId, walletId);
 
             // Assert
             chainDefault1.ShouldNotBe(chainDefault2);
@@ -394,8 +395,8 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var walletId = WalletId.New();
 
             // Act
-            var ethereumDefault = PrincipalChainDefault.Create(principalId, "ethereum-mainnet", walletId);
-            var polygonDefault = PrincipalChainDefault.Create(principalId, "polygon-mainnet", walletId);
+            var ethereumDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, "ethereum-mainnet", walletId);
+            var polygonDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, "polygon-mainnet", walletId);
 
             // Assert
             ethereumDefault.ShouldNotBe(polygonDefault);
@@ -414,7 +415,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void PrincipalChainDefault_Should_InheritFromAuditableDeletableEntity()
         {
             // Arrange & Act
-            var chainDefault = PrincipalChainDefault.Create(AxonUserId.New(), "ethereum-mainnet", WalletId.New());
+            var chainDefault = PrincipalChainDefault.Create(AxonUserId.New(), NetworkEnvironment.Mainnet, "ethereum-mainnet", WalletId.New());
 
             // Assert - Verify auditable properties are available
             var now = DateTimeOffset.UtcNow;
@@ -430,7 +431,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
         public void PrincipalChainDefault_Should_UseGuidAsId()
         {
             // Arrange & Act
-            var chainDefault = PrincipalChainDefault.Create(AxonUserId.New(), "ethereum-mainnet", WalletId.New());
+            var chainDefault = PrincipalChainDefault.Create(AxonUserId.New(), NetworkEnvironment.Mainnet, "ethereum-mainnet", WalletId.New());
 
             // Assert
             chainDefault.Id.ShouldBeOfType<Guid>();
@@ -458,7 +459,7 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var newWalletId = WalletId.New();
 
             // Act
-            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, initialWalletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, initialWalletId);
 
             // Verify initial state
             chainDefault.WalletId.ShouldBe(initialWalletId);
@@ -484,9 +485,9 @@ public class PrincipalChainDefaultTests : IdentityTestBase
             var solanaWalletId = WalletId.New();
 
             // Act
-            var ethereumDefault = PrincipalChainDefault.Create(principalId, "ethereum-mainnet", ethereumWalletId);
-            var polygonDefault = PrincipalChainDefault.Create(principalId, "polygon-mainnet", polygonWalletId);
-            var solanaDefault = PrincipalChainDefault.Create(principalId, "solana-mainnet", solanaWalletId);
+            var ethereumDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, "ethereum-mainnet", ethereumWalletId);
+            var polygonDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, "polygon-mainnet", polygonWalletId);
+            var solanaDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, "solana-mainnet", solanaWalletId);
 
             // Assert - All defaults should be for the same principal but different chains and wallets
             var defaults = new[] { ethereumDefault, polygonDefault, solanaDefault };

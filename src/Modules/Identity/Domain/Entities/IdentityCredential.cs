@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Domain.Entities.Base;
 
 namespace Axon.Modules.Identity.Domain.Entities;

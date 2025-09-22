@@ -33,7 +33,7 @@ public class WalletTests : IdentityTestBase
             var timestamp = DateTime.UtcNow;
 
             // Act
-            var wallet = Wallet.Create(walletId, chainId, address, timestamp);
+            var wallet = Wallet.Create(walletId, NetworkEnvironment.Mainnet, chainId, address, timestamp);
 
             // Assert
             wallet.ShouldSatisfyAllConditions(
@@ -53,7 +53,7 @@ public class WalletTests : IdentityTestBase
             var address = Builders.EthereumAddress;
 
             // Act
-            var wallet = Wallet.Create(null, chainId, address);
+            var wallet = Wallet.Create(null, NetworkEnvironment.Mainnet, chainId, address);
 
             // Assert
             wallet.Id.Value.ShouldNotBe(Guid.Empty);
@@ -68,7 +68,7 @@ public class WalletTests : IdentityTestBase
             var address = Builders.EthereumAddress;
 
             // Act
-            var wallet = Wallet.Create(null, chainId, address);
+            var wallet = Wallet.Create(null, NetworkEnvironment.Mainnet, chainId, address);
 
             // Assert
             var afterCreation = DateTime.UtcNow;
@@ -91,7 +91,7 @@ public class WalletTests : IdentityTestBase
             foreach (var (chainId, address) in testCases)
             {
                 // Act
-                var wallet = Wallet.Create(null, chainId, address);
+                var wallet = Wallet.Create(null, NetworkEnvironment.Mainnet, chainId, address);
 
                 // Assert
                 wallet.ChainId.ShouldBe(chainId);
