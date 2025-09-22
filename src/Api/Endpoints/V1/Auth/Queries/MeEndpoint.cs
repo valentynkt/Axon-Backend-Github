@@ -4,7 +4,7 @@ using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Application.Common.Constants;
-using Axon.Modules.Identity.Infrastructure.Authentication;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
@@ -13,23 +13,29 @@ namespace Axon.Api.Endpoints.V1.Auth;
 
 /// <summary>
 /// GET /auth/me - Get current user information
-/// Uses BaseIdentityQueryEndpoint for standardized error handling and authentication
+/// Uses unified bearer token validation to support both Dynamic JWT and Axon Access Tokens
 /// </summary>
 public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
 {
-    public MeEndpoint(IMediator mediator, ILogger<MeEndpoint> logger)
+    private readonly IUnifiedBearerTokenValidator _tokenValidator;
+
+    public MeEndpoint(
+        IMediator mediator,
+        ILogger<MeEndpoint> logger,
+        IUnifiedBearerTokenValidator tokenValidator)
         : base(mediator, logger)
     {
+        _tokenValidator = tokenValidator ?? throw new ArgumentNullException(nameof(tokenValidator));
     }
 
     public override void Configure()
     {
         base.Configure();
-        // Use Axon JWT authentication scheme for internal token validation
-        AuthSchemes(AuthenticationSchemes.AxonJwt);
+        // Allow anonymous access since we'll handle token validation manually
+        AllowAnonymous();
     }
 
-    protected override string GetRoute() => "/auth/me";
+    protected override string GetRoute() => "/api/v1/auth/me";
 
     protected override string GetSummary() => "Get current user information";
 
@@ -37,7 +43,11 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         """
         Returns information about the currently authenticated user with ETag caching support.
 
-        **Requires**: Valid Axon JWT token in Authorization header (internal tokens only)
+        **Requires**: Valid Dynamic JWT or Axon Access Token in Authorization header
+
+        **Supported Token Types**:
+        - Dynamic JWT (from Dynamic.xyz authentication)
+        - Axon Access Token (from /auth/exchange endpoint)
 
         **ETag Support**:
         - Server returns `ETag` header with fingerprint of user data
@@ -48,56 +58,58 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
     protected override string GetSuccessResponse() => "Returns current user information with claims";
 
-    protected override Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
+    protected override async Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
     {
-        var user = HttpContext.User;
-        
-        if (user?.Identity?.IsAuthenticated != true)
+        // Extract bearer token from Authorization header
+        var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(authHeader) ||
+            !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            Logger.LogWarning("Unauthenticated user attempting to access /auth/me");
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("User is not authenticated")));
+            Logger.LogWarning("/auth/me request missing Authorization header or Bearer token");
+            return Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("Authorization header with Bearer token is required"));
         }
 
-        // Extract Dynamic credential information from JWT claims
-        var subjectClaim = user.FindFirst("sub")?.Value;
-        var issuerClaim = user.FindFirst("iss")?.Value;
-
-        if (string.IsNullOrWhiteSpace(subjectClaim))
+        var bearerToken = authHeader["Bearer ".Length..].Trim();
+        if (string.IsNullOrWhiteSpace(bearerToken))
         {
-            Logger.LogWarning("JWT missing subject claim for /auth/me request");
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Validation("JWT missing required subject claim")));
+            Logger.LogWarning("/auth/me request has empty Bearer token");
+            return Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("Bearer token cannot be empty"));
         }
 
-        if (string.IsNullOrWhiteSpace(issuerClaim))
+        // Validate token using unified validator
+        var tokenValidationResult = await _tokenValidator.ValidateTokenAsync(bearerToken, ct);
+        if (tokenValidationResult.IsFailure)
         {
-            Logger.LogWarning("JWT missing issuer claim for /auth/me request");
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Validation("JWT missing required issuer claim")));
+            Logger.LogWarning("Token validation failed for /auth/me: {Error}", tokenValidationResult.Error.Message);
+            return Result.Failure<GetMyPrincipalQuery, Error>(tokenValidationResult.Error);
         }
 
-        // Create Dynamic provider type
-        var providerTypeResult = ProviderType.Create(DynamicAuthConstants.ProviderType);
+        var tokenContext = tokenValidationResult.Value;
+
+        // Create provider type from validated token
+        var providerTypeResult = ProviderType.Create(tokenContext.ProviderType);
         if (providerTypeResult.IsFailure)
         {
-            Logger.LogError("Failed to create Dynamic provider type: {Error}", providerTypeResult.Error.Message);
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error));
+            Logger.LogError("Failed to create provider type from token: {Error}", providerTypeResult.Error.Message);
+            return Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error);
         }
 
         // Extract If-None-Match header for ETag support
         var ifNoneMatch = HttpContext.Request.Headers.IfNoneMatch.FirstOrDefault();
 
-        Logger.LogDebug("Retrieving user info for subject: {Subject}, issuer: {Issuer}", subjectClaim, issuerClaim);
+        Logger.LogDebug("Retrieving user info for AxonUserId: {AxonUserId}, TokenType: {TokenType}",
+            tokenContext.AxonUserId, tokenContext.TokenType);
 
         var query = new GetMyPrincipalQuery(
             ProviderType: providerTypeResult.Value,
-            Issuer: issuerClaim,
-            Subject: subjectClaim,
+            Issuer: tokenContext.Issuer,
+            Subject: tokenContext.Subject,
             IfNoneMatch: ifNoneMatch
         );
 
-        return Task.FromResult(Result.Success<GetMyPrincipalQuery, Error>(query));
+        return Result.Success<GetMyPrincipalQuery, Error>(query);
     }
 
     protected override string? ExtractETagFromDomainResult(CurrentUserResult domainResult)

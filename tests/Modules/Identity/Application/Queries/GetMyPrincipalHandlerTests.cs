@@ -237,12 +237,10 @@ public class GetMyPrincipalHandlerTests
             var userResult = result.Value;
 
             userResult.ShouldSatisfyAllConditions(
-                r => r.Profile.AxonUserId.ShouldBe(principal.Id.Value.ToString()),
-                r => r.Profile.Subject.ShouldBe(TestSubject),
+                r => r.Profile.AxonId.ShouldBe(principal.Id.Value.ToString()),
                 r => r.Profile.RiskTier.ShouldBe("low"),
                 r => r.ETag.ShouldBe(etag),
-                r => r.Wallets.ShouldNotBeEmpty(),
-                r => r.ChainDefaults.ShouldNotBeNull()
+                r => r.Wallets.ShouldNotBeEmpty()
             );
         }
 
@@ -263,10 +261,8 @@ public class GetMyPrincipalHandlerTests
             result.IsSuccess.ShouldBeTrue();
             var userResult = result.Value;
 
-            // Verify that Subject and AxonUserId are different values
-            userResult.Profile.Subject.ShouldBe(TestSubject);
-            userResult.Profile.AxonUserId.ShouldBe(principal.Id.Value.ToString());
-            userResult.Profile.Subject.ShouldNotBe(userResult.Profile.AxonUserId);
+            // Verify the AxonId is correctly set
+            userResult.Profile.AxonId.ShouldBe(principal.Id.Value.ToString());
         }
 
         [Test]
@@ -288,9 +284,9 @@ public class GetMyPrincipalHandlerTests
 
             userResult.Wallets.ShouldHaveSingleItem()
                 .ShouldSatisfyAllConditions(
-                    w => w.ChainId.ShouldBe("ethereum-mainnet"),
-                    w => w.AccessMode.ShouldBe("signing"),
-                    w => w.IsVerified.ShouldBeTrue()
+                    w => w.Chain.ShouldBe("ethereum-mainnet"),
+                    w => w.Access.ShouldBe("signing"),
+                    w => w.State.ShouldBe("verified")
                 );
         }
 
@@ -341,7 +337,7 @@ public class GetMyPrincipalHandlerTests
         }
 
         [Test]
-        public async Task Handle_WithChainDefaults_Should_IncludeInResponse()
+        public async Task Handle_WithChainDefaults_Should_MarkWalletAsDefault()
         {
             // Arrange
             var principal = CreateTestPrincipalWithChainDefaults();
@@ -355,7 +351,7 @@ public class GetMyPrincipalHandlerTests
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
-            result.Value.ChainDefaults.ShouldContainKey("ethereum-mainnet");
+            result.Value.Wallets.ShouldContain(w => w.IsDefault == true);
         }
     }
 

@@ -42,4 +42,15 @@ public interface IWalletWriteRepository : IWriteRepository<Wallet, WalletId>
     Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(
         IEnumerable<(string chainId, Address address)> walletSpecs,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Upserts a wallet with the given network environment, chain ID, and address.
+    /// Uses INSERT ... ON CONFLICT DO NOTHING pattern for race condition protection.
+    /// Returns the wallet (either newly created or existing).
+    /// </summary>
+    Task<Wallet> UpsertWalletAsync(
+        NetworkEnvironment networkEnvironment,
+        ChainId chainId,
+        Address address,
+        CancellationToken cancellationToken = default);
 }

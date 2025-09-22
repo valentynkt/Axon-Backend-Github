@@ -1,35 +1,30 @@
 namespace Axon.Api.Contracts.V1.Auth;
 
 /// <summary>
-/// Normalized snapshot of the authenticated principal suitable for UI/state hydration.
+/// Response for GET /api/v1/auth/me endpoint per High-Level Flow Architecture
+/// Returns canonical merged view of current user with ETag support
 /// </summary>
 public sealed record GetCurrentUserResponseDto(
-    string AxonUserId,
-    bool IsAuthenticated,
-    string Environment,             // e.g. "mainnet" | "devnet" | "testnet"
-    string RiskPosture,             // e.g. "balanced"
-    ProviderLinkDto[] Providers,    // linked auth identities
-    WalletDto[] Wallets,            // known wallets
-    ChainDefaultDto[] ChainDefaults // per-chain default wallet mapping
+    UserProfileDto Profile,
+    WalletInfoDto[] Wallets,
+    string ETag
 );
 
-public sealed record ProviderLinkDto(
-    string Provider,                // "dynamic" | "siws" | "oidc" (future)
-    string Issuer,                  // provider issuer (if applicable)
-    string Subject                  // stable subject/user id from provider
+/// <summary>
+/// User profile information
+/// </summary>
+public sealed record UserProfileDto(
+    string AxonId,
+    string RiskTier                 // e.g. "balanced"
 );
 
-public sealed record WalletDto(
-    string WalletId,                // internal id (ULID as string)
-    string ChainId,                 // "solana" | "ethereum" | etc.
-    string Address,                 // normalized address
-    string OwnershipStatus,         // "verified" | "pending" | "revoked"
-    string AccessMode,              // "signing" | "watch_only"
-    string? Provider,               // optional: wallet provider label (if known)
-    string? DisplayName             // optional: display name (if set)
-);
-
-public sealed record ChainDefaultDto(
-    string ChainId,
-    string WalletId
+/// <summary>
+/// Simplified wallet information per architecture specification
+/// </summary>
+public sealed record WalletInfoDto(
+    string Chain,                   // "solana", "ethereum", etc.
+    string Address,                 // normalized wallet address
+    string State,                   // "verified", "pending", "revoked"
+    string Access,                  // "signing", "watch_only"
+    bool IsDefault                  // true if this is the default wallet for this chain
 );

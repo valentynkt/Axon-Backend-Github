@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
@@ -91,10 +92,13 @@ public static class ServiceRegistration
         // Register Write Repositories
         services.AddScoped<IAxonPrincipalWriteRepository, AxonPrincipalWriteRepository>();
         services.AddScoped<IWalletWriteRepository, WalletWriteRepository>();
-        
+
         // Register Read Repositories
         services.AddScoped<IAxonPrincipalReadRepository, AxonPrincipalReadRepository>();
         services.AddScoped<IWalletReadRepository, WalletReadRepository>();
+
+        // Register Wallet Ownership Repository for Story 5.3
+        services.AddScoped<IWalletOwnershipRepository, WalletOwnershipRepository>();
         
         // Register Repository and DbContext interfaces
         services.AddScoped<IIdentityReadDbContext>(provider => provider.GetRequiredService<IdentityReadDbContext>());
@@ -137,6 +141,18 @@ public static class ServiceRegistration
 
         // Register new authentication services for Story 5.2
         services.AddScoped<ICanonicalMessageService, CanonicalMessageService>();
+
+        // Register Axon JWT Service for token minting and validation
+        services.AddScoped<IAxonJwtService, AxonJwtService>();
+
+        // Register Unified Bearer Token Validator for multi-token support
+        services.AddScoped<IUnifiedBearerTokenValidator, UnifiedBearerTokenValidator>();
+
+        // Register Address Normalization Service for API edge validation
+        services.AddScoped<IAddressNormalizationService, AddressNormalizationService>();
+
+        // Register Principal Resolution Service for Story 5.3
+        services.AddScoped<IPrincipalResolutionService, PrincipalResolutionService>();
 
         // CRITICAL FIX: Register ICurrentUserService implementation
         // This is required by all command/query handlers in the application

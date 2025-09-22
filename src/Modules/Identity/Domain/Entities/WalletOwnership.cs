@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -15,37 +16,45 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     public WalletId WalletId { get; private set; }
     public AccessMode AccessMode { get; private set; }
     public OwnershipStatus Status { get; private set; }
+    public VerificationSource VerificationSource { get; private set; }
     public DateTime? VerifiedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
+
+    // Navigation property for resolution
+    public AxonPrincipal Principal { get; private set; } = null!;
 
     // EF Core constructor
     private WalletOwnership() { }
 
     private WalletOwnership(
-        WalletOwnershipId id, 
-        AxonUserId principalId, 
-        WalletId walletId, 
-        AccessMode accessMode, 
-        OwnershipStatus status) : base(id)
+        WalletOwnershipId id,
+        AxonUserId principalId,
+        WalletId walletId,
+        AccessMode accessMode,
+        OwnershipStatus status,
+        VerificationSource verificationSource) : base(id)
     {
         PrincipalId = principalId;
         WalletId = walletId;
         AccessMode = accessMode;
         Status = status;
+        VerificationSource = verificationSource;
     }
 
     public static WalletOwnership Create(
-        AxonUserId principalId, 
-        WalletId walletId, 
-        AccessMode accessMode = AccessMode.Signing, 
-        OwnershipStatus status = OwnershipStatus.Pending)
+        AxonUserId principalId,
+        WalletId walletId,
+        AccessMode accessMode = AccessMode.Signing,
+        OwnershipStatus status = OwnershipStatus.Pending,
+        VerificationSource verificationSource = VerificationSource.DynamicAttested)
     {
         return new WalletOwnership(
-            WalletOwnershipId.New(), 
-            principalId, 
-            walletId, 
-            accessMode, 
-            status);
+            WalletOwnershipId.New(),
+            principalId,
+            walletId,
+            accessMode,
+            status,
+            verificationSource);
     }
 
     /// <summary>

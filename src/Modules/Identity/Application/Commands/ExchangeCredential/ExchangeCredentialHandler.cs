@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Common.Commands;
 using Axon.Modules.Identity.Application.Common.Constants;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -33,12 +34,15 @@ namespace Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 /// </summary>
 public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<ExchangeCredentialCommand, ExchangeOutcome>
 {
+    private static readonly ActivitySource ActivitySource = new("Axon.Identity.ExchangeCredential");
     private const string JwtIssuerMetadataKey = "jwt_issuer";
     private readonly IAxonPrincipalWriteRepository _principalWriteRepository;
     private readonly IWalletWriteRepository _walletRepository;
     private readonly IExchangeMetricsService _metricsService;
     private readonly IMemoryCache _memoryCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IPrincipalResolutionService _resolutionService;
+    private readonly IAddressNormalizationService _addressNormalizer;
     private readonly ILogger<ExchangeCredentialHandler> _logger;
 
     // OpenTelemetry metrics for cache warming monitoring
@@ -57,6 +61,8 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         IExchangeMetricsService metricsService,
         IMemoryCache memoryCache,
         IHttpContextAccessor httpContextAccessor,
+        IPrincipalResolutionService resolutionService,
+        IAddressNormalizationService addressNormalizer,
         ILogger<ExchangeCredentialHandler> logger)
         : base(currentUserService)
     {
@@ -65,6 +71,8 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         _metricsService = metricsService;
         _memoryCache = memoryCache;
         _httpContextAccessor = httpContextAccessor;
+        _resolutionService = resolutionService;
+        _addressNormalizer = addressNormalizer;
         _logger = logger;
     }
 
@@ -226,30 +234,37 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         var (providerType, issuer, subject) = credentialResult.Value;
 
-        // Step 2: Find or create Principal using wallet-first resolution
-        var principalResult = await ResolveOrCreatePrincipalWalletFirst(
-            providerType, issuer, subject, userData.Wallets, cancellationToken);
+        // Step 2: Get network environment from userData
+        var networkEnvResult = NetworkEnvironment.Create(userData.EnvironmentId);
+        if (networkEnvResult.IsFailure)
+            return networkEnvResult.Error;
+
+        var networkEnvironment = networkEnvResult.Value;
+
+        // Step 3: Resolve or create Principal using new resolution service
+        var principalResult = await ResolveOrCreatePrincipalWithNewService(
+            providerType, issuer, subject, networkEnvironment, userData.Wallets, cancellationToken);
         if (principalResult.IsFailure)
             return principalResult.Error;
 
         var (principal, isNewPrincipal) = principalResult.Value;
 
-        // Step 3: Process wallets in batch to prevent N+1 queries
+        // Step 4: Process wallets in batch to prevent N+1 queries
         var walletProcessingResult = await ProcessWalletsBatch(
-            principal, userData.Wallets, cancellationToken);
+            principal, networkEnvironment, userData.Wallets, cancellationToken);
         if (walletProcessingResult.IsFailure)
             return walletProcessingResult.Error;
 
         var walletMetrics = walletProcessingResult.Value;
 
-        // Step 4: Apply verified-first chain defaults
+        // Step 5: Apply verified-first chain defaults
         var defaultsApplied = await ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds, cancellationToken);
 
         _logger.LogDebug("Before persistence: PrincipalId={PrincipalId}, DefaultsApplied={DefaultsApplied}, " +
             "ChainDefaultsCount={ChainDefaultsCount}, WalletOwnershipsCount={WalletOwnershipsCount}",
             principal.Id.Value, defaultsApplied, principal.PrincipalChainDefaults.Count, principal.WalletOwnerships.Count);
 
-        // Step 5: Persist changes
+        // Step 6: Persist changes
         if (isNewPrincipal)
         {
             await _principalWriteRepository.AddAsync(principal, cancellationToken);
@@ -266,10 +281,10 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             "DefaultsApplied={DefaultsApplied}, FinalChainDefaultsCount={FinalChainDefaultsCount}",
             principal.Id.Value, saveResult, defaultsApplied, principal.PrincipalChainDefaults.Count);
 
-        // Step 6: Warm user context caches for subsequent identity resolution
+        // Step 7: Warm user context caches for subsequent identity resolution
         await WarmUserContextCaches(userData.AxonUserId, principal.Id);
 
-        // Step 7: Return stable metrics
+        // Step 8: Return stable metrics
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
             AxonUserId: principal.Id,
             Created: isNewPrincipal,
@@ -339,134 +354,169 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     }
 
     /// <summary>
-    /// Resolves or creates a principal using wallet-first resolution strategy.
-    /// Prioritizes wallet ownership over credential matching to prevent duplicate identities.
+    /// Resolves or creates a principal using the new PrincipalResolutionService.
+    /// Implements deterministic 2-step resolution with cross-network conflict detection.
     /// </summary>
     /// <param name="providerType">Authentication provider type</param>
     /// <param name="issuer">Token issuer identifier</param>
     /// <param name="subject">Token subject identifier</param>
-    /// <param name="wallets">List of wallet data for ownership lookup</param>
+    /// <param name="networkEnvironment">Network environment for the request</param>
+    /// <param name="wallets">List of wallet data for resolution</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Tuple containing the resolved/created principal and whether it's newly created</returns>
-    /// <remarks>
-    /// This method implements a 4-step resolution process:
-    /// 1. Check wallets for existing ownership (if wallets provided)
-    /// 2. Fallback to credential-based lookup
-    /// 3. Add new credential to existing principal (with conflict detection)
-    /// 4. Create new principal if none found
-    /// The process is idempotent and safe for retries.
-    /// </remarks>
-    private async Task<Result<(AxonPrincipal principal, bool isNew), Error>> ResolveOrCreatePrincipalWalletFirst(
+    private async Task<Result<(AxonPrincipal principal, bool isNew), Error>> ResolveOrCreatePrincipalWithNewService(
         ProviderType providerType,
         string issuer,
         string subject,
+        NetworkEnvironment networkEnvironment,
         List<ExchangeWalletData> wallets,
         CancellationToken cancellationToken)
     {
-        AxonPrincipal? resolvedPrincipal = null;
-
-        // STEP 1: Check wallets first (if provided) - USE BATCH LOOKUP FOR EFFICIENCY
-        if (wallets is { Count: > 0 })
+        // For now, use the first wallet for resolution. In the future, we might want to handle multiple wallets
+        if (wallets is not { Count: > 0 })
         {
-            // Parse wallet data and create address pairs for batch lookup (reuse from ProcessWalletsBatch)
-            var walletSpecs = new List<(string chainId, Address address)>();
-            var parseErrors = new List<string>();
-
-            foreach (var wallet in wallets)
-            {
-                var addressResult = Address.Create(wallet.Address);
-                if (addressResult.IsFailure)
-                {
-                    parseErrors.Add($"Invalid address {wallet.Address}: {addressResult.Error.Message}");
-                    continue;
-                }
-
-                walletSpecs.Add((wallet.Chain, addressResult.Value));
-            }
-
-            // If we have valid wallet specs, batch lookup wallet owners
-            if (walletSpecs.Count > 0)
-            {
-                var walletLookup = await _walletRepository.EnsureManyByChainAndAddressAsync(
-                    walletSpecs, cancellationToken);
-
-                // Batch check for existing verified signing ownership (PREFERRED APPROACH)
-                var walletOwners = await _principalWriteRepository.FindVerifiedSigningOwnersAsync(
-                    walletLookup.Values, cancellationToken);
-
-                if (walletOwners.Count > 0)
-                {
-                    resolvedPrincipal = walletOwners.First().Value; // Found wallet owner
-                }
-            }
-        }
-
-        // STEP 2: Fallback to credential lookup (existing logic)
-        if (resolvedPrincipal is null)
-        {
-            resolvedPrincipal = await _principalWriteRepository.FindByCredentialAsync(
+            // If no wallets, fall back to credential-only lookup
+            var principal = await _principalWriteRepository.FindByCredentialAsync(
                 providerType, issuer, subject, cancellationToken);
-        }
 
-        // STEP 3: Add credential to existing principal (if found)
-        if (resolvedPrincipal is not null)
-        {
-            // Check if credential already exists (idempotency)
-            var hasCredential = resolvedPrincipal.Credentials.Any(c =>
-                c.Provider == providerType.Value &&
-                c.Issuer == issuer &&
-                c.Subject == subject);
-
-            if (!hasCredential)
+            if (principal is not null)
             {
-                var credential = IdentityCredential.Create(
-                    resolvedPrincipal.Id,
-                    providerType.Value,
-                    issuer,
-                    subject,
-                    DateTime.UtcNow);
-
-                // Check credential uniqueness BEFORE calling domain method (proper async pattern)
-                var providerTypeResult = ProviderType.Create(credential.Provider);
-                if (providerTypeResult.IsFailure)
-                    return Result.Failure<(AxonPrincipal, bool), Error>(providerTypeResult.Error);
-
-                var isTaken = await _principalWriteRepository.IsCredentialTakenAsync(
-                    providerTypeResult.Value, credential.Issuer, credential.Subject, cancellationToken);
-
-                // Use domain method with synchronous check function
-                var addResult = resolvedPrincipal.AddCredential(credential, (provider, iss, subj) =>
-                    Result.Success<bool, Error>(isTaken));
-
-                if (addResult.IsFailure)
-                {
-                    // Convert BusinessRule error to Conflict as specified in Story 3.1 requirements
-                    if (addResult.Error.Code == "IDENTITY.CREDENTIAL.BELONGS_TO_OTHER")
-                    {
-                        return Result.Failure<(AxonPrincipal, bool), Error>(
-                            Error.Conflict("This login method belongs to a different account"));
-                    }
-                    return Result.Failure<(AxonPrincipal, bool), Error>(addResult.Error);
-                }
+                return (principal, false);
             }
 
-            return (resolvedPrincipal, false); // Existing principal
+            // Create new principal if none found
+            var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+            if (createResult.IsFailure)
+                return createResult.Error;
+
+            return (createResult.Value, true);
         }
 
-        // STEP 4: Create new principal (existing CreateWithDynamicCredential logic)
-        var createResult = AxonPrincipal.CreateWithDynamicCredential(
-            providerType, issuer, subject);
+        // Use the first wallet for resolution
+        var firstWallet = wallets[0];
 
-        if (createResult.IsFailure)
-            return createResult.Error;
+        // Normalize the address first
+        var normalizedAddressResult = _addressNormalizer.NormalizeAddress(firstWallet.Chain, firstWallet.Address);
+        if (normalizedAddressResult.IsFailure)
+            return normalizedAddressResult.Error;
 
-        return (createResult.Value, true); // New principal
+        var chainIdResult = ChainId.Create(firstWallet.Chain);
+        if (chainIdResult.IsFailure)
+            return chainIdResult.Error;
+
+        // Use the PrincipalResolutionService for deterministic resolution
+        using var activity = ActivitySource.StartActivity("ExchangeCredential.PrincipalResolution");
+        activity?.SetTag("provider", providerType.Value);
+        activity?.SetTag("network_environment", networkEnvironment.Value);
+        activity?.SetTag("chain_id", chainIdResult.Value.Value);
+
+        _logger.LogInformation(
+            "Delegating principal resolution to PrincipalResolutionService: " +
+            "provider={Provider} network_environment={NetworkEnvironment} chain_id={ChainId} address={Address}",
+            providerType.Value, networkEnvironment.Value, chainIdResult.Value.Value, normalizedAddressResult.Value.Value);
+
+        var resolutionResult = await _resolutionService.ResolveAsync(
+            providerType, issuer, subject, networkEnvironment,
+            chainIdResult.Value, normalizedAddressResult.Value, cancellationToken);
+
+        if (resolutionResult.IsFailure)
+            return resolutionResult.Error;
+
+        var result = resolutionResult.Value;
+        var isNewPrincipal = result.Path == ResolutionPath.Created;
+
+        activity?.SetTag("resolution_path", result.Path.ToString());
+        activity?.SetTag("was_auto_linked", result.WasAutoLinked);
+        activity?.SetTag("principal_id", result.Principal.Id.Value.ToString());
+
+        _logger.LogInformation(
+            "Principal resolution completed: principal_id={PrincipalId} resolution_path={ResolutionPath} " +
+            "was_auto_linked={WasAutoLinked} provider={Provider}",
+            result.Principal.Id.Value, result.Path, result.WasAutoLinked, providerType.Value);
+
+        // Handle credential management: update last_seen_at or add new credential
+        if (!isNewPrincipal)
+        {
+            await HandleCredentialManagement(result.Principal, providerType, issuer, subject, cancellationToken);
+        }
+
+        return (result.Principal, isNewPrincipal);
     }
+
+    /// <summary>
+    /// Handles credential management for existing principals.
+    /// Implements monotonic last_seen_at updates and adds new credentials if needed.
+    /// </summary>
+    /// <param name="principal">The existing principal</param>
+    /// <param name="providerType">Provider type</param>
+    /// <param name="issuer">Token issuer</param>
+    /// <param name="subject">Token subject</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    private async Task HandleCredentialManagement(
+        AxonPrincipal principal,
+        ProviderType providerType,
+        string issuer,
+        string subject,
+        CancellationToken cancellationToken)
+    {
+        // Check if credential already exists
+        var existingCredential = principal.Credentials.FirstOrDefault(c =>
+            c.Provider == providerType.Value &&
+            c.Issuer == issuer &&
+            c.Subject == subject);
+
+        if (existingCredential is not null)
+        {
+            // Update last_seen_at monotonically (only if newer)
+            var now = DateTime.UtcNow;
+            existingCredential.UpdateLastSeen(now);
+
+            _logger.LogDebug(
+                "Updated credential last_seen_at for {Provider}:{Issuer}:{Subject} to {LastSeenAt}",
+                providerType.Value, issuer, subject, now);
+            return;
+        }
+
+        // Create new credential if it doesn't exist
+        var credential = IdentityCredential.Create(
+            principal.Id,
+            providerType.Value,
+            issuer,
+            subject,
+            DateTime.UtcNow);
+
+        // Check credential uniqueness BEFORE calling domain method
+        var isTaken = await _principalWriteRepository.IsCredentialTakenAsync(
+            providerType, credential.Issuer, credential.Subject, cancellationToken);
+
+        // Use domain method with synchronous check function
+        var addResult = principal.AddCredential(credential, (provider, iss, subj) =>
+            Result.Success<bool, Error>(isTaken));
+
+        if (addResult.IsFailure)
+        {
+            // Convert BusinessRule error to Conflict as specified in requirements
+            if (addResult.Error.Code == "IDENTITY.CREDENTIAL.BELONGS_TO_OTHER")
+            {
+                _logger.LogWarning(
+                    "Credential conflict: {Provider}:{Issuer}:{Subject} belongs to different account",
+                    providerType.Value, issuer, subject);
+                throw new InvalidOperationException("This login method belongs to a different account");
+            }
+            throw new InvalidOperationException(addResult.Error.Message);
+        }
+
+        _logger.LogDebug(
+            "Added new credential {Provider}:{Issuer}:{Subject} to principal {PrincipalId}",
+            providerType.Value, issuer, subject, principal.Id.Value);
+    }
+
 
     /// <summary>
     /// Processes wallets in batch to prevent N+1 queries and establish verified ownership relationships.
     /// </summary>
     /// <param name="principal">The principal to link wallets to</param>
+    /// <param name="networkEnvironment">The network environment context</param>
     /// <param name="wallets">List of wallet data to process</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Processing metrics including counts of processed, linked, skipped, and conflicted wallets</returns>
@@ -480,6 +530,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     /// </remarks>
     private async Task<Result<WalletProcessingMetrics, Error>> ProcessWalletsBatch(
         AxonPrincipal principal,
+        NetworkEnvironment networkEnvironment,
         List<ExchangeWalletData> wallets,
         CancellationToken cancellationToken)
     {
@@ -489,21 +540,35 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
                 new WalletProcessingMetrics(0, 0, 0, 0, new List<WalletId>()));
         }
 
-        // Step 1: Parse wallet data and create address pairs for batch lookup
+        // Step 1: Parse wallet data and create address pairs for batch lookup with normalization
         var walletSpecs = new List<(string chainId, Address address)>();
         var parseErrors = new List<string>();
 
         foreach (var wallet in wallets)
         {
-            var addressResult = Address.Create(wallet.Address);
-            if (addressResult.IsFailure)
+            // Validate chain ID first
+            var chainIdResult = ChainId.Create(wallet.Chain);
+            if (chainIdResult.IsFailure)
             {
-                parseErrors.Add($"Invalid address {wallet.Address}: {addressResult.Error.Message}");
+                parseErrors.Add($"Invalid chain {wallet.Chain}: {chainIdResult.Error.Message}");
                 continue;
             }
 
-            walletSpecs.Add((wallet.Chain, addressResult.Value));
+            // Normalize address using the normalization service
+            var normalizedAddressResult = _addressNormalizer.NormalizeAddress(
+                wallet.Chain, wallet.Address);
+            if (normalizedAddressResult.IsFailure)
+            {
+                parseErrors.Add($"Invalid address {wallet.Address}: {normalizedAddressResult.Error.Message}");
+                continue;
+            }
+
+            walletSpecs.Add((wallet.Chain, normalizedAddressResult.Value));
         }
+
+        _logger.LogDebug(
+            "Processed {WalletCount} wallets for network environment {NetworkEnvironment}",
+            walletSpecs.Count, networkEnvironment.Value);
 
         if (parseErrors.Count > 0)
         {

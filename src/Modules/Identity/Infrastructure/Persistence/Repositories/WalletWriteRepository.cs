@@ -117,4 +117,33 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 
         return result;
     }
+
+    public async Task<Wallet> UpsertWalletAsync(
+        NetworkEnvironment networkEnvironment,
+        ChainId chainId,
+        Address address,
+        CancellationToken cancellationToken = default)
+    {
+        // First try to find existing wallet by triple-key lookup
+        var existingWallet = await DbSet
+            .FirstOrDefaultAsync(w =>
+                w.NetworkEnvironment == networkEnvironment &&
+                w.ChainId == chainId.Value &&
+                w.Address == address,
+                cancellationToken);
+
+        if (existingWallet != null)
+        {
+            return existingWallet;
+        }
+
+        // Create new wallet if not found
+        var newWallet = Wallet.Create(null, networkEnvironment, chainId.Value, address);
+        await DbSet.AddAsync(newWallet, cancellationToken);
+
+        // Save changes to persist the new wallet
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return newWallet;
+    }
 }

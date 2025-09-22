@@ -1,5 +1,6 @@
 using Axon.Api.Contracts.V1.Auth;
 using Axon.Api.Validators.V1.Auth;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -16,11 +17,16 @@ namespace Axon.Api.Endpoints.V1.Auth.Commands;
 public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, ChallengeResponseDto>
 {
     private readonly ICanonicalMessageService _canonicalMessageService;
+    private readonly IAddressNormalizationService _addressNormalizationService;
 
-    public ChallengeEndpoint(ICanonicalMessageService canonicalMessageService, ILogger<ChallengeEndpoint> logger)
+    public ChallengeEndpoint(
+        ICanonicalMessageService canonicalMessageService,
+        IAddressNormalizationService addressNormalizationService,
+        ILogger<ChallengeEndpoint> logger)
         : base(logger)
     {
         _canonicalMessageService = canonicalMessageService ?? throw new ArgumentNullException(nameof(canonicalMessageService));
+        _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
     }
 
     public override void Configure()
@@ -66,16 +72,33 @@ public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, 
             return Result.Failure<ChallengeResponseDto, Error>(envResult.Error);
         }
 
-        // Normalize light inputs (keep challenge lenient; hard checks happen at exchange)
+        // Normalize inputs and apply address validation per Story 5.3 AC#13
         var chainId = request.ChainId?.Trim().ToLowerInvariant();
-        var address = request.WalletAddress?.Trim();
         var audience = string.IsNullOrWhiteSpace(request.Audience) ? string.Empty : request.Audience!.Trim();
+
+        // Apply address normalization at API edge
+        var rawAddress = request.WalletAddress?.Trim();
+        if (string.IsNullOrWhiteSpace(rawAddress) || string.IsNullOrWhiteSpace(chainId))
+        {
+            return Result.Failure<ChallengeResponseDto, Error>(
+                Error.Validation("Chain ID and wallet address are required"));
+        }
+
+        var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(chainId!, rawAddress!);
+        if (normalizedAddressResult.IsFailure)
+        {
+            Logger.LogWarning("Failed to normalize address {Address} for chain {Chain}: {Error}",
+                rawAddress, chainId, normalizedAddressResult.Error.Message);
+            return Result.Failure<ChallengeResponseDto, Error>(normalizedAddressResult.Error);
+        }
+
+        var address = normalizedAddressResult.Value.Value;
 
         // Generate canonical challenge via domain service
         var challengeResult = await _canonicalMessageService.GenerateChallengeAsync(
             envResult.Value,
             chainId!,
-            address!,
+            address,
             audience,
             ct);
 

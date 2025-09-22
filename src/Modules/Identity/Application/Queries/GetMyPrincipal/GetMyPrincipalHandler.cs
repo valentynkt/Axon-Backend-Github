@@ -106,21 +106,19 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
         }
 
         // Step 6: Build CurrentUserResult response
-        var result = await BuildCurrentUserResult(principalWithOwnerships, query.Subject, currentETag, cancellationToken);
+        var result = await BuildCurrentUserResult(principalWithOwnerships, currentETag, cancellationToken);
 
         return Result.Success<CurrentUserResult, Error>(result);
     }
 
     private async Task<CurrentUserResult> BuildCurrentUserResult(
         Domain.Aggregates.AxonPrincipal.AxonPrincipal principal,
-        string subject,
         string etag,
         CancellationToken cancellationToken)
     {
-        // Build user profile
+        // Build user profile per architecture specification
         var profile = new UserProfile(
-            AxonUserId: principal.Id.Value.ToString(),
-            Subject: subject,
+            AxonId: principal.Id.Value.ToString(),
             RiskTier: CurrentUserResultMapper.MapRiskTierToWire(principal.RiskTier));
 
         // Build wallets array - only verified wallets for security
@@ -134,32 +132,30 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
             // Get wallet details for verified ownerships
             var walletIds = verifiedOwnerships.Select(wo => wo.WalletId).ToList();
             var wallets = await _walletRepository.GetByIdsAsync(walletIds, false, cancellationToken);
-            
+
             var walletDict = wallets.ToDictionary(w => w.Id, w => w);
 
             foreach (var ownership in verifiedOwnerships)
             {
                 if (walletDict.TryGetValue(ownership.WalletId, out var wallet))
                 {
+                    // Check if this wallet is the default for its chain
+                    var isDefault = principal.ChainDefaults.TryGetValue(wallet.ChainId.ToString(), out var defaultWalletId)
+                                   && defaultWalletId == wallet.Id;
+
                     walletInfos.Add(new WalletInfo(
-                        WalletId: wallet.Id.Value.ToString(),
-                        ChainId: wallet.ChainId.ToString(),
+                        Chain: wallet.ChainId.ToString(),
                         Address: wallet.Address.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        AccessMode: CurrentUserResultMapper.MapAccessModeToWire(ownership.AccessMode),
-                        IsVerified: ownership.Status == OwnershipStatus.Verified));
+                        State: CurrentUserResultMapper.MapOwnershipStatusToWire(ownership.Status),
+                        Access: CurrentUserResultMapper.MapAccessModeToWire(ownership.AccessMode),
+                        IsDefault: isDefault));
                 }
             }
         }
 
-        // Build chain defaults mapping
-        var chainDefaults = principal.ChainDefaults.ToDictionary(
-            kv => kv.Key,
-            kv => kv.Value.Value.ToString());
-
         return new CurrentUserResult(
             Profile: profile,
             Wallets: walletInfos.AsReadOnly(),
-            ChainDefaults: chainDefaults.AsReadOnly(),
             ETag: etag);
     }
 

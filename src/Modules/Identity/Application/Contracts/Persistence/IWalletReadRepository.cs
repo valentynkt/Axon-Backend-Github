@@ -91,4 +91,15 @@ public interface IWalletReadRepository : ISpecificationReadRepository<Wallet>
         IEnumerable<WalletId> walletIds,
         bool includeDeleted = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds a wallet using the triple-key lookup (network environment, chain ID, address).
+    /// This is the primary lookup method for deterministic principal resolution.
+    /// Uses the ux_wallet_netenv_chain_addr index for optimal performance.
+    /// </summary>
+    Task<Wallet?> FindWalletAsync(
+        NetworkEnvironment networkEnvironment,
+        ChainId chainId,
+        Address address,
+        CancellationToken cancellationToken = default);
 }
