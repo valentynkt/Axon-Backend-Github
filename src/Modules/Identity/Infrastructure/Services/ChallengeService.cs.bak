@@ -1,0 +1,101 @@
+using System.Security.Cryptography;
+using Axon.Modules.Identity.Application.Contracts.Services;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using CSharpFunctionalExtensions;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+
+namespace Axon.Modules.Identity.Infrastructure.Services;
+
+/// <summary>
+/// Service for authentication challenge generation and validation
+/// Extracted from AuthenticationService for better separation of concerns
+/// </summary>
+public class ChallengeService : IChallengeService
+{
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<ChallengeService> _logger;
+
+    public ChallengeService(
+        IMemoryCache cache,
+        ILogger<ChallengeService> logger)
+    {
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Generates an authentication challenge for the given address
+    /// </summary>
+    public Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
+        string address,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(address);
+
+            // Generate cryptographically secure random challenge
+            var challengeBytes = new byte[32]; // 256-bit challenge
+            RandomNumberGenerator.Fill(challengeBytes);
+            var challenge = Convert.ToHexString(challengeBytes).ToLowerInvariant();
+
+            var expiresAt = DateTime.UtcNow.AddMinutes(10); // 10-minute challenge expiry
+
+            var authChallenge = new AuthenticationChallenge(
+                Challenge: challenge,
+                Address: address.ToLowerInvariant(),
+                ExpiresAt: expiresAt);
+
+            // Cache the challenge for validation
+            var cacheKey = $"auth_challenge_{address.ToLowerInvariant()}";
+            _cache.Set(cacheKey, challenge, expiresAt);
+
+            _logger.LogDebug("Generated authentication challenge for address {Address} expires at {ExpiresAt}",
+                address, expiresAt);
+
+            return Task.FromResult(Result.Success<AuthenticationChallenge, Error>(authChallenge));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate challenge for address {Address}", address);
+            return Task.FromResult(Result.Failure<AuthenticationChallenge, Error>(
+                Error.Failure("CHALLENGE_GENERATION_FAILED", "Failed to generate authentication challenge")));
+        }
+    }
+
+    /// <summary>
+    /// Checks if a token has been used for replay protection
+    /// </summary>
+    public Task<Result<Unit, Error>> CheckAndMarkTokenUsedAsync(
+        string jti,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(jti);
+
+            var cacheKey = $"used_token_{jti}";
+
+            // Check if token has already been used
+            if (_cache.TryGetValue(cacheKey, out _))
+            {
+                _logger.LogWarning("Token replay detected for JTI: {Jti}", jti);
+                return Task.FromResult(Result.Failure<Unit, Error>(
+                    Error.Unauthorized("Token has already been used")));
+            }
+
+            // Mark token as used (cache for 1 hour)
+            _cache.Set(cacheKey, true, TimeSpan.FromHours(1));
+
+            _logger.LogDebug("Marked token as used for JTI: {Jti}", jti);
+            return Task.FromResult(Result.Success<Unit, Error>(Unit.Value));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check token usage for JTI: {Jti}", jti);
+            return Task.FromResult(Result.Failure<Unit, Error>(
+                Error.Failure("TOKEN_REPLAY_CHECK_FAILED", "Failed to check token replay status")));
+        }
+    }
+}

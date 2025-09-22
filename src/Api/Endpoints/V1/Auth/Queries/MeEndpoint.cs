@@ -17,15 +17,18 @@ namespace Axon.Api.Endpoints.V1.Auth;
 /// </summary>
 public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
 {
-    private readonly IUnifiedBearerTokenValidator _tokenValidator;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly IBearerTokenExtractor _bearerTokenExtractor;
 
     public MeEndpoint(
         IMediator mediator,
         ILogger<MeEndpoint> logger,
-        IUnifiedBearerTokenValidator tokenValidator)
+        IAuthenticationService authenticationService,
+        IBearerTokenExtractor bearerTokenExtractor)
         : base(mediator, logger)
     {
-        _tokenValidator = tokenValidator ?? throw new ArgumentNullException(nameof(tokenValidator));
+        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
+        _bearerTokenExtractor = bearerTokenExtractor ?? throw new ArgumentNullException(nameof(bearerTokenExtractor));
     }
 
     public override void Configure()
@@ -33,6 +36,9 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         base.Configure();
         // Allow anonymous access since we'll handle token validation manually
         AllowAnonymous();
+
+        // Apply rate limiting for auth endpoints
+        Options(x => x.RequireRateLimiting("AuthExchange"));
     }
 
     protected override string GetRoute() => "/api/v1/auth/me";
@@ -61,25 +67,16 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
     protected override async Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
     {
         // Extract bearer token from Authorization header
-        var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(authHeader) ||
-            !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var tokenResult = _bearerTokenExtractor.ExtractBearerToken(HttpContext);
+        if (tokenResult.IsFailure)
         {
-            Logger.LogWarning("/auth/me request missing Authorization header or Bearer token");
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("Authorization header with Bearer token is required"));
+            return Result.Failure<GetMyPrincipalQuery, Error>(tokenResult.Error);
         }
 
-        var bearerToken = authHeader["Bearer ".Length..].Trim();
-        if (string.IsNullOrWhiteSpace(bearerToken))
-        {
-            Logger.LogWarning("/auth/me request has empty Bearer token");
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("Bearer token cannot be empty"));
-        }
+        var bearerToken = tokenResult.Value;
 
-        // Validate token using unified validator
-        var tokenValidationResult = await _tokenValidator.ValidateTokenAsync(bearerToken, ct);
+        // Validate token using unified authentication service
+        var tokenValidationResult = await _authenticationService.ValidateTokenAsync(bearerToken, ct);
         if (tokenValidationResult.IsFailure)
         {
             Logger.LogWarning("Token validation failed for /auth/me: {Error}", tokenValidationResult.Error.Message);
@@ -88,22 +85,17 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
         var tokenContext = tokenValidationResult.Value;
 
-        // Create provider type from validated token
-        var providerTypeResult = ProviderType.Create(tokenContext.ProviderType);
-        if (providerTypeResult.IsFailure)
-        {
-            Logger.LogError("Failed to create provider type from token: {Error}", providerTypeResult.Error.Message);
-            return Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error);
-        }
+        // Provider type is already available in validated token context
+        var providerType = tokenContext.ProviderType;
 
         // Extract If-None-Match header for ETag support
         var ifNoneMatch = HttpContext.Request.Headers.IfNoneMatch.FirstOrDefault();
 
         Logger.LogDebug("Retrieving user info for AxonUserId: {AxonUserId}, TokenType: {TokenType}",
-            tokenContext.AxonUserId, tokenContext.TokenType);
+            tokenContext.AxonUserId.Value, tokenContext.TokenType);
 
         var query = new GetMyPrincipalQuery(
-            ProviderType: providerTypeResult.Value,
+            ProviderType: providerType,
             Issuer: tokenContext.Issuer,
             Subject: tokenContext.Subject,
             IfNoneMatch: ifNoneMatch

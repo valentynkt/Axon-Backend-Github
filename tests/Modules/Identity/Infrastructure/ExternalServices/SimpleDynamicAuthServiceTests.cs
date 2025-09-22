@@ -9,6 +9,7 @@ using NSubstitute;
 using NUnit.Framework;
 using Shouldly;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
@@ -26,7 +27,7 @@ public class SimpleDynamicAuthServiceTests
     private ILogger<DynamicAuthService> _logger;
     private DynamicXyzOptions _options;
     private IDynamicClaimNormalizer _claimNormalizer;
-    private IJwtReplayGuard _replayGuard;
+    private IAuthenticationService _authenticationService;
     private IJwksService _jwksService;
     private ICollection<SecurityKey> _testKeys;
 
@@ -36,7 +37,7 @@ public class SimpleDynamicAuthServiceTests
         _memoryCache = new MemoryCache(new MemoryCacheOptions());
         _logger = Substitute.For<ILogger<DynamicAuthService>>();
         _claimNormalizer = Substitute.For<IDynamicClaimNormalizer>();
-        _replayGuard = Substitute.For<IJwtReplayGuard>();
+        _authenticationService = Substitute.For<IAuthenticationService>();
         _jwksService = Substitute.For<IJwksService>();
         
         _options = new DynamicXyzOptions
@@ -60,7 +61,7 @@ public class SimpleDynamicAuthServiceTests
             _logger,
             optionsWrapper,
             _claimNormalizer,
-            _replayGuard,
+            _authenticationService,
             _jwksService);
     }
 

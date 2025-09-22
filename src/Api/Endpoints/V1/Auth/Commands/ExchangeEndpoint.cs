@@ -25,24 +25,27 @@ public sealed class ExchangeEndpoint
         ExchangeOutcome>
 {
     private const string JwtIssuerMetadataKey = "jwt_issuer";
+    private readonly IAuthenticationService _authenticationService;
     private readonly IDynamicAuthService _dynamicAuthService;
-    private readonly IAxonJwtService _axonJwtService;
-    private readonly IUnifiedBearerTokenValidator _tokenValidator;
     private readonly IAddressNormalizationService _addressNormalizationService;
+    private readonly IBearerTokenExtractor _bearerTokenExtractor;
+    private readonly INetworkEnvironmentResolver _networkEnvironmentResolver;
 
     public ExchangeEndpoint(
         IMediator mediator,
         ILogger<ExchangeEndpoint> logger,
+        IAuthenticationService authenticationService,
         IDynamicAuthService dynamicAuthService,
-        IAxonJwtService axonJwtService,
-        IUnifiedBearerTokenValidator tokenValidator,
-        IAddressNormalizationService addressNormalizationService)
+        IAddressNormalizationService addressNormalizationService,
+        IBearerTokenExtractor bearerTokenExtractor,
+        INetworkEnvironmentResolver networkEnvironmentResolver)
         : base(mediator, logger)
     {
+        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
         _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
-        _axonJwtService = axonJwtService ?? throw new ArgumentNullException(nameof(axonJwtService));
-        _tokenValidator = tokenValidator ?? throw new ArgumentNullException(nameof(tokenValidator));
         _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
+        _bearerTokenExtractor = bearerTokenExtractor ?? throw new ArgumentNullException(nameof(bearerTokenExtractor));
+        _networkEnvironmentResolver = networkEnvironmentResolver ?? throw new ArgumentNullException(nameof(networkEnvironmentResolver));
     }
 
     protected override string GetRoute() => "/api/v1/auth/exchange";
@@ -69,6 +72,9 @@ public sealed class ExchangeEndpoint
     {
         base.Configure();
 
+        // Apply rate limiting policy for exchange endpoint
+        Options(x => x.RequireRateLimiting("AuthExchange"));
+
         // Document responses succinctly
         Summary(s =>
         {
@@ -89,25 +95,16 @@ public sealed class ExchangeEndpoint
         CancellationToken ct)
     {
         // 1) Extract bearer token from Authorization header
-        var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(authHeader) ||
-            !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var tokenResult = _bearerTokenExtractor.ExtractBearerToken(HttpContext);
+        if (tokenResult.IsFailure)
         {
-            Logger.LogWarning("Exchange request missing Authorization header or Bearer token");
-            return Result.Failure<ExchangeCredentialCommand, Error>(
-                Error.Unauthorized("Authorization header with Bearer token is required"));
+            return Result.Failure<ExchangeCredentialCommand, Error>(tokenResult.Error);
         }
 
-        var bearerToken = authHeader["Bearer ".Length..].Trim();
-        if (string.IsNullOrWhiteSpace(bearerToken))
-        {
-            Logger.LogWarning("Exchange request has empty Bearer token");
-            return Result.Failure<ExchangeCredentialCommand, Error>(
-                Error.Unauthorized("Bearer token cannot be empty"));
-        }
+        var bearerToken = tokenResult.Value;
 
-        // 2) Validate token using unified validator (supports both Dynamic JWT and Axon Access Token)
-        var tokenValidationResult = await _tokenValidator.ValidateTokenAsync(bearerToken, ct);
+        // 2) Validate token using unified authentication service (supports both Dynamic JWT and Axon Access Token)
+        var tokenValidationResult = await _authenticationService.ValidateTokenAsync(bearerToken, ct);
         if (tokenValidationResult.IsFailure)
         {
             Logger.LogWarning("Bearer token validation failed: {Code} {Message}",
@@ -159,14 +156,19 @@ public sealed class ExchangeEndpoint
                 [JwtIssuerMetadataKey] = tokenContext.Issuer
             };
 
-            // TODO: NetworkEnvironment determination strategy needed
-            // Dynamic's EnvironmentId (e.g., UUID) ≠ NetworkEnvironment (mainnet/devnet/testnet)
-            // Current approach passes Dynamic's EnvironmentId through, but handlers need
-            // to determine appropriate NetworkEnvironment for wallet triple-key lookup
+            // Resolve NetworkEnvironment from Dynamic's EnvironmentId
+            var networkEnvResult = _networkEnvironmentResolver.ResolveFromDynamicEnvironment(dynamicUser.EnvironmentId);
+            if (networkEnvResult.IsFailure)
+            {
+                Logger.LogWarning("Failed to resolve NetworkEnvironment from Dynamic EnvironmentId '{EnvironmentId}': {Error}",
+                    dynamicUser.EnvironmentId, networkEnvResult.Error.Message);
+                return Result.Failure<ExchangeCredentialCommand, Error>(networkEnvResult.Error);
+            }
+
             userData = new ExchangeUserData(
                 AxonUserId:       dynamicUser.AxonUserId,
                 Email:            dynamicUser.Email,
-                EnvironmentId:    dynamicUser.EnvironmentId, // TODO: Consider NetworkEnvironment mapping
+                EnvironmentId:    networkEnvResult.Value.Value, // Now properly mapped NetworkEnvironment
                 Wallets:          exchangeWallets,
                 FirstVisitUtc:    dynamicUser.FirstVisitUtc,
                 LastVisitUtc:     dynamicUser.LastVisitUtc,
@@ -182,17 +184,14 @@ public sealed class ExchangeEndpoint
                 [JwtIssuerMetadataKey] = tokenContext.Issuer
             };
 
-            // TODO: Determine NetworkEnvironment strategy
-            // Currently defaults to mainnet, but should be properly determined based on:
-            // - User preference stored in database, or
-            // - Request parameter (requires updating DTO), or
-            // - Mapping from Dynamic's EnvironmentId (if applicable), or
-            // - Context-based detection (production deployment → mainnet)
-            // Note: EnvironmentId ≠ NetworkEnvironment (different concepts)
+            // For Axon refresh tokens, use default NetworkEnvironment (mainnet)
+            // Axon tokens don't carry Dynamic environment context, so we use the production default
+            var defaultNetworkEnv = _networkEnvironmentResolver.ResolveDefault();
+
             userData = new ExchangeUserData(
-                AxonUserId:       tokenContext.AxonUserId,
+                AxonUserId:       tokenContext.AxonUserId.Value.ToString(),
                 Email:            "", // Not available from Axon tokens
-                EnvironmentId:    "mainnet", // TODO: Replace with proper NetworkEnvironment determination
+                EnvironmentId:    defaultNetworkEnv.Value, // Production default NetworkEnvironment
                 Wallets:          new List<ExchangeWalletData>(), // No wallet updates for refresh
                 FirstVisitUtc:    null,
                 LastVisitUtc:     DateTimeOffset.UtcNow,
@@ -241,35 +240,38 @@ public sealed class ExchangeEndpoint
             return Result.Failure<ExchangeTokenResponseDto, Error>(providerTypeResult.Error);
         }
 
-        // Generate Axon JWT access token
-        var tokenResult = _axonJwtService.GenerateAccessTokenAsync(
+        // Generate Axon JWT refresh token (includes access token) using unified service
+        var refreshTokenResult = _authenticationService.GenerateRefreshTokenAsync(
             outcome.AxonUserId,
             providerTypeResult.Value,
             issuer,
             subject,
-            expiresIn: 3600,
             CancellationToken.None).GetAwaiter().GetResult();
 
-        if (tokenResult.IsFailure)
+        if (refreshTokenResult.IsFailure)
         {
-            Logger.LogError("Failed to generate Axon JWT token for AxonUserId={AxonUserId}: {Error}",
-                outcome.AxonUserId.Value, tokenResult.Error.Message);
-            return Result.Failure<ExchangeTokenResponseDto, Error>(tokenResult.Error);
+            Logger.LogError("Failed to generate Axon JWT tokens for AxonUserId={AxonUserId}: {Error}",
+                outcome.AxonUserId.Value, refreshTokenResult.Error.Message);
+            return Result.Failure<ExchangeTokenResponseDto, Error>(refreshTokenResult.Error);
         }
 
-        var axonToken = tokenResult.Value;
+        var tokens = refreshTokenResult.Value;
 
         var response = new ExchangeTokenResponseDto(
-            AccessToken:      axonToken.AccessToken,
-            TokenType:        axonToken.TokenType,
-            ExpiresIn:        axonToken.ExpiresIn,
-            AxonUserId:       outcome.AxonUserId.ToString(),
-            Created:          outcome.Created,
-            WalletsProcessed: outcome.WalletsProcessed,
-            WalletsLinked:    outcome.WalletsLinked,
-            DefaultsApplied:  outcome.DefaultsApplied,
-            Skipped:          outcome.Skipped,
-            Conflicts:        outcome.Conflicts
+            AccessToken:            tokens.AccessToken,
+            RefreshToken:           tokens.RefreshToken,
+            TokenType:              tokens.TokenType,
+            ExpiresIn:              tokens.ExpiresIn,
+            AxonUserId:             outcome.AxonUserId.ToString(),
+            Created:                outcome.Created,
+            WalletsProcessed:       outcome.WalletsProcessed,
+            WalletsLinked:          outcome.WalletsLinked,
+            DefaultsApplied:        outcome.DefaultsApplied,
+            Skipped:                outcome.Skipped,
+            Conflicts:              outcome.Conflicts,
+            IssuedAt:               tokens.IssuedAt,
+            AccessTokenExpiresAt:   tokens.AccessTokenExpiresAt,
+            RefreshTokenExpiresAt:  tokens.RefreshTokenExpiresAt
         );
 
         return Result.Success<ExchangeTokenResponseDto, Error>(response);

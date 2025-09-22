@@ -43,6 +43,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IPrincipalResolutionService _resolutionService;
     private readonly IAddressNormalizationService _addressNormalizer;
+    private readonly IWalletVerificationService _walletVerificationService;
     private readonly ILogger<ExchangeCredentialHandler> _logger;
 
     // OpenTelemetry metrics for cache warming monitoring
@@ -63,6 +64,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         IHttpContextAccessor httpContextAccessor,
         IPrincipalResolutionService resolutionService,
         IAddressNormalizationService addressNormalizer,
+        IWalletVerificationService walletVerificationService,
         ILogger<ExchangeCredentialHandler> logger)
         : base(currentUserService)
     {
@@ -73,6 +75,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         _httpContextAccessor = httpContextAccessor;
         _resolutionService = resolutionService;
         _addressNormalizer = addressNormalizer;
+        _walletVerificationService = walletVerificationService;
         _logger = logger;
     }
 
@@ -580,53 +583,74 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         var walletLookup = await _walletRepository.EnsureManyByChainAndAddressAsync(walletSpecs, cancellationToken);
         var walletIds = walletLookup.Values.ToList();
 
-        // Step 3: Check for existing verified signing ownership conflicts
-        var existingOwners = await _principalWriteRepository.FindVerifiedSigningOwnersAsync(walletIds, cancellationToken);
-        
-        var conflicts = existingOwners.Where(kvp => kvp.Value.Id != principal.Id).ToList();
-        if (conflicts.Count > 0)
-        {
-            // Log wallet ownership conflict with details
-            var conflictWallet = conflicts.First();
-            var conflictSpec = walletSpecs.First(ws => walletLookup.ContainsKey(ws) && walletLookup[ws] == conflictWallet.Key);
-
-            _logger.LogWarning("Wallet ownership conflict detected: Chain={Chain}, Address={Address}, " +
-                "ConflictingPrincipalId={ConflictingPrincipalId}, CurrentPrincipalId={CurrentPrincipalId}",
-                conflictSpec.chainId, conflictSpec.address.Value, conflictWallet.Value.Id.Value, principal.Id.Value);
-
-            return Result.Failure<WalletProcessingMetrics, Error>(
-                IdentityDomainErrors.Wallet.WalletOwnershipConflict(conflictSpec.chainId, conflictSpec.address.Value));
-        }
-
-        // Step 4: Link wallets with verified & signing ownership
+        // Step 3 & 4: Verify wallet ownerships using the new verification service with transaction guards
         var linked = 0;
         var skipped = 0;
+        var conflicts = 0;
 
         foreach (var walletId in walletIds)
         {
-            // Create wallet ownership entity
-            var ownership = WalletOwnership.Create(
-                principal.Id, 
-                walletId, 
-                Domain.Enums.AccessMode.Signing, 
-                Domain.Enums.OwnershipStatus.Verified);
+            // Use the new WalletVerificationService which handles:
+            // - Transaction scoping with row-level locks
+            // - Checking for existing verified signing ownership conflicts
+            // - Auto-revoking pending ownerships
+            // - Retry logic for race conditions
+            var verificationResult = await _walletVerificationService.VerifyWalletOwnershipAsync(
+                walletId,
+                principal.Id,
+                Domain.Enums.AccessMode.Signing,
+                Domain.Enums.VerificationSource.DynamicAttested,
+                cancellationToken);
 
-            // Check function that verifies no other principal owns this wallet with verified+signing
-            var checkExistingOwnership = (WalletId wId, Domain.Enums.AccessMode mode, Domain.Enums.OwnershipStatus status) =>
+            if (verificationResult.IsFailure)
             {
-                // If this wallet is already in the existingOwners collection and not owned by current principal, it's a conflict
-                var hasConflict = existingOwners.ContainsKey(wId) && existingOwners[wId].Id != principal.Id;
-                return Result.Success<bool, Error>(hasConflict);
-            };
+                // Check if it's a conflict error (409)
+                if (verificationResult.Error.Code.Contains("ALREADY_VERIFIED", StringComparison.OrdinalIgnoreCase) ||
+                    verificationResult.Error.Code.Contains("CONFLICT", StringComparison.OrdinalIgnoreCase))
+                {
+                    conflicts++;
 
-            var linkResult = principal.LinkWalletOwnership(ownership, checkExistingOwnership);
-            if (linkResult.IsSuccess)
-            {
-                linked++;
+                    // Get wallet details for logging
+                    var conflictSpec = walletSpecs.First(ws => walletLookup.ContainsKey(ws) && walletLookup[ws] == walletId);
+
+                    _logger.LogWarning("Wallet ownership conflict detected: Chain={Chain}, Address={Address}, " +
+                        "CurrentPrincipalId={CurrentPrincipalId}, Error={Error}",
+                        conflictSpec.chainId, conflictSpec.address.Value, principal.Id.Value, verificationResult.Error.Message);
+
+                    return Result.Failure<WalletProcessingMetrics, Error>(
+                        IdentityDomainErrors.Wallet.WalletOwnershipConflict(conflictSpec.chainId, conflictSpec.address.Value));
+                }
+                else
+                {
+                    // Other errors - skip this wallet
+                    skipped++;
+                    _logger.LogWarning("Failed to verify wallet ownership for WalletId={WalletId}: {Error}",
+                        walletId, verificationResult.Error.Message);
+                }
             }
             else
             {
-                skipped++;
+                // Successfully verified - link to principal
+                var ownership = verificationResult.Value;
+
+                // Check function for LinkWalletOwnership (should always succeed since we already verified)
+                var checkExistingOwnership = (WalletId wId, Domain.Enums.AccessMode mode, Domain.Enums.OwnershipStatus status) =>
+                {
+                    // Already verified by service, no conflicts
+                    return Result.Success<bool, Error>(false);
+                };
+
+                var linkResult = principal.LinkWalletOwnership(ownership, checkExistingOwnership);
+                if (linkResult.IsSuccess)
+                {
+                    linked++;
+                }
+                else
+                {
+                    skipped++;
+                    _logger.LogWarning("Failed to link verified ownership to principal: {Error}",
+                        linkResult.Error.Message);
+                }
             }
         }
 

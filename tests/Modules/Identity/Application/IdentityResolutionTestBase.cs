@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -55,6 +56,10 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
         InitializeMocks();
 
         // Create handler with mocked dependencies
+        var mockResolutionService = Substitute.For<IPrincipalResolutionService>();
+        var mockAddressNormalizer = Substitute.For<IAddressNormalizationService>();
+        var mockWalletVerificationService = Substitute.For<IWalletVerificationService>();
+
         ExchangeHandler = new ExchangeCredentialHandler(
             MockCurrentUserService,
             MockPrincipalRepository,
@@ -62,6 +67,9 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
             MockMetricsService,
             MockMemoryCache,
             MockHttpContextAccessor,
+            mockResolutionService,
+            mockAddressNormalizer,
+            mockWalletVerificationService,
             MockLogger);
     }
 

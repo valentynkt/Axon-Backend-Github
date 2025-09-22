@@ -4,6 +4,8 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using BuildingBlocks.Application;
+using Axon.Modules.Identity.Application.Common.Models;
 
 namespace Axon.Modules.Identity.Application.Commands;
 
@@ -15,6 +17,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence;
+using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +31,8 @@ using Testcontainers.PostgreSql;
 public class PrincipalResolutionIntegrationTests
 {
     private PostgreSqlContainer _postgres = null!;
-    private IdentityDbContext _context = null!;
+    private IdentityWriteDbContext _writeContext = null!;
+    private IdentityReadDbContext _readContext = null!;
     private IPrincipalResolutionService _resolutionService = null!;
     private IWalletReadRepository _walletReadRepository = null!;
     private IWalletWriteRepository _walletWriteRepository = null!;
@@ -60,21 +64,24 @@ public class PrincipalResolutionIntegrationTests
     [SetUp]
     public async Task SetUp()
     {
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
+        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
             .UseNpgsql(_postgres.GetConnectionString())
             .Options;
 
-        _context = new IdentityDbContext(options);
-        await _context.Database.EnsureCreatedAsync();
+        _writeContext = new IdentityWriteDbContext(options);
+        await _writeContext.Database.EnsureCreatedAsync();
 
         await CreateIndexes();
 
-        _walletReadRepository = new WalletReadRepository(_context);
-        _walletWriteRepository = new WalletWriteRepository(_context);
-        _walletOwnershipRepository = new WalletOwnershipRepository(_context);
-        _principalReadRepository = new AxonPrincipalReadRepository(_context);
-        _principalWriteRepository = new AxonPrincipalWriteRepository(_context);
-        _addressNormalization = new AddressNormalizationService();
+        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
+        var addressLogger = Substitute.For<ILogger<AddressNormalizationService>>();
+
+        _walletReadRepository = new WalletReadRepository(_readContext);
+        _walletWriteRepository = new WalletWriteRepository(_writeContext, mockUnitOfWork);
+        _walletOwnershipRepository = new WalletOwnershipRepository(_writeContext, _readContext, mockUnitOfWork);
+        _principalReadRepository = new AxonPrincipalReadRepository(_readContext);
+        _principalWriteRepository = new AxonPrincipalWriteRepository(_writeContext, mockUnitOfWork);
+        _addressNormalization = new AddressNormalizationService(addressLogger);
         _logger = Substitute.For<ILogger<PrincipalResolutionService>>();
 
         _resolutionService = new PrincipalResolutionService(
@@ -83,18 +90,17 @@ public class PrincipalResolutionIntegrationTests
             _walletReadRepository,
             _walletWriteRepository,
             _walletOwnershipRepository,
-            _addressNormalization,
             _logger);
     }
 
     [TearDown]
     public async Task TearDown()
     {
-        await _context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.principal CASCADE");
-        await _context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet CASCADE");
-        await _context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownership CASCADE");
-        await _context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.credential CASCADE");
-        await _context.DisposeAsync();
+        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.principal CASCADE");
+        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet CASCADE");
+        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownership CASCADE");
+        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.credential CASCADE");
+        await _writeContext.DisposeAsync();
     }
 
     private async Task CreateIndexes()
@@ -161,7 +167,7 @@ public class PrincipalResolutionIntegrationTests
             ON identity.wallet(chain_id, address)
             WHERE is_deleted = false;";
 
-        await _context.Database.ExecuteSqlRawAsync(sql);
+        await _writeContext.Database.ExecuteSqlRawAsync(sql);
     }
 
     [Test]
@@ -170,10 +176,10 @@ public class PrincipalResolutionIntegrationTests
         // Arrange - Create test data
         var networkEnv = NetworkEnvironment.Mainnet;
         var chainId = "solana";
-        var address = new Address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
         // Pre-warm the database connection
-        await _principalReadRepository.FindByIdAsync(AxonUserId.New(), CancellationToken.None);
+        await _principalReadRepository.GetByIdWithActiveOwnershipsAsync(AxonUserId.New(), CancellationToken.None);
 
         var timings = new List<long>();
 
@@ -187,7 +193,7 @@ public class PrincipalResolutionIntegrationTests
                 "dynamic.xyz",
                 $"user{i}",
                 networkEnv,
-                ChainId.Create(chainId).Value,
+                ChainId.From(chainId),
                 address,
                 CancellationToken.None);
 
@@ -197,10 +203,10 @@ public class PrincipalResolutionIntegrationTests
             // Clean up created principal for next iteration
             if (result.IsSuccess && result.Value.Path == ResolutionPath.Created)
             {
-                await _context.Database.ExecuteSqlRawAsync(
+                await _writeContext.Database.ExecuteSqlRawAsync(
                     "DELETE FROM identity.wallet_ownership WHERE principal_id = {0}",
                     result.Value.Principal.Id.Value.ToString());
-                await _context.Database.ExecuteSqlRawAsync(
+                await _writeContext.Database.ExecuteSqlRawAsync(
                     "DELETE FROM identity.principal WHERE id = {0}",
                     result.Value.Principal.Id.Value.ToString());
             }
@@ -220,15 +226,16 @@ public class PrincipalResolutionIntegrationTests
         // Arrange
         var networkEnv = NetworkEnvironment.Mainnet;
         var chainId = "solana";
-        var address = Address.Create("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").Value;
+        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
         // Create a wallet first
         var wallet = Wallet.Create(
+            null,
             networkEnv,
-            ChainId.Create(chainId).Value,
-            address).Value;
+            chainId,
+            address);
         await _walletWriteRepository.AddAsync(wallet, CancellationToken.None);
-        await _context.SaveChangesAsync();
+        await _writeContext.SaveChangesAsync();
 
         // Act - Get query plan
         var explainQuery = @"
@@ -240,7 +247,7 @@ public class PrincipalResolutionIntegrationTests
               AND w.address = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
               AND w.is_deleted = false";
 
-        var result = await _context.Database
+        var result = await _readContext.Database
             .SqlQueryRaw<string>(explainQuery)
             .ToListAsync();
 
@@ -255,46 +262,39 @@ public class PrincipalResolutionIntegrationTests
     public async Task ResolveAsync_CrossEnvironmentConflict_ShouldReturn409()
     {
         // Arrange - Create principal A with credential
-        var principalA = new AxonPrincipal(
-            new AxonId(Ulid.NewUlid()),
-            PrincipalType.Human,
-            RiskTier.Low);
+        var principalA = AxonPrincipal.CreateHuman(AxonUserId.New());
 
-        var credential = new IdentityCredential(
-            new CredentialId(Ulid.NewUlid()),
+        var credential = IdentityCredential.Create(
             principalA.Id,
-            ProviderType.Dynamic,
+            ProviderType.Dynamic.Value,
             "dynamic.xyz",
             "user123");
-        principalA.AddCredential(credential);
+        var addCredentialResult = principalA.AddCredential(credential, (provider, issuer, subject) => Result.Success<bool, Error>(false));
+        addCredentialResult.IsSuccess.ShouldBeTrue();
 
         await _principalWriteRepository.AddAsync(principalA, CancellationToken.None);
-        await _context.SaveChangesAsync();
+        await _writeContext.SaveChangesAsync();
 
         // Create principal B with verified+signing ownership on devnet
-        var principalB = new AxonPrincipal(
-            new AxonId(Ulid.NewUlid()),
-            PrincipalType.Human,
-            RiskTier.Low);
+        var principalB = AxonPrincipal.CreateHuman(AxonUserId.New());
         await _principalWriteRepository.AddAsync(principalB, CancellationToken.None);
 
-        var address = new Address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-        var devnetWallet = new Wallet(
-            new WalletId(Ulid.NewUlid()),
+        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        var devnetWallet = Wallet.Create(
+            WalletId.New(),
             NetworkEnvironment.Devnet,
             "solana",
             address);
         await _walletWriteRepository.AddAsync(devnetWallet, CancellationToken.None);
 
-        var ownership = new WalletOwnership(
-            new OwnershipId(Ulid.NewUlid()),
+        var ownership = await _walletOwnershipRepository.CreateOwnershipAsync(
             principalB.Id,
             devnetWallet.Id,
-            OwnershipStatus.Verified,
             AccessMode.Signing,
-            VerificationSource.DirectSignatureMsg);
-        await _walletOwnershipRepository.AddAsync(ownership, CancellationToken.None);
-        await _context.SaveChangesAsync();
+            OwnershipStatus.Verified,
+            VerificationSource.DirectSignatureMsg,
+            CancellationToken.None);
+        await _writeContext.SaveChangesAsync();
 
         // Act - Try to resolve on mainnet with principal A's credential
         var result = await _resolutionService.ResolveAsync(
@@ -302,7 +302,7 @@ public class PrincipalResolutionIntegrationTests
             "dynamic.xyz",
             "user123",
             NetworkEnvironment.Mainnet,
-            ChainId.Create("solana").Value,
+            ChainId.From("solana"),
             address,
             CancellationToken.None);
 
@@ -317,7 +317,7 @@ public class PrincipalResolutionIntegrationTests
         // Arrange
         var networkEnv = NetworkEnvironment.Mainnet;
         var chainId = "solana";
-        var address = new Address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
         // Act - Run concurrent resolutions
         var tasks = new List<Task<Result<PrincipalResolutionResult, Error>>>();
@@ -328,7 +328,7 @@ public class PrincipalResolutionIntegrationTests
                 "dynamic.xyz",
                 $"concurrent{i}",
                 networkEnv,
-                ChainId.Create(chainId).Value,
+                ChainId.From(chainId),
                 address,
                 CancellationToken.None));
         }
@@ -351,38 +351,34 @@ public class PrincipalResolutionIntegrationTests
     public async Task ResolveAsync_CrossEnvironmentAutoLink_WhenPrincipalsMatch()
     {
         // Arrange - Create principal with credential and devnet wallet
-        var principal = new AxonPrincipal(
-            new AxonId(Ulid.NewUlid()),
-            PrincipalType.Human,
-            RiskTier.Low);
+        var principal = AxonPrincipal.CreateHuman(AxonUserId.New());
 
-        var credential = new IdentityCredential(
-            new CredentialId(Ulid.NewUlid()),
+        var credential = IdentityCredential.Create(
             principal.Id,
-            ProviderType.Dynamic,
+            ProviderType.Dynamic.Value,
             "dynamic.xyz",
             "user123");
-        principal.AddCredential(credential);
+        var addCredentialResult3 = principal.AddCredential(credential, (provider, issuer, subject) => Result.Success<bool, Error>(false));
+        addCredentialResult3.IsSuccess.ShouldBeTrue();
 
         await _principalWriteRepository.AddAsync(principal, CancellationToken.None);
 
-        var address = new Address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-        var devnetWallet = new Wallet(
-            new WalletId(Ulid.NewUlid()),
+        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        var devnetWallet = Wallet.Create(
+            WalletId.New(),
             NetworkEnvironment.Devnet,
             "solana",
             address);
         await _walletWriteRepository.AddAsync(devnetWallet, CancellationToken.None);
 
-        var ownership = new WalletOwnership(
-            new OwnershipId(Ulid.NewUlid()),
+        var ownership = await _walletOwnershipRepository.CreateOwnershipAsync(
             principal.Id,
             devnetWallet.Id,
-            OwnershipStatus.Verified,
             AccessMode.Signing,
-            VerificationSource.DirectSignatureMsg);
-        await _walletOwnershipRepository.AddAsync(ownership, CancellationToken.None);
-        await _context.SaveChangesAsync();
+            OwnershipStatus.Verified,
+            VerificationSource.DirectSignatureMsg,
+            CancellationToken.None);
+        await _writeContext.SaveChangesAsync();
 
         // Act - Resolve on mainnet with same credential
         var result = await _resolutionService.ResolveAsync(
@@ -390,7 +386,7 @@ public class PrincipalResolutionIntegrationTests
             "dynamic.xyz",
             "user123",
             NetworkEnvironment.Mainnet,
-            ChainId.Create("solana").Value,
+            ChainId.From("solana"),
             address,
             CancellationToken.None);
 
@@ -402,7 +398,7 @@ public class PrincipalResolutionIntegrationTests
         // Verify mainnet wallet was created
         var mainnetWallet = await _walletReadRepository.FindWalletAsync(
             NetworkEnvironment.Mainnet,
-            "solana",
+            ChainId.From("solana"),
             address,
             CancellationToken.None);
         mainnetWallet.ShouldNotBeNull();

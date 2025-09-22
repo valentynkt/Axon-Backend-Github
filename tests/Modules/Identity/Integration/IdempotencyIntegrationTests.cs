@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
@@ -63,6 +64,9 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         var currentUserService = Substitute.For<ICurrentUserService>();
         var metricsService = Substitute.For<IExchangeMetricsService>();
         var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        var resolutionService = Substitute.For<IPrincipalResolutionService>();
+        var addressNormalizer = Substitute.For<IAddressNormalizationService>();
+        var walletVerificationService = Substitute.For<IWalletVerificationService>();
         var logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
 
         // Use real repositories from base class for integration testing
@@ -73,6 +77,9 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             metricsService,
             _memoryCache,         // Use field to avoid disposal warning
             httpContextAccessor,
+            resolutionService,
+            addressNormalizer,
+            walletVerificationService,
             logger);
     }
 

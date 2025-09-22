@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -48,6 +49,10 @@ public class ExchangeCredentialHandlerTests
 
         _principalRepository.UnitOfWork.Returns(_unitOfWork);
 
+        var mockResolutionService = Substitute.For<IPrincipalResolutionService>();
+        var mockAddressNormalizer = Substitute.For<IAddressNormalizationService>();
+        var mockWalletVerificationService = Substitute.For<IWalletVerificationService>();
+
         _handler = new ExchangeCredentialHandler(
             _currentUserService,
             _principalRepository,
@@ -55,6 +60,9 @@ public class ExchangeCredentialHandlerTests
             _metricsService,
             _memoryCache,
             _httpContextAccessor,
+            mockResolutionService,
+            mockAddressNormalizer,
+            mockWalletVerificationService,
             _logger);
     }
 

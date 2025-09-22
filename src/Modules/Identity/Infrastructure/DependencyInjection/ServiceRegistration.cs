@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Application.Common.Models;
+using Axon.Modules.Identity.Application.Configuration;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
@@ -6,6 +7,7 @@ using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Services.Configuration;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Application;
@@ -129,30 +131,64 @@ public static class ServiceRegistration
             options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
         });
         
-        services.AddScoped<IDynamicAuthService, DynamicAuthService>();
+        // Configure Dynamic JWT validation options (Story 5.5)
+        services.Configure<DynamicValidationOptions>(configuration.GetSection(DynamicValidationOptions.SectionName));
+
+        // Use hardened Dynamic auth service when validation options are configured
+        var dynamicValidationSection = configuration.GetSection(DynamicValidationOptions.SectionName);
+        if (dynamicValidationSection.Exists() && dynamicValidationSection["EnvironmentMapping"] != null)
+        {
+            services.AddScoped<IDynamicAuthService, DynamicAuthServiceHardened>();
+            services.AddHostedService<DynamicAuthServiceHardened>(); // For JWKS pre-warming
+        }
+        else
+        {
+            services.AddScoped<IDynamicAuthService, DynamicAuthService>();
+        }
+
         services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
-        
-        // Register JWT Replay Guard service
-        services.AddMemoryCache(); // Required for replay guard
-        services.AddScoped<IJwtReplayGuard, MemoryJwtReplayGuard>();
-        
-        // Register Exchange Metrics Service
-        services.AddScoped<IExchangeMetricsService, ExchangeMetricsService>();
 
-        // Register new authentication services for Story 5.2
-        services.AddScoped<ICanonicalMessageService, CanonicalMessageService>();
+        // Register memory cache required for unified authentication service
+        services.AddMemoryCache();
 
-        // Register Axon JWT Service for token minting and validation
-        services.AddScoped<IAxonJwtService, AxonJwtService>();
+        // Configure unified authentication options
+        services.Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName));
 
-        // Register Unified Bearer Token Validator for multi-token support
-        services.AddScoped<IUnifiedBearerTokenValidator, UnifiedBearerTokenValidator>();
+        // Register focused authentication services
+        // NOTE: These are replaced by the unified AuthenticationService (Story 5.5)
+        // services.AddScoped<IJwtTokenService, JwtTokenService>();
+        // services.AddScoped<IChallengeService, ChallengeService>();
+        services.AddScoped<IBearerTokenExtractor, BearerTokenExtractor>();
+
+        // Register unified authentication service (orchestrates the focused services)
+        services.AddScoped<IAuthenticationService, AuthenticationService>();
+
+        // Register modern claims transformation for Dynamic.xyz integration
+        services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, DynamicClaimsTransformation>();
+
+        // Configure Azure Key Vault options for JWT signing (Story 5.5)
+        // Note: AuthenticationService now handles all JWT operations
+        var keyVaultSection = configuration.GetSection(AzureKeyVaultOptions.SectionName);
+        if (keyVaultSection.Exists() && !string.IsNullOrEmpty(keyVaultSection["VaultUri"]))
+        {
+            // Configure Azure Key Vault options for production use
+            services.Configure<AzureKeyVaultOptions>(keyVaultSection);
+        }
+
+        // Note: Replay protection is now handled directly in AuthenticationService
+        // Removed legacy services: IReplayProtectionService, IApiKeyAudienceService, ICanonicalMessageService
 
         // Register Address Normalization Service for API edge validation
         services.AddScoped<IAddressNormalizationService, AddressNormalizationService>();
 
         // Register Principal Resolution Service for Story 5.3
         services.AddScoped<IPrincipalResolutionService, PrincipalResolutionService>();
+
+        // Register Wallet Verification Service for Story 5.4 - Transaction guards
+        services.AddScoped<IWalletVerificationService, WalletVerificationService>();
+
+        // Register Network Environment Resolver for NetworkEnvironment mapping
+        services.AddScoped<INetworkEnvironmentResolver, NetworkEnvironmentResolver>();
 
         // CRITICAL FIX: Register ICurrentUserService implementation
         // This is required by all command/query handlers in the application

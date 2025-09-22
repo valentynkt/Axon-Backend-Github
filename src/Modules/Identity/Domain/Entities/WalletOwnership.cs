@@ -19,6 +19,7 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     public VerificationSource VerificationSource { get; private set; }
     public DateTime? VerifiedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
+    public string? RevokeReason { get; private set; }
 
     // Navigation property for resolution
     public AxonPrincipal Principal { get; private set; } = null!;
@@ -60,7 +61,7 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     /// <summary>
     /// Updates the ownership status with validation for valid transitions.
     /// </summary>
-    public Result<Unit, Error> UpdateStatus(OwnershipStatus newStatus)
+    public Result<Unit, Error> UpdateStatus(OwnershipStatus newStatus, string? revokeReason = null)
     {
         // Validate status transition
         var transitionResult = ValidateStatusTransition(Status, newStatus);
@@ -72,16 +73,18 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
             return Result.Success<Unit, Error>(Unit.Value);
 
         Status = newStatus;
-        
+
         // Update timestamps based on status
         switch (newStatus)
         {
             case OwnershipStatus.Verified:
                 VerifiedAt = DateTime.UtcNow;
                 RevokedAt = null;
+                RevokeReason = null;
                 break;
             case OwnershipStatus.Revoked:
                 RevokedAt = DateTime.UtcNow;
+                RevokeReason = revokeReason;
                 break;
         }
 

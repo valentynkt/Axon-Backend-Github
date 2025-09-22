@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 using Axon.Modules.Identity.Infrastructure.Services;
@@ -29,7 +32,7 @@ public sealed class DynamicAuthService : IDynamicAuthService
     private readonly ILogger<DynamicAuthService> _logger;
     private readonly DynamicXyzOptions _options;
     private readonly IDynamicClaimNormalizer _claimNormalizer;
-    private readonly IJwtReplayGuard _replayGuard;
+    private readonly IAuthenticationService _authenticationService;
     private readonly IJwksService _jwksService;
     private readonly TimeSpan _tokenCacheExpiration;
 
@@ -38,14 +41,14 @@ public sealed class DynamicAuthService : IDynamicAuthService
         ILogger<DynamicAuthService> logger,
         IOptions<DynamicXyzOptions> options,
         IDynamicClaimNormalizer claimNormalizer,
-        IJwtReplayGuard replayGuard,
+        IAuthenticationService authenticationService,
         IJwksService jwksService)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _claimNormalizer = claimNormalizer ?? throw new ArgumentNullException(nameof(claimNormalizer));
-        _replayGuard = replayGuard ?? throw new ArgumentNullException(nameof(replayGuard));
+        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
         _jwksService = jwksService ?? throw new ArgumentNullException(nameof(jwksService));
         
         // Cache validated tokens for 5 minutes to avoid repeated validation
@@ -115,7 +118,7 @@ public sealed class DynamicAuthService : IDynamicAuthService
                     expiresAt = DateTimeOffset.FromUnixTimeSeconds(expUnix);
                 }
                 
-                var replayCheck = await _replayGuard.CheckAndMarkUsedAsync(jtiClaim.Value, expiresAt, cancellationToken);
+                var replayCheck = await _authenticationService.CheckAndMarkTokenUsedAsync(jtiClaim.Value, expiresAt, cancellationToken);
                 if (replayCheck.IsFailure)
                 {
                     _logger.LogWarning("JWT replay protection failed: {Error}", replayCheck.Error.Message);
@@ -266,9 +269,10 @@ public sealed class DynamicAuthService : IDynamicAuthService
 
     private static string GetTokenHash(string token)
     {
-        // Use a simple hash for cache key - just take last 8 chars of token
-        // This is safe since we're only using it for caching
-        return token.Length > 8 ? token[^8..] : token;
+        // Use SHA256 hash for secure cache key generation
+        // This prevents cache collision attacks and token inference
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(hashBytes)[..16]; // Take first 16 chars for cache key
     }
 }
     

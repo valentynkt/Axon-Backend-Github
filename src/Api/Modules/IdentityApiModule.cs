@@ -1,9 +1,10 @@
 using Axon.BuildingBlocks.Web.Configuration;
 using Axon.Modules.Identity.Application.DependencyInjection;
 using Axon.Modules.Identity.Infrastructure.DependencyInjection;
-using Axon.Modules.Identity.Infrastructure.Authentication.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using System.Threading.RateLimiting;
 
 namespace Axon.Api.Modules;
@@ -34,20 +35,75 @@ public sealed class IdentityApiModule : IApiModule
         AddRateLimiting(services);
     }
 
-    private static void AddJwtAuthentication(IServiceCollection services, IConfiguration _)
+    private static void AddJwtAuthentication(IServiceCollection services, IConfiguration configuration)
     {
-        // Configure Dynamic JWT authentication options
-        services.Configure<DynamicJwtAuthenticationOptions>(options =>
-        {
-            options.Realm = "Axon API";
-        });
+        // Get JWT configuration from appsettings
+        var jwtSection = configuration.GetSection("Axon");
+        var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("Axon:Issuer configuration is required");
+        var audience = jwtSection["Audience"] ?? "axon-api";
+        var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("Axon:SigningKey configuration is required");
 
-        // Add JWT Bearer authentication scheme
+        // Add standard JWT Bearer authentication
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddScheme<DynamicJwtAuthenticationOptions, Axon.Modules.Identity.Infrastructure.Authentication.Handlers.DynamicJwtAuthenticationHandler>(
-                JwtBearerDefaults.AuthenticationScheme, 
-                "Dynamic JWT Authentication", 
-                options => { });
+            .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+            {
+                // Keep JWT claims as-is; avoid automatic mapping to WS-* claim types
+                options.MapInboundClaims = false;
+
+                // Recommended for public APIs
+                options.RequireHttpsMetadata = true;
+
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    // Issuer / audience validation - STRICT
+                    ValidateIssuer = true,
+                    ValidIssuer = issuer,
+                    ValidateAudience = !string.IsNullOrEmpty(audience),
+                    ValidAudience = audience,
+
+                    // Signature validation - MANDATORY
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+                    RequireSignedTokens = true,
+
+                    // Lifetime validation - SHORT EXPIRY
+                    ValidateLifetime = true,
+                    RequireExpirationTime = true,
+                    ClockSkew = TimeSpan.FromSeconds(30), // Reduced from 60 seconds for tighter security
+
+                    // Token type validation - SECURITY BEST PRACTICE
+                    ValidTypes = new[] { "JWT", "at+jwt" }, // Only allow specific token types
+                    ValidateTokenReplay = false, // Handled by our replay protection service
+
+                    // Use "sub" as the name claim
+                    NameClaimType = "sub",
+                    RoleClaimType = "role"
+                };
+
+                // Diagnostics
+                options.Events = new JwtBearerEvents
+                {
+                    OnAuthenticationFailed = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("Auth.JwtBearer");
+
+                        logger.LogWarning(context.Exception, "JWT authentication failed");
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("Auth.JwtBearer");
+
+                        var subject = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
+                        logger.LogDebug("JWT validated for sub={Subject}", subject);
+                        return Task.CompletedTask;
+                    }
+                };
+            });
 
         // Add authorization using AddAuthorizationBuilder for modern ASP.NET Core
         services.AddAuthorizationBuilder()

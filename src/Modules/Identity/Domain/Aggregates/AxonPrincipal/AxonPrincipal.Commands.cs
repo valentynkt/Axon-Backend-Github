@@ -278,6 +278,130 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
+    /// Sets a wallet as the chain default with verified+signing validation.
+    /// </summary>
+    /// <param name="networkEnvironment">The network environment.</param>
+    /// <param name="chainId">The chain ID.</param>
+    /// <param name="walletId">The wallet ID to set as default.</param>
+    /// <returns>Result indicating success or failure.</returns>
+    public Result<Unit, Error> SetChainDefault(NetworkEnvironment networkEnvironment, string chainId, WalletId walletId)
+    {
+        ArgumentNullException.ThrowIfNull(chainId);
+
+        // Find the ownership for this wallet
+        var ownership = _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId && !o.IsDeleted);
+
+        if (ownership == null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
+
+        // Validate it's verified+signing (watch-only not allowed as default)
+        if (!ownership.IsVerifiedSigning)
+            return Result.Failure<Unit, Error>(
+                Error.Validation(
+                    "Cannot set watch-only wallet as default. Only verified signing wallets can be defaults.",
+                    "WALLET.DEFAULT.WATCH_ONLY_NOT_ALLOWED"));
+
+        // Find existing default for this chain
+        var existingDefault = _principalChainDefaults
+            .FirstOrDefault(d => d.NetworkEnvironment == networkEnvironment &&
+                               d.ChainId == chainId &&
+                               !d.IsDeleted);
+
+        // If already set to this wallet, no-op
+        if (existingDefault?.WalletId == walletId)
+            return Result.Success<Unit, Error>(Unit.Value);
+
+        var oldDefault = existingDefault?.WalletId;
+
+        // Update or create the default
+        if (existingDefault != null)
+        {
+            existingDefault.UpdateWallet(walletId);
+        }
+        else
+        {
+            var newDefault = PrincipalChainDefault.Create(Id, networkEnvironment, chainId, walletId);
+            _principalChainDefaults.Add(newDefault);
+        }
+
+        // Raise domain event
+        RaiseDomainEvent(new PrincipalChangedEvent(
+            Id,
+            $"ChainDefault.{networkEnvironment}.{chainId}",
+            oldDefault?.ToString() ?? "none",
+            walletId.ToString()
+        ));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Clears the chain default for a specific network and chain.
+    /// Used when ownership is revoked or wallet is removed.
+    /// </summary>
+    /// <param name="networkEnvironment">The network environment.</param>
+    /// <param name="chainId">The chain ID.</param>
+    /// <returns>Result indicating success or failure.</returns>
+    public Result<Unit, Error> ClearChainDefault(NetworkEnvironment networkEnvironment, string chainId)
+    {
+        ArgumentNullException.ThrowIfNull(chainId);
+
+        var defaultEntry = _principalChainDefaults
+            .FirstOrDefault(d => d.NetworkEnvironment == networkEnvironment &&
+                               d.ChainId == chainId &&
+                               !d.IsDeleted);
+
+        if (defaultEntry == null)
+            return Result.Success<Unit, Error>(Unit.Value); // No-op if no default set
+
+        var oldDefault = defaultEntry.WalletId;
+
+        // Soft delete the default
+        defaultEntry.SoftDelete();
+
+        // Raise domain event
+        RaiseDomainEvent(new PrincipalChangedEvent(
+            Id,
+            $"ChainDefault.{networkEnvironment}.{chainId}",
+            oldDefault.ToString(),
+            "none"
+        ));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Clears all chain defaults for a specific wallet.
+    /// Used when wallet ownership is revoked.
+    /// </summary>
+    /// <param name="walletId">The wallet ID to clear from defaults.</param>
+    /// <returns>Number of defaults cleared.</returns>
+    public Result<int, Error> ClearChainDefaultsForWallet(WalletId walletId)
+    {
+        var defaultsToRemove = _principalChainDefaults
+            .Where(d => d.WalletId == walletId && !d.IsDeleted)
+            .ToList();
+
+        if (defaultsToRemove.Count == 0)
+            return Result.Success<int, Error>(0);
+
+        foreach (var defaultEntry in defaultsToRemove)
+        {
+            defaultEntry.SoftDelete();
+
+            // Raise domain event for each cleared default
+            RaiseDomainEvent(new PrincipalChangedEvent(
+                Id,
+                $"ChainDefault.{defaultEntry.NetworkEnvironment}.{defaultEntry.ChainId}",
+                walletId.ToString(),
+                "none"
+            ));
+        }
+
+        return Result.Success<int, Error>(defaultsToRemove.Count);
+    }
+
+    /// <summary>
     /// Removes a wallet ownership from the principal.
     /// </summary>
     public Result<Unit, Error> RemoveWalletOwnership(WalletId walletId)

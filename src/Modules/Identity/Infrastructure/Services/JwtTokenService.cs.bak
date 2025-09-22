@@ -1,0 +1,314 @@
+using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+
+namespace Axon.Modules.Identity.Infrastructure.Services;
+
+/// <summary>
+/// Service for JWT token operations (generation, validation, refresh)
+/// Extracted from AuthenticationService for better separation of concerns
+/// </summary>
+public class JwtTokenService : IJwtTokenService
+{
+    private readonly AuthenticationOptions _options;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<JwtTokenService> _logger;
+
+    public JwtTokenService(
+        IOptions<AuthenticationOptions> options,
+        IMemoryCache cache,
+        ILogger<JwtTokenService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options.Value;
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Generates an Axon access token for authenticated user
+    /// </summary>
+    public Task<Result<AxonToken, Error>> GenerateAccessTokenAsync(
+        AxonUserId userId,
+        ProviderType providerType,
+        string providerSubject,
+        string issuer,
+        int expiryMinutes = 15,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var utcNow = DateTime.UtcNow;
+            var expiresAt = utcNow.AddMinutes(expiryMinutes);
+
+            var claims = new List<Claim>
+            {
+                new(JwtRegisteredClaimNames.Sub, userId.Value.ToString(CultureInfo.InvariantCulture)),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new(JwtRegisteredClaimNames.Iat, new DateTimeOffset(utcNow).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+                new(JwtRegisteredClaimNames.Exp, new DateTimeOffset(expiresAt).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+                new("provider_type", providerType.ToString()),
+                new("provider_subject", providerSubject),
+                new("original_issuer", issuer)
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey));
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: _options.Issuer,
+                audience: _options.Audience,
+                claims: claims,
+                notBefore: utcNow,
+                expires: expiresAt,
+                signingCredentials: credentials);
+
+            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+            var axonToken = new AxonToken(
+                Token: tokenString,
+                ExpiresAt: expiresAt);
+
+            _logger.LogDebug("Generated Axon access token for user {UserId} with expiry {ExpiresAt}",
+                userId.Value, expiresAt);
+
+            return Task.FromResult(Result.Success<AxonToken, Error>(axonToken));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate access token for user {UserId}", userId.Value);
+            return Task.FromResult(Result.Failure<AxonToken, Error>(
+                Error.Failure("TOKEN_GENERATION_FAILED", "Failed to generate access token")));
+        }
+    }
+
+    /// <summary>
+    /// Validates an Axon access token
+    /// </summary>
+    public Task<Result<AuthenticatedContext, Error>> ValidateAxonTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var validationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _options.Issuer,
+                ValidateAudience = !string.IsNullOrEmpty(_options.Audience),
+                ValidAudience = _options.Audience,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey)),
+                ClockSkew = TimeSpan.FromMinutes(1)
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
+
+            var jwtToken = (JwtSecurityToken)validatedToken;
+
+            // Extract claims
+            var subjectClaim = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            var providerTypeClaim = principal.FindFirst("provider_type")?.Value;
+            var providerSubjectClaim = principal.FindFirst("provider_subject")?.Value;
+            var originalIssuerClaim = principal.FindFirst("original_issuer")?.Value;
+
+            if (string.IsNullOrEmpty(subjectClaim) ||
+                !long.TryParse(subjectClaim, CultureInfo.InvariantCulture, out var userIdValue) ||
+                string.IsNullOrEmpty(providerTypeClaim) ||
+                !Enum.TryParse<ProviderType>(providerTypeClaim, out var providerType))
+            {
+                return Task.FromResult(Result.Failure<AuthenticatedContext, Error>(
+                    Error.Unauthorized("Invalid token claims")));
+            }
+
+            var userId = new AxonUserId(userIdValue);
+            var expiresAt = jwtToken.ValidTo;
+
+            var context = new AuthenticatedContext(
+                UserId: userId,
+                ProviderType: providerType,
+                ProviderSubject: providerSubjectClaim ?? string.Empty,
+                OriginalIssuer: originalIssuerClaim ?? string.Empty,
+                ExpiresAt: expiresAt);
+
+            _logger.LogDebug("Successfully validated Axon token for user {UserId}", userId.Value);
+            return Task.FromResult(Result.Success<AuthenticatedContext, Error>(context));
+        }
+        catch (SecurityTokenExpiredException)
+        {
+            _logger.LogDebug("Token validation failed: token expired");
+            return Task.FromResult(Result.Failure<AuthenticatedContext, Error>(
+                Error.Unauthorized("Token has expired")));
+        }
+        catch (SecurityTokenException ex)
+        {
+            _logger.LogDebug("Token validation failed: {Message}", ex.Message);
+            return Task.FromResult(Result.Failure<AuthenticatedContext, Error>(
+                Error.Unauthorized("Invalid token")));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during token validation");
+            return Task.FromResult(Result.Failure<AuthenticatedContext, Error>(
+                Error.Failure("TOKEN_VALIDATION_ERROR", "Token validation failed")));
+        }
+    }
+
+    /// <summary>
+    /// Generates refresh token response with access and refresh tokens
+    /// </summary>
+    public async Task<Result<RefreshTokenResponse, Error>> GenerateRefreshTokenAsync(
+        AxonUserId userId,
+        ProviderType providerType,
+        string providerSubject,
+        string issuer,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Generate access token
+            var accessTokenResult = await GenerateAccessTokenAsync(
+                userId, providerType, providerSubject, issuer, 15, cancellationToken);
+
+            if (accessTokenResult.IsFailure)
+            {
+                return Result.Failure<RefreshTokenResponse, Error>(accessTokenResult.Error);
+            }
+
+            // Generate refresh token (longer lived)
+            var refreshTokenUtcNow = DateTime.UtcNow;
+            var refreshTokenExpiresAt = refreshTokenUtcNow.AddDays(30); // 30-day refresh token
+
+            var refreshClaims = new List<Claim>
+            {
+                new(JwtRegisteredClaimNames.Sub, userId.Value.ToString(CultureInfo.InvariantCulture)),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new(JwtRegisteredClaimNames.Iat, new DateTimeOffset(refreshTokenUtcNow).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+                new(JwtRegisteredClaimNames.Exp, new DateTimeOffset(refreshTokenExpiresAt).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+                new("provider_type", providerType.ToString()),
+                new("provider_subject", providerSubject),
+                new("original_issuer", issuer),
+                new("token_type", "refresh")
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey));
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var refreshToken = new JwtSecurityToken(
+                issuer: _options.Issuer,
+                audience: _options.Audience,
+                claims: refreshClaims,
+                notBefore: refreshTokenUtcNow,
+                expires: refreshTokenExpiresAt,
+                signingCredentials: credentials);
+
+            var refreshTokenString = new JwtSecurityTokenHandler().WriteToken(refreshToken);
+
+            var response = new RefreshTokenResponse(
+                AccessToken: accessTokenResult.Value.Token,
+                RefreshToken: refreshTokenString,
+                ExpiresAt: accessTokenResult.Value.ExpiresAt,
+                RefreshExpiresAt: refreshTokenExpiresAt);
+
+            _logger.LogDebug("Generated refresh token for user {UserId}", userId.Value);
+            return Result.Success<RefreshTokenResponse, Error>(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate refresh token for user {UserId}", userId.Value);
+            return Result.Failure<RefreshTokenResponse, Error>(
+                Error.Failure("REFRESH_TOKEN_GENERATION_FAILED", "Failed to generate refresh token"));
+        }
+    }
+
+    /// <summary>
+    /// Refreshes access token using valid refresh token
+    /// </summary>
+    public async Task<Result<RefreshTokenResponse, Error>> RefreshAccessTokenAsync(
+        string refreshToken,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Validate refresh token
+            var validationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _options.Issuer,
+                ValidateAudience = !string.IsNullOrEmpty(_options.Audience),
+                ValidAudience = _options.Audience,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey)),
+                ClockSkew = TimeSpan.FromMinutes(5)
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(refreshToken, validationParameters, out var validatedToken);
+
+            var jwtToken = (JwtSecurityToken)validatedToken;
+
+            // Verify this is a refresh token
+            var tokenTypeClaim = principal.FindFirst("token_type")?.Value;
+            if (tokenTypeClaim != "refresh")
+            {
+                return Result.Failure<RefreshTokenResponse, Error>(
+                    Error.Unauthorized("Invalid token type"));
+            }
+
+            // Extract user information
+            var subjectClaim = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            var providerTypeClaim = principal.FindFirst("provider_type")?.Value;
+            var providerSubjectClaim = principal.FindFirst("provider_subject")?.Value;
+            var originalIssuerClaim = principal.FindFirst("original_issuer")?.Value;
+
+            if (string.IsNullOrEmpty(subjectClaim) ||
+                !long.TryParse(subjectClaim, CultureInfo.InvariantCulture, out var userIdValue) ||
+                string.IsNullOrEmpty(providerTypeClaim) ||
+                !Enum.TryParse<ProviderType>(providerTypeClaim, out var providerType))
+            {
+                return Result.Failure<RefreshTokenResponse, Error>(
+                    Error.Unauthorized("Invalid refresh token claims"));
+            }
+
+            var userId = new AxonUserId(userIdValue);
+
+            // Generate new tokens
+            return await GenerateRefreshTokenAsync(
+                userId,
+                providerType,
+                providerSubjectClaim ?? string.Empty,
+                originalIssuerClaim ?? string.Empty,
+                cancellationToken);
+        }
+        catch (SecurityTokenExpiredException)
+        {
+            _logger.LogDebug("Refresh token validation failed: token expired");
+            return Result.Failure<RefreshTokenResponse, Error>(
+                Error.Unauthorized("Refresh token has expired"));
+        }
+        catch (SecurityTokenException ex)
+        {
+            _logger.LogDebug("Refresh token validation failed: {Message}", ex.Message);
+            return Result.Failure<RefreshTokenResponse, Error>(
+                Error.Unauthorized("Invalid refresh token"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during refresh token validation");
+            return Result.Failure<RefreshTokenResponse, Error>(
+                Error.Failure("REFRESH_TOKEN_ERROR", "Refresh token validation failed"));
+        }
+    }
+}

@@ -2,7 +2,6 @@ using Axon.Api.Contracts.V1.Auth;
 using Axon.Api.Validators.V1.Auth;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Endpoints.Base;
 using BuildingBlocks.Web.Extensions;
@@ -16,16 +15,16 @@ namespace Axon.Api.Endpoints.V1.Auth.Commands;
 /// </summary>
 public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, ChallengeResponseDto>
 {
-    private readonly ICanonicalMessageService _canonicalMessageService;
+    private readonly IAuthenticationService _authenticationService;
     private readonly IAddressNormalizationService _addressNormalizationService;
 
     public ChallengeEndpoint(
-        ICanonicalMessageService canonicalMessageService,
+        IAuthenticationService authenticationService,
         IAddressNormalizationService addressNormalizationService,
         ILogger<ChallengeEndpoint> logger)
         : base(logger)
     {
-        _canonicalMessageService = canonicalMessageService ?? throw new ArgumentNullException(nameof(canonicalMessageService));
+        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
         _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
     }
 
@@ -94,8 +93,8 @@ public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, 
 
         var address = normalizedAddressResult.Value.Value;
 
-        // Generate canonical challenge via domain service
-        var challengeResult = await _canonicalMessageService.GenerateChallengeAsync(
+        // Generate challenge via unified authentication service
+        var challengeResult = await _authenticationService.GenerateChallengeAsync(
             envResult.Value,
             chainId!,
             address,
@@ -115,7 +114,7 @@ public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, 
         HttpContext.Response.Headers.Pragma = "no-cache";
 
         var response = new ChallengeResponseDto(
-            Message:      ch.CanonicalJson,
+            Message:      ch.Message,
             NetworkEnvironment:  ch.NetworkEnvironment,
             ChainId:      ch.ChainId,
             Address:      ch.Address,
