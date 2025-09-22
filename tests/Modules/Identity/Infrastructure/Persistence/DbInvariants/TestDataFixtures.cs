@@ -137,6 +137,7 @@ public static class TestDataFixtures
     {
         return Wallet.Create(
             id,
+            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet,
             SolanaMainnetChain,
             Address.Create(W1MainAddress).Value);
     }
@@ -149,6 +150,7 @@ public static class TestDataFixtures
     {
         return Wallet.Create(
             id,
+            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Devnet,
             SolanaDevnetChain,
             Address.Create(W1DevAddress).Value);
     }
@@ -160,6 +162,7 @@ public static class TestDataFixtures
     {
         return Wallet.Create(
             id,
+            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet,
             SolanaMainnetChain,
             Address.Create(W2MainAddress).Value);
     }
@@ -172,9 +175,13 @@ public static class TestDataFixtures
         string address,
         WalletId? id = null)
     {
-        // NOTE: Environment parameter will be added during refactoring
+        // Default to mainnet for test data
+        var networkContext = chainId.Contains("devnet", StringComparison.OrdinalIgnoreCase) ?
+            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Devnet :
+            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet;
         return Wallet.Create(
             id,
+            networkContext,
             chainId,
             Address.Create(address).Value);
     }
@@ -244,44 +251,15 @@ public static class TestDataFixtures
     #region Credential Factory Methods
 
     /// <summary>
-    /// Creates Dynamic credential for user A with kid1.
+    /// Creates a Dynamic credential for the specified principal.
     /// </summary>
     public static IdentityCredential CreateDynACredential(AxonUserId principalId)
     {
         return IdentityCredential.Create(
             principalId,
-            "dynamic",
+            ProviderType.Create("dynamic").Value.Value,
             DynamicIssuer,
             DynA_Subject);
-    }
-
-    /// <summary>
-    /// Creates Dynamic credential for user A with rotated key (kid2).
-    /// Same subject and issuer but represents key rotation scenario.
-    /// </summary>
-    public static IdentityCredential CreateDynARotatedCredential(AxonUserId principalId)
-    {
-        return IdentityCredential.Create(
-            principalId,
-            "dynamic",
-            DynamicIssuer,
-            DynA_Rotated_Subject);
-    }
-
-    /// <summary>
-    /// Creates custom credential for testing.
-    /// </summary>
-    public static IdentityCredential CreateCustomCredential(
-        AxonUserId principalId,
-        string provider,
-        string issuer,
-        string subject)
-    {
-        return IdentityCredential.Create(
-            principalId,
-            provider,
-            issuer,
-            subject);
     }
 
     #endregion
@@ -297,6 +275,7 @@ public static class TestDataFixtures
     {
         return PrincipalChainDefault.Create(
             principalId,
+            NetworkEnvironment.From("mainnet"),
             SolanaMainnetChain,
             walletId);
     }
@@ -310,6 +289,7 @@ public static class TestDataFixtures
     {
         return PrincipalChainDefault.Create(
             principalId,
+            NetworkEnvironment.From("devnet"),
             SolanaDevnetChain,
             walletId);
     }
@@ -324,6 +304,7 @@ public static class TestDataFixtures
     {
         return PrincipalChainDefault.Create(
             principalId,
+            NetworkEnvironment.From("mainnet"),
             chainId,
             walletId);
     }
@@ -485,7 +466,7 @@ public static class TestDataFixtures
 
         // Create default for this wallet
         var chainDefault = CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        principal.ApplyChainDefault(SolanaMainnetChain, wallet.Id);
+        principal.ApplyChainDefault(NetworkEnvironment.From("mainnet"), SolanaMainnetChain, wallet.Id);
 
         return (principal, wallet, chainDefault);
     }

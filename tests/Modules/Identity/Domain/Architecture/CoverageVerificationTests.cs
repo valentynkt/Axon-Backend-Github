@@ -55,8 +55,8 @@ public class CoverageVerificationTests
             principal.LinkWalletOwnership(pendingOwnership, (wId, mode, status) => Result.Success<bool, Error>(false));
 
             // Act - Exercise both branches of verified-first invariant
-            var verifiedDefaultResult = principal.ApplyChainDefault("solana-mainnet", verifiedWalletId);
-            var pendingDefaultResult = principal.ApplyChainDefault("ethereum-mainnet", pendingWalletId);
+            var verifiedDefaultResult = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", verifiedWalletId);
+            var pendingDefaultResult = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", pendingWalletId);
 
             // Assert - Both success and failure paths should be exercised
             verifiedDefaultResult.IsSuccess.ShouldBeTrue(); // Success path (verified wallet)
@@ -102,7 +102,7 @@ public class CoverageVerificationTests
         public void Wallet_OwnershipConflictLogic_ShouldBeCovered()
         {
             // Arrange - Given wallet
-            var wallet = Wallet.Create(WalletId.New(), "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
+            var wallet = Wallet.Create(WalletId.New(), NetworkEnvironment.Mainnet, "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
             var principalId = AxonUserId.New();
 
             // Act - Exercise both conflict and no-conflict paths
@@ -129,7 +129,7 @@ public class CoverageVerificationTests
             
             // Test with null/invalid inputs (should throw ArgumentNullException)
             Should.Throw<ArgumentNullException>(() => 
-                principal.ApplyChainDefault(null!, WalletId.New()));
+                principal.ApplyChainDefault(NetworkEnvironment.Mainnet, null!, WalletId.New()));
                 
             Should.Throw<ArgumentNullException>(() =>
                 principal.LinkWalletOwnership(null!, (wId, mode, status) => Result.Success<bool, Error>(false)));
@@ -174,9 +174,9 @@ public class CoverageVerificationTests
             var errors = new List<Result<object, Error>>
             {
                 // Wallet not owned error
-                principal.ApplyChainDefault("test", walletId).IsSuccess 
+                principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "test", walletId).IsSuccess 
                     ? Result.Success<object, Error>(new object()) 
-                    : Result.Failure<object, Error>(principal.ApplyChainDefault("test", walletId).Error),
+                    : Result.Failure<object, Error>(principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "test", walletId).Error),
                 
                 // Service principal risk constraint error  
                 servicePrincipal.UpdateRiskTier(RiskTier.High).IsSuccess 
@@ -227,8 +227,8 @@ public class CoverageVerificationTests
             var result3 = principal.LinkWalletOwnership(watchOnlyOwnership2, (wId, mode, status) => Result.Success<bool, Error>(false));
 
             // Set defaults for different chains
-            var default1 = principal.ApplyChainDefault("solana-mainnet", wallet1);
-            var default2 = principal.ApplyChainDefault("ethereum-mainnet", wallet2); // Should fail (watch-only)
+            var default1 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", wallet1);
+            var default2 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", wallet2); // Should fail (watch-only)
 
             // Update risk tier
             var riskUpdate = principal.UpdateRiskTier(RiskTier.High);
@@ -263,9 +263,9 @@ public class CoverageVerificationTests
             principal.LinkWalletOwnership(ownership1, (wId, mode, status) => Result.Success<bool, Error>(false));
             principal.LinkWalletOwnership(ownership2, (wId, mode, status) => Result.Success<bool, Error>(false));
             principal.UpdateRiskTier(RiskTier.Medium);
-            principal.ApplyChainDefault("solana-mainnet", wallet1);
+            principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", wallet1);
             principal.UpdateRiskTier(RiskTier.High);
-            principal.ApplyChainDefault("ethereum-mainnet", wallet2);
+            principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", wallet2);
             principal.UpdateRiskTier(RiskTier.Low);
 
             // Verify final consistency
@@ -346,9 +346,9 @@ public class CoverageVerificationTests
                 }
             }
 
-            // AccessMode enum coverage  
+            // AccessMode enum coverage
             var accessModes = Enum.GetValues<AccessMode>();
-            var wallet = Wallet.Create(WalletId.New(), "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
+            var wallet = Wallet.Create(WalletId.New(), NetworkEnvironment.Mainnet, "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
             
             foreach (var accessMode in accessModes)
             {
@@ -379,12 +379,12 @@ public class CoverageVerificationTests
             // This test ensures all domain error codes are covered by triggering scenarios that produce each error
             var principal = AxonPrincipal.CreateHuman();
             var servicePrincipal = AxonPrincipal.CreateService();
-            var wallet = Wallet.Create(WalletId.New(), "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
+            var wallet = Wallet.Create(WalletId.New(), NetworkEnvironment.Mainnet, "solana-mainnet", Address.From(TestConstants.ValidSolanaAddress));
             
             var errorResults = new List<Result<object, Error>>();
 
             // Trigger various domain errors to ensure coverage
-            var result1 = principal.ApplyChainDefault("test", WalletId.New());
+            var result1 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "test", WalletId.New());
             errorResults.Add(result1.IsSuccess ? Result.Success<object, Error>(new object()) : Result.Failure<object, Error>(result1.Error)); // Wallet not owned
             
             var result2 = servicePrincipal.UpdateRiskTier(RiskTier.High);

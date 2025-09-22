@@ -3,6 +3,7 @@ using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -33,10 +34,28 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
     // Keep old property names for compatibility
     public DbSet<AxonPrincipal> AxonPrincipals => Principals;
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+
+        // Configure NetworkEnvironment value objects globally
+        configurationBuilder.Properties<NetworkEnvironment>()
+            .HaveConversion<NetworkEnvironment.EfCoreValueConverter>()
+            .HaveMaxLength(50);
+
+        // Configure Address value objects globally
+        configurationBuilder.Properties<Address>()
+            .HaveConversion<Address.EfCoreValueConverter>()
+            .HaveMaxLength(200);
+
+        // Note: Strong ID conversions and column names are configured in individual entity configurations
+        // as they require specific per-property configuration
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
+
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
         // No need to duplicate schema configuration
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityWriteDbContext).Assembly);

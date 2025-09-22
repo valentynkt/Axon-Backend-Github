@@ -209,7 +209,7 @@ Using authentic JWT claims provides:
 - **Stable Identity**: Each user maintains consistent identity across sessions using the actual JWT `sub` claim
 - **Provider Traceability**: The exact Dynamic.xyz environment that issued the credential is preserved via `iss` claim
 - **Security Audit Trail**: Complete provenance of identity credentials for security investigations
-- **Multi-Environment Support**: Proper handling of different Dynamic.xyz environments (dev, staging, production)
+- **Dynamic Provider Support**: Proper handling of different Dynamic.xyz provider environments (mapped to network environments)
 
 ## Security Considerations
 

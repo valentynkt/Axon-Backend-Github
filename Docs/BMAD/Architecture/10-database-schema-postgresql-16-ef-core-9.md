@@ -2,7 +2,8 @@
 
 > **IDs:** ULID stored as `CHAR(26)`; BTREE indexed.
 > **Concurrency:** `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()` + EF concurrency tokens.
-> **Soft Delete:** Not used in MVP (keep minimalism).
+> **Soft Delete:** Used with partial indexes for constraint enforcement.
+> **NetworkEnvironment:** Only on wallets - credentials remain network-agnostic.
 
 ```sql
 -- principals
@@ -26,16 +27,17 @@ CREATE TABLE identity.credential (
   UNIQUE (provider, issuer, subject)
 );
 
--- wallets (global uniqueness by (chain_id, address))
+-- wallets (network environment scoped uniqueness by (network_environment, chain_id, address))
 CREATE TABLE identity.wallet (
-  id            CHAR(26) PRIMARY KEY,
-  chain_id      TEXT NOT NULL,
-  address       TEXT NOT NULL,
-  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (chain_id, address)
+  id                   CHAR(26) PRIMARY KEY,
+  network_environment  TEXT NOT NULL,           -- 'mainnet', 'devnet', 'testnet'
+  chain_id            TEXT NOT NULL,
+  address             TEXT NOT NULL,
+  first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (network_environment, chain_id, address)
 );
 
 -- wallet ownerships (enforce only one verified+signing owner globally)
@@ -55,17 +57,19 @@ CREATE UNIQUE INDEX ux_wallet_verified_signing_owner
   ON identity.wallet_ownership (wallet_id)
   WHERE status = 1 AND access_mode = 0;
 
--- chain defaults (one default wallet per principal per chain)
+-- chain defaults (one default wallet per principal per network environment per chain)
 CREATE TABLE identity.principal_chain_default (
-  principal_id CHAR(26) NOT NULL REFERENCES identity.principal(id) ON DELETE CASCADE,
-  chain_id     TEXT NOT NULL,
-  wallet_id    CHAR(26) NOT NULL REFERENCES identity.wallet(id) ON DELETE RESTRICT,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (principal_id, chain_id)
+  principal_id        CHAR(26) NOT NULL REFERENCES identity.principal(id) ON DELETE CASCADE,
+  network_environment TEXT NOT NULL,           -- 'mainnet', 'devnet', 'testnet'
+  chain_id           TEXT NOT NULL,
+  wallet_id          CHAR(26) NOT NULL REFERENCES identity.wallet(id) ON DELETE RESTRICT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (principal_id, network_environment, chain_id)
 );
 
 -- helpful indexes
+CREATE INDEX ix_wallet_netenv_chain ON identity.wallet(network_environment, chain_id);
 CREATE INDEX ix_wallet_chain ON identity.wallet(chain_id);
 CREATE INDEX ix_credential_principal ON identity.credential(principal_id);
 CREATE INDEX ix_ownership_principal ON identity.wallet_ownership(principal_id);

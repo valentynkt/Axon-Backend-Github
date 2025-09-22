@@ -53,8 +53,7 @@ public sealed partial class AxonPrincipal : AggregateRoot<AxonUserId>
         AxonUserId? id = null)
     {
         var principal = new AxonPrincipal(id ?? AxonUserId.New(), PrincipalType.Human);
-
-        // Create Dynamic credential
+        
         var credential = IdentityCredential.Create(
             principal.Id,
             providerType.Value,

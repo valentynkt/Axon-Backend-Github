@@ -41,7 +41,7 @@ Task<AxonPrincipal?> FindByWalletIdAsync(WalletId walletId, CancellationToken ct
 
 // Wallet operations (Performance optimized)
 Task<IReadOnlyDictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(IEnumerable<WalletId> walletIds, CancellationToken ct = default);
-Task<IReadOnlyDictionary<(string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(IEnumerable<(string chainId, Address address)> items, CancellationToken ct = default);
+Task<IReadOnlyDictionary<(NetworkEnvironment networkEnvironment, string chainId, Address address), WalletId>> EnsureManyByChainAndAddressAsync(IEnumerable<(NetworkEnvironment networkEnvironment, string chainId, Address address)> items, CancellationToken ct = default);
 
 // ETag & snapshots
 Task<string> GetPrincipalFingerprintAsync(AxonUserId principalId, CancellationToken ct = default);

@@ -2,6 +2,7 @@ using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
@@ -478,7 +479,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var reloadedPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
         reloadedPrincipal.ShouldNotBeNull();
 
-        var chainDefaultResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", wallet.Id) });
+        var chainDefaultResult = reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("1", wallet.Id) });
 
         // Assert: Should fail at domain level
         chainDefaultResult.IsFailure.ShouldBeTrue();

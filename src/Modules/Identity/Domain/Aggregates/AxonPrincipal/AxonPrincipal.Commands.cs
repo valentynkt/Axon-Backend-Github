@@ -2,6 +2,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.Events;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
@@ -175,6 +176,7 @@ public sealed partial class AxonPrincipal
     /// Applies chain defaults for multiple wallet-to-chain mappings in a single optimized operation.
     /// This method is significantly more efficient than calling ApplyChainDefault individually.
     /// </summary>
+    /// <param name="networkEnvironment">The network environment for the chain defaults</param>
     /// <param name="walletChainMappings">Collection of tuples containing (chainId, walletId) pairs to set as defaults</param>
     /// <returns>Number of actual defaults applied (excluding no-ops and failures)</returns>
     /// <remarks>
@@ -184,7 +186,7 @@ public sealed partial class AxonPrincipal
     /// - Reduced IsDeleted checks and LINQ operations
     /// Only processes chains that don't already have the target wallet as default.
     /// </remarks>
-    public Result<int, Error> ApplyChainDefaultsBatch(IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
+    public Result<int, Error> ApplyChainDefaultsBatch(NetworkEnvironment networkEnvironment, IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
     {
         var mappings = walletChainMappings.ToList();
         if (mappings.Count == 0)
@@ -236,7 +238,7 @@ public sealed partial class AxonPrincipal
             }
             else
             {
-                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+                var newDefault = PrincipalChainDefault.Create(Id, networkEnvironment, chainId, walletId);
                 _principalChainDefaults.Add(newDefault);
                 activeDefaults[chainId] = newDefault; // Update our local cache
             }
@@ -262,12 +264,12 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Applies a chain default with verified-first enforcement.
     /// </summary>
-    public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId)
+    public Result<Unit, Error> ApplyChainDefault(NetworkEnvironment networkEnvironment, string chainId, WalletId walletId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
         // Use the optimized batch method for consistent logic and reduced complexity
-        var batchResult = ApplyChainDefaultsBatch(new[] { (chainId, walletId) });
+        var batchResult = ApplyChainDefaultsBatch(networkEnvironment, new[] { (chainId, walletId) });
 
         if (batchResult.IsFailure)
             return Result.Failure<Unit, Error>(batchResult.Error);

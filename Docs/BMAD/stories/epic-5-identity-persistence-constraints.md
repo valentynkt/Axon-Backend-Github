@@ -112,13 +112,13 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
   - Convert to lowercase (or EIP-55 checksum consistently)
   - Fixed length validation
 - Apply normalization at API edge before ANY database operation
-- Apply normalization before computing `(environment, chain_id, address)` keys
+- Apply normalization before computing `(network_environment, chain_id, address)` keys
 
 ### 10. Per-Partner Audience Configuration ✅ LOCKED
 **Requirement**: Multi-tenant B2B audience binding
 **Implementation**:
 - Each API key/partner has audience allowlist
-- Allowlists are environment-scoped
+- Allowlists are network_environment-scoped
 - Dynamic JWT `aud` must match partner's allowlist
 - Wallet proof `aud` must match partner's identifier
 - Configuration stored in partner settings table
@@ -127,7 +127,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 ## Current State Analysis (Brownfield)
 
 ### Existing Components to Refactor
-1. **Missing Environment Isolation**: No environment field in Wallet/Credential entities
+1. **Missing NetworkEnvironment Isolation**: No network_environment field in Wallet/Credential entities
 2. **Weak Constraints**: Business logic enforcement instead of database constraints
 3. **Multiple Resolution Paths**: Inconsistent identity resolution logic
 4. **No Exclusive Signing**: Multiple verified owners possible
@@ -144,16 +144,16 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 ### Story 5.1: Database Schema Refactoring & Constraint Implementation
 **Priority**: P0 (Foundation)
 **Type**: Refactoring/Database
-**PRD Requirements**: 5 Hard Database Constraints, Environment Isolation
+**PRD Requirements**: 5 Hard Database Constraints, NetworkEnvironment Isolation
 
 **Acceptance Criteria**:
-1. Implement environment model per decision #1 (separate environment column + chain_id='solana')
+1. Implement network_environment model per decision #1 (separate network_environment column + chain_id='solana')
 2. Add 5 named partial unique indexes with CONCURRENTLY creation:
-   - `ux_wallet_env_chain_addr`: (environment, chain_id, address) WHERE is_deleted=false
-   - `ux_credential_env`: (environment, provider, issuer, subject) WHERE is_deleted=false
+   - `ux_wallet_netenv_chain_addr`: (network_environment, chain_id, address) WHERE is_deleted=false
+   - `ux_credential_provider`: (provider, issuer, subject) WHERE is_deleted=false
    - `ux_ownership_pair`: (principal_id, wallet_id) WHERE is_deleted=false
    - `ux_exclusive_signing`: (wallet_id) WHERE status='verified' AND access_mode='signing'
-   - `ux_chain_default`: (principal_id, environment, chain_id) WHERE is_deleted=false
+   - `ux_chain_default`: (principal_id, network_environment, chain_id) WHERE is_deleted=false
    - `idx_ownership_wallet_active`: (wallet_id) WHERE is_deleted=false
    - `idx_ownership_principal_active`: (principal_id) WHERE is_deleted=false
    - **`idx_wallet_chain_addr_active`: (chain_id, address) WHERE is_deleted=false** (for cross-env lookups)
@@ -179,25 +179,25 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 **Acceptance Criteria**:
 1. Remove all OIDC provider code while KEEPING Dynamic JWT validation
 2. `/auth/me` accepts **Axon JWT only** (not Dynamic JWT directly)
-3. `/auth/exchange` (wallet path) **requires `environment` in payload AND signed message**
-4. `/auth/challenge` returns canonical message with `environment`, `chain_id`, `address` embedded
+3. `/auth/exchange` (wallet path) **requires `network_environment` in payload AND signed message**
+4. `/auth/challenge` returns canonical message with `network_environment`, `chain_id`, `address` embedded
 5. Delete nonce database tables if they exist (remain stateless)
 6. Remove refresh token infrastructure completely
-7. Map Dynamic environmentId to our environment deterministically
+7. Map Dynamic environmentId to our network_environment deterministically
 8. Reject tokens whose iss environmentId does not map to one of ('mainnet','devnet','test')
 9. All tests pass with updated auth flow
 
 **API Contract Clarifications**:
-- Wallet proof payload MUST include: `{environment, chain_id, address, signature, message}`
-- **Signed message MUST embed**: `{environment, chain_id, address, issued_at, exp, nonce, aud}` where `exp = issued_at + 300s` (≤5 minutes)
-- **SDKs MUST sign the canonical template v1** with strict field order: `{environment, chain_id, address, issued_at, exp, nonce, aud}`
+- Wallet proof payload MUST include: `{network_environment, chain_id, address, signature, message}`
+- **Signed message MUST embed**: `{network_environment, chain_id, address, issued_at, exp, nonce, aud}` where `exp = issued_at + 300s` (≤5 minutes)
+- **SDKs MUST sign the canonical template v1** with strict field order: `{network_environment, chain_id, address, issued_at, exp, nonce, aud}`
 - **Hard cap TTL enforcement**: Server rejects any wallet proof where `exp > issued_at + 300s`
 - **Server rejects non-canonical encodings** (e.g., different field order, extra fields, missing fields)
 - **Publish canonical template in SDK docs** and enforce byte-for-byte match
 - **Server validates `aud` against partner/client allowlist** for the API key to prevent cross-app replay
 - **Optional `domain` field** for additional binding when applicable
 - Canonicalize message bytes server-side (stable JSON or exact string template) and reject mismatched payload vs signature fields
-- Reject if environment in payload doesn't match environment in signed message
+- Reject if network_environment in payload doesn't match network_environment in signed message
 - **Apply ±60s clock skew tolerance for `nbf`/`exp` validation**
 - **Never log raw JWTs or signatures; log only stable hashes and identifiers**
 
@@ -209,17 +209,17 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 **Acceptance Criteria**:
 1. Implement 2-step resolution: credential-first → wallet-fallback → create-new
 2. Define "active ownership" as `status != revoked`
-3. **Wallet lookup MUST use triple key**: `(environment, chain_id, address)`
+3. **Wallet lookup MUST use triple key**: `(network_environment, chain_id, address)`
 4. Tie-break applies **ONLY if no verified+signing exists**:
    - `dynamic_attested` > `direct_signature_msg` > `direct_signature_tx` > `watch_only`
    - Then earliest principal (by created_at)
 5. Candidates come from Wallet found by triple, not global search
-6. Add resolution path audit trail with environment context
+6. Add resolution path audit trail with network_environment context
 7. Resolution performance <100ms P95
 8. Remove all legacy `FindPrincipalBy*` methods
-9. Log resolution_path={credential|wallet|created} and auto_revoke reason=conflict_lost with {environment, chain_id, address}
+9. Log resolution_path={credential|wallet|created} and auto_revoke reason=conflict_lost with {network_environment, chain_id, address}
 10. IdentityCredential.last_seen_at only updates if newer (monotonic), with a unit test
-11. **Cross-environment attach decision tree**: Run credential-first resolution; if resolves to principal **A**, check cross-env verified+signing owner **B** for (chain_id, address): if **A == B** auto-link wallet for current env; if **A != B** return 409 Conflict; if credential-first fails, attach to **B** and create env-scoped wallet row; watch-only elsewhere never blocks attach
+11. **Cross-network-environment attach decision tree**: Run credential-first resolution; if resolves to principal **A**, check cross-network-env verified+signing owner **B** for (chain_id, address): if **A == B** auto-link wallet for current network_env; if **A != B** return 409 Conflict; if credential-first fails, attach to **B** and create network_env-scoped wallet row; watch-only elsewhere never blocks attach
 12. **Late principal creation with race protection**: Upsert wallet first (INSERT ... ON CONFLICT DO NOTHING), then re-read wallet and re-resolve ownerships. Only create principal if still no candidate
 13. **Normalize addresses chain-specifically before all database operations** and key computations
 14. **Solana addresses: validate base58, trim whitespace, check length** before storing
@@ -227,7 +227,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 
 **Query Requirements**:
 - NEVER query ownerships directly by address
-- ALWAYS fetch Wallet by `(env, chain_id, address)` first
+- ALWAYS fetch Wallet by `(network_env, chain_id, address)` first
 - Then traverse ownerships by `wallet_id`
 - Log triple key in all resolution paths
 
@@ -302,11 +302,11 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 13. **Log replay attempts with hashed identifiers only** (no raw bytes/tokens)
 
 **Error Messages**:
-- "Wallet already verified on {environment}/{chain_id}" for 409s
-- "Cross-environment verified+signing conflict: manual resolution required" for cross-env conflicts
-- "Unknown Dynamic environmentId: {id}" for unmapped environments
+- "Wallet already verified on {network_environment}/{chain_id}" for 409s
+- "Cross-network-environment verified+signing conflict: manual resolution required" for cross-network-env conflicts
+- "Unknown Dynamic environmentId: {id}" for unmapped network_environments
 - "Wallet proof TTL exceeds 5-minute maximum" for TTL violations
-- "Replay detected for signature on {environment}" for replays
+- "Replay detected for signature on {network_environment}" for replays
 - "Invalid audience '{aud}' for this API key" for cross-app replay attempts
 
 ### Story 5.6: Comprehensive Testing & Validation
@@ -315,16 +315,16 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 **PRD Requirements**: Test Coverage for Critical Scenarios
 
 **Acceptance Criteria**:
-1. **Environment Isolation Tests**:
+1. **NetworkEnvironment Isolation Tests**:
    - Same base58 address on mainnet vs devnet = different Wallet rows
-   - No index conflicts between environments
-   - Same (chain_id, address) across environments → same principal; wallets are env-scoped
-2. **Per-Environment Exclusivity**:
-   - Two verifies on same `(env, wallet)` → one winner
-   - Two verifies on different env wallets → both succeed
+   - No index conflicts between network_environments
+   - Same (chain_id, address) across network_environments → same principal; wallets are network_env-scoped
+2. **Per-NetworkEnvironment Exclusivity**:
+   - Two verifies on same `(network_env, wallet)` → one winner
+   - Two verifies on different network_env wallets → both succeed
 3. **Query Performance**:
-   - EXPLAIN ANALYZE shows index scans for `(env, chain_id, addr)`
-   - EXPLAIN ANALYZE shows index scans for `(env, provider, issuer, subject)`
+   - EXPLAIN ANALYZE shows index scans for `(network_env, chain_id, addr)`
+   - EXPLAIN ANALYZE shows index scans for `(provider, issuer, subject)`
 4. **Default Guard Tests**:
    - Default on mainnet doesn't affect devnet
    - Setting default requires verified+signing on that env
@@ -333,7 +333,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
    - Challenge TTL and clock skew handling
    - Replay detection across instances
 6. **API Enhancement**:
-   - /auth/me returns wallets grouped or tagged by {environment, chain_id} so integrators can render per-network state easily
+   - /auth/me returns wallets grouped or tagged by {network_environment, chain_id} so integrators can render per-network state easily
 7. **Query Plan Validation**:
    - Assert all hot paths use index scans via EXPLAIN ANALYZE in CI pipeline
    - CI gate fails if any critical query uses seq scan instead of index scan
@@ -347,7 +347,7 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
    - Cross-app replay prevented via audience binding
    - **nbf/exp skew acceptance within ±60s**
    - **Namespaced replay keys prevent cross-API-key collisions**
-   - **Cross-env attach requires verified+signing (not watch-only)**
+   - **Cross-network-env attach requires verified+signing (not watch-only)**
    - **EXPLAIN CI gate confirms index scans on all hot paths**
 
 **Test Implementation**:
@@ -376,19 +376,19 @@ Implement the complete Identity Persistence & Constraints system from PRD while 
 - Resolution latency tracking (<100ms P95)
 - **Track JWKS cache hit rate (target >95%)**
 - **Monitor audience-mismatch count per partner (alert on spikes)**
-- **Log format: Always include `{environment, chain_id, address}` + hashed token/sig IDs (never raw)**
+- **Log format: Always include `{network_environment, chain_id, address}` + hashed token/sig IDs (never raw)**
 
 ## Technical Implementation Details
 
 ### Database Constraints SQL
 ```sql
 -- Named indexes for clear error messages
-CREATE UNIQUE INDEX CONCURRENTLY ux_wallet_env_chain_addr
-  ON identity.wallet (environment, chain_id, address)
+CREATE UNIQUE INDEX CONCURRENTLY ux_wallet_netenv_chain_addr
+  ON identity.wallet (network_environment, chain_id, address)
   WHERE is_deleted = false;
 
-CREATE UNIQUE INDEX CONCURRENTLY ux_credential_env
-  ON identity.credential (environment, provider, issuer, subject)
+CREATE UNIQUE INDEX CONCURRENTLY ux_credential_provider
+  ON identity.credential (provider, issuer, subject)
   WHERE is_deleted = false;
 
 CREATE UNIQUE INDEX CONCURRENTLY ux_ownership_pair
@@ -400,22 +400,19 @@ CREATE UNIQUE INDEX CONCURRENTLY ux_exclusive_signing
   WHERE status = 'verified' AND access_mode = 'signing' AND is_deleted = false;
 
 CREATE UNIQUE INDEX CONCURRENTLY ux_chain_default
-  ON identity.principal_chain_default (principal_id, environment, chain_id)
+  ON identity.principal_chain_default (principal_id, network_environment, chain_id)
   WHERE is_deleted = false;
 
 -- CHECK constraints for valid values
 ALTER TABLE identity.wallet
-  ADD CONSTRAINT check_wallet_environment
-  CHECK (environment IN ('mainnet','devnet','test'));
+  ADD CONSTRAINT check_wallet_network_environment
+  CHECK (network_environment IN ('mainnet','devnet','test'));
 
 ALTER TABLE identity.wallet
   ADD CONSTRAINT check_wallet_chain
   CHECK (chain_id IN ('solana','ethereum'));
 
--- CHECK constraint for credential environment
-ALTER TABLE identity.credential
-  ADD CONSTRAINT check_credential_environment
-  CHECK (environment IN ('mainnet','devnet','test'));
+-- No network environment constraint needed for credentials
 
 -- Read-path optimization indexes
 CREATE INDEX CONCURRENTLY idx_ownership_wallet_active
@@ -434,8 +431,8 @@ CREATE INDEX CONCURRENTLY idx_wallet_chain_addr_active
 
 ### Resolution Algorithm Pseudocode
 ```csharp
-// Step 1: Credential match (already env-scoped)
-var principalA = await FindByCredential(env, provider, issuer, subject);
+// Step 1: Credential match (provider scoped only)
+var principalA = await FindByCredential(provider, issuer, subject);
 if (principalA != null)
 {
     // Credential resolved to principal A - check cross-env conflict
@@ -445,8 +442,8 @@ if (principalA != null)
         var principalB = crossEnvOwnership.Principal;
         if (principalA.Id == principalB.Id)
         {
-            // A == B: Same principal - auto-link wallet for current env
-            await CreateWalletForEnvironment(principalA.Id, environment, chainId, address);
+            // A == B: Same principal - auto-link wallet for current network_env
+            await CreateWalletForNetworkEnvironment(principalA.Id, networkEnvironment, chainId, address);
             return principalA;
         }
         else
@@ -461,21 +458,21 @@ if (principalA != null)
 }
 
 // Step 2: Wallet match with tie-break (MUST use triple key)
-var wallet = await FindWallet(environment, chainId, address);
+var wallet = await FindWallet(networkEnvironment, chainId, address);
 if (wallet == null)
 {
     // Credential-first failed - check for cross-env attach to existing verified owner
     var crossEnvOwnership = await FindVerifiedSigningOwnershipAcrossEnvironments(chainId, address);
     if (crossEnvOwnership != null)
     {
-        // Attach to B (existing verified+signing owner) and create env-scoped wallet
-        await CreateWalletForEnvironment(crossEnvOwnership.PrincipalId, environment, chainId, address);
+        // Attach to B (existing verified+signing owner) and create network_env-scoped wallet
+        await CreateWalletForNetworkEnvironment(crossEnvOwnership.PrincipalId, networkEnvironment, chainId, address);
         return crossEnvOwnership.Principal;
     }
 
     // Upsert wallet first to prevent race conditions
-    await UpsertWallet(environment, chainId, address); // INSERT ... ON CONFLICT DO NOTHING
-    wallet = await FindWallet(environment, chainId, address);
+    await UpsertWallet(networkEnvironment, chainId, address); // INSERT ... ON CONFLICT DO NOTHING
+    wallet = await FindWallet(networkEnvironment, chainId, address);
 
     // Check if another request already linked ownership during race
     var raceOwnerships = await FindActiveOwnerships(wallet.Id);
@@ -591,12 +588,12 @@ public async Task<Result<Principal>> VerifyWalletOwnership(Guid walletId, Guid p
 
 ### Must Complete (P0)
 - [ ] All 5 database constraints enforced with named indexes
-- [ ] Environment isolation implemented and tested
+- [ ] NetworkEnvironment isolation implemented and tested
 - [ ] Deterministic resolution with tie-breaking active
 - [ ] Transaction-scoped exclusivity with retry logic
 - [ ] Default wallet guard enforced at domain level
 - [ ] **KMS/HSM-backed JWT signing with kid rotation support**
-- [ ] **Cross-environment verified-owner conflict gate (409 response)**
+- [ ] **Cross-network-environment verified-owner conflict gate (409 response)**
 - [ ] **Hard cap wallet-proof TTL (≤5 minutes) enforcement**
 - [ ] Dynamic JWT hardening (iss/aud/JWKS) complete
 - [ ] **Deterministic replay protection (SHA-256 base64url hashing)**
@@ -605,7 +602,7 @@ public async Task<Result<Principal>> VerifyWalletOwnership(Guid walletId, Guid p
 ### Should Complete (P1)
 - [ ] OIDC code removed (keeping Dynamic JWT)
 - [ ] Refresh tokens eliminated
-- [ ] **Pre-migration cross-environment conflict scan & report**
+- [ ] **Pre-migration cross-network-environment conflict scan & report**
 - [ ] **Key rotation playbook documented**
 - [ ] Migration deduplication report generated
 - [ ] Performance targets met (<100ms resolution)

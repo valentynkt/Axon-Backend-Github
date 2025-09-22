@@ -10,11 +10,11 @@
 ## 🎯 Executive Summary
 
 ### TL;DR
-Ship a **KISS, 20/80** identity fabric for **Dynamic + Wallet** only. Database enforces what matters: unique Wallet per `(environment, chain, address)`, unique Credential per `(environment, provider, issuer, subject)`, one live Ownership per `(principal, wallet)`, and ≤1 verified+signing owner per wallet. Credential-first → wallet-control resolution ensures users map to the **same AxonPrincipal** across apps. Mint short-lived Axon JWT (~15m) for both flows. **No refresh tokens, no nonce ledger, no OIDC, no overengineering.**
+Ship a **KISS, 20/80** identity fabric for **Dynamic + Wallet** only. Database enforces what matters: unique Wallet per `(network_environment, chain, address)`, unique Credential per `(provider, issuer, subject)`, one live Ownership per `(principal, wallet)`, and ≤1 verified+signing owner per wallet. Credential-first → wallet-control resolution ensures users map to the **same AxonPrincipal** across apps. Mint short-lived Axon JWT (~15m) for both flows. **No refresh tokens, no nonce ledger, no OIDC, no overengineering.**
 
 ### ✅ 6 Critical KISS Alignments
 1. **No OIDC**: Dynamic JWT + Wallet signatures only (removed all OIDC references)
-2. **Single Environment Model**: Separate `environment` field + simple `chain` values (no double-encoding)
+2. **Single NetworkEnvironment Model**: Separate `network_environment` field for Wallets only + simple `chain` values (no double-encoding)
 3. **Deterministic Tie-Break**: Ranked resolution (dynamic_verified > direct_signature > watch_only) → earliest principal
 4. **Default Wallet Guard**: Only `verified+signing` wallets from same principal can be defaults
 5. **Hardened JWT**: Enforce `iss`/`aud` validation, JWKS cache (10-30min), `kid` rotation
@@ -23,7 +23,7 @@ Ship a **KISS, 20/80** identity fabric for **Dynamic + Wallet** only. Database e
 ### Business Problem
 Axon needs a minimal, vendor-agnostic identity core where any accepted proof (Dynamic JWT or wallet signature) deterministically resolves to one AxonPrincipal across all B2B clients and apps (web/mobile/dApp).
 
-**Current State**: Multiple authentication paths can create duplicate identities, environment isolation is incomplete, and wallet ownership constraints lack database-level enforcement.
+**Current State**: Multiple authentication paths can create duplicate identities, network environment isolation is incomplete, and wallet ownership constraints lack database-level enforcement.
 
 ### Solution Overview (KISS Approach)
 Implement a **simplified** Identity Persistence & Constraints system focused on the 20% of features that deliver 80% of value.
@@ -51,12 +51,12 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 
 ### User Impact Examples
 - **Web3 Developer**: "I authenticate with Dynamic in your web app and wallet in the CLI - am I the same user?"
-- **Security Auditor**: "How do you guarantee environment isolation at the database level?"
+- **Security Auditor**: "How do you guarantee network environment isolation at the database level?"
 - **B2B Client**: "Can we trust that wallet ownership is exclusive?"
 
 ### Business Constraints (KISS Focus)
 1. **Database-First Security**: Hard constraints at DB level, not application logic
-2. **Environment Safety**: Absolute separation between mainnet/devnet/test
+2. **NetworkEnvironment Safety**: Absolute separation between mainnet/devnet/test
 3. **Two Auth Methods Only**: Dynamic JWT + Wallet signatures (covers 95% of cases)
 4. **No Overengineering**: No refresh tokens, no nonce ledger, no OIDC (for now)
 
@@ -72,8 +72,8 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 | "Dynamic vs Wallet = 2 users" | One AxonPrincipal | Deterministic matching algorithm |
 | **Wallet Conflicts** | DB constraint | Partial-unique: ≤1 verified+signing owner |
 | "Who owns this wallet?" | Exclusivity rule | Database enforces single ownership |
-| **Environment Leaks** | Natural keys | Include environment in all unique indexes |
-| "Mainnet/devnet collision" | Hard separation | `(env, chain, address)` uniqueness |
+| **NetworkEnvironment Leaks** | Natural keys | Include network_environment in wallet unique indexes |
+| "Mainnet/devnet collision" | Hard separation | `(network_env, chain, address)` uniqueness |
 | **Token Complexity** | Simple JWT | 15-minute lifespan, no refresh |
 | "Complex token management" | KISS approach | Re-exchange (Dynamic) or re-prompt (wallet) |
 
@@ -102,9 +102,9 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 #### 2. **Achieve Database-Level Security** (Priority: P0)
 **Objective**: Guarantee identity constraints at the database level, not just business logic
 **Success Criteria**:
-- Environment isolation enforced by database constraints
+- NetworkEnvironment isolation enforced by database constraints
 - Wallet exclusivity guaranteed by unique indexes
-- Credential uniqueness enforced across all environments
+- Credential uniqueness enforced (provider-scoped, not network-scoped)
 - Zero possibility of constraint bypass through API or direct access
 
 **Business Value**: Security assurance required for enterprise customer confidence
@@ -162,7 +162,7 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 #### F1: **Simple Principal Resolution (2 Steps)**
 **Business Requirement**: One identity per user across Dynamic + Wallet auth
 **Implementation**:
-1. **Credential Match**: If `(env, provider, issuer, subject)` exists → use that principal
+1. **Credential Match**: If `(provider, issuer, subject)` exists → use that principal
 2. **Wallet Match**: Else check wallet ownership (prefer verified+signing)
 3. **Create New**: Only if no matches found
 
@@ -171,11 +171,11 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 #### F2: **5 Hard Database Constraints with Guards**
 **Business Requirement**: Database-enforced identity rules
 **The 5 Constraints**:
-1. Unique Wallet: `(environment, chain_id, address)` WHERE `is_deleted=false`
-2. Unique Credential: `(environment, provider, issuer, subject)` WHERE `is_deleted=false`
+1. Unique Wallet: `(network_environment, chain_id, address)` WHERE `is_deleted=false`
+2. Unique Credential: `(provider, issuer, subject)` WHERE `is_deleted=false`
 3. One Ownership: `(principal_id, wallet_id)` WHERE `is_deleted=false`
 4. Exclusive Signing: `(wallet_id)` WHERE `status='verified' AND access_mode='signing'`
-5. One Default: `(principal_id, environment, chain_id)` WHERE `is_deleted=false`
+5. One Default: `(principal_id, network_environment, chain_id)` WHERE `is_deleted=false`
 
 **Business Guards (Domain-Level Enforcement)**:
 - **Default Wallet Guard**: `SetDefault(principal, wallet)` requires:
@@ -192,13 +192,13 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 - Issue 15-minute Axon JWT for both Dynamic and wallet auth
 - **Dynamic JWT Validation Requirements**:
   - Validate `iss` matches: `app.dynamicauth.com/{environmentId}`
-  - Map environmentId deterministically to our environment ('mainnet','devnet','test')
+  - Map environmentId deterministically to our network_environment ('mainnet','devnet','test')
   - Reject tokens whose iss environmentId does not map to one of ('mainnet','devnet','test')
   - Validate `aud` matches expected value (document in config)
   - Cache JWKS for 10-30 minutes with `kid` rotation support
   - Clock skew tolerance: ±60 seconds max
 - **Wallet Proof Replay Resistance (KISS)**:
-  - Signed payload must include: `{issued_at, exp (≤5min), nonce, address, chain_id, environment, aud}`
+  - Signed payload must include: `{issued_at, exp (≤5min), nonce, address, chain_id, network_environment, aud}`
   - In-memory LRU cache rejects duplicate `{message, signature}` pairs for 5-10 min
   - No database ledger or complex nonce tracking
   - Server canonicalizes message bytes (stable JSON template) and validates payload vs signature fields
@@ -247,7 +247,7 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 | Metric | Current State | Target State | Improvement |
 |--------|---------------|--------------|------------|
 | **Identity Conflicts** | Possible via API bypass | Database-prevented | 100% elimination |
-| **Environment Isolation** | Business-logic enforced | Database-guaranteed | Security assurance |
+| **NetworkEnvironment Isolation** | Business-logic enforced | Database-guaranteed | Security assurance |
 | **Resolution Determinism** | Varies by implementation | Documented algorithm | Predictable outcomes |
 | **Enterprise Readiness** | Single-tenant focused | Multi-tenant ready | B2B market enablement |
 
@@ -264,7 +264,7 @@ Axon needs a rock-solid identity foundation that works TODAY. Start with Dynamic
 ### Phase 1: Database Constraints (2 days)
 **Goal**: Add the 5 critical database constraints
 **Tasks**:
-- Add environment column to Wallet and Credential tables
+- Add network_environment column to Wallet tables only
 - Create 5 unique indexes with proper WHERE clauses
 - Test constraint enforcement
 
@@ -314,7 +314,7 @@ Each phase includes database migration rollback scripts. Principal merge operati
 ## 🏁 Definition of Success
 
 ### Must Achieve
-- ✅ Database-level environment isolation with zero bypass possibilities
+- ✅ Database-level network environment isolation with zero bypass possibilities
 - ✅ Unified identity resolution across Dynamic, wallet, and OIDC authentication
 - ✅ Deterministic principal resolution with <100ms latency
 - ✅ Identity change audit trail for resolution paths and ownership changes
@@ -332,11 +332,11 @@ Each phase includes database migration rollback scripts. Principal merge operati
 ### The 5 Database Constraints
 ```sql
 -- 1. Unique Wallet
-CREATE UNIQUE INDEX ux_wallet ON wallet (environment, chain_id, address)
+CREATE UNIQUE INDEX ux_wallet ON wallet (network_environment, chain_id, address)
 WHERE is_deleted = false;
 
 -- 2. Unique Credential
-CREATE UNIQUE INDEX ux_credential ON credential (environment, provider, issuer, subject)
+CREATE UNIQUE INDEX ux_credential ON credential (provider, issuer, subject)
 WHERE is_deleted = false;
 
 -- 3. One Ownership per Pair
@@ -348,32 +348,32 @@ CREATE UNIQUE INDEX ux_exclusive ON wallet_ownership (wallet_id)
 WHERE status = 'verified' AND access_mode = 'signing' AND is_deleted = false;
 
 -- 5. One Default per Chain
-CREATE UNIQUE INDEX ux_default ON principal_chain_default (principal_id, environment, chain_id)
+CREATE UNIQUE INDEX ux_default ON principal_chain_default (principal_id, network_environment, chain_id)
 WHERE is_deleted = false;
 ```
 
 ### 2-Step Resolution with Deterministic Tie-Break
 ```csharp
 // Step 1: Credential match
-var principal = await FindByCredential(env, provider, issuer, subject);
+var principal = await FindByCredential(provider, issuer, subject);
 if (principal != null) return principal;
 
 // Step 2: Wallet match with tie-break
-var wallet = await FindWallet(env, chain_id, address);
+var wallet = await FindWallet(network_env, chain_id, address);
 if (wallet == null)
 {
     // Check cross-environment attach rule first
     var crossEnvPrincipal = await FindPrincipalAcrossEnvironments(chain_id, address);
     if (crossEnvPrincipal != null)
     {
-        // Create wallet for this environment and link to existing principal
-        await CreateWalletForEnvironment(crossEnvPrincipal.Id, env, chain_id, address);
+        // Create wallet for this network environment and link to existing principal
+        await CreateWalletForNetworkEnvironment(crossEnvPrincipal.Id, network_env, chain_id, address);
         return crossEnvPrincipal;
     }
 
     // Upsert wallet first to prevent race conditions
-    await UpsertWallet(env, chain_id, address); // INSERT ... ON CONFLICT DO NOTHING
-    wallet = await FindWallet(env, chain_id, address);
+    await UpsertWallet(network_env, chain_id, address); // INSERT ... ON CONFLICT DO NOTHING
+    wallet = await FindWallet(network_env, chain_id, address);
 
     // Check if another request already linked ownership during race
     var raceOwnerships = await FindActiveOwnerships(wallet.Id);
@@ -431,7 +431,7 @@ var signedPayload = new
     nonce = Guid.NewGuid().ToString(),
     address = walletAddress,
     chain_id = chain_id,
-    environment = environment,
+    network_environment = network_environment,
     aud = partnerIdentifier // Bind to relying party
 };
 
