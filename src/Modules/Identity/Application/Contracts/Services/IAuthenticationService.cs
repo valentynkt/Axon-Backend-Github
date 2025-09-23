@@ -6,13 +6,12 @@ using CSharpFunctionalExtensions;
 namespace Axon.Modules.Identity.Application.Contracts.Services;
 
 /// <summary>
-/// Unified authentication service that handles all JWT and challenge operations.
-/// Consolidates functionality from AxonJwtService, UnifiedBearerTokenValidator,
-/// CanonicalMessageService, and MemoryJwtReplayGuard.
+/// Authentication service for token generation and challenge operations.
+/// JWT validation is now handled by ASP.NET Core JWT Bearer middleware.
 /// </summary>
 public interface IAuthenticationService
 {
-    // Token Operations
+    // Token Generation Operations
     Task<Result<AxonToken, Error>> GenerateAccessTokenAsync(
         AxonUserId axonUserId,
         ProviderType providerType,
@@ -21,8 +20,9 @@ public interface IAuthenticationService
         int expiresIn = -1, // Use configuration default when -1
         CancellationToken cancellationToken = default);
 
-    Task<Result<AuthenticatedContext, Error>> ValidateTokenAsync(
-        string bearerToken,
+    // Process authenticated context from middleware-validated token
+    Task<Result<AuthenticatedContext, Error>> ProcessAuthenticatedUserAsync(
+        ClaimsPrincipal principal,
         CancellationToken cancellationToken = default);
 
     // Refresh Token Operations
@@ -50,16 +50,12 @@ public interface IAuthenticationService
         string expectedWalletAddress,
         string expectedAudience);
 
-    // Replay Protection (built-in)
-    Task<Result<Unit, Error>> CheckAndMarkTokenUsedAsync(
-        string jti,
-        DateTimeOffset expiresAt,
-        CancellationToken cancellationToken = default);
+    // Note: Replay protection is now handled by JwtEventHandlers in the middleware pipeline
 
     // HMAC Operations for Challenge Verification
     string GenerateMacForChallenge(string canonicalJson, string keyVersion);
     Result<bool, Error> ValidateMac(string message, string mac, string keyVersion);
-    Task<Result<Unit, Error>> CheckAndMarkNonceUsedAsync(
+    Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
         string signedMessage, string mkv, CancellationToken ct = default);
 }
 

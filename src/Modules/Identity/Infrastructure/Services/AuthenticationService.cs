@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -7,13 +6,11 @@ using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Configuration;
-using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Utilities;
 using CSharpFunctionalExtensions;
-using MediatR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,11 +18,9 @@ using Microsoft.Extensions.Options;
 namespace Axon.Modules.Identity.Infrastructure.Services;
 
 /// <summary>
-/// Unified authentication service that consolidates functionality from:
-/// - AxonJwtService
-/// - UnifiedBearerTokenValidator
-/// - CanonicalMessageService
-/// - MemoryJwtReplayGuard
+/// Authentication service focusing on token generation and challenge operations.
+/// JWT validation is now handled by ASP.NET Core JWT Bearer middleware.
+/// Refactored from 823 lines to ~500 lines with better separation of concerns.
 /// </summary>
 public sealed class AuthenticationService : IAuthenticationService
 {
@@ -34,21 +29,24 @@ public sealed class AuthenticationService : IAuthenticationService
     private readonly byte[] _hmacKey;
     private readonly JwtSecurityTokenHandler _tokenHandler;
     private readonly IMemoryCache _cache;
-    private readonly IDynamicAuthService _dynamicAuthService;
     private readonly ILogger<AuthenticationService> _logger;
-    private static readonly object ReplayLock = new();
+    private static readonly object ChallengeLock = new();
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
 
     public AuthenticationService(
         IOptions<AuthenticationOptions> options,
         IMemoryCache cache,
-        IDynamicAuthService dynamicAuthService,
         ILogger<AuthenticationService> logger)
     {
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
 
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _signingKey = new SymmetricSecurityKey(TryBase64(_options.SigningKey, out var signingKeyBytes)
@@ -60,12 +58,17 @@ public sealed class AuthenticationService : IAuthenticationService
         _tokenHandler = new JwtSecurityTokenHandler();
     }
 
+    #region Token Generation
+
+    /// <summary>
+    /// Generate Axon JWT access token
+    /// </summary>
     public async Task<Result<AxonToken, Error>> GenerateAccessTokenAsync(
         AxonUserId axonUserId,
         ProviderType providerType,
         string issuer,
         string subject,
-        int expiresIn = -1, // Use configuration default when -1
+        int expiresIn = -1,
         CancellationToken cancellationToken = default)
     {
         try
@@ -83,7 +86,7 @@ public sealed class AuthenticationService : IAuthenticationService
                 new Claim(JwtRegisteredClaimNames.Aud, _options.Audience),
                 new Claim(JwtRegisteredClaimNames.Iat, issuedAt.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
                 new Claim(JwtRegisteredClaimNames.Exp, expiresAt.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()), // For replay protection
                 new Claim("axon_user_id", axonUserId.Value.ToString()),
                 new Claim("provider_type", providerType.Value),
                 new Claim("original_issuer", issuer),
@@ -99,493 +102,101 @@ public sealed class AuthenticationService : IAuthenticationService
                 SigningCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256Signature)
             };
 
-            var token = _tokenHandler.CreateToken(tokenDescriptor);
-            var tokenString = _tokenHandler.WriteToken(token);
+            var securityToken = _tokenHandler.CreateToken(tokenDescriptor);
+            var tokenString = _tokenHandler.WriteToken(securityToken);
 
-            _logger.LogDebug("Generated Axon JWT token for AxonUserId={AxonUserId}, Provider={Provider}, ExpiresIn={ExpiresIn}s",
-                axonUserId.Value, providerType.Value, expiresIn);
+            _logger.LogDebug("Generated Axon JWT for user {UserId} with JTI {Jti}",
+                axonUserId.Value, claims.First(c => c.Type == JwtRegisteredClaimNames.Jti).Value);
 
-            var result = new AxonToken(
+            var token = new AxonToken(
                 AccessToken: tokenString,
                 TokenType: "Bearer",
                 ExpiresIn: expiresIn,
                 IssuedAt: issuedAt,
                 ExpiresAt: expiresAt);
 
-            return Result.Success<AxonToken, Error>(result);
+            return await Task.FromResult(Result.Success<AxonToken, Error>(token));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate Axon JWT token for AxonUserId={AxonUserId}", axonUserId.Value);
+            _logger.LogError(ex, "Failed to generate access token for user {UserId}", axonUserId.Value);
             return Result.Failure<AxonToken, Error>(
-                Error.Internal($"Failed to generate access token: {ex.Message}", AuthErrors.TokenGenerationFailed));
+                Error.Internal("Failed to generate access token", "AUTH.TOKEN_GENERATION_FAILED"));
         }
     }
 
-    public async Task<Result<AuthenticatedContext, Error>> ValidateTokenAsync(
-        string bearerToken,
+    /// <summary>
+    /// Process authenticated context from middleware-validated token
+    /// </summary>
+    public async Task<Result<AuthenticatedContext, Error>> ProcessAuthenticatedUserAsync(
+        ClaimsPrincipal principal,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(bearerToken))
-        {
-            return Result.Failure<AuthenticatedContext, Error>(
-                Error.Unauthorized("Bearer token is required", AuthErrors.TokenRequired));
-        }
-
         try
         {
-            var tokenType = DetermineTokenType(bearerToken);
-            _logger.LogDebug("Detected token type: {TokenType}", tokenType);
-
-            return tokenType switch
-            {
-                TokenType.DynamicJwt => await ValidateDynamicTokenAsync(bearerToken, cancellationToken),
-                TokenType.AxonAccessToken => await ValidateAxonTokenAsync(bearerToken, cancellationToken),
-                _ => Result.Failure<AuthenticatedContext, Error>(
-                    Error.Unauthorized("Unsupported token type", AuthErrors.TokenUnsupportedType))
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error during token validation");
-            return Result.Failure<AuthenticatedContext, Error>(
-                Error.Internal($"Token validation failed: {ex.Message}", AuthErrors.ValidationError));
-        }
-    }
-
-    public Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
-        string chainId,      // Compound format e.g. "solana-mainnet"
-        string walletAddress,
-        string audience,
-        CancellationToken cancellationToken = default)
-    {
-        var chainIdVo = ChainId.Create(chainId);
-        if (chainIdVo.IsFailure)
-            return Task.FromResult(Result.Failure<AuthenticationChallenge, Error>(chainIdVo.Error));
-
-        var addressVo = Address.Create(walletAddress);
-        if (addressVo.IsFailure)
-            return Task.FromResult(Result.Failure<AuthenticationChallenge, Error>(addressVo.Error));
-
-        if (string.IsNullOrWhiteSpace(audience))
-            audience = _options.DefaultAudience;
-
-        var now = DateTimeOffset.UtcNow;
-        var issuedAt = now.ToUnixTimeSeconds();
-        var expiration = now.AddSeconds(_options.MaxTtlSeconds).ToUnixTimeSeconds();
-        var nonce = GenerateBase64UrlNonce(32);
-
-        // Extract network environment for legacy message format
-        var networkEnv = ChainIdConverter.ExtractNetworkEnvironment(chainId) ?? "mainnet";
-        var baseChain = ChainIdConverter.ExtractBaseChain(chainId);
-
-        var message = BuildChallengeMessage(
-            networkEnv,
-            baseChain,
-            addressVo.Value.Value,
-            issuedAt,
-            expiration,
-            nonce,
-            audience);
-
-        // Generate MAC for challenge
-        var keyVersion = _options.CurrentKeyVersion;
-        var mac = GenerateMacForChallenge(message, keyVersion);
-
-        var result = new AuthenticationChallenge(
-            ChainId: chainId,
-            Address: addressVo.Value.Value,
-            IssuedAt: issuedAt,
-            Exp: expiration,
-            Nonce: nonce,
-            Aud: audience,
-            Message: message,
-            Mac: mac,
-            Mkv: keyVersion);
-
-        return Task.FromResult(Result.Success<AuthenticationChallenge, Error>(result));
-    }
-
-    public Result<bool, Error> ValidateChallenge(
-        string message,
-        string expectedChainId,      // Compound format e.g. "solana-mainnet"
-        string expectedWalletAddress,
-        string expectedAudience)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-            return Result.Failure<bool, Error>(Error.Validation("Message cannot be empty", AuthErrors.ChallengeRequired));
-
-        try
-        {
-            using var doc = JsonDocument.Parse(message);
-            var root = doc.RootElement;
-
-            if (!TryGetString(root, "network_environment", out var env) ||
-                !TryGetString(root, "chain_id", out var chain) ||
-                !TryGetString(root, "address", out var address) ||
-                !TryGetInt64(root, "issued_at", out var iat) ||
-                !TryGetInt64(root, "exp", out var exp) ||
-                !TryGetString(root, "nonce", out var nonce) ||
-                !TryGetString(root, "aud", out var aud))
-            {
-                return Result.Failure<bool, Error>(Error.Validation("Message missing required fields", AuthErrors.ChallengeMissingFields));
-            }
-
-            // Extract expected values from compound chain ID for validation
-            var expectedEnv = ChainIdConverter.ExtractNetworkEnvironment(expectedChainId) ?? "mainnet";
-            var expectedBaseChain = ChainIdConverter.ExtractBaseChain(expectedChainId);
-
-            if (!string.Equals(env, expectedEnv, StringComparison.Ordinal))
-                return Fail($"Network environment mismatch: expected {expectedEnv}, got {env}", AuthErrors.ChallengeNetworkMismatch);
-
-            if (!string.Equals(chain, expectedBaseChain, StringComparison.Ordinal))
-                return Fail($"Chain ID mismatch: expected {expectedBaseChain}, got {chain}", AuthErrors.ChallengeChainMismatch);
-
-            if (!string.Equals(address, expectedWalletAddress, StringComparison.Ordinal))
-                return Fail($"Address mismatch: expected {expectedWalletAddress}, got {address}", AuthErrors.ChallengeAddressMismatch);
-
-            if (!string.Equals(aud, expectedAudience, StringComparison.Ordinal))
-                return Fail($"Audience mismatch: expected {expectedAudience}, got {aud}", AuthErrors.ChallengeAudienceMismatch);
-
-            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(iat);
-            var expiration = DateTimeOffset.FromUnixTimeSeconds(exp);
-            var ttlResult = ValidateTtl(issuedAt, expiration);
-            if (ttlResult.IsFailure) return ttlResult;
-
-            var now = DateTimeOffset.UtcNow;
-            if (now < issuedAt.AddSeconds(-_options.ClockSkewSeconds))
-                return Fail("Message not yet valid (issued in future)", AuthErrors.ChallengeNotYetValid);
-            if (now > expiration.AddSeconds(_options.ClockSkewSeconds))
-                return Fail("Message has expired", AuthErrors.ChallengeExpired);
-
-            var chainIdVo = ChainId.Create(chain);
-            if (chainIdVo.IsFailure) return Result.Failure<bool, Error>(chainIdVo.Error);
-            var addrVo = Address.Create(address);
-            if (addrVo.IsFailure) return Result.Failure<bool, Error>(addrVo.Error);
-
-            return Result.Success<bool, Error>(true);
-        }
-        catch (JsonException)
-        {
-            return Result.Failure<bool, Error>(Error.Validation("Invalid JSON format", AuthErrors.ChallengeInvalidJson));
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure<bool, Error>(Error.Internal($"Error validating challenge: {ex.Message}", AuthErrors.ChallengeValidationError));
-        }
-    }
-
-    public Task<Result<Unit, Error>> CheckAndMarkTokenUsedAsync(
-        string jti,
-        DateTimeOffset expiresAt,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(jti))
-        {
-            _logger.LogWarning("JWT replay check attempted with empty jti");
-            return Task.FromResult(Result.Failure<Unit, Error>(
-                Error.Validation("JWT ID (jti) is required for replay protection", AuthErrors.TokenRequired)));
-        }
-
-        try
-        {
-            var cacheKey = $"jwt_used_{jti}";
-
-            lock (ReplayLock)
-            {
-                if (_cache.TryGetValue(cacheKey, out _))
-                {
-                    _logger.LogWarning("JWT replay attempt detected for jti: {Jti}", jti);
-                    return Task.FromResult(Result.Failure<Unit, Error>(
-                        Error.Unauthorized("JWT token has already been used", AuthErrors.TokenReplayed)));
-                }
-
-                var cacheExpiration = expiresAt.Subtract(DateTimeOffset.UtcNow);
-
-                if (cacheExpiration <= TimeSpan.Zero)
-                {
-                    _logger.LogWarning("Attempt to cache expired JWT with jti: {Jti}", jti);
-                    return Task.FromResult(Result.Failure<Unit, Error>(
-                        Error.Unauthorized("JWT token has expired", AuthErrors.TokenExpired)));
-                }
-
-                var bufferTime = TimeSpan.FromMinutes(_options.ReplayGuardBufferMinutes);
-                var effectiveExpiration = cacheExpiration.Add(bufferTime);
-
-                _cache.Set(cacheKey, true, effectiveExpiration);
-
-                _logger.LogDebug("JWT jti marked as used: {Jti}, expires in: {Duration}", jti, effectiveExpiration);
-                return Task.FromResult(Result.Success<Unit, Error>(Unit.Value));
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during JWT replay check for jti: {Jti}", jti);
-            return Task.FromResult(Result.Failure<Unit, Error>(
-                Error.External("JWT replay check failed", AuthErrors.ReplayCheckError, ex)));
-        }
-    }
-
-    public string GenerateMacForChallenge(string canonicalJson, string keyVersion)
-    {
-        if (!_options.HmacKeys.TryGetValue(keyVersion, out var keyBase64))
-        {
-            throw new InvalidOperationException($"HMAC key version '{keyVersion}' not found");
-        }
-
-        var key = Convert.FromBase64String(keyBase64);
-        using var hmac = new HMACSHA256(key);
-        var messageBytes = Encoding.UTF8.GetBytes(canonicalJson);
-        var hash = hmac.ComputeHash(messageBytes);
-        return Base64UrlEncoder.Encode(hash);
-    }
-
-    public Result<bool, Error> ValidateMac(string message, string mac, string keyVersion)
-    {
-        try
-        {
-            var expectedMac = GenerateMacForChallenge(message, keyVersion);
-            var expectedBytes = Base64UrlEncoder.DecodeBytes(expectedMac);
-            var actualBytes = Base64UrlEncoder.DecodeBytes(mac);
-
-            if (!CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes))
-            {
-                return Result.Failure<bool, Error>(
-                    Error.Unauthorized("Invalid MAC", AuthErrors.MacInvalid));
-            }
-
-            return Result.Success<bool, Error>(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MAC validation failed");
-            return Result.Failure<bool, Error>(
-                Error.Internal("MAC validation error", AuthErrors.MacValidationError));
-        }
-    }
-
-    public async Task<Result<Unit, Error>> CheckAndMarkNonceUsedAsync(
-        string signedMessage, string mkv, CancellationToken ct = default)
-    {
-        using var doc = JsonDocument.Parse(signedMessage);
-        var nonce = doc.RootElement.GetProperty("nonce").GetString();
-        if (string.IsNullOrWhiteSpace(nonce))
-            return Result.Failure<Unit, Error>(Error.Validation("Missing nonce", AuthErrors.NonceRequired));
-
-        var cacheKey = $"nonce:{mkv}:{nonce}";
-
-        // Compute remaining TTL with skew (don't cache past expiration)
-        var iat = doc.RootElement.GetProperty("issued_at").GetInt64();
-        var exp = doc.RootElement.GetProperty("exp").GetInt64();
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var remaining = Math.Max(0, (int)(exp - now) + _options.ClockSkewSeconds);
-
-        if (remaining <= 0)
-            return Result.Failure<Unit, Error>(Error.Validation("Challenge expired", AuthErrors.ChallengeExpired));
-
-        if (_cache.TryGetValue(cacheKey, out _))
-        {
-            _logger.LogWarning("Replay attempt detected for nonce {Nonce}", nonce[..Math.Min(8, nonce.Length)]);
-            return Result.Failure<Unit, Error>(
-                Error.Conflict("Message already used", AuthErrors.TokenReplayed));
-        }
-
-        _cache.Set(cacheKey, true, TimeSpan.FromSeconds(remaining));
-        return Result.Success<Unit, Error>(Unit.Value);
-    }
-
-    // Private helper methods
-
-    private TokenType DetermineTokenType(string token)
-    {
-        try
-        {
-            if (!_tokenHandler.CanReadToken(token))
-                return TokenType.DynamicJwt;
-
-            var jsonToken = _tokenHandler.ReadJwtToken(token);
-            var issuer = jsonToken.Issuer;
-
-            if (!string.IsNullOrEmpty(issuer) && issuer.Contains("axon", StringComparison.OrdinalIgnoreCase))
-                return TokenType.AxonAccessToken;
-
-            if (!string.IsNullOrEmpty(issuer) && issuer.Contains("dynamic", StringComparison.OrdinalIgnoreCase))
-                return TokenType.DynamicJwt;
-
-            var axonUserIdClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "axon_user_id");
-            if (axonUserIdClaim != null)
-                return TokenType.AxonAccessToken;
-
-            return TokenType.DynamicJwt;
-        }
-        catch
-        {
-            return TokenType.DynamicJwt;
-        }
-    }
-
-    private async Task<Result<AuthenticatedContext, Error>> ValidateDynamicTokenAsync(
-        string token,
-        CancellationToken cancellationToken)
-    {
-        var validationResult = await _dynamicAuthService.ValidateTokenAsync(token, cancellationToken);
-        if (validationResult.IsFailure)
-        {
-            _logger.LogWarning("Dynamic JWT validation failed: {Error}", validationResult.Error.Message);
-            return Result.Failure<AuthenticatedContext, Error>(validationResult.Error);
-        }
-
-        var dynamicUser = validationResult.Value;
-
-        var rawClaimsResult = await _dynamicAuthService.GetRawClaimsAsync(token, cancellationToken);
-        if (rawClaimsResult.IsFailure)
-        {
-            _logger.LogWarning("Failed to get raw claims from Dynamic JWT: {Error}", rawClaimsResult.Error.Message);
-            return Result.Failure<AuthenticatedContext, Error>(rawClaimsResult.Error);
-        }
-
-        var principal = rawClaimsResult.Value;
-        var issuer = principal.FindFirst("iss")?.Value ?? "unknown";
-        var subject = principal.FindFirst("sub")?.Value ?? dynamicUser.AxonUserId;
-        var iatClaim = principal.FindFirst("iat")?.Value;
-        var expClaim = principal.FindFirst("exp")?.Value;
-
-        var issuedAt = !string.IsNullOrEmpty(iatClaim) && long.TryParse(iatClaim, out var iat)
-            ? DateTimeOffset.FromUnixTimeSeconds(iat)
-            : DateTimeOffset.UtcNow;
-
-        var expiresAt = !string.IsNullOrEmpty(expClaim) && long.TryParse(expClaim, out var exp)
-            ? DateTimeOffset.FromUnixTimeSeconds(exp)
-            : DateTimeOffset.UtcNow.AddHours(1);
-
-        if (!Guid.TryParse(dynamicUser.AxonUserId, out var axonUserIdGuid))
-        {
-            return Result.Failure<AuthenticatedContext, Error>(
-                Error.Validation("Invalid AxonUserId format in Dynamic token", AuthErrors.TokenInvalidAxonUserId));
-        }
-
-        var context = new AuthenticatedContext(
-            TokenType: TokenType.DynamicJwt,
-            AxonUserId: new AxonUserId(axonUserIdGuid),
-            ProviderType: ProviderType.Create("dynamic").Value,
-            Issuer: issuer,
-            Subject: subject,
-            Principal: principal,
-            IssuedAt: issuedAt,
-            ExpiresAt: expiresAt);
-
-        _logger.LogDebug("Successfully validated Dynamic JWT for AxonUserId: {AxonUserId}", dynamicUser.AxonUserId);
-        return Result.Success<AuthenticatedContext, Error>(context);
-    }
-
-    private async Task<Result<AuthenticatedContext, Error>> ValidateAxonTokenAsync(
-        string token,
-        CancellationToken _ = default)
-    {
-        try
-        {
-            var validationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidIssuer = _options.Issuer,
-                ValidateAudience = !string.IsNullOrEmpty(_options.Audience),
-                ValidAudience = _options.Audience,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = _signingKey,
-                ValidateLifetime = true,
-                RequireExpirationTime = true,
-                RequireSignedTokens = true,
-                ClockSkew = TimeSpan.FromSeconds(_options.ClockSkewSeconds),
-                NameClaimType = "sub"
-            };
-
-            var principal = _tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
-
-            var axonUserIdClaim = principal.FindFirst("axon_user_id")?.Value;
-            var providerTypeClaim = principal.FindFirst("provider_type")?.Value;
-            var originalIssuerClaim = principal.FindFirst("original_issuer")?.Value;
-            var originalSubjectClaim = principal.FindFirst("original_subject")?.Value;
-            var iatClaim = principal.FindFirst(JwtRegisteredClaimNames.Iat)?.Value;
-            var expClaim = principal.FindFirst(JwtRegisteredClaimNames.Exp)?.Value;
-
-            if (string.IsNullOrEmpty(axonUserIdClaim) ||
-                string.IsNullOrEmpty(providerTypeClaim) ||
-                string.IsNullOrEmpty(originalIssuerClaim) ||
-                string.IsNullOrEmpty(originalSubjectClaim) ||
-                string.IsNullOrEmpty(iatClaim) ||
-                string.IsNullOrEmpty(expClaim))
+            if (principal?.Identity?.IsAuthenticated != true)
             {
                 return Result.Failure<AuthenticatedContext, Error>(
-                    Error.Validation("Token missing required claims", AuthErrors.TokenInvalidClaims));
+                    Error.Unauthorized("User is not authenticated"));
             }
 
-            if (!Guid.TryParse(axonUserIdClaim, out var axonUserIdGuid))
+            // Extract claims from validated principal
+            var axonUserIdClaim = principal.FindFirst("axon_user_id")?.Value
+                ?? principal.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrEmpty(axonUserIdClaim) || !Guid.TryParse(axonUserIdClaim, out var userGuid))
             {
                 return Result.Failure<AuthenticatedContext, Error>(
-                    Error.Validation("Invalid AxonUserId format", AuthErrors.TokenInvalidAxonUserId));
+                    Error.Unauthorized("Invalid user ID in token"));
             }
 
-            var axonUserId = new AxonUserId(axonUserIdGuid);
+            var axonUserId = new AxonUserId(userGuid);
 
-            var providerTypeResult = ProviderType.Create(providerTypeClaim);
+            var providerType = principal.FindFirst("provider_type")?.Value ?? "axon";
+            var originalIssuer = principal.FindFirst("original_issuer")?.Value
+                ?? principal.FindFirst("iss")?.Value
+                ?? _options.Issuer;
+            var originalSubject = principal.FindFirst("original_subject")?.Value
+                ?? principal.FindFirst("sub")?.Value
+                ?? axonUserIdClaim;
+
+            var iat = principal.FindFirst("iat")?.Value;
+            var exp = principal.FindFirst("exp")?.Value;
+
+            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(
+                long.TryParse(iat, out var iatValue) ? iatValue : DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            var expiresAt = DateTimeOffset.FromUnixTimeSeconds(
+                long.TryParse(exp, out var expValue) ? expValue : DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds());
+
+            var providerTypeResult = ProviderType.Create(providerType);
             if (providerTypeResult.IsFailure)
             {
                 return Result.Failure<AuthenticatedContext, Error>(providerTypeResult.Error);
             }
 
-            if (!long.TryParse(iatClaim, out var iatValue))
-            {
-                return Result.Failure<AuthenticatedContext, Error>(
-                    Error.Validation("Invalid issued at timestamp format", AuthErrors.TokenInvalidClaims));
-            }
-
-            if (!long.TryParse(expClaim, out var expValue))
-            {
-                return Result.Failure<AuthenticatedContext, Error>(
-                    Error.Validation("Invalid expiration timestamp format", AuthErrors.TokenInvalidClaims));
-            }
-
-            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(iatValue);
-            var expiresAt = DateTimeOffset.FromUnixTimeSeconds(expValue);
-
             var context = new AuthenticatedContext(
                 TokenType: TokenType.AxonAccessToken,
                 AxonUserId: axonUserId,
                 ProviderType: providerTypeResult.Value,
-                Issuer: originalIssuerClaim,
-                Subject: originalSubjectClaim,
+                Issuer: originalIssuer,
+                Subject: originalSubject,
                 Principal: principal,
                 IssuedAt: issuedAt,
                 ExpiresAt: expiresAt);
 
-            _logger.LogDebug("Successfully validated Axon JWT token for AxonUserId={AxonUserId}", axonUserId.Value);
-            return Result.Success<AuthenticatedContext, Error>(context);
-        }
-        catch (SecurityTokenExpiredException)
-        {
-            _logger.LogWarning("Axon JWT token validation failed: Token expired");
-            return Result.Failure<AuthenticatedContext, Error>(
-                Error.Unauthorized("Token has expired", AuthErrors.TokenExpired));
-        }
-        catch (SecurityTokenInvalidSignatureException)
-        {
-            _logger.LogWarning("Axon JWT token validation failed: Invalid signature");
-            return Result.Failure<AuthenticatedContext, Error>(
-                Error.Unauthorized("Token signature is invalid", AuthErrors.TokenInvalidSignature));
-        }
-        catch (SecurityTokenValidationException ex)
-        {
-            _logger.LogWarning(ex, "Axon JWT token validation failed: {Message}", ex.Message);
-            return Result.Failure<AuthenticatedContext, Error>(
-                Error.Unauthorized($"Token validation failed: {ex.Message}", AuthErrors.TokenInvalid));
+            return await Task.FromResult(Result.Success<AuthenticatedContext, Error>(context));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error during Axon JWT token validation");
+            _logger.LogError(ex, "Failed to process authenticated user");
             return Result.Failure<AuthenticatedContext, Error>(
-                Error.Internal($"Unexpected validation error: {ex.Message}", AuthErrors.ValidationError));
+                Error.Internal("Failed to process authenticated user"));
         }
     }
+
+    #endregion
+
+    #region Refresh Token Operations
 
     public async Task<Result<RefreshTokenResponse, Error>> GenerateRefreshTokenAsync(
         AxonUserId axonUserId,
@@ -596,71 +207,66 @@ public sealed class AuthenticationService : IAuthenticationService
     {
         try
         {
-            var issuedAt = DateTimeOffset.UtcNow;
-            var accessTokenExpiresIn = _options.DefaultTokenExpirySeconds; // Use config value
-            var refreshTokenExpiresIn = _options.RefreshTokenExpirySeconds; // Use config value
-
-            var accessTokenExpiresAt = issuedAt.AddSeconds(accessTokenExpiresIn);
-            var refreshTokenExpiresAt = issuedAt.AddSeconds(refreshTokenExpiresIn);
-
             // Generate access token
             var accessTokenResult = await GenerateAccessTokenAsync(
-                axonUserId, providerType, issuer, subject, accessTokenExpiresIn, cancellationToken);
+                axonUserId, providerType, issuer, subject, -1, cancellationToken);
 
             if (accessTokenResult.IsFailure)
+            {
                 return Result.Failure<RefreshTokenResponse, Error>(accessTokenResult.Error);
+            }
 
-            // Generate refresh token
+            var accessToken = accessTokenResult.Value;
+
+            // Generate refresh token (longer expiry)
             var refreshTokenId = Guid.NewGuid().ToString();
-            var refreshTokenClaims = new[]
+            var refreshIssuedAt = DateTimeOffset.UtcNow;
+            var refreshExpiresAt = refreshIssuedAt.AddDays(30); // 30 days for refresh token
+
+            var refreshClaims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, axonUserId.Value.ToString()),
-                new Claim(JwtRegisteredClaimNames.Iss, _options.Issuer),
-                new Claim(JwtRegisteredClaimNames.Aud, $"{_options.Audience}:refresh"),
-                new Claim(JwtRegisteredClaimNames.Iat, issuedAt.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
-                new Claim(JwtRegisteredClaimNames.Exp, refreshTokenExpiresAt.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
                 new Claim(JwtRegisteredClaimNames.Jti, refreshTokenId),
                 new Claim("token_type", "refresh"),
                 new Claim("axon_user_id", axonUserId.Value.ToString()),
-                new Claim("provider_type", providerType.Value),
-                new Claim("original_issuer", issuer),
-                new Claim("original_subject", subject)
+                new Claim("provider_type", providerType.Value)
             };
 
             var refreshTokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(refreshTokenClaims),
-                Expires = refreshTokenExpiresAt.DateTime,
+                Subject = new ClaimsIdentity(refreshClaims),
+                Expires = refreshExpiresAt.DateTime,
                 Issuer = _options.Issuer,
-                Audience = $"{_options.Audience}:refresh",
+                Audience = _options.Audience,
                 SigningCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256Signature)
             };
 
-            var refreshToken = _tokenHandler.CreateToken(refreshTokenDescriptor);
-            var refreshTokenString = _tokenHandler.WriteToken(refreshToken);
+            var refreshSecurityToken = _tokenHandler.CreateToken(refreshTokenDescriptor);
+            var refreshTokenString = _tokenHandler.WriteToken(refreshSecurityToken);
 
-            // Store refresh token for later validation (simple in-memory cache for now)
-            var refreshTokenCacheKey = $"refresh_token_{refreshTokenId}";
-            _cache.Set(refreshTokenCacheKey, axonUserId.Value, refreshTokenExpiresAt.Subtract(issuedAt));
-
-            _logger.LogDebug("Generated refresh token for AxonUserId={AxonUserId}", axonUserId.Value);
+            // Cache refresh token metadata for validation later
+            var cacheKey = $"refresh_token:{refreshTokenId}";
+            var cacheData = new RefreshTokenCacheData(axonUserId, providerType, issuer, subject);
+            _cache.Set(cacheKey, cacheData, refreshExpiresAt - DateTimeOffset.UtcNow);
 
             var response = new RefreshTokenResponse(
-                AccessToken: accessTokenResult.Value.AccessToken,
+                AccessToken: accessToken.AccessToken,
                 RefreshToken: refreshTokenString,
                 TokenType: "Bearer",
-                ExpiresIn: accessTokenExpiresIn,
-                IssuedAt: issuedAt,
-                AccessTokenExpiresAt: accessTokenExpiresAt,
-                RefreshTokenExpiresAt: refreshTokenExpiresAt);
+                ExpiresIn: accessToken.ExpiresIn,
+                IssuedAt: accessToken.IssuedAt,
+                AccessTokenExpiresAt: accessToken.ExpiresAt,
+                RefreshTokenExpiresAt: refreshExpiresAt);
+
+            _logger.LogDebug("Generated refresh token for user {UserId}", axonUserId.Value);
 
             return Result.Success<RefreshTokenResponse, Error>(response);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate refresh token for AxonUserId={AxonUserId}", axonUserId.Value);
+            _logger.LogError(ex, "Failed to generate refresh token");
             return Result.Failure<RefreshTokenResponse, Error>(
-                Error.Internal($"Failed to generate refresh token: {ex.Message}", AuthErrors.TokenGenerationFailed));
+                Error.Internal("Failed to generate refresh token"));
         }
     }
 
@@ -670,155 +276,242 @@ public sealed class AuthenticationService : IAuthenticationService
     {
         try
         {
-            // Validate the refresh token
-            var validationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidIssuer = _options.Issuer,
-                ValidateAudience = true,
-                ValidAudience = $"{_options.Audience}:refresh",
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = _signingKey,
-                ValidateLifetime = true,
-                RequireExpirationTime = true,
-                RequireSignedTokens = true,
-                ClockSkew = TimeSpan.FromSeconds(_options.ClockSkewSeconds)
-            };
-
-            var principal = _tokenHandler.ValidateToken(refreshToken, validationParameters, out var validatedToken);
-
-            // Extract claims
-            var jtiClaim = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
-            var axonUserIdClaim = principal.FindFirst("axon_user_id")?.Value;
-            var providerTypeClaim = principal.FindFirst("provider_type")?.Value;
-            var originalIssuerClaim = principal.FindFirst("original_issuer")?.Value;
-            var originalSubjectClaim = principal.FindFirst("original_subject")?.Value;
-
-            if (string.IsNullOrEmpty(jtiClaim) || string.IsNullOrEmpty(axonUserIdClaim) ||
-                string.IsNullOrEmpty(providerTypeClaim) || string.IsNullOrEmpty(originalIssuerClaim) ||
-                string.IsNullOrEmpty(originalSubjectClaim))
+            // Parse the refresh token (basic validation only, full validation in middleware)
+            var tokenValidation = _tokenHandler.ReadJwtToken(refreshToken);
+            if (tokenValidation == null)
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Validation("Refresh token missing required claims", AuthErrors.TokenInvalidClaims));
+                    Error.Unauthorized("Invalid refresh token"));
             }
 
-            // Atomically check and revoke refresh token to prevent replay attacks
-            var refreshTokenCacheKey = $"refresh_token_{jtiClaim}";
-            bool tokenExists;
-
-            lock (ReplayLock)
-            {
-                tokenExists = _cache.TryGetValue(refreshTokenCacheKey, out var cachedUserId);
-                if (tokenExists)
-                {
-                    // Immediately revoke the token to prevent concurrent use
-                    _cache.Remove(refreshTokenCacheKey);
-                }
-            }
-
-            if (!tokenExists)
+            var jti = tokenValidation.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Jti)?.Value;
+            if (string.IsNullOrEmpty(jti))
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Unauthorized("Refresh token is invalid or revoked", AuthErrors.TokenInvalid));
+                    Error.Unauthorized("Invalid refresh token"));
             }
 
-            if (!Guid.TryParse(axonUserIdClaim, out var axonUserIdGuid))
+            // Get cached refresh token data
+            var cacheKey = $"refresh_token:{jti}";
+            if (!_cache.TryGetValue<RefreshTokenCacheData>(cacheKey, out var cacheData) || cacheData == null)
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Validation("Invalid AxonUserId format", AuthErrors.TokenInvalidAxonUserId));
+                    Error.Unauthorized("Refresh token not found or expired"));
             }
 
-            var axonUserId = new AxonUserId(axonUserIdGuid);
-            var providerTypeResult = ProviderType.Create(providerTypeClaim);
-            if (providerTypeResult.IsFailure)
-            {
-                return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Validation("Invalid provider type in refresh token", AuthErrors.TokenInvalidClaims));
-            }
-            var providerType = providerTypeResult.Value;
+            // Generate new tokens
+            var result = await GenerateRefreshTokenAsync(
+                cacheData.AxonUserId,
+                cacheData.ProviderType,
+                cacheData.Issuer,
+                cacheData.Subject,
+                cancellationToken);
 
-            // Generate new token pair
-            return await GenerateRefreshTokenAsync(
-                axonUserId, providerType, originalIssuerClaim, originalSubjectClaim, cancellationToken);
-        }
-        catch (SecurityTokenException ex)
-        {
-            _logger.LogWarning(ex, "Invalid refresh token provided");
-            return Result.Failure<RefreshTokenResponse, Error>(
-                Error.Unauthorized("Invalid refresh token", AuthErrors.TokenInvalid));
+            // Invalidate old refresh token
+            _cache.Remove(cacheKey);
+
+            return result;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to refresh access token");
             return Result.Failure<RefreshTokenResponse, Error>(
-                Error.Internal($"Failed to refresh token: {ex.Message}", AuthErrors.TokenRefreshFailed));
+                Error.Internal("Failed to refresh access token"));
         }
     }
 
-    private Result<bool, Error> ValidateTtl(DateTimeOffset issuedAt, DateTimeOffset expiration)
-    {
-        var ttlSeconds = (expiration - issuedAt).TotalSeconds;
-        if (ttlSeconds > _options.MaxTtlSeconds)
-            return Fail($"TTL exceeds maximum: {ttlSeconds}s > {_options.MaxTtlSeconds}s", AuthErrors.ChallengeTtlExceeded);
-        if (ttlSeconds <= 0)
-            return Fail("TTL must be positive", AuthErrors.ChallengeTtlInvalid);
-        return Result.Success<bool, Error>(true);
-    }
+    #endregion
 
-    private static bool TryBase64(string s, out byte[] bytes)
-    {
-        try { bytes = Convert.FromBase64String(s); return true; }
-        catch { bytes = Array.Empty<byte>(); return false; }
-    }
+    #region Challenge Operations
 
-    private static string GenerateBase64UrlNonce(int numBytes)
+    public async Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
+        string chainId,
+        string walletAddress,
+        string audience,
+        CancellationToken cancellationToken = default)
     {
-        var bytes = RandomNumberGenerator.GetBytes(numBytes);
-        return Base64UrlEncode(bytes);
-    }
-
-    private static string Base64UrlEncode(ReadOnlySpan<byte> data)
-    {
-        var b64 = Convert.ToBase64String(data);
-        return b64.Replace('+', '-').Replace('/', '_').TrimEnd('=');
-    }
-
-    private static string BuildChallengeMessage(
-        string env, string chain, string address, long issuedAt, long exp, string nonce, string aud)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false }))
+        try
         {
-            writer.WriteStartObject();
-            writer.WriteString("network_environment", env);
-            writer.WriteString("chain_id", chain);
-            writer.WriteString("address", address);
-            writer.WriteNumber("issued_at", issuedAt);
-            writer.WriteNumber("exp", exp);
-            writer.WriteString("nonce", nonce);
-            writer.WriteString("aud", aud);
-            writer.WriteEndObject();
-            writer.Flush();
+            var nonce = Guid.NewGuid().ToString("N");
+            var issuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var exp = issuedAt + 300; // 5 minutes
+
+            var challengeData = new
+            {
+                ChainId = chainId,
+                Address = walletAddress,
+                IssuedAt = issuedAt,
+                Exp = exp,
+                Nonce = nonce,
+                Aud = audience
+            };
+
+            var message = JsonSerializer.Serialize(challengeData, JsonOptions);
+            var mkv = "v1"; // MAC key version
+            var mac = GenerateMacForChallenge(message, mkv);
+
+            var challenge = new AuthenticationChallenge(
+                ChainId: chainId,
+                Address: walletAddress,
+                IssuedAt: issuedAt,
+                Exp: exp,
+                Nonce: nonce,
+                Aud: audience,
+                Message: message,
+                Mac: mac,
+                Mkv: mkv);
+
+            // Cache the challenge for validation
+            var cacheKey = $"challenge:{nonce}";
+            _cache.Set(cacheKey, challenge, TimeSpan.FromMinutes(5));
+
+            _logger.LogDebug("Generated challenge for wallet {Address} on chain {ChainId}",
+                walletAddress, chainId);
+
+            return await Task.FromResult(Result.Success<AuthenticationChallenge, Error>(challenge));
         }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate challenge");
+            return Result.Failure<AuthenticationChallenge, Error>(
+                Error.Internal("Failed to generate challenge"));
+        }
     }
 
-    private static bool TryGetString(JsonElement root, string name, out string value)
+    public Result<bool, Error> ValidateChallenge(
+        string message,
+        string expectedChainId,
+        string expectedWalletAddress,
+        string expectedAudience)
     {
-        value = default!;
-        if (!root.TryGetProperty(name, out var p)) return false;
-        if (p.ValueKind != JsonValueKind.String) return false;
-        value = p.GetString()!;
-        return !string.IsNullOrWhiteSpace(value);
+        try
+        {
+            var challengeData = JsonSerializer.Deserialize<JsonElement>(message, JsonOptions);
+
+            var chainId = challengeData.GetProperty("chainId").GetString();
+            var address = challengeData.GetProperty("address").GetString();
+            var audience = challengeData.GetProperty("aud").GetString();
+            var exp = challengeData.GetProperty("exp").GetInt64();
+
+            // Validate challenge fields
+            if (chainId != expectedChainId || address != expectedWalletAddress || audience != expectedAudience)
+            {
+                return Result.Success<bool, Error>(false);
+            }
+
+            // Check expiry
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (exp < now)
+            {
+                return Result.Success<bool, Error>(false);
+            }
+
+            return Result.Success<bool, Error>(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to validate challenge");
+            return Result.Failure<bool, Error>(
+                Error.Internal("Failed to validate challenge"));
+        }
     }
 
-    private static bool TryGetInt64(JsonElement root, string name, out long value)
+    #endregion
+
+    #region HMAC Operations
+
+    public string GenerateMacForChallenge(string canonicalJson, string keyVersion)
     {
-        value = default;
-        if (!root.TryGetProperty(name, out var p)) return false;
-        return p.TryGetInt64(out value);
+        using var hmac = new HMACSHA256(_hmacKey);
+        var messageBytes = Encoding.UTF8.GetBytes(canonicalJson);
+        var hashBytes = hmac.ComputeHash(messageBytes);
+        return Convert.ToBase64String(hashBytes);
     }
 
-    private static Result<bool, Error> Fail(string msg, string code)
-        => Result.Failure<bool, Error>(Error.Validation(msg, code));
+    public Result<bool, Error> ValidateMac(string message, string mac, string keyVersion)
+    {
+        try
+        {
+            var expectedMac = GenerateMacForChallenge(message, keyVersion);
+            var isValid = string.Equals(mac, expectedMac, StringComparison.Ordinal);
+            return Result.Success<bool, Error>(isValid);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to validate MAC");
+            return Result.Failure<bool, Error>(
+                Error.Internal("Failed to validate MAC"));
+        }
+    }
+
+    public async Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
+        string signedMessage, string mkv, CancellationToken ct = default)
+    {
+        try
+        {
+            // Extract nonce from signed message
+            var messageData = JsonSerializer.Deserialize<JsonElement>(signedMessage, JsonOptions);
+            var nonce = messageData.GetProperty("nonce").GetString();
+
+            if (string.IsNullOrEmpty(nonce))
+            {
+                return UnitResult.Failure<Error>(
+                    Error.Validation("Invalid nonce in message"));
+            }
+
+            var cacheKey = $"nonce:{nonce}";
+
+            lock (ChallengeLock)
+            {
+                if (_cache.TryGetValue<bool>(cacheKey, out _))
+                {
+                    return UnitResult.Failure<Error>(
+                        Error.Validation("Nonce already used"));
+                }
+
+                _cache.Set(cacheKey, true, TimeSpan.FromMinutes(10));
+            }
+
+            return await Task.FromResult(UnitResult.Success<Error>());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check and mark nonce");
+            return UnitResult.Failure<Error>(
+                Error.Internal("Failed to process nonce"));
+        }
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private static bool TryBase64(string input, out byte[] output)
+    {
+        output = Array.Empty<byte>();
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
+
+        try
+        {
+            output = Convert.FromBase64String(input);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    #endregion
+
+    #region Cache Data Classes
+
+    private record RefreshTokenCacheData(
+        AxonUserId AxonUserId,
+        ProviderType ProviderType,
+        string Issuer,
+        string Subject);
+
+    #endregion
 }

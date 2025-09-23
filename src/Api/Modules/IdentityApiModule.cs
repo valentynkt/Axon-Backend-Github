@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
@@ -32,10 +33,13 @@ public sealed class IdentityApiModule : IApiModule
         // Register Identity Application layer services (handlers, validators, orchestration)
         services.AddIdentityApplication();
         services.AddIdentityInfrastructure(configuration);
-        
+
+        // Add replay protection services
+        AddReplayProtection(services, configuration);
+
         // Register JWT Bearer authentication using Dynamic.xyz
         AddJwtAuthentication(services, configuration);
-        
+
         // Register rate limiting for auth endpoints
         AddRateLimiting(services);
     }
@@ -100,27 +104,28 @@ public sealed class IdentityApiModule : IApiModule
                 RoleClaimType = "role"
             };
 
-            // Diagnostics for Dynamic JWT
+            // Enhanced events for Dynamic JWT with claims transformation
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>
                 {
-                    var logger = context.HttpContext.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("Auth.DynamicJwt");
-
-                    logger.LogWarning(context.Exception, "Dynamic JWT authentication failed");
-                    return Task.CompletedTask;
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.OnAuthenticationFailedAsync(context, "DynamicJwt");
                 },
                 OnTokenValidated = context =>
                 {
-                    var logger = context.HttpContext.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("Auth.DynamicJwt");
-
-                    var subject = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
-                    logger.LogDebug("Dynamic JWT validated for sub={Subject}", subject);
-                    return Task.CompletedTask;
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.ValidateDynamicTokenAsync(context);
+                },
+                OnChallenge = context =>
+                {
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.OnChallengeAsync(context, "DynamicJwt");
+                },
+                OnForbidden = context =>
+                {
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.OnForbiddenAsync(context, "DynamicJwt");
                 }
             };
         })
@@ -150,27 +155,28 @@ public sealed class IdentityApiModule : IApiModule
                 RoleClaimType = "role"
             };
 
-            // Diagnostics for Axon JWT
+            // Enhanced events for Axon JWT with replay protection and security stamp validation
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>
                 {
-                    var logger = context.HttpContext.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("Auth.AxonJwt");
-
-                    logger.LogWarning(context.Exception, "Axon JWT authentication failed");
-                    return Task.CompletedTask;
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.OnAuthenticationFailedAsync(context, "AxonJwt");
                 },
                 OnTokenValidated = context =>
                 {
-                    var logger = context.HttpContext.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("Auth.AxonJwt");
-
-                    var subject = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
-                    logger.LogDebug("Axon JWT validated for sub={Subject}", subject);
-                    return Task.CompletedTask;
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.ValidateAxonTokenAsync(context);
+                },
+                OnChallenge = context =>
+                {
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.OnChallengeAsync(context, "AxonJwt");
+                },
+                OnForbidden = context =>
+                {
+                    var handlers = context.HttpContext.RequestServices.GetRequiredService<JwtEventHandlers>();
+                    return handlers.OnForbiddenAsync(context, "AxonJwt");
                 }
             };
         });
@@ -181,6 +187,24 @@ public sealed class IdentityApiModule : IApiModule
             {
                 policy.RequireAuthenticatedUser();
             });
+    }
+
+    private static void AddReplayProtection(IServiceCollection services, IConfiguration configuration)
+    {
+        // Check if Redis is configured for distributed caching
+        var redisConnection = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrEmpty(redisConnection))
+        {
+            services.AddReplayProtectionWithRedis(redisConnection);
+        }
+        else
+        {
+            // Fallback to memory cache only
+            services.AddReplayProtection();
+        }
+
+        // Register JWT event handlers
+        services.AddScoped<JwtEventHandlers>();
     }
 
     private static void AddRateLimiting(IServiceCollection services)

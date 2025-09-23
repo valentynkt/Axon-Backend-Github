@@ -173,6 +173,7 @@ public static class ServiceRegistration
         services.AddScoped<IBearerTokenExtractor, BearerTokenExtractor>();
 
         // Register unified authentication service (orchestrates the focused services)
+        // Authentication service - JWT validation handled by middleware
         services.AddScoped<IAuthenticationService, AuthenticationService>();
 
         // Add Microsoft Identity Framework with AxonUserAuth (Story 5 - Identity Integration)
