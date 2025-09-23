@@ -9,6 +9,8 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
 {
     public void Configure(EntityTypeBuilder<PrincipalChainDefault> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.ToTable("principal_chain_default", "identity");
 
         builder.HasKey(d => d.Id);

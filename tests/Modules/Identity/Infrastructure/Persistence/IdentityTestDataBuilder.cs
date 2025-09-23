@@ -77,6 +77,8 @@ public class IdentityTestDataBuilder
 
         public PrincipalBuilder WithMultiChainDefaults(params (string chainId, WalletId walletId)[] defaults)
         {
+            ArgumentNullException.ThrowIfNull(defaults);
+
             foreach (var (chainId, walletId) in defaults)
             {
                 WithChainDefault(chainId, walletId);

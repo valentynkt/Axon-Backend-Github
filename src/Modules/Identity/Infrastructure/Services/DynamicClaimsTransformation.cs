@@ -25,6 +25,8 @@ public sealed class DynamicClaimsTransformation : IClaimsTransformation
 
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
+        ArgumentNullException.ThrowIfNull(principal);
+
         // Only transform if we have a JWT Bearer token but no Dynamic-specific claims yet
         if (!ShouldTransform(principal))
             return principal;

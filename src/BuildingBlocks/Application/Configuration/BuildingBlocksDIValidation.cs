@@ -33,7 +33,20 @@ public static class BuildingBlocksDIValidation
         {
             // Core infrastructure services
             TestServiceResolution<IMediator>(serviceProvider, errors, "IMediator - MediatR command/query dispatcher");
-            TestServiceResolution<IValidatorFactory>(serviceProvider, errors, "IValidatorFactory - FluentValidation factory");
+
+            // FluentValidation services (using IServiceProvider instead of obsolete IValidatorFactory)
+            try
+            {
+                var validatorServices = serviceProvider.GetServices<IValidator>();
+                if (!validatorServices.Any())
+                {
+                    errors.Add("BUILDINGBLOCKS: No FluentValidation validators registered");
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"BUILDINGBLOCKS: FluentValidation services failed to resolve: {ex.Message}");
+            }
             
             // Validate behavior registration order
             ValidateBehaviorOrder(serviceProvider, errors);

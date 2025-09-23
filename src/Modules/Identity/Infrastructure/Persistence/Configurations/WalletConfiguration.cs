@@ -10,6 +10,8 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
 {
     public void Configure(EntityTypeBuilder<Wallet> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.ToTable("wallet", "identity", t =>
         {
             // Check constraint for Solana network validation using modern EF Core 9 approach

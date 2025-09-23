@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Common;
@@ -21,16 +22,19 @@ public static class Extensions
 {
     // ---------- AddDbContext (builder overload) ----------
     // Provider-agnostic. Provider must be supplied by the caller (e.g., PostgresExtensions).
-    public static IServiceCollection AddDbContext<TContext>(
+    public static IServiceCollection AddDbContext<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(
         this WebApplicationBuilder builder,
         Action<DatabaseOptions>? configureOptions = null,
         Action<DbContextOptionsBuilder, DatabaseOptions, Type>? configureProvider = null)
         where TContext : DbContext, IDbContext
-        => builder.Services.AddDbContext<TContext>(builder.Configuration, configureOptions, configureProvider);
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return builder.Services.AddDbContext<TContext>(builder.Configuration, configureOptions, configureProvider);
+    }
 
     // ---------- AddDbContext (services overload) ----------
     // Provider-agnostic. Provider must be supplied by the caller (e.g., PostgresExtensions).
-    public static IServiceCollection AddDbContext<TContext>(
+    public static IServiceCollection AddDbContext<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(
         this IServiceCollection services,
         IConfiguration configuration,
         Action<DatabaseOptions>? configureOptions = null,
@@ -103,11 +107,13 @@ public static class Extensions
     }
 
     // ---------- Optional: explicit in-memory helper ----------
-    public static IServiceCollection AddInMemoryDbContext<TContext>(
+    public static IServiceCollection AddInMemoryDbContext<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(
         this WebApplicationBuilder builder,
         string? nameSuffix = null)
         where TContext : DbContext, IDbContext
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         return builder.Services.AddDbContext<TContext>((_, options) =>
         {
             var dbName = $"{typeof(TContext).Name}{(string.IsNullOrWhiteSpace(nameSuffix) ? "" : "_" + nameSuffix.Kebaberize())}";
@@ -124,7 +130,7 @@ public static class Extensions
     }
 
     // ---------- Migrate + Seed at startup ----------
-    public static IApplicationBuilder UseMigration<TContext>(this IApplicationBuilder app)
+    public static IApplicationBuilder UseMigration<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(this IApplicationBuilder app)
         where TContext : DbContext, IDbContext
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -133,7 +139,7 @@ public static class Extensions
         return app;
     }
 
-    private static async Task MigrateAsync<TContext>(IServiceProvider sp)
+    private static async Task MigrateAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(IServiceProvider sp)
         where TContext : DbContext, IDbContext
     {
         await using var scope = sp.CreateAsyncScope();
@@ -194,7 +200,7 @@ public static class Extensions
         }
     }
 
-    private static IServiceCollection AddDbContext<TContext>(
+    private static IServiceCollection AddDbContext<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(
         this IServiceCollection services,
         Action<IServiceProvider, DbContextOptionsBuilder> builder)
         where TContext : DbContext, IDbContext

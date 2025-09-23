@@ -1,11 +1,11 @@
 using Axon.Api.Contracts.V1.Auth;
+using Axon.Api.Modules;
 using Axon.Api.Validators.V1.Auth;
-using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Application.Commands.GenerateChallenge;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
-using BuildingBlocks.Web.Endpoints.Base;
-using BuildingBlocks.Web.Extensions;
 using CSharpFunctionalExtensions;
+using MediatR;
 
 namespace Axon.Api.Endpoints.V1.Auth.Commands;
 
@@ -13,119 +13,106 @@ namespace Axon.Api.Endpoints.V1.Auth.Commands;
 /// POST /auth/challenge - Generate canonical message for wallet authentication.
 /// Returns a canonical message that the wallet must sign.
 /// </summary>
-public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, ChallengeResponseDto>
+public sealed class ChallengeEndpoint
+    : BaseIdentityCommandEndpoint<
+        ChallengeRequestDto,
+        ChallengeResponseDto,
+        GenerateChallengeCommand,
+        GenerateChallengeResult>
 {
-    private readonly IAuthenticationService _authenticationService;
-    private readonly IAddressNormalizationService _addressNormalizationService;
-
-    public ChallengeEndpoint(
-        IAuthenticationService authenticationService,
-        IAddressNormalizationService addressNormalizationService,
-        ILogger<ChallengeEndpoint> logger)
-        : base(logger)
+    public ChallengeEndpoint(IMediator mediator, ILogger<ChallengeEndpoint> logger)
+        : base(mediator, logger)
     {
-        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
-        _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
     }
 
     public override void Configure()
     {
-        Post("/api/v1/auth/challenge");
-        AllowAnonymous(); // Public endpoint for generating challenges
+        base.Configure();
+
         Validator<ChallengeRequestDtoValidator>();
 
+        // Apply rate limiting policy for challenge endpoint
+        Options(x => x.RequireRateLimiting("AuthChallenge"));
+
+        // Document responses succinctly
         Summary(s =>
         {
-            s.Summary = "Generate wallet authentication challenge";
-            s.Description = """
-                Generates a canonical challenge message for wallet authentication.
-
-                The returned message must be signed by the wallet and then submitted to the exchange endpoint.
-
-                • Rate Limited: 10 requests/min/IP (configured globally)
-                • Message Format: Canonical JSON with strict field ordering
-                • TTL: up to 5 minutes (300 seconds)
-                • Environments: mainnet, devnet, testnet
-                """;
-            s.Responses[200] = "Returns canonical challenge message for signing";
+            s.Summary = GetSummary();
+            s.Description = GetDescription();
+            s.Responses[200] = GetSuccessResponse();
             s.Responses[400] = "Invalid request parameters";
             s.Responses[422] = "Business rule violation";
             s.Responses[429] = "Too Many Requests - Rate limit exceeded";
             s.Responses[500] = "Internal server error";
         });
-
-        Tags("Authentication");
     }
 
-    protected override async Task<Result<ChallengeResponseDto, Error>> ExecuteAsync(
+    protected override string GetRoute() => "/api/v1/auth/challenge";
+    protected override string GetSummary() => "Generate wallet authentication challenge";
+    protected override string GetDescription() =>
+        """
+        Generates a canonical challenge message for wallet authentication.
+
+        The returned message must be signed by the wallet and then submitted to the exchange endpoint.
+
+        **Behavior**:
+        • Rate Limited: 10 requests/min/IP (configured globally)
+        • Message Format: Canonical JSON with strict field ordering
+        • TTL: up to 5 minutes (300 seconds)
+        • Environments: mainnet, devnet, testnet
+        """;
+    protected override string GetSuccessResponse() => "Returns canonical challenge message for signing";
+
+    protected override Task<Result<GenerateChallengeCommand, Error>> ExecuteCommand(
         ChallengeRequestDto request,
         CancellationToken ct)
     {
-        LogRequestReceived();
-
-        // Map/validate environment (DTO uses string "Environment" -> VO)
+        // Validate environment
         var envResult = NetworkEnvironment.Create(request.NetworkEnvironment);
         if (envResult.IsFailure)
         {
             Logger.LogWarning("Invalid environment: {Environment}", request.NetworkEnvironment);
-            return Result.Failure<ChallengeResponseDto, Error>(envResult.Error);
+            return Task.FromResult(Result.Failure<GenerateChallengeCommand, Error>(envResult.Error));
         }
 
-        // Normalize inputs and apply address validation per Story 5.3 AC#13
-        var chainId = request.ChainId?.Trim().ToLowerInvariant();
-        var audience = string.IsNullOrWhiteSpace(request.Audience) ? string.Empty : request.Audience!.Trim();
+        // Validate required fields
+        var chainId = request.ChainId.Trim().ToLowerInvariant();
+        var rawAddress = request.WalletAddress.Trim();
 
-        // Apply address normalization at API edge
-        var rawAddress = request.WalletAddress?.Trim();
         if (string.IsNullOrWhiteSpace(rawAddress) || string.IsNullOrWhiteSpace(chainId))
         {
-            return Result.Failure<ChallengeResponseDto, Error>(
-                Error.Validation("Chain ID and wallet address are required"));
+            return Task.FromResult(Result.Failure<GenerateChallengeCommand, Error>(
+                Error.Validation("Chain ID and wallet address are required")));
         }
 
-        var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(chainId!, rawAddress!);
-        if (normalizedAddressResult.IsFailure)
-        {
-            Logger.LogWarning("Failed to normalize address {Address} for chain {Chain}: {Error}",
-                rawAddress, chainId, normalizedAddressResult.Error.Message);
-            return Result.Failure<ChallengeResponseDto, Error>(normalizedAddressResult.Error);
-        }
+        var audience = string.IsNullOrWhiteSpace(request.Audience) ? null : request.Audience.Trim();
 
-        var address = normalizedAddressResult.Value.Value;
-
-        // Generate challenge via unified authentication service
-        var challengeResult = await _authenticationService.GenerateChallengeAsync(
-            envResult.Value,
-            chainId!,
-            address,
-            audience,
-            ct);
-
-        if (challengeResult.IsFailure)
-        {
-            Logger.LogWarning("Failed to generate challenge: {Error}", challengeResult.Error.Message);
-            return Result.Failure<ChallengeResponseDto, Error>(challengeResult.Error);
-        }
-
-        var ch = challengeResult.Value;
-
-        // Avoid caching sensitive auth payloads
+        // Prevent caching of auth responses
         HttpContext.Response.Headers.CacheControl = "no-store";
         HttpContext.Response.Headers.Pragma = "no-cache";
 
-        var response = new ChallengeResponseDto(
-            Message:      ch.Message,
-            NetworkEnvironment:  ch.NetworkEnvironment,
-            ChainId:      ch.ChainId,
-            Address:      ch.Address,
-            IssuedAt:     ch.IssuedAt,   // unix seconds
-            ExpiresAt:    ch.Exp,  // unix seconds
-            Nonce:        ch.Nonce,
-            Audience:     ch.Aud
+        var command = new GenerateChallengeCommand(
+            NetworkEnvironment: envResult.Value,
+            ChainId: chainId,
+            WalletAddress: rawAddress,
+            Audience: audience
         );
 
-        Logger.LogInformation("Generated challenge for {Address} on {Environment}", address, ch.NetworkEnvironment);
-        LogRequestCompleted();
+        return Task.FromResult(Result.Success<GenerateChallengeCommand, Error>(command));
+    }
+
+    protected override Result<ChallengeResponseDto, Error> MapDomainToResponse(GenerateChallengeResult result)
+    {
+        var response = new ChallengeResponseDto(
+            Message: result.Message,
+            NetworkEnvironment: result.NetworkEnvironment,
+            ChainId: result.ChainId,
+            Address: result.Address,
+            IssuedAt: result.IssuedAt,
+            ExpiresAt: result.ExpiresAt,
+            Nonce: result.Nonce,
+            Audience: result.Audience
+        );
 
         return Result.Success<ChallengeResponseDto, Error>(response);
     }

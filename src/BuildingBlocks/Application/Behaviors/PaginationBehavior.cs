@@ -27,6 +27,8 @@ public sealed class PaginationBehavior<TRequest, TResponse> : IPipelineBehavior<
         RequestHandlerDelegate<Result<TResponse, Error>> next,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         // Only apply pagination validation to requests that implement IPaginatedRequest
         if (request is not IPaginatedRequest paginatedRequest)
         {

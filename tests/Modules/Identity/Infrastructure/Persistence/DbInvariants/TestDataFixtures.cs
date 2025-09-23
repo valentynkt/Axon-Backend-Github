@@ -175,6 +175,8 @@ public static class TestDataFixtures
         string address,
         WalletId? id = null)
     {
+        ArgumentNullException.ThrowIfNull(chainId);
+
         // Default to mainnet for test data
         var networkContext = chainId.Contains("devnet", StringComparison.OrdinalIgnoreCase) ?
             Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Devnet :

@@ -19,22 +19,22 @@ using System.Security.Claims;
 namespace Axon.Modules.Identity.Infrastructure.Tests.ExternalServices;
 
 [TestFixture]
-public class DynamicAuthServiceHardenedTests
+public class DynamicAuthServiceTests
 {
     private MemoryCache _cache;
-    private ILogger<DynamicAuthServiceHardened> _logger;
+    private ILogger<DynamicAuthService> _logger;
     private IOptions<DynamicXyzOptions> _dynamicOptions;
     private IOptions<DynamicValidationOptions> _validationOptions;
     private IDynamicClaimNormalizer _claimNormalizer;
     private IAuthenticationService _authenticationService;
     private IJwksService _jwksService;
-    private DynamicAuthServiceHardened _service;
+    private DynamicAuthService _service;
 
     [SetUp]
     public void Setup()
     {
         _cache = new MemoryCache(new MemoryCacheOptions());
-        _logger = Substitute.For<ILogger<DynamicAuthServiceHardened>>();
+        _logger = Substitute.For<ILogger<DynamicAuthService>>();
 
         _dynamicOptions = Options.Create(new DynamicXyzOptions
         {
@@ -69,13 +69,12 @@ public class DynamicAuthServiceHardenedTests
         _authenticationService = Substitute.For<IAuthenticationService>();
         _jwksService = Substitute.For<IJwksService>();
 
-        _service = new DynamicAuthServiceHardened(
+        _service = new DynamicAuthService(
             _cache,
             _logger,
             _dynamicOptions,
             _validationOptions,
             _claimNormalizer,
-            _authenticationService,
             _jwksService);
     }
 
@@ -83,6 +82,7 @@ public class DynamicAuthServiceHardenedTests
     public void TearDown()
     {
         _cache?.Dispose();
+        _service?.Dispose();
     }
 
     [Test]
@@ -237,7 +237,7 @@ public class DynamicAuthServiceHardenedTests
                 new Claim(JwtRegisteredClaimNames.Sub, "test-user"),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new Claim(JwtRegisteredClaimNames.Exp,
-                    new DateTimeOffset(DateTime.UtcNow.AddMinutes(5)).ToUnixTimeSeconds().ToString())
+                    new DateTimeOffset(DateTime.UtcNow.AddMinutes(5)).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture))
             },
             expires: DateTime.UtcNow.AddMinutes(5),
             signingCredentials: new SigningCredentials(

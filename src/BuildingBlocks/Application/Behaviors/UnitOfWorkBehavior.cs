@@ -120,7 +120,7 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
 
     /// <summary>
     /// Per-closed-TResponse compiled accessors for CFE results.
-    /// Supports: Result, Result<T>, Result<T, Error>, UnitResult<Error>.
+    /// Supports: Result, Result&lt;T&gt;, Result&lt;T, Error&gt;, UnitResult&lt;Error&gt;.
     /// If the shape is unrecognized, we treat as success (commit).
     /// </summary>
     private static class ResultShape<T>

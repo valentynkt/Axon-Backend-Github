@@ -17,6 +17,8 @@ public sealed class AddressNormalizationService : IAddressNormalizationService
 
     public Result<Address, Error> NormalizeAddress(string chainId, string address)
     {
+        ArgumentNullException.ThrowIfNull(chainId);
+
         if (string.IsNullOrWhiteSpace(address))
         {
             return Result.Failure<Address, Error>(Error.Validation("Address cannot be empty"));
@@ -85,11 +87,11 @@ public sealed class AddressNormalizationService : IAddressNormalizationService
     private static bool IsValidBase58(string value)
     {
         const string base58Chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-        return value.All(c => base58Chars.Contains(c));
+        return value.All(c => base58Chars.Contains(c, StringComparison.Ordinal));
     }
 
     private static bool IsValidHex(string value)
     {
-        return value.All(c => "0123456789abcdefABCDEF".Contains(c));
+        return value.All(c => "0123456789abcdefABCDEF".Contains(c, StringComparison.Ordinal));
     }
 }

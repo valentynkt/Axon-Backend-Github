@@ -36,6 +36,8 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
+        ArgumentNullException.ThrowIfNull(configurationBuilder);
+
         base.ConfigureConventions(configurationBuilder);
 
         // Configure NetworkEnvironment value objects globally
@@ -54,6 +56,8 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
         base.OnModelCreating(modelBuilder);
 
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())

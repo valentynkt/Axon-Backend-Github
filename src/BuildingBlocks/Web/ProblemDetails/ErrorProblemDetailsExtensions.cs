@@ -21,6 +21,8 @@ public static class ErrorProblemDetailsExtensions
         string? instance = null,
         string? traceId = null)
     {
+        ArgumentNullException.ThrowIfNull(error);
+
         var statusCode = error.ToHttpStatusCode();
         
         var problemDetails = new Microsoft.AspNetCore.Mvc.ProblemDetails

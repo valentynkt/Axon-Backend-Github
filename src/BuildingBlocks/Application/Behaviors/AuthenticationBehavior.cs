@@ -30,6 +30,8 @@ public sealed class AuthenticationBehavior<TRequest, TResponse> : IPipelineBehav
         RequestHandlerDelegate<Result<TResponse, Error>> next,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         // Only apply authentication to requests that implement IAuthenticatedRequest
         if (request is not IAuthenticatedRequest)
         {

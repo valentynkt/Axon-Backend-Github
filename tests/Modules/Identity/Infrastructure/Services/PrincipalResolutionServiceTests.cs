@@ -56,6 +56,13 @@ public class PrincipalResolutionServiceTests
         _testAddress = Address.Create("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM").Value;
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        _principalWriteRepository.Dispose();
+        _walletWriteRepository.Dispose();
+    }
+
     [Test]
     public async Task ResolveAsync_CredentialMatch_ReturnsExistingPrincipal()
     {

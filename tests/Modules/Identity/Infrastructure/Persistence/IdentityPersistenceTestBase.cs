@@ -166,6 +166,8 @@ public abstract class IdentityPersistenceTestBase
         AxonPrincipal principal,
         params Wallet[] wallets)
     {
+        ArgumentNullException.ThrowIfNull(wallets);
+
         // Save wallets first
         foreach (var wallet in wallets)
         {
@@ -302,6 +304,8 @@ public abstract class IdentityPersistenceTestBase
     /// </summary>
     protected async Task<T?> QueryFreshAsync<T>(Func<Task<T?>> query) where T : class
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         ClearChangeTracker();
         return await query();
     }

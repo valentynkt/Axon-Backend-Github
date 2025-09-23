@@ -356,7 +356,7 @@ public class WalletPersistenceTests : IdentityPersistenceTestBase
 
         for (int i = 0; i < 100; i++)
         {
-            var chainId = (i % 5 + 1).ToString(); // Chains 1-5
+            var chainId = (i % 5 + 1).ToString(System.Globalization.CultureInfo.InvariantCulture); // Chains 1-5
             var address = Address.Create($"0x{i:X40}").Value;
             walletSpecs.Add((chainId, address));
         }
@@ -452,7 +452,7 @@ public class WalletPersistenceTests : IdentityPersistenceTestBase
 
         foreach (var chainId in specialChainIds)
         {
-            var wallet = CreateTestWallet(chainId, $"0x{chainId.GetHashCode():X8}".PadRight(42, '0'));
+            var wallet = CreateTestWallet(chainId, $"0x{chainId.GetHashCode(StringComparison.Ordinal):X8}".PadRight(42, '0'));
             wallets.Add(wallet);
         }
 

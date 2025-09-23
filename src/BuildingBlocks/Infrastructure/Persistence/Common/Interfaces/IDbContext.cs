@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using BuildingBlocks.Core.Domain.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -15,7 +16,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 public interface IDbContext : IDisposable, IAsyncDisposable
 {
     /// <summary>DbSet accessor. Prefer repositories in Application.</summary>
-    DbSet<TEntity> Set<TEntity>() where TEntity : class;
+    DbSet<TEntity> Set<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.NonPublicFields | DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties | DynamicallyAccessedMemberTypes.Interfaces)] TEntity>() where TEntity : class;
 
     /// <summary>Persist pending changes.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

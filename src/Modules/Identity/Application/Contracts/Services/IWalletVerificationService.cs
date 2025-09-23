@@ -1,4 +1,5 @@
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -49,5 +50,15 @@ public interface IWalletVerificationService
     Task<Result<bool, Error>> CanSetAsDefaultAsync(
         AxonUserId principalId,
         WalletId walletId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verifies multiple wallet ownerships in a single transaction with consistent lock ordering to prevent deadlocks.
+    /// </summary>
+    /// <param name="requests">Collection of verification requests with wallet ID, principal ID, access mode, and verification source.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result containing the list of verified ownerships or an error.</returns>
+    Task<Result<IReadOnlyList<WalletOwnership>, Error>> VerifyBatchWalletOwnershipsAsync(
+        IEnumerable<(WalletId WalletId, AxonUserId PrincipalId, AccessMode AccessMode, VerificationSource VerificationSource)> requests,
         CancellationToken cancellationToken = default);
 }

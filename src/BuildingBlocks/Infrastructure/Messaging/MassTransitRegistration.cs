@@ -1,4 +1,5 @@
 // File: BuildingBlocks/Infrastructure/Messaging/MassTransitRegistration.cs
+using System;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using BuildingBlocks.Application.Events.Publishing;
@@ -30,6 +31,8 @@ public static partial class MassTransitRegistration
         params Assembly[] consumerAssemblies)
         where TDbContext : DbContext
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         // Bind options once; allow caller overrides
         services.Configure<MassTransitOptions>(configuration.GetSection("MassTransit"));
         if (configure is not null) services.PostConfigure(configure);

@@ -9,6 +9,8 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
 {
     public void Configure(EntityTypeBuilder<WalletOwnership> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.ToTable("wallet_ownership", "identity");
 
         builder.HasKey(o => o.Id);

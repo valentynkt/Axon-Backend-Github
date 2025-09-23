@@ -10,6 +10,8 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
 {
     public void Configure(EntityTypeBuilder<AxonPrincipal> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.ToTable("principal", "identity");
 
         builder.HasKey(p => p.Id);

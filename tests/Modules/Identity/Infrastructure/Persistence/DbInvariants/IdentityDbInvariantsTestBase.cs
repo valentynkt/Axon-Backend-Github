@@ -279,6 +279,8 @@ public abstract class IdentityDbInvariantsTestBase
     /// </summary>
     protected async Task<T?> QueryFreshAsync<T>(Func<Task<T?>> query) where T : class
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         ClearChangeTracker();
         return await query();
     }

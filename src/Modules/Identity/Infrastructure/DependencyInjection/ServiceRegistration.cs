@@ -134,17 +134,9 @@ public static class ServiceRegistration
         // Configure Dynamic JWT validation options (Story 5.5)
         services.Configure<DynamicValidationOptions>(configuration.GetSection(DynamicValidationOptions.SectionName));
 
-        // Use hardened Dynamic auth service when validation options are configured
-        var dynamicValidationSection = configuration.GetSection(DynamicValidationOptions.SectionName);
-        if (dynamicValidationSection.Exists() && dynamicValidationSection["EnvironmentMapping"] != null)
-        {
-            services.AddScoped<IDynamicAuthService, DynamicAuthServiceHardened>();
-            services.AddHostedService<DynamicAuthServiceHardened>(); // For JWKS pre-warming
-        }
-        else
-        {
-            services.AddScoped<IDynamicAuthService, DynamicAuthService>();
-        }
+        // Register Dynamic auth service with JWKS pre-warming
+        services.AddScoped<IDynamicAuthService, DynamicAuthService>();
+        services.AddHostedService<DynamicAuthService>(); // For JWKS pre-warming
 
         services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
 

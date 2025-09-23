@@ -402,6 +402,40 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
+    /// Updates the status of a wallet ownership and clears defaults if revoked.
+    /// </summary>
+    public Result<Unit, Error> UpdateWalletOwnershipStatus(WalletId walletId, OwnershipStatus newStatus, string? revokeReason = null)
+    {
+        var ownership = _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
+        if (ownership == null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
+
+        var oldStatus = ownership.Status;
+        var updateResult = ownership.UpdateStatus(newStatus, revokeReason);
+        if (updateResult.IsFailure)
+            return updateResult;
+
+        // Clear defaults if status becomes Revoked (strict clear-on-revoke policy)
+        if (newStatus == OwnershipStatus.Revoked && oldStatus != OwnershipStatus.Revoked)
+        {
+            var clearResult = ClearChainDefaultsForWallet(walletId);
+            if (clearResult.IsFailure)
+                return Result.Failure<Unit, Error>(clearResult.Error);
+        }
+
+        // Raise domain event
+        RaiseDomainEvent(new OwnershipChangedEvent(
+            Id,
+            walletId,
+            "status_updated",
+            ownership.AccessMode.ToString(),
+            newStatus.ToString()
+        ));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
     /// Removes a wallet ownership from the principal.
     /// </summary>
     public Result<Unit, Error> RemoveWalletOwnership(WalletId walletId)

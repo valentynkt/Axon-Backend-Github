@@ -325,6 +325,42 @@ public sealed class WalletVerificationService : IWalletVerificationService
         return Result.Success<bool, Error>(true);
     }
 
+    public async Task<Result<IReadOnlyList<WalletOwnership>, Error>> VerifyBatchWalletOwnershipsAsync(
+        IEnumerable<(WalletId WalletId, AxonUserId PrincipalId, AccessMode AccessMode, VerificationSource VerificationSource)> requests,
+        CancellationToken cancellationToken = default)
+    {
+        var orderedRequests = OrderWalletRequestsConsistently(requests);
+        var retryCount = 0;
+
+        while (retryCount < MaxRetryAttempts)
+        {
+            try
+            {
+                return await ExecuteBatchVerificationTransactionAsync(orderedRequests, cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                retryCount++;
+                _logger.LogWarning(
+                    "Unique constraint violation during batch wallet verification. Attempt {RetryCount}/{MaxRetryAttempts}",
+                    retryCount, MaxRetryAttempts);
+
+                if (retryCount >= MaxRetryAttempts)
+                {
+                    return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(
+                        Error.Conflict("Failed to verify batch ownership after retries due to concurrent modifications",
+                            "WALLET.VERIFICATION.BATCH_RACE_CONDITION"));
+                }
+
+                // Small delay before retry
+                await Task.Delay(100 * retryCount, cancellationToken);
+            }
+        }
+
+        return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(
+            Error.Failure("Unexpected error during batch verification", "WALLET.VERIFICATION.BATCH_UNEXPECTED"));
+    }
+
     private async Task ClearDefaultWalletsForOwnershipAsync(
         WalletOwnership ownership,
         CancellationToken cancellationToken)
@@ -343,6 +379,235 @@ public sealed class WalletVerificationService : IWalletVerificationService
                 "Cleared default wallet for principal {PrincipalId} on network {NetworkEnvironment} chain {ChainId}",
                 ownership.PrincipalId, defaultEntry.NetworkEnvironment, defaultEntry.ChainId);
         }
+    }
+
+    /// <summary>
+    /// Orders wallet requests consistently by wallet ID to prevent deadlocks.
+    /// All multi-wallet operations must use this ordering to avoid transaction deadlocks.
+    /// </summary>
+    private static IEnumerable<(WalletId WalletId, AxonUserId PrincipalId, AccessMode AccessMode, VerificationSource VerificationSource)>
+        OrderWalletRequestsConsistently(
+            IEnumerable<(WalletId WalletId, AxonUserId PrincipalId, AccessMode AccessMode, VerificationSource VerificationSource)> requests)
+    {
+        return requests.OrderBy(r => r.WalletId.Value);
+    }
+
+    /// <summary>
+    /// Orders wallet IDs consistently to prevent deadlocks in multi-wallet operations.
+    /// </summary>
+    private static IEnumerable<WalletId> OrderWalletIdsConsistently(IEnumerable<WalletId> walletIds)
+    {
+        return walletIds.OrderBy(id => id.Value);
+    }
+
+    private async Task<Result<IReadOnlyList<WalletOwnership>, Error>> ExecuteBatchVerificationTransactionAsync(
+        IEnumerable<(WalletId WalletId, AxonUserId PrincipalId, AccessMode AccessMode, VerificationSource VerificationSource)> orderedRequests,
+        CancellationToken cancellationToken)
+    {
+        using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable,
+            cancellationToken);
+
+        try
+        {
+            var results = new List<WalletOwnership>();
+            var uniqueWalletIds = orderedRequests.Select(r => r.WalletId).Distinct().ToList();
+
+            // Step 1: Lock all wallets in consistent order to prevent deadlocks
+            var wallets = await LockWalletsInOrderAsync(uniqueWalletIds, cancellationToken);
+            var missingWallets = uniqueWalletIds.Except(wallets.Select(w => w.Id)).ToList();
+
+            if (missingWallets.Count > 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(
+                    Error.NotFound($"Wallets not found: {string.Join(", ", missingWallets.Select(w => w.Value))}",
+                        "WALLET.BATCH.NOT_FOUND"));
+            }
+
+            // Step 2: Lock all competing ownerships for all wallets in consistent order
+            var allOwnerships = await LockBatchCompetingOwnershipsAsync(uniqueWalletIds, cancellationToken);
+
+            // Step 3: Process each verification request
+            foreach (var request in orderedRequests)
+            {
+                var walletOwnerships = allOwnerships.Where(o => o.WalletId == request.WalletId).ToList();
+
+                // Check for existing verified+signing ownership
+                var verifiedSigningOwnership = walletOwnerships
+                    .FirstOrDefault(o => o.Status == OwnershipStatus.Verified &&
+                                       o.AccessMode == AccessMode.Signing &&
+                                       !o.IsDeleted);
+
+                // If another principal already has verified+signing, return 409 Conflict
+                if (verifiedSigningOwnership != null && verifiedSigningOwnership.PrincipalId != request.PrincipalId)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(
+                        Error.Conflict(
+                            $"Wallet {request.WalletId.Value} already has verified signing ownership by another principal",
+                            "WALLET.BATCH.OWNERSHIP.ALREADY_VERIFIED"));
+                }
+
+                // Find or create ownership for the requesting principal
+                var candidateOwnership = walletOwnerships
+                    .FirstOrDefault(o => o.PrincipalId == request.PrincipalId && !o.IsDeleted);
+
+                if (candidateOwnership == null)
+                {
+                    candidateOwnership = WalletOwnership.Create(
+                        request.PrincipalId,
+                        request.WalletId,
+                        request.AccessMode,
+                        OwnershipStatus.Verified,
+                        request.VerificationSource);
+
+                    await _dbContext.WalletOwnerships.AddAsync(candidateOwnership, cancellationToken);
+                    allOwnerships.Add(candidateOwnership); // Add to tracking collection
+                }
+                else
+                {
+                    // Update existing ownership to verified
+                    var updateResult = candidateOwnership.UpdateStatus(OwnershipStatus.Verified);
+                    if (updateResult.IsFailure)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(updateResult.Error);
+                    }
+
+                    // Update access mode if different
+                    if (candidateOwnership.AccessMode != request.AccessMode)
+                    {
+                        var modeResult = candidateOwnership.UpdateAccessMode(request.AccessMode);
+                        if (modeResult.IsFailure)
+                        {
+                            await transaction.RollbackAsync(cancellationToken);
+                            return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(modeResult.Error);
+                        }
+                    }
+                }
+
+                // Auto-revoke other pending/unverified ownerships on the same wallet (silent operation)
+                if (request.AccessMode == AccessMode.Signing)
+                {
+                    foreach (var ownership in walletOwnerships)
+                    {
+                        if (ownership.Id != candidateOwnership.Id &&
+                            ownership.Status != OwnershipStatus.Verified &&
+                            !ownership.IsDeleted)
+                        {
+                            var revokeResult = ownership.UpdateStatus(
+                                OwnershipStatus.Revoked,
+                                "Auto-revoked due to batch verified signing ownership");
+
+                            if (revokeResult.IsSuccess)
+                            {
+                                _logger.LogInformation(
+                                    "Auto-revoked pending ownership {OwnershipId} for principal {PrincipalId} on wallet {WalletId} during batch verification",
+                                    ownership.Id, ownership.PrincipalId, request.WalletId);
+                            }
+                        }
+                    }
+                }
+
+                results.Add(candidateOwnership);
+            }
+
+            // Save changes and commit transaction
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Successfully completed batch verification for {RequestCount} requests across {WalletCount} wallets",
+                orderedRequests.Count(), uniqueWalletIds.Count);
+
+            return Result.Success<IReadOnlyList<WalletOwnership>, Error>(results.AsReadOnly());
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+
+            _logger.LogError(ex,
+                "Error during batch wallet ownership verification for {RequestCount} requests",
+                orderedRequests.Count());
+
+            throw;
+        }
+    }
+
+    private async Task<List<Wallet>> LockWalletsInOrderAsync(
+        IEnumerable<WalletId> walletIds,
+        CancellationToken cancellationToken)
+    {
+        var orderedIds = OrderWalletIdsConsistently(walletIds).ToList();
+
+        if (orderedIds.Count == 0)
+            return new List<Wallet>();
+
+        if (orderedIds.Count == 1)
+        {
+            // Use raw SQL for explicit row-level lock with FOR UPDATE
+            var singleWallet = await _dbContext.Wallets
+                .FromSqlRaw(
+                    "SELECT * FROM identity.wallet WHERE id = {0} FOR UPDATE",
+                    orderedIds[0].Value.ToString())
+                .ToListAsync(cancellationToken);
+            return singleWallet;
+        }
+
+        // For multiple wallets, we need to use a different approach
+        // Build parameterized query for multiple IDs
+        var parameters = orderedIds.Select((id, index) => new { Parameter = $"@p{index}", Value = id.Value.ToString() }).ToList();
+        var parameterList = string.Join(", ", parameters.Select(p => p.Parameter));
+        var sql = $"SELECT * FROM identity.wallet WHERE id IN ({parameterList}) ORDER BY id ASC FOR UPDATE";
+
+        var parameterValues = parameters.Select(p => (object)p.Value).ToArray();
+
+        var wallets = await _dbContext.Wallets
+            .FromSqlRaw(sql, parameterValues)
+            .ToListAsync(cancellationToken);
+
+        return wallets;
+    }
+
+    private async Task<List<WalletOwnership>> LockBatchCompetingOwnershipsAsync(
+        IEnumerable<WalletId> walletIds,
+        CancellationToken cancellationToken)
+    {
+        var orderedIds = OrderWalletIdsConsistently(walletIds).ToList();
+
+        if (orderedIds.Count == 0)
+            return new List<WalletOwnership>();
+
+        if (orderedIds.Count == 1)
+        {
+            // Use raw SQL for explicit row-level lock with FOR UPDATE and consistent ordering
+            var singleOwnerships = await _dbContext.WalletOwnerships
+                .FromSqlRaw(
+                    @"SELECT * FROM identity.wallet_ownership
+                    WHERE wallet_id = {0} AND is_deleted = false
+                    ORDER BY id ASC
+                    FOR UPDATE",
+                    orderedIds[0].Value.ToString())
+                .ToListAsync(cancellationToken);
+            return singleOwnerships;
+        }
+
+        // For multiple wallets, build parameterized query
+        var parameters = orderedIds.Select((id, index) => new { Parameter = $"@p{index}", Value = id.Value.ToString() }).ToList();
+        var parameterList = string.Join(", ", parameters.Select(p => p.Parameter));
+        var sql = $@"SELECT * FROM identity.wallet_ownership
+                WHERE wallet_id IN ({parameterList}) AND is_deleted = false
+                ORDER BY wallet_id ASC, id ASC
+                FOR UPDATE";
+
+        var parameterValues = parameters.Select(p => (object)p.Value).ToArray();
+
+        var ownerships = await _dbContext.WalletOwnerships
+            .FromSqlRaw(sql, parameterValues)
+            .ToListAsync(cancellationToken);
+
+        return ownerships;
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex)

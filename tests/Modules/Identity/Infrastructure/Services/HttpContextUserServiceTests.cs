@@ -44,6 +44,7 @@ public class HttpContextUserServiceTests
     [TearDown]
     public void TearDown()
     {
+        _memoryCache?.Dispose();
         // NSubstitute mocks don't need disposal
         // The NUnit analyzer warning is about the interface, not the mock
     }

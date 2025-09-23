@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -49,7 +50,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         CancellationToken cancellationToken = default)
     {
         using var activity = ActivitySource.StartActivity("PrincipalResolution.Resolve");
-        activity?.SetTag("provider", provider.ToString());
+        activity?.SetTag("provider", provider.ToString(CultureInfo.InvariantCulture));
         activity?.SetTag("network_environment", networkEnvironment.Value);
         activity?.SetTag("chain_id", chainId.Value);
 

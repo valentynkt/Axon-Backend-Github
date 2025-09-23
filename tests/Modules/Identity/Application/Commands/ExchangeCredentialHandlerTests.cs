@@ -32,6 +32,9 @@ public class ExchangeCredentialHandlerTests
     private IHttpContextAccessor _httpContextAccessor = null!;
     private ILogger<ExchangeCredentialHandler> _logger = null!;
     private IWriteUnitOfWork<IdentityModule> _unitOfWork = null!;
+    private IPrincipalResolutionService _resolutionService = null!;
+    private IAddressNormalizationService _addressNormalizer = null!;
+    private IWalletVerificationService _walletVerificationService = null!;
     private ExchangeCredentialHandler _handler = null!;
     private static readonly ProviderType TestProviderType = ProviderType.From("dynamic");
 
@@ -46,12 +49,14 @@ public class ExchangeCredentialHandlerTests
         _httpContextAccessor = Substitute.For<IHttpContextAccessor>();
         _logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
         _unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
+        _resolutionService = Substitute.For<IPrincipalResolutionService>();
+        _addressNormalizer = Substitute.For<IAddressNormalizationService>();
+        _walletVerificationService = Substitute.For<IWalletVerificationService>();
 
         _principalRepository.UnitOfWork.Returns(_unitOfWork);
 
-        var mockResolutionService = Substitute.For<IPrincipalResolutionService>();
-        var mockAddressNormalizer = Substitute.For<IAddressNormalizationService>();
-        var mockWalletVerificationService = Substitute.For<IWalletVerificationService>();
+        // Configure default behaviors for the new services
+        ConfigureDefaultServiceBehaviors();
 
         _handler = new ExchangeCredentialHandler(
             _currentUserService,
@@ -60,9 +65,9 @@ public class ExchangeCredentialHandlerTests
             _metricsService,
             _memoryCache,
             _httpContextAccessor,
-            mockResolutionService,
-            mockAddressNormalizer,
-            mockWalletVerificationService,
+            _resolutionService,
+            _addressNormalizer,
+            _walletVerificationService,
             _logger);
     }
 
@@ -72,6 +77,68 @@ public class ExchangeCredentialHandlerTests
         _principalRepository?.Dispose();
         _walletRepository?.Dispose();
         _unitOfWork?.Dispose();
+        _memoryCache?.Dispose();
+    }
+
+    private void ConfigureDefaultServiceBehaviors()
+    {
+        // Configure default address normalization (just return the parsed address)
+        _addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
+            .Returns(args =>
+            {
+                var address = (string)args[1];
+                return Address.Create(address);
+            });
+
+        // Configure default wallet verification (always succeed)
+        _walletVerificationService.VerifyWalletOwnershipAsync(
+            Arg.Any<WalletId>(),
+            Arg.Any<AxonUserId>(),
+            Arg.Any<Domain.Enums.AccessMode>(),
+            Arg.Any<Domain.Enums.VerificationSource>(),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var walletId = (WalletId)args[0];
+                var principalId = (AxonUserId)args[1];
+                var accessMode = (Domain.Enums.AccessMode)args[2];
+                var verificationSource = (Domain.Enums.VerificationSource)args[3];
+
+                var ownership = WalletOwnership.Create(
+                    principalId,
+                    walletId,
+                    accessMode,
+                    verificationSource,
+                    Domain.Enums.OwnershipStatus.Verified,
+                    DateTime.UtcNow);
+                return Result.Success<WalletOwnership, Error>(ownership);
+            });
+
+        // Configure default principal resolution (create new principal)
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
     }
 
     [Test]
@@ -128,18 +195,35 @@ public class ExchangeCredentialHandlerTests
         var userData = CreateTestUserData();
         var command = new ExchangeCredentialCommand(userData);
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
+        // Configure resolution service to create new principal
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
 
         _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
-
-        _principalRepository.FindVerifiedSigningOwnersAsync(
-            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<WalletId, AxonPrincipal>());
-
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -161,18 +245,23 @@ public class ExchangeCredentialHandlerTests
         var command = new ExchangeCredentialCommand(userData);
         var existingPrincipal = CreateTestPrincipal();
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(existingPrincipal);
+        // Configure resolution service to return existing principal via credential resolution
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new PrincipalResolutionResult(
+                existingPrincipal,
+                ResolutionPath.Credential,
+                false));
 
         _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
-
-        _principalRepository.FindVerifiedSigningOwnersAsync(
-            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<WalletId, AxonPrincipal>());
-
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -193,9 +282,31 @@ public class ExchangeCredentialHandlerTests
         var userData = CreateTestUserDataWithMultipleWallets();
         var command = new ExchangeCredentialCommand(userData);
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
+        // Configure resolution service to create new principal
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
 
         var walletIds = new Dictionary<(string, Address), WalletId>
         {
@@ -207,11 +318,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(walletIds);
 
-        _principalRepository.FindVerifiedSigningOwnersAsync(
-            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<WalletId, AxonPrincipal>());
-
-
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
@@ -219,7 +325,7 @@ public class ExchangeCredentialHandlerTests
         result.IsSuccess.ShouldBeTrue();
         result.Value.WalletsProcessed.ShouldBe(2);
 
-        await _walletRepository.Received(2) // Called twice: once for wallet-first resolution, once for wallet processing
+        await _walletRepository.Received(1) // Called once for wallet processing (resolution service handles wallet lookup separately)
             .EnsureManyByChainAndAddressAsync(
                 Arg.Is<IEnumerable<(string, Address)>>(specs => specs.Count() == 2),
                 Arg.Any<CancellationToken>());
@@ -232,19 +338,41 @@ public class ExchangeCredentialHandlerTests
         var userData = CreateTestUserDataWithInvalidWallet();
         var command = new ExchangeCredentialCommand(userData);
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
+        // Configure address normalizer to return error for invalid address
+        _addressNormalizer.NormalizeAddress(Arg.Any<string>(), "short")
+            .Returns(Result.Failure<Address, Error>(
+                Error.Validation("Address too short", "ADDRESS.INVALID")));
+
+        // Configure resolution service for fallback behavior
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
 
         // Setup mocks for potential repository calls (even though validation should fail early)
         _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>());
-
-        _principalRepository.FindVerifiedSigningOwnersAsync(
-            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<WalletId, AxonPrincipal>());
-
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -265,7 +393,30 @@ public class ExchangeCredentialHandlerTests
         var conflictWalletId = WalletId.New();
         var conflictPrincipal = CreateTestPrincipal();
 
-        // The wallet-first resolution should find the conflicting principal that owns the wallet
+        // Configure resolution service to return the conflicting principal via wallet resolution
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new PrincipalResolutionResult(
+                conflictPrincipal,
+                ResolutionPath.Wallet,
+                true));
+
+        // Configure wallet verification to return conflict error
+        _walletVerificationService.VerifyWalletOwnershipAsync(
+            Arg.Any<WalletId>(),
+            Arg.Is<AxonUserId>(id => id != conflictPrincipal.Id), // Different principal trying to claim wallet
+            Arg.Any<Domain.Enums.AccessMode>(),
+            Arg.Any<Domain.Enums.VerificationSource>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<WalletOwnership, Error>(
+                Error.Conflict("Wallet is already verified by another principal", "WALLET.ALREADY_VERIFIED")));
+
         _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>
@@ -273,25 +424,13 @@ public class ExchangeCredentialHandlerTests
                 { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), conflictWalletId }
             });
 
-        _principalRepository.FindVerifiedSigningOwnersAsync(
-            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<WalletId, AxonPrincipal>
-            {
-                { conflictWalletId, conflictPrincipal }
-            });
-
-        // Setup: The dynamic credential for the userData belongs to a DIFFERENT principal (conflict)
-        _principalRepository.IsCredentialTakenAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(true); // This credential belongs to someone else
-
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert: Should return conflict because credential belongs to different account
+        // Assert: Should return conflict because wallet is owned by different principal
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.Conflict);
-        result.Error.Message.ShouldContain("This login method belongs to a different account");
+        result.Error.Message.ShouldContain("Wallet ownership conflict");
     }
 
     [Test]
@@ -301,10 +440,31 @@ public class ExchangeCredentialHandlerTests
         var userData = CreateTestUserDataWithEmptyWallets();
         var command = new ExchangeCredentialCommand(userData);
 
-        _principalRepository.FindByCredentialAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
+        // Configure resolution service for credential-only lookup (no wallets)
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
 
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -467,19 +627,26 @@ public class ExchangeCredentialHandlerTests
         var existingPrincipal = CreateTestPrincipal();
         var walletId = WalletId.New();
 
-        // Setup: Wallet is owned by existing principal (wallet-first resolution should find it)
+        // Configure resolution service to return existing principal via wallet resolution
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new PrincipalResolutionResult(
+                existingPrincipal,
+                ResolutionPath.Wallet,
+                true));
+
+        // Setup: Wallet is owned by existing principal
         _walletRepository.EnsureManyByChainAndAddressAsync(
             Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<(string, Address), WalletId>
             {
                 { ("1", Address.Create("0x1234567890123456789012345678901234567890").Value), walletId }
-            });
-
-        _principalRepository.FindVerifiedSigningOwnersAsync(
-            Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<WalletId, AxonPrincipal>
-            {
-                { walletId, existingPrincipal }
             });
 
         // Act
@@ -490,9 +657,14 @@ public class ExchangeCredentialHandlerTests
         result.Value.Created.ShouldBeFalse();
         result.Value.AxonUserId.ShouldBe(existingPrincipal.Id);
 
-        // Verify wallet ownership relationships are correct
-        await _principalRepository.Received().FindVerifiedSigningOwnersAsync(
-            Arg.Is<IEnumerable<WalletId>>(ids => ids.Contains(walletId)),
+        // Verify resolution service was called
+        await _resolutionService.Received(1).ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
             Arg.Any<CancellationToken>());
 
         // Should update existing principal, not create new
@@ -526,10 +698,7 @@ public class ExchangeCredentialHandlerTests
                 { walletId, existingPrincipal }
             });
 
-        // Setup: Credential is not taken by another principal
-        _principalRepository.IsCredentialTakenAsync(
-            TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(false);
+        // Note: Credential checking is now handled by the resolution service internally
 
         // Capture initial credential count
         var initialCredentialCount = existingPrincipal.Credentials.Count;
@@ -553,14 +722,15 @@ public class ExchangeCredentialHandlerTests
             c.Subject == userData.AxonUserId);
         addedCredential.ShouldNotBeNull();
 
-        // Verify wallet ownership relationships are correct
-        await _principalRepository.Received().FindVerifiedSigningOwnersAsync(
-            Arg.Is<IEnumerable<WalletId>>(ids => ids.Contains(walletId)),
+        // Verify resolution service was called
+        await _resolutionService.Received(1).ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<NetworkEnvironment>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
             Arg.Any<CancellationToken>());
-
-        // Verify credential conflict check was performed
-        await _principalRepository.Received(1)
-            .IsCredentialTakenAsync(TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using BuildingBlocks.Core.Abstractions.CQRS;
@@ -49,6 +50,8 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         // Only process idempotent commands
         if (request is not IIdempotentCommand idempotentCommand)
         {
@@ -258,6 +261,7 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
 
     // ---------- Type shape detection ----------
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075:UnrecognizedReflectionPattern", Justification = "The properties IsSuccess and Error are guaranteed to exist on UnitResult<Error> type")]
     private static bool IsUnitResultError(object? obj, out (bool IsSuccess, Error? Error) value)
     {
         value = default;
@@ -280,6 +284,7 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         return true;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075:UnrecognizedReflectionPattern", Justification = "The properties IsSuccess, Value, and Error are guaranteed to exist on Result<T,Error> type")]
     private static bool IsResultWithError(object? obj, out bool isSuccess, out object? value, out Error? error, out Type valueType)
     {
         isSuccess = default;

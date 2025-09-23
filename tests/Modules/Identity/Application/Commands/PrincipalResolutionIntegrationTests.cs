@@ -64,11 +64,16 @@ public class PrincipalResolutionIntegrationTests
     [SetUp]
     public async Task SetUp()
     {
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
+        var writeOptions = new DbContextOptionsBuilder<IdentityWriteDbContext>()
             .UseNpgsql(_postgres.GetConnectionString())
             .Options;
 
-        _writeContext = new IdentityWriteDbContext(options);
+        var readOptions = new DbContextOptionsBuilder<IdentityReadDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+
+        _writeContext = new IdentityWriteDbContext(writeOptions);
+        _readContext = new IdentityReadDbContext(readOptions);
         await _writeContext.Database.EnsureCreatedAsync();
 
         await CreateIndexes();
@@ -100,7 +105,11 @@ public class PrincipalResolutionIntegrationTests
         await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet CASCADE");
         await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownership CASCADE");
         await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.credential CASCADE");
+
+        _walletWriteRepository?.Dispose();
+        _principalWriteRepository?.Dispose();
         await _writeContext.DisposeAsync();
+        await _readContext.DisposeAsync();
     }
 
     private async Task CreateIndexes()

@@ -32,6 +32,8 @@ public sealed class IdentityReadDbContext : ReadDbContextBase<IdentityModule>, I
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
         // Essential indexes for query performance
         modelBuilder.Entity<AxonPrincipal>()
             .HasIndex(p => new { p.UpdatedAt, p.Id })

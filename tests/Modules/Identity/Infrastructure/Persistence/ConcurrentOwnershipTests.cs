@@ -329,7 +329,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
 
         // Assert: System should handle deadlocks gracefully (not both fail due to deadlock)
         var isDeadlock = exception1 != null && exception2 != null &&
-                        (exception1.Message.Contains("deadlock") || exception2.Message.Contains("deadlock"));
+                        (exception1.Message.Contains("deadlock", StringComparison.OrdinalIgnoreCase) || exception2.Message.Contains("deadlock", StringComparison.OrdinalIgnoreCase));
 
         if (isDeadlock)
         {

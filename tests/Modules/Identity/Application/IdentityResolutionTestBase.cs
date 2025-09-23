@@ -345,6 +345,18 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
     #endregion
 
+    #region Cleanup
+
+    protected override async Task TearDownDerived()
+    {
+        MockMemoryCache?.Dispose();
+        MockPrincipalRepository?.Dispose();
+        MockWalletRepository?.Dispose();
+        await base.TearDownDerived();
+    }
+
+    #endregion
+
     #region Assertion Helpers
 
     /// <summary>

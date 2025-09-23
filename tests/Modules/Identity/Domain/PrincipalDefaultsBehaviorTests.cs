@@ -293,20 +293,17 @@ public class PrincipalDefaultsBehaviorTests
         // Verify default exists
         principal.PrincipalChainDefaults.Count.ShouldBe(1);
 
-        // Get the ownership for status change
-        var ownership = principal.WalletOwnerships.First(wo => wo.WalletId == wallet.Id);
-
-        // Act: Change ownership status to revoked (instead of removing)
-        var statusResult = ownership.UpdateStatus(OwnershipStatus.Revoked);
+        // Act: Change ownership status to revoked using principal method
+        var statusResult = principal.UpdateWalletOwnershipStatus(wallet.Id, OwnershipStatus.Revoked);
 
         // Assert: Status change should succeed
         statusResult.IsSuccess.ShouldBeTrue();
 
         // Verify ownership still exists but is revoked
         principal.WalletOwnerships.Count.ShouldBe(1);
+        var ownership = principal.WalletOwnerships.First(wo => wo.WalletId == wallet.Id);
         ownership.Status.ShouldBe(OwnershipStatus.Revoked);
 
-        // NOTE: This test will FAIL initially if status-based clearing is not implemented
         // The system should detect revoked status and clear defaults even without removal
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
     }
