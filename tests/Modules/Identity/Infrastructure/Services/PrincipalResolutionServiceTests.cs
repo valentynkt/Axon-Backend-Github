@@ -76,7 +76,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -86,7 +86,7 @@ public class PrincipalResolutionServiceTests
         result.Value.WasAutoLinked.Should().BeFalse();
 
         // Should not check for wallets or cross-env conflicts when credential found
-        await _walletReadRepository.DidNotReceive().FindWalletAsync(Arg.Any<NetworkEnvironment>(), Arg.Any<ChainId>(), Arg.Any<Address>(), Arg.Any<CancellationToken>());
+        await _walletReadRepository.DidNotReceive().FindWalletAsync(Arg.Any<ChainId>(), Arg.Any<Address>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -133,12 +133,12 @@ public class PrincipalResolutionServiceTests
         _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
             .Returns(crossEnvOwnership);
 
-        _walletWriteRepository.UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(CreateTestWallet());
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -147,7 +147,7 @@ public class PrincipalResolutionServiceTests
         result.Value.Path.Should().Be(ResolutionPath.Credential);
         result.Value.WasAutoLinked.Should().BeTrue();
 
-        await _walletWriteRepository.Received(1).UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>());
+        await _walletWriteRepository.Received(1).UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -164,7 +164,7 @@ public class PrincipalResolutionServiceTests
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _walletReadRepository.FindWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(existingWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
@@ -174,7 +174,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -206,7 +206,7 @@ public class PrincipalResolutionServiceTests
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _walletReadRepository.FindWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(existingWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
@@ -214,7 +214,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -237,7 +237,7 @@ public class PrincipalResolutionServiceTests
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _walletReadRepository.FindWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns((Wallet?)null);
 
         _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
@@ -245,12 +245,12 @@ public class PrincipalResolutionServiceTests
 
         // Navigation property would be set by EF Core in real scenario
 
-        _walletWriteRepository.UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(newWallet);
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -259,7 +259,7 @@ public class PrincipalResolutionServiceTests
         result.Value.Path.Should().Be(ResolutionPath.Wallet);
         result.Value.WasAutoLinked.Should().BeTrue();
 
-        await _walletWriteRepository.Received(1).UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>());
+        await _walletWriteRepository.Received(1).UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -272,14 +272,14 @@ public class PrincipalResolutionServiceTests
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _walletReadRepository.FindWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns((Wallet?)null);
 
         _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
             .Returns((WalletOwnership?)null);
 
         var newWallet = CreateTestWallet();
-        _walletWriteRepository.UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(newWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(newWallet.Id, Arg.Any<CancellationToken>())
@@ -287,7 +287,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -297,7 +297,7 @@ public class PrincipalResolutionServiceTests
         result.Value.WasAutoLinked.Should().BeFalse();
 
         // Should have created the wallet first for race protection
-        await _walletWriteRepository.Received(1).UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>());
+        await _walletWriteRepository.Received(1).UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -314,13 +314,13 @@ public class PrincipalResolutionServiceTests
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _walletReadRepository.FindWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns((Wallet?)null);
 
         _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
             .Returns((WalletOwnership?)null);
 
-        _walletWriteRepository.UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(newWallet);
 
         // Simulate race condition: another request already linked ownership
@@ -331,7 +331,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -341,7 +341,7 @@ public class PrincipalResolutionServiceTests
         result.Value.WasAutoLinked.Should().BeFalse();
 
         // Should still have attempted wallet upsert
-        await _walletWriteRepository.Received(1).UpsertWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>());
+        await _walletWriteRepository.Received(1).UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -365,7 +365,7 @@ public class PrincipalResolutionServiceTests
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
-        _walletReadRepository.FindWalletAsync(_mainnetEnv, _solanaChain, _testAddress, Arg.Any<CancellationToken>())
+        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(existingWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
@@ -373,7 +373,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         // Assert
@@ -396,7 +396,7 @@ public class PrincipalResolutionServiceTests
 
         // Act
         var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject, _mainnetEnv,
+            _dynamicProvider, issuer, subject,
             _solanaChain, _testAddress, CancellationToken.None);
 
         stopwatch.Stop();
@@ -418,10 +418,9 @@ public class PrincipalResolutionServiceTests
 
     private static Wallet CreateTestWallet()
     {
-        var networkEnv = NetworkEnvironment.Create("mainnet").Value;
-        var chainId = ChainId.Create("solana").Value;
+        var chainId = ChainId.Create("solana-mainnet").Value;
         var address = Address.Create("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM").Value;
-        return Wallet.Create(null, networkEnv, chainId.Value, address);
+        return Wallet.Create(null, chainId.Value, address);
     }
 
     private static WalletOwnership CreateTestWalletOwnership(

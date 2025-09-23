@@ -175,8 +175,8 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Applies chain defaults for multiple wallet-to-chain mappings in a single optimized operation.
     /// This method is significantly more efficient than calling ApplyChainDefault individually.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    /// <param name="networkEnvironment">The network environment for the chain defaults</param>
     /// <param name="walletChainMappings">Collection of tuples containing (chainId, walletId) pairs to set as defaults</param>
     /// <returns>Number of actual defaults applied (excluding no-ops and failures)</returns>
     /// <remarks>
@@ -186,7 +186,7 @@ public sealed partial class AxonPrincipal
     /// - Reduced IsDeleted checks and LINQ operations
     /// Only processes chains that don't already have the target wallet as default.
     /// </remarks>
-    public Result<int, Error> ApplyChainDefaultsBatch(NetworkEnvironment networkEnvironment, IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
+    public Result<int, Error> ApplyChainDefaultsBatch(IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
     {
         var mappings = walletChainMappings.ToList();
         if (mappings.Count == 0)
@@ -238,7 +238,7 @@ public sealed partial class AxonPrincipal
             }
             else
             {
-                var newDefault = PrincipalChainDefault.Create(Id, networkEnvironment, chainId, walletId);
+                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
                 _principalChainDefaults.Add(newDefault);
                 activeDefaults[chainId] = newDefault; // Update our local cache
             }
@@ -263,13 +263,14 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Applies a chain default with verified-first enforcement.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    public Result<Unit, Error> ApplyChainDefault(NetworkEnvironment networkEnvironment, string chainId, WalletId walletId)
+    public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
         // Use the optimized batch method for consistent logic and reduced complexity
-        var batchResult = ApplyChainDefaultsBatch(networkEnvironment, new[] { (chainId, walletId) });
+        var batchResult = ApplyChainDefaultsBatch(new[] { (chainId, walletId) });
 
         if (batchResult.IsFailure)
             return Result.Failure<Unit, Error>(batchResult.Error);
@@ -279,12 +280,12 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Sets a wallet as the chain default with verified+signing validation.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    /// <param name="networkEnvironment">The network environment.</param>
-    /// <param name="chainId">The chain ID.</param>
+    /// <param name="chainId">The chain ID in compound format.</param>
     /// <param name="walletId">The wallet ID to set as default.</param>
     /// <returns>Result indicating success or failure.</returns>
-    public Result<Unit, Error> SetChainDefault(NetworkEnvironment networkEnvironment, string chainId, WalletId walletId)
+    public Result<Unit, Error> SetChainDefault(string chainId, WalletId walletId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
@@ -303,8 +304,7 @@ public sealed partial class AxonPrincipal
 
         // Find existing default for this chain
         var existingDefault = _principalChainDefaults
-            .FirstOrDefault(d => d.NetworkEnvironment == networkEnvironment &&
-                               d.ChainId == chainId &&
+            .FirstOrDefault(d => d.ChainId == chainId &&
                                !d.IsDeleted);
 
         // If already set to this wallet, no-op
@@ -320,14 +320,14 @@ public sealed partial class AxonPrincipal
         }
         else
         {
-            var newDefault = PrincipalChainDefault.Create(Id, networkEnvironment, chainId, walletId);
+            var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
             _principalChainDefaults.Add(newDefault);
         }
 
         // Raise domain event
         RaiseDomainEvent(new PrincipalChangedEvent(
             Id,
-            $"ChainDefault.{networkEnvironment}.{chainId}",
+            $"ChainDefault.{chainId}",
             oldDefault?.ToString() ?? "none",
             walletId.ToString()
         ));
@@ -336,19 +336,18 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
-    /// Clears the chain default for a specific network and chain.
+    /// Clears the chain default for a specific chain.
     /// Used when ownership is revoked or wallet is removed.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    /// <param name="networkEnvironment">The network environment.</param>
-    /// <param name="chainId">The chain ID.</param>
+    /// <param name="chainId">The chain ID in compound format.</param>
     /// <returns>Result indicating success or failure.</returns>
-    public Result<Unit, Error> ClearChainDefault(NetworkEnvironment networkEnvironment, string chainId)
+    public Result<Unit, Error> ClearChainDefault(string chainId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
         var defaultEntry = _principalChainDefaults
-            .FirstOrDefault(d => d.NetworkEnvironment == networkEnvironment &&
-                               d.ChainId == chainId &&
+            .FirstOrDefault(d => d.ChainId == chainId &&
                                !d.IsDeleted);
 
         if (defaultEntry == null)
@@ -362,7 +361,7 @@ public sealed partial class AxonPrincipal
         // Raise domain event
         RaiseDomainEvent(new PrincipalChangedEvent(
             Id,
-            $"ChainDefault.{networkEnvironment}.{chainId}",
+            $"ChainDefault.{chainId}",
             oldDefault.ToString(),
             "none"
         ));
@@ -392,7 +391,7 @@ public sealed partial class AxonPrincipal
             // Raise domain event for each cleared default
             RaiseDomainEvent(new PrincipalChangedEvent(
                 Id,
-                $"ChainDefault.{defaultEntry.NetworkEnvironment}.{defaultEntry.ChainId}",
+                $"ChainDefault.{defaultEntry.ChainId}",
                 walletId.ToString(),
                 "none"
             ));

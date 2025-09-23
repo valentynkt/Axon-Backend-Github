@@ -94,11 +94,11 @@ public class PrincipalChainDefaultPersistenceTests
         // Step 3: Apply chain defaults (this is the critical part that was failing)
         var chainMappings = new[]
         {
-            ("1", wallet1.Id),
-            ("137", wallet2.Id)
+            ("ethereum-mainnet", wallet1.Id),
+            ("polygon-mainnet", wallet2.Id)
         };
 
-        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.Mainnet, chainMappings);
+        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(chainMappings);
         batchResult.IsSuccess.ShouldBeTrue();
         batchResult.Value.ShouldBe(2); // Should apply 2 defaults
 
@@ -148,7 +148,7 @@ public class PrincipalChainDefaultPersistenceTests
         // Add initial default
         var ownership1 = WalletOwnership.Create(principal.Id, wallet1.Id, AccessMode.Signing, OwnershipStatus.Verified);
         principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.ApplyChainDefaultsBatch(NetworkEnvironment.Mainnet, new[] { ("1", wallet1.Id) });
+        principal.ApplyChainDefaultsBatch(new[] { ("ethereum-mainnet", wallet1.Id) });
 
         await _repository.AddAsync(principal);
         await _unitOfWork.SaveChangesAsync();
@@ -161,7 +161,7 @@ public class PrincipalChainDefaultPersistenceTests
         reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
 
         // Change the default to wallet2
-        var updateResult = reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.Mainnet, new[] { ("1", wallet2.Id) });
+        var updateResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("ethereum-mainnet", wallet2.Id) });
         updateResult.IsSuccess.ShouldBeTrue();
         updateResult.Value.ShouldBe(1); // Should update 1 default
 
@@ -192,7 +192,6 @@ public class PrincipalChainDefaultPersistenceTests
     {
         return Wallet.Create(
             null,
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet,
             chainId,
             Address.Create(address).Value);
     }

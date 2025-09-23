@@ -152,7 +152,7 @@ public class WalletPersistenceTests : IdentityPersistenceTestBase
         // Arrange: Create a wallet
         var chainIdString = "ethereum";
         var address = Address.Create("0x1111111111111111111111111111111111111111").Value;
-        var wallet1 = Wallet.Create(null, Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet, chainIdString, address);
+        var wallet1 = Wallet.Create(null, chainIdString, address);
         await DbContext.Wallets.AddAsync(wallet1);
         await UnitOfWork.SaveChangesAsync();
 

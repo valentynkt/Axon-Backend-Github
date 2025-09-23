@@ -187,14 +187,14 @@ public class ExchangeCredentialValidatorTests
         public void Validate_WithInvalidEnvironmentId_Should_HaveValidationError(string? environmentId)
         {
             // Arrange
-            var userData = CreateValidExchangeUserData() with { EnvironmentId = environmentId! };
+            var userData = CreateValidExchangeUserData() with { DynamicEnvironmentId = environmentId! };
             var command = new ExchangeCredentialCommand(userData);
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor("UserData.EnvironmentId")
+            result.ShouldHaveValidationErrorFor("UserData.DynamicEnvironmentId")
                 .WithErrorMessage("Environment ID is required");
         }
 
@@ -203,14 +203,14 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var longEnvironmentId = new string('a', 257); // Exceeds 256 character limit
-            var userData = CreateValidExchangeUserData() with { EnvironmentId = longEnvironmentId };
+            var userData = CreateValidExchangeUserData() with { DynamicEnvironmentId = longEnvironmentId };
             var command = new ExchangeCredentialCommand(userData);
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor("UserData.EnvironmentId")
+            result.ShouldHaveValidationErrorFor("UserData.DynamicEnvironmentId")
                 .WithErrorMessage("Environment ID must not exceed 256 characters");
         }
 
@@ -558,7 +558,7 @@ public class ExchangeCredentialValidatorTests
             {
                 AxonUserId = "user-123_test.special+chars",
                 Email = "user.name+tag@example-domain.com",
-                EnvironmentId = "env-123_test-special"
+                DynamicEnvironmentId = "env-123_test-special"
             };
             var command = new ExchangeCredentialCommand(userData);
 
@@ -577,7 +577,7 @@ public class ExchangeCredentialValidatorTests
             {
                 AxonUserId = "用户123",
                 Email = "test@example.com", // Keep email ASCII for validity
-                EnvironmentId = "环境123"
+                DynamicEnvironmentId = "环境123"
             };
             var command = new ExchangeCredentialCommand(userData);
 
@@ -586,7 +586,7 @@ public class ExchangeCredentialValidatorTests
 
             // Assert
             result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
-            result.ShouldNotHaveValidationErrorFor("UserData.EnvironmentId");
+            result.ShouldNotHaveValidationErrorFor("UserData.DynamicEnvironmentId");
         }
 
         [Test]
@@ -597,7 +597,7 @@ public class ExchangeCredentialValidatorTests
             {
                 AxonUserId = new string('a', 256), // Exactly at limit
                 Email = $"{new string('a', 307)}@example.com", // Exactly at 320 limit (307 + 13 = 320)
-                EnvironmentId = new string('a', 256) // Exactly at limit
+                DynamicEnvironmentId = new string('a', 256) // Exactly at limit
             };
 
             var walletData = CreateValidExchangeWalletData() with
@@ -625,7 +625,7 @@ public class ExchangeCredentialValidatorTests
             var userData = CreateValidExchangeUserData() with
             {
                 AxonUserId = "<script>alert('xss')</script>",
-                EnvironmentId = "'; DROP TABLE users; --"
+                DynamicEnvironmentId = "'; DROP TABLE users; --"
             };
             var command = new ExchangeCredentialCommand(userData);
 
@@ -636,7 +636,7 @@ public class ExchangeCredentialValidatorTests
             // Should pass validation since these are just strings being validated for length/format
             // The actual security protection happens at other layers
             result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
-            result.ShouldNotHaveValidationErrorFor("UserData.EnvironmentId");
+            result.ShouldNotHaveValidationErrorFor("UserData.DynamicEnvironmentId");
         }
     }
 
@@ -649,7 +649,7 @@ public class ExchangeCredentialValidatorTests
         return new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 CreateValidExchangeWalletData()

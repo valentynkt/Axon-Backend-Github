@@ -43,6 +43,15 @@ public static class AuthErrors
     public const string ReplayCheckError = "AUTH.REPLAY_CHECK_ERROR";
     public const string ReplayRaceCondition = "AUTH.REPLAY_RACE_CONDITION";
 
+    // Signature Verification Errors
+    public const string SignatureInvalidAddress = "SIGNATURE.INVALID_ADDRESS";
+    public const string SignatureInvalidPublicKey = "SIGNATURE.INVALID_PUBLIC_KEY";
+    public const string SignatureInvalidSignature = "SIGNATURE.INVALID_SIGNATURE";
+    public const string SignatureInvalidLength = "SIGNATURE.INVALID_LENGTH";
+    public const string SignatureInvalidKeyLength = "SIGNATURE.INVALID_KEY_LENGTH";
+    public const string SignatureVerificationError = "SIGNATURE.VERIFICATION_ERROR";
+    public const string SignatureUnsupportedChain = "SIGNATURE.UNSUPPORTED_CHAIN";
+
     // General Auth Errors
     public const string ValidationError = "AUTH.VALIDATION_ERROR";
     public const string ConfigurationError = "AUTH.CONFIGURATION_ERROR";

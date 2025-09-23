@@ -8,7 +8,6 @@ using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Configuration;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Services;
-using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
@@ -35,7 +34,6 @@ public sealed class AuthenticationService : IAuthenticationService
     private readonly JwtSecurityTokenHandler _tokenHandler;
     private readonly IMemoryCache _cache;
     private readonly IDynamicAuthService _dynamicAuthService;
-    private readonly IExchangeMetricsService _metricsService;
     private readonly ILogger<AuthenticationService> _logger;
     private static readonly object ReplayLock = new();
 
@@ -43,7 +41,6 @@ public sealed class AuthenticationService : IAuthenticationService
         IOptions<AuthenticationOptions> options,
         IMemoryCache cache,
         IDynamicAuthService dynamicAuthService,
-        IExchangeMetricsService metricsService,
         ILogger<AuthenticationService> logger)
     {
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
@@ -51,7 +48,6 @@ public sealed class AuthenticationService : IAuthenticationService
 
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
-        _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _signingKey = new SymmetricSecurityKey(TryBase64(_options.SigningKey, out var signingKeyBytes)
@@ -287,7 +283,6 @@ public sealed class AuthenticationService : IAuthenticationService
             {
                 if (_cache.TryGetValue(cacheKey, out _))
                 {
-                    _metricsService.RecordReplayAttempt(jti);
                     _logger.LogWarning("JWT replay attempt detected for jti: {Jti}", jti);
                     return Task.FromResult(Result.Failure<Unit, Error>(
                         Error.Unauthorized("JWT token has already been used", AuthErrors.TokenReplayed)));

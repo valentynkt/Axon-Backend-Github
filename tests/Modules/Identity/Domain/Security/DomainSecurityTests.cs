@@ -32,7 +32,7 @@ public class DomainSecurityTests
         public void DomainErrors_ShouldNotExposePrincipalIds()
         {
             // Act - When operations fail and generate domain errors
-            var invalidWalletResult = _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", WalletId.New());
+            var invalidWalletResult = _principal.ApplyChainDefault( "solana-mainnet", WalletId.New());
 
             // Assert - Then error messages should not contain principal IDs
             invalidWalletResult.IsFailure.ShouldBeTrue();
@@ -53,7 +53,7 @@ public class DomainSecurityTests
             var nonExistentWalletId = WalletId.New();
 
             // Act - When operation fails with wallet reference
-            var result = _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", nonExistentWalletId);
+            var result = _principal.ApplyChainDefault( "ethereum-mainnet", nonExistentWalletId);
 
             // Assert - Then error should not expose wallet ID
             result.IsFailure.ShouldBeTrue();
@@ -68,7 +68,7 @@ public class DomainSecurityTests
         public void DomainErrors_ShouldProvideGenericMessages()
         {
             // Act - When various operations fail
-            var walletNotOwnedResult = _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", WalletId.New());
+            var walletNotOwnedResult = _principal.ApplyChainDefault( "solana-mainnet", WalletId.New());
             var conflictResult = _principal.LinkWalletOwnership(
                 WalletOwnership.Create(_principal.Id, _walletId, AccessMode.Signing, OwnershipStatus.Verified),
                 (wId, mode, status) => Result.Success<bool, Error>(true) // Simulate conflict
@@ -117,7 +117,7 @@ public class DomainSecurityTests
             // Act - When operations fail
             var results = new[]
             {
-                _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "test-chain", sensitiveWalletId),
+                _principal.ApplyChainDefault( "test-chain", sensitiveWalletId),
                 _principal.LinkWalletOwnership(
                     WalletOwnership.Create(sensitivePrincipalId, sensitiveWalletId, AccessMode.Signing, OwnershipStatus.Verified),
                     (wId, mode, status) => Result.Success<bool, Error>(false)
@@ -147,7 +147,7 @@ public class DomainSecurityTests
             // Arrange - Given various error scenarios
             var testScenarios = new[]
             {
-                () => _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "test", WalletId.New()),
+                () => _principal.ApplyChainDefault( "test", WalletId.New()),
                 () => _principal.UpdateRiskTier(_principal.RiskTier), // No-op, should succeed
                 () => AxonPrincipal.CreateService().UpdateRiskTier(RiskTier.High), // Should fail
             };
@@ -194,7 +194,7 @@ public class DomainSecurityTests
             {
                 Should.NotThrow(() =>
                 {
-                    var result = _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, maliciousChainId, _walletId);
+                    var result = _principal.ApplyChainDefault( maliciousChainId, _walletId);
                     // Operation should either succeed or fail gracefully without exceptions
                 });
             }
@@ -278,7 +278,7 @@ public class DomainSecurityTests
             var ownership = WalletOwnership.Create(_principal.Id, _walletId, AccessMode.Signing, OwnershipStatus.Verified);
             _principal.LinkWalletOwnership(ownership, (wId, mode, status) => Result.Success<bool, Error>(false));
             _principal.UpdateRiskTier(RiskTier.High);
-            _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", _walletId);
+            _principal.ApplyChainDefault( "solana-mainnet", _walletId);
 
             // Assert - Then all state should remain consistent
             _principal.WalletOwnerships.Count.ShouldBe(1);
@@ -304,7 +304,7 @@ public class DomainSecurityTests
             // Act - When performing operations in sequence
             var result1 = _principal.LinkWalletOwnership(ownership1, (wId, mode, status) => Result.Success<bool, Error>(false));
             var result2 = _principal.LinkWalletOwnership(ownership2, (wId, mode, status) => Result.Success<bool, Error>(false));
-            var result3 = _principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "solana-mainnet", wallet1);
+            var result3 = _principal.ApplyChainDefault( "solana-mainnet", wallet1);
 
             // Assert - Then all operations should succeed and maintain consistency
             result1.IsSuccess.ShouldBeTrue();

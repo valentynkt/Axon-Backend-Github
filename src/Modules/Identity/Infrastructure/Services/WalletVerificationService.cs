@@ -376,8 +376,8 @@ public sealed class WalletVerificationService : IWalletVerificationService
             _dbContext.PrincipalChainDefaults.Remove(defaultEntry);
 
             _logger.LogInformation(
-                "Cleared default wallet for principal {PrincipalId} on network {NetworkEnvironment} chain {ChainId}",
-                ownership.PrincipalId, defaultEntry.NetworkEnvironment, defaultEntry.ChainId);
+                "Cleared default wallet for principal {PrincipalId} on chain {ChainId}",
+                ownership.PrincipalId, defaultEntry.ChainId);
         }
     }
 

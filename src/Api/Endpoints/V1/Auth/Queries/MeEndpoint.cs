@@ -57,15 +57,15 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
     protected override string GetSuccessResponse() => "Returns current user information with claims";
 
-    protected override async Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
+    protected override Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
     {
         // User is already authenticated via [Authorize] attribute
         var principal = HttpContext.User;
 
         if (principal?.Identity?.IsAuthenticated != true)
         {
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("User is not authenticated", "AUTH.NOT_AUTHENTICATED"));
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("User is not authenticated", "AUTH.NOT_AUTHENTICATED")));
         }
 
         // Extract claims from authenticated principal
@@ -74,15 +74,15 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
         if (string.IsNullOrEmpty(subject))
         {
-            return Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("Invalid token: missing subject claim", "AUTH.MISSING_SUBJECT"));
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("Invalid token: missing subject claim", "AUTH.MISSING_SUBJECT")));
         }
 
         // Create provider type for Axon tokens
         var providerTypeResult = ProviderType.Create("axon");
         if (providerTypeResult.IsFailure)
         {
-            return Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error);
+            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error));
         }
 
         // Extract If-None-Match header for ETag support
@@ -98,7 +98,7 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
             IfNoneMatch: ifNoneMatch
         );
 
-        return Result.Success<GetMyPrincipalQuery, Error>(query);
+        return Task.FromResult(Result.Success<GetMyPrincipalQuery, Error>(query));
     }
 
     protected override string? ExtractETagFromDomainResult(CurrentUserResult domainResult)

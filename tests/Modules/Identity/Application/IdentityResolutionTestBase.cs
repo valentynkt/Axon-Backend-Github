@@ -2,7 +2,6 @@ using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
-using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -34,7 +33,6 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
     protected IAxonPrincipalWriteRepository MockPrincipalRepository { get; private set; } = null!;
     protected IWalletWriteRepository MockWalletRepository { get; private set; } = null!;
-    protected IExchangeMetricsService MockMetricsService { get; private set; } = null!;
     protected ICurrentUserService MockCurrentUserService { get; private set; } = null!;
     protected IMemoryCache MockMemoryCache { get; private set; } = null!;
     protected IHttpContextAccessor MockHttpContextAccessor { get; private set; } = null!;
@@ -64,7 +62,6 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
             MockCurrentUserService,
             MockPrincipalRepository,
             MockWalletRepository,
-            MockMetricsService,
             MockMemoryCache,
             MockHttpContextAccessor,
             mockResolutionService,
@@ -77,7 +74,6 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     {
         MockPrincipalRepository = Substitute.For<IAxonPrincipalWriteRepository>();
         MockWalletRepository = Substitute.For<IWalletWriteRepository>();
-        MockMetricsService = Substitute.For<IExchangeMetricsService>();
         MockCurrentUserService = Substitute.For<ICurrentUserService>();
         MockMemoryCache = Substitute.For<IMemoryCache>();
         MockHttpContextAccessor = Substitute.For<IHttpContextAccessor>();
@@ -118,7 +114,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: axonUserId,
                 Email: "test@example.com",
-                EnvironmentId: environmentId,
+                DynamicEnvironmentId: environmentId,
                 Wallets: wallets ?? new List<ExchangeWalletData>()));
     }
 

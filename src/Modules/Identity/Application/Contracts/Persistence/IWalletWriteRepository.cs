@@ -44,12 +44,11 @@ public interface IWalletWriteRepository : IWriteRepository<Wallet, WalletId>
         CancellationToken ct = default);
 
     /// <summary>
-    /// Upserts a wallet with the given network environment, chain ID, and address.
+    /// Upserts a wallet with the given compound chain ID and address.
     /// Uses INSERT ... ON CONFLICT DO NOTHING pattern for race condition protection.
     /// Returns the wallet (either newly created or existing).
     /// </summary>
     Task<Wallet> UpsertWalletAsync(
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken = default);

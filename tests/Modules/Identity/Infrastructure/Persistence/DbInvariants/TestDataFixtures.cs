@@ -34,12 +34,12 @@ public static class TestDataFixtures
     /// <summary>
     /// Solana mainnet chain identifier.
     /// </summary>
-    public const string SolanaMainnetChain = "solana:mainnet";
+    public const string SolanaMainnetChain = "solana-mainnet";
 
     /// <summary>
     /// Solana devnet chain identifier.
     /// </summary>
-    public const string SolanaDevnetChain = "solana:devnet";
+    public const string SolanaDevnetChain = "solana-devnet";
 
     #endregion
 
@@ -65,9 +65,14 @@ public static class TestDataFixtures
     #region Dynamic JWT Data
 
     /// <summary>
-    /// Dynamic issuer for testing.
+    /// Dynamic environment ID for testing (tenant-specific).
     /// </summary>
-    public const string DynamicIssuer = "https://app.dynamic.xyz";
+    public const string DynamicEnvironmentId = "dyn_test_env_12345";
+
+    /// <summary>
+    /// Dynamic issuer for testing - constructed to match handler logic.
+    /// </summary>
+    public const string DynamicIssuer = "app.dynamicauth.com/dyn_test_env_12345";
 
     /// <summary>
     /// Subject for Dynamic JWT user A.
@@ -137,7 +142,6 @@ public static class TestDataFixtures
     {
         return Wallet.Create(
             id,
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet,
             SolanaMainnetChain,
             Address.Create(W1MainAddress).Value);
     }
@@ -150,7 +154,6 @@ public static class TestDataFixtures
     {
         return Wallet.Create(
             id,
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Devnet,
             SolanaDevnetChain,
             Address.Create(W1DevAddress).Value);
     }
@@ -162,7 +165,6 @@ public static class TestDataFixtures
     {
         return Wallet.Create(
             id,
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet,
             SolanaMainnetChain,
             Address.Create(W2MainAddress).Value);
     }
@@ -177,13 +179,8 @@ public static class TestDataFixtures
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
-        // Default to mainnet for test data
-        var networkContext = chainId.Contains("devnet", StringComparison.OrdinalIgnoreCase) ?
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Devnet :
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet;
         return Wallet.Create(
             id,
-            networkContext,
             chainId,
             Address.Create(address).Value);
     }
@@ -277,7 +274,6 @@ public static class TestDataFixtures
     {
         return PrincipalChainDefault.Create(
             principalId,
-            NetworkEnvironment.From("mainnet"),
             SolanaMainnetChain,
             walletId);
     }
@@ -291,7 +287,6 @@ public static class TestDataFixtures
     {
         return PrincipalChainDefault.Create(
             principalId,
-            NetworkEnvironment.From("devnet"),
             SolanaDevnetChain,
             walletId);
     }
@@ -306,7 +301,6 @@ public static class TestDataFixtures
     {
         return PrincipalChainDefault.Create(
             principalId,
-            NetworkEnvironment.From("mainnet"),
             chainId,
             walletId);
     }
@@ -468,7 +462,7 @@ public static class TestDataFixtures
 
         // Create default for this wallet
         var chainDefault = CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        principal.ApplyChainDefault(NetworkEnvironment.From("mainnet"), SolanaMainnetChain, wallet.Id);
+        principal.ApplyChainDefault(SolanaMainnetChain, wallet.Id);
 
         return (principal, wallet, chainDefault);
     }

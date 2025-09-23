@@ -5,7 +5,6 @@ using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
@@ -30,7 +29,6 @@ public sealed class ExchangeEndpoint
     private readonly IDynamicAuthService _dynamicAuthService;
     private readonly IAddressNormalizationService _addressNormalizationService;
     private readonly IBearerTokenExtractor _bearerTokenExtractor;
-    private readonly INetworkEnvironmentResolver _networkEnvironmentResolver;
 
     public ExchangeEndpoint(
         IMediator mediator,
@@ -38,15 +36,13 @@ public sealed class ExchangeEndpoint
         Axon.Modules.Identity.Application.Contracts.Services.IAuthenticationService authenticationService,
         IDynamicAuthService dynamicAuthService,
         IAddressNormalizationService addressNormalizationService,
-        IBearerTokenExtractor bearerTokenExtractor,
-        INetworkEnvironmentResolver networkEnvironmentResolver)
+        IBearerTokenExtractor bearerTokenExtractor)
         : base(mediator, logger)
     {
         _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
         _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
         _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
         _bearerTokenExtractor = bearerTokenExtractor ?? throw new ArgumentNullException(nameof(bearerTokenExtractor));
-        _networkEnvironmentResolver = networkEnvironmentResolver ?? throw new ArgumentNullException(nameof(networkEnvironmentResolver));
     }
 
     protected override string GetRoute() => "/api/v1/auth/exchange";
@@ -139,12 +135,15 @@ public sealed class ExchangeEndpoint
         var exchangeWallets = new List<ExchangeWalletData>();
         foreach (var wallet in dynamicUser.Wallets)
         {
+            // Convert simple chain IDs from Dynamic to compound format
+            var compoundChainId = ConvertToCompoundChainId(wallet.Chain);
+
             // Apply address normalization at API edge per Story 5.3 AC#13
-            var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(wallet.Chain, wallet.Address);
+            var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(compoundChainId, wallet.Address);
             if (normalizedAddressResult.IsFailure)
             {
                 Logger.LogWarning("Failed to normalize address {Address} for chain {Chain}: {Error}",
-                    wallet.Address, wallet.Chain, normalizedAddressResult.Error.Message);
+                    wallet.Address, compoundChainId, normalizedAddressResult.Error.Message);
 
                 // Skip invalid addresses rather than failing the entire exchange
                 continue;
@@ -152,7 +151,7 @@ public sealed class ExchangeEndpoint
 
             exchangeWallets.Add(new ExchangeWalletData(
                 Address:        normalizedAddressResult.Value.Value,
-                Chain:          wallet.Chain,
+                Chain:          compoundChainId,
                 WalletName:     wallet.WalletName,
                 Provider:       wallet.Provider,
                 ConnectedAtUtc: wallet.ConnectedAtUtc
@@ -164,24 +163,16 @@ public sealed class ExchangeEndpoint
             [JwtIssuerMetadataKey] = issuer
         };
 
-        // Resolve NetworkEnvironment from Dynamic's EnvironmentId
-        var networkEnvResult = _networkEnvironmentResolver.ResolveFromDynamicEnvironment(dynamicUser.EnvironmentId);
-        if (networkEnvResult.IsFailure)
-        {
-            Logger.LogWarning("Failed to resolve NetworkEnvironment from Dynamic EnvironmentId '{EnvironmentId}': {Error}",
-                dynamicUser.EnvironmentId, networkEnvResult.Error.Message);
-            return Result.Failure<ExchangeCredentialCommand, Error>(networkEnvResult.Error);
-        }
 
         var userData = new ExchangeUserData(
-            AxonUserId:       dynamicUser.AxonUserId,
-            Email:            dynamicUser.Email,
-            EnvironmentId:    networkEnvResult.Value.Value, // Now properly mapped NetworkEnvironment
-            Wallets:          exchangeWallets,
-            FirstVisitUtc:    dynamicUser.FirstVisitUtc,
-            LastVisitUtc:     dynamicUser.LastVisitUtc,
-            IsNewUser:        dynamicUser.IsNewUser,
-            AdditionalMetadata: additional
+            AxonUserId:              dynamicUser.AxonUserId,
+            Email:                   dynamicUser.Email,
+            DynamicEnvironmentId:    dynamicUser.EnvironmentId, // Keep original Dynamic environment ID for issuer construction
+            Wallets:                 exchangeWallets,
+            FirstVisitUtc:           dynamicUser.FirstVisitUtc,
+            LastVisitUtc:            dynamicUser.LastVisitUtc,
+            IsNewUser:               dynamicUser.IsNewUser,
+            AdditionalMetadata:      additional
         );
 
         // 4) Prevent caching of auth responses
@@ -259,5 +250,34 @@ public sealed class ExchangeEndpoint
         );
 
         return Result.Success<ExchangeTokenResponseDto, Error>(response);
+    }
+
+    /// <summary>
+    /// Converts Dynamic's simple chain IDs to compound format with network suffix.
+    /// Dynamic sends chains like "solana", "ethereum" - we convert to "solana-mainnet", "ethereum-mainnet".
+    /// Defaults to mainnet for production safety.
+    /// </summary>
+    /// <param name="simpleChainId">Simple chain ID from Dynamic (e.g., "solana")</param>
+    /// <returns>Compound chain ID (e.g., "solana-mainnet")</returns>
+    private static string ConvertToCompoundChainId(string simpleChainId)
+    {
+        // If already compound format, return as-is
+        if (simpleChainId.Contains('-', StringComparison.Ordinal))
+            return simpleChainId;
+
+        // Convert simple chain IDs to compound format with mainnet suffix
+        // TODO: This could be enhanced to use Dynamic environment context for testnet detection
+        return simpleChainId.ToLowerInvariant() switch
+        {
+            "solana" => "solana-mainnet",
+            "ethereum" => "ethereum-mainnet",
+            "polygon" => "polygon-mainnet",
+            "arbitrum" => "arbitrum-one", // Arbitrum mainnet is called "arbitrum-one"
+            "optimism" => "optimism-mainnet",
+            "base" => "base-mainnet",
+            "avalanche" => "avalanche-mainnet", // Note: This may need validation against ChainId
+            "binance" => "binance-mainnet", // Note: This may need validation against ChainId
+            _ => $"{simpleChainId}-mainnet" // Default pattern for unknown chains
+        };
     }
 }

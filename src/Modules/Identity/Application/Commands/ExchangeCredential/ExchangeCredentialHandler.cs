@@ -3,7 +3,6 @@ using Axon.Modules.Identity.Application.Common.Constants;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
-using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -38,7 +37,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     private const string JwtIssuerMetadataKey = "jwt_issuer";
     private readonly IAxonPrincipalWriteRepository _principalWriteRepository;
     private readonly IWalletWriteRepository _walletRepository;
-    private readonly IExchangeMetricsService _metricsService;
     private readonly IMemoryCache _memoryCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IPrincipalResolutionService _resolutionService;
@@ -59,7 +57,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         ICurrentUserService currentUserService,
         IAxonPrincipalWriteRepository principalRepository,
         IWalletWriteRepository walletRepository,
-        IExchangeMetricsService metricsService,
         IMemoryCache memoryCache,
         IHttpContextAccessor httpContextAccessor,
         IPrincipalResolutionService resolutionService,
@@ -70,7 +67,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     {
         _principalWriteRepository = principalRepository;
         _walletRepository = walletRepository;
-        _metricsService = metricsService;
         _memoryCache = memoryCache;
         _httpContextAccessor = httpContextAccessor;
         _resolutionService = resolutionService;
@@ -92,7 +88,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             ["CorrelationId"] = correlationId,
             ["Provider"] = "dynamic",
             ["AxonUserId"] = command.UserData?.AxonUserId ?? "unknown",
-            ["EnvironmentId"] = command.UserData?.EnvironmentId ?? "unknown",
+            ["DynamicEnvironmentId"] = command.UserData?.DynamicEnvironmentId ?? "unknown",
             ["WalletCount"] = command.UserData?.Wallets?.Count ?? 0
         });
 
@@ -104,11 +100,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         if (validationResult.IsFailure)
         {
             processingStartTime.Stop();
-            _metricsService.RecordExchangeFailure(
-                validationResult.Error.Code,
-                "validation",
-                processingStartTime.ElapsedMilliseconds);
-
             _logger.LogWarning("Exchange validation failed: {ErrorCode} - {Message}",
                 validationResult.Error.Code, validationResult.Error.Message);
             return validationResult.Error;
@@ -124,14 +115,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             if (result.IsSuccess)
             {
                 var outcome = result.Value;
-                _metricsService.RecordExchangeSuccess(
-                    command.UserData!.AxonUserId,
-                    outcome.Created,
-                    outcome.WalletsProcessed,
-                    outcome.WalletsLinked,
-                    outcome.Conflicts,
-                    processingStartTime.ElapsedMilliseconds);
-
                 _logger.LogInformation("Exchange completed successfully: Created={Created}, WalletsProcessed={WalletsProcessed}, " +
                     "WalletsLinked={WalletsLinked}, Conflicts={Conflicts}, DefaultsApplied={DefaultsApplied}, Duration={Duration}ms",
                     outcome.Created, outcome.WalletsProcessed, outcome.WalletsLinked,
@@ -139,11 +122,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             }
             else
             {
-                _metricsService.RecordExchangeFailure(
-                    result.Error.Code,
-                    result.Error.Type.ToString().ToLowerInvariant(),
-                    processingStartTime.ElapsedMilliseconds);
-
                 _logger.LogWarning("Exchange failed: {ErrorCode} - {Message}",
                     result.Error.Code, result.Error.Message);
             }
@@ -153,8 +131,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         catch (Exception ex)
         {
             processingStartTime.Stop();
-            _metricsService.RecordExchangeFailure("EXCHANGE.INTERNAL", "internal", processingStartTime.ElapsedMilliseconds);
-
             _logger.LogError(ex, "Unexpected error during exchange processing after {Duration}ms",
                 processingStartTime.ElapsedMilliseconds);
 
@@ -237,22 +213,18 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         var (providerType, issuer, subject) = credentialResult.Value;
 
-        // Step 2: Determine network environment based on business logic
-        // For production exchanges, default to mainnet unless specific testnet requirements
-        // The EnvironmentId is for Dynamic JWT issuer validation, not blockchain network
-        var networkEnvironment = NetworkEnvironment.Mainnet;
-
-        // Step 3: Resolve or create Principal using new resolution service
+        // Step 2: Resolve or create Principal using new resolution service
+        // ChainIds are now compound format (e.g., "solana-mainnet") containing all network information
         var principalResult = await ResolveOrCreatePrincipalWithNewService(
-            providerType, issuer, subject, networkEnvironment, userData.Wallets, cancellationToken);
+            providerType, issuer, subject, userData.Wallets, cancellationToken);
         if (principalResult.IsFailure)
             return principalResult.Error;
 
         var (principal, isNewPrincipal) = principalResult.Value;
 
-        // Step 4: Process wallets in batch to prevent N+1 queries
+        // Step 3: Process wallets in batch to prevent N+1 queries
         var walletProcessingResult = await ProcessWalletsBatch(
-            principal, networkEnvironment, userData.Wallets, cancellationToken);
+            principal, userData.Wallets, cancellationToken);
         if (walletProcessingResult.IsFailure)
             return walletProcessingResult.Error;
 
@@ -316,9 +288,9 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             return Result.Failure<ExchangeOutcome, Error>(
                 Error.Validation("User ID is required", "EXCHANGE.USER_ID_REQUIRED"));
 
-        if (string.IsNullOrWhiteSpace(userData.EnvironmentId))
+        if (string.IsNullOrWhiteSpace(userData.DynamicEnvironmentId))
             return Result.Failure<ExchangeOutcome, Error>(
-                Error.Validation("Environment ID is required", "EXCHANGE.ENV_ID_REQUIRED"));
+                Error.Validation("Dynamic Environment ID is required", "EXCHANGE.ENV_ID_REQUIRED"));
 
         await Task.CompletedTask;
         return Result.Success<ExchangeOutcome, Error>(new ExchangeOutcome(
@@ -344,7 +316,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         // Use JWT issuer from metadata if available, otherwise construct using Dynamic's format
         var issuer = userData.AdditionalMetadata?.TryGetValue(JwtIssuerMetadataKey, out var jwtIssuer) == true && jwtIssuer is string jwtIssuerStr
             ? jwtIssuerStr
-            : $"{DynamicAuthConstants.IssuerPrefix}/{userData.EnvironmentId}";
+            : $"{DynamicAuthConstants.IssuerPrefix}/{userData.DynamicEnvironmentId}";
 
         // Log which issuer source was used for debugging
         var issuerSource = userData.AdditionalMetadata?.ContainsKey(JwtIssuerMetadataKey) == true ? "JWT claim" : "constructed";
@@ -361,15 +333,13 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     /// <param name="providerType">Authentication provider type</param>
     /// <param name="issuer">Token issuer identifier</param>
     /// <param name="subject">Token subject identifier</param>
-    /// <param name="networkEnvironment">Network environment for the request</param>
-    /// <param name="wallets">List of wallet data for resolution</param>
+    /// <param name="wallets">List of wallet data for resolution (ChainIds must be in compound format)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Tuple containing the resolved/created principal and whether it's newly created</returns>
     private async Task<Result<(AxonPrincipal principal, bool isNew), Error>> ResolveOrCreatePrincipalWithNewService(
         ProviderType providerType,
         string issuer,
         string subject,
-        NetworkEnvironment networkEnvironment,
         List<ExchangeWalletData> wallets,
         CancellationToken cancellationToken)
     {
@@ -408,16 +378,15 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         // Use the PrincipalResolutionService for deterministic resolution
         using var activity = ActivitySource.StartActivity("ExchangeCredential.PrincipalResolution");
         activity?.SetTag("provider", providerType.Value);
-        activity?.SetTag("network_environment", networkEnvironment.Value);
         activity?.SetTag("chain_id", chainIdResult.Value.Value);
 
         _logger.LogInformation(
             "Delegating principal resolution to PrincipalResolutionService: " +
-            "provider={Provider} network_environment={NetworkEnvironment} chain_id={ChainId} address={Address}",
-            providerType.Value, networkEnvironment.Value, chainIdResult.Value.Value, normalizedAddressResult.Value.Value);
+            "provider={Provider} chain_id={ChainId} address={Address}",
+            providerType.Value, chainIdResult.Value.Value, normalizedAddressResult.Value.Value);
 
         var resolutionResult = await _resolutionService.ResolveAsync(
-            providerType, issuer, subject, networkEnvironment,
+            providerType, issuer, subject,
             chainIdResult.Value, normalizedAddressResult.Value, cancellationToken);
 
         if (resolutionResult.IsFailure)
@@ -517,7 +486,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     /// Processes wallets in batch to prevent N+1 queries and establish verified ownership relationships.
     /// </summary>
     /// <param name="principal">The principal to link wallets to</param>
-    /// <param name="networkEnvironment">The network environment context</param>
     /// <param name="wallets">List of wallet data to process</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Processing metrics including counts of processed, linked, skipped, and conflicted wallets</returns>
@@ -531,7 +499,6 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     /// </remarks>
     private async Task<Result<WalletProcessingMetrics, Error>> ProcessWalletsBatch(
         AxonPrincipal principal,
-        NetworkEnvironment networkEnvironment,
         List<ExchangeWalletData> wallets,
         CancellationToken cancellationToken)
     {
@@ -568,8 +535,8 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         }
 
         _logger.LogDebug(
-            "Processed {WalletCount} wallets for network environment {NetworkEnvironment}",
-            walletSpecs.Count, networkEnvironment.Value);
+            "Processed {WalletCount} wallets",
+            walletSpecs.Count);
 
         if (parseErrors.Count > 0)
         {
@@ -692,18 +659,16 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         if (chainWalletMappings.Count == 0)
             return 0;
 
-        // Get network environment from the first wallet (all wallets should be from the same network)
-        var networkEnvironment = wallets[0].NetworkEnvironment;
 
-        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method for network {NetworkEnvironment}. " +
+
+        _logger.LogDebug("Chain defaults processing: {ChainCount} chains to process using batch method for network. " +
             "Chains: [{ChainDetails}], ExistingDefaults: {ExistingDefaultsCount}",
             chainWalletMappings.Count,
-            networkEnvironment.Value,
             string.Join(", ", chainWalletMappings.Select(m => $"{m.chainId}:{m.walletId.Value}")),
             principal.PrincipalChainDefaults.Count);
 
         // Use optimized batch method that handles all filtering, validation, and no-op detection internally
-        var batchResult = principal.ApplyChainDefaultsBatch(networkEnvironment, chainWalletMappings);
+        var batchResult = principal.ApplyChainDefaultsBatch(chainWalletMappings);
 
         if (batchResult.IsFailure)
         {

@@ -14,12 +14,12 @@ public interface IPrincipalResolutionService
 {
     /// <summary>
     /// Resolves a principal using the deterministic 2-step resolution algorithm.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
     /// <param name="provider">The identity provider type</param>
     /// <param name="issuer">The issuer of the credential</param>
     /// <param name="subject">The subject identifier from the credential</param>
-    /// <param name="networkEnvironment">The network environment (e.g., mainnet, devnet)</param>
-    /// <param name="chainId">The blockchain chain identifier</param>
+    /// <param name="chainId">The blockchain chain identifier in compound format</param>
     /// <param name="address">The wallet address</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Resolution result containing the principal and resolution path</returns>
@@ -27,7 +27,6 @@ public interface IPrincipalResolutionService
         ProviderType provider,
         string issuer,
         string subject,
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken = default);

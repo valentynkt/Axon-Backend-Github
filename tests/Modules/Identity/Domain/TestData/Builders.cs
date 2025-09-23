@@ -71,7 +71,6 @@ public static class Builders
     {
         return PrincipalChainDefault.Create(
             principalId ?? AxonUserId.New(),
-            NetworkEnvironment.Mainnet,
             chainId,
             walletId ?? WalletId.New()
         );

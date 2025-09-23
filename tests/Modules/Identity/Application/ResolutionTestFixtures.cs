@@ -181,7 +181,7 @@ public static class ResolutionTestFixtures
                 new ExchangeUserData(
                     AxonUserId: dynamicSubject,
                     Email: "test@example.com",
-                    EnvironmentId: environmentId,
+                    DynamicEnvironmentId: environmentId,
                     Wallets: wallets));
         }
 
@@ -194,7 +194,7 @@ public static class ResolutionTestFixtures
                 new ExchangeUserData(
                     AxonUserId: subject,
                     Email: "test@example.com",
-                    EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                    DynamicEnvironmentId: TestDataFixtures.MainnetEnvironment,
                     Wallets: new List<ExchangeWalletData>()));
         }
 
@@ -225,7 +225,7 @@ public static class ResolutionTestFixtures
                 new ExchangeUserData(
                     AxonUserId: DynamicJWTClaims.SubjectA,
                     Email: "test@example.com",
-                    EnvironmentId: environmentId,
+                    DynamicEnvironmentId: environmentId,
                     Wallets: wallets));
         }
     }

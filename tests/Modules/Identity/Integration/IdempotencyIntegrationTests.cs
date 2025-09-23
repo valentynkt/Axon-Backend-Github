@@ -1,7 +1,6 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Application.Contracts.Services;
-using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -62,7 +61,6 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     {
         // Create mock dependencies using NSubstitute
         var currentUserService = Substitute.For<ICurrentUserService>();
-        var metricsService = Substitute.For<IExchangeMetricsService>();
         var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
         var resolutionService = Substitute.For<IPrincipalResolutionService>();
         var addressNormalizer = Substitute.For<IAddressNormalizationService>();
@@ -74,7 +72,6 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             currentUserService,
             PrincipalRepository,  // Real repository from base class
             WalletRepository,     // Real repository from base class
-            metricsService,
             _memoryCache,         // Use field to avoid disposal warning
             httpContextAccessor,
             resolutionService,
@@ -103,7 +100,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: TestDataFixtures.DynA_Subject,
                 Email: "test@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>()
             ));
 
@@ -148,7 +145,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: TestDataFixtures.DynA_Subject,
                 Email: "test@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>()
             ));
 
@@ -182,7 +179,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: TestDataFixtures.DynA_Subject,
                 Email: "test@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>()
             ));
 
@@ -222,7 +219,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: "unknown_user_12345",
                 Email: "test@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>
                 {
                     new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
@@ -280,7 +277,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: "different_user_54321",
                 Email: "test2@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>
                 {
                     new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
@@ -328,7 +325,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: "test_user_67890",
                 Email: "test3@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>
                 {
                     new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
@@ -393,6 +390,196 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
 
     #endregion
 
+    #region Advanced Idempotency Scenarios
+
+    [Test]
+    public async Task ExchangeCredential_MixedTokenAndWalletIdempotency_HandlesCorrectly()
+    {
+        // Arrange - User has both Dynamic credential and wallet
+        var principal = TestDataFixtures.CreatePrincipalA();
+        var wallet = TestDataFixtures.CreateW1Main();
+
+        await PrincipalRepository.AddAsync(principal, CancellationToken.None);
+        await WalletRepository.AddAsync(wallet, CancellationToken.None);
+        await UnitOfWork.SaveChangesAsync(CancellationToken.None);
+
+        ClearChangeTracker();
+
+        // Command with both credential and wallet data
+        var command = new ExchangeCredentialCommand(
+            new ExchangeUserData(
+                AxonUserId: TestDataFixtures.DynA_Subject,
+                Email: "test@example.com",
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
+                Wallets: new List<ExchangeWalletData>
+                {
+                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
+                }
+            ));
+
+        // Act - Execute multiple times
+        var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
+        _timeProvider.Advance(TimeSpan.FromMinutes(5));
+        var result2 = await ExecuteExchangeWithIdempotencyCheck(command);
+        _timeProvider.Advance(TimeSpan.FromMinutes(10));
+        var result3 = await ExecuteExchangeWithIdempotencyCheck(command);
+
+        // Assert
+        result1.IsSuccess.ShouldBeTrue();
+        result2.IsSuccess.ShouldBeTrue();
+        result3.IsSuccess.ShouldBeTrue();
+
+        // All should resolve to same principal
+        result1.Value.AxonUserId.ShouldBe(result2.Value.AxonUserId);
+        result2.Value.AxonUserId.ShouldBe(result3.Value.AxonUserId);
+
+        // None should create new (existing principal and wallet)
+        result1.Value.Created.ShouldBeFalse();
+        result2.Value.Created.ShouldBeFalse();
+        result3.Value.Created.ShouldBeFalse();
+
+        // Verify database consistency
+        await VerifyOnlyOnePrincipalExists(principal.Id);
+        await VerifyOnlyOneWalletOwnership(wallet.Id);
+    }
+
+    [Test]
+    public async Task ExchangeCredential_CredentialCacheExpiry_StillIdempotent()
+    {
+        // Arrange - Create principal with credential
+        var principal = TestDataFixtures.CreatePrincipalA();
+        await PrincipalRepository.AddAsync(principal, CancellationToken.None);
+        await UnitOfWork.SaveChangesAsync(CancellationToken.None);
+
+        var originalCredential = principal.Credentials.First();
+        var originalLastSeenAt = originalCredential.LastSeenAt;
+
+        ClearChangeTracker();
+
+        var command = new ExchangeCredentialCommand(
+            new ExchangeUserData(
+                AxonUserId: TestDataFixtures.DynA_Subject,
+                Email: "test@example.com",
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
+                Wallets: new List<ExchangeWalletData>()
+            ));
+
+        // Act - Simulate cache expiry by advancing time significantly
+        _timeProvider.Advance(TimeSpan.FromHours(25)); // Beyond typical cache TTL
+        var result = await ExecuteExchangeWithIdempotencyCheck(command);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeFalse("Should find existing credential despite cache expiry");
+
+        // Verify credential timestamp was updated
+        var updatedPrincipal = await QueryFreshAsync(async () =>
+            await PrincipalRepository.GetByIdAsync(principal.Id, CancellationToken.None));
+
+        updatedPrincipal.ShouldNotBeNull();
+        var updatedCredential = updatedPrincipal.Credentials.First();
+        updatedCredential.LastSeenAt.ShouldBeGreaterThan(originalLastSeenAt);
+    }
+
+    [Test]
+    public async Task ExchangeCredential_WalletOwnershipStateTransitions_MaintainIdempotency()
+    {
+        // Arrange - Create principal with pending wallet ownership
+        var principal = AxonPrincipal.CreateHuman();
+        var wallet = TestDataFixtures.CreateW1Main();
+        var pendingOwnership = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
+
+        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+
+        await PrincipalRepository.AddAsync(principal, CancellationToken.None);
+        await WalletRepository.AddAsync(wallet, CancellationToken.None);
+        await UnitOfWork.SaveChangesAsync(CancellationToken.None);
+
+        ClearChangeTracker();
+
+        var command = new ExchangeCredentialCommand(
+            new ExchangeUserData(
+                AxonUserId: "transition_test_user",
+                Email: "test@example.com",
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
+                Wallets: new List<ExchangeWalletData>
+                {
+                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
+                }
+            ));
+
+        // Act - Execute multiple times as ownership transitions from pending to verified
+        var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
+
+        // Simulate some time passing
+        _timeProvider.Advance(TimeSpan.FromMinutes(1));
+        var result2 = await ExecuteExchangeWithIdempotencyCheck(command);
+
+        // Assert
+        result1.IsSuccess.ShouldBeTrue();
+        result2.IsSuccess.ShouldBeTrue();
+
+        // Should resolve to same principal
+        result1.Value.AxonUserId.Value.ShouldBe(principal.Id.Value);
+        result2.Value.AxonUserId.Value.ShouldBe(principal.Id.Value);
+
+        // Verify only one ownership record exists
+        await VerifyOnlyOneWalletOwnership(wallet.Id);
+    }
+
+    [Test]
+    public async Task ExchangeCredential_MultipleEnvironmentSwitch_RemainsIdempotent()
+    {
+        // Arrange - Create principal with mainnet environment
+        var principal = TestDataFixtures.CreatePrincipalA();
+        await PrincipalRepository.AddAsync(principal, CancellationToken.None);
+        await UnitOfWork.SaveChangesAsync(CancellationToken.None);
+
+        ClearChangeTracker();
+
+        // Commands for different environments (but same user)
+        var mainnetCommand = new ExchangeCredentialCommand(
+            new ExchangeUserData(
+                AxonUserId: TestDataFixtures.DynA_Subject,
+                Email: "test@example.com",
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
+                Wallets: new List<ExchangeWalletData>
+                {
+                    new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "ethereum")
+                }
+            ));
+
+        var testnetCommand = new ExchangeCredentialCommand(
+            new ExchangeUserData(
+                AxonUserId: TestDataFixtures.DynA_Subject,
+                Email: "test@example.com",
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
+                Wallets: new List<ExchangeWalletData>
+                {
+                    new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42", "ethereum") // Different testnet address
+                }
+            ));
+
+        // Act - Switch between environments
+        var mainnetResult1 = await ExecuteExchangeWithIdempotencyCheck(mainnetCommand);
+        var testnetResult = await ExecuteExchangeWithIdempotencyCheck(testnetCommand);
+        var mainnetResult2 = await ExecuteExchangeWithIdempotencyCheck(mainnetCommand);
+
+        // Assert
+        mainnetResult1.IsSuccess.ShouldBeTrue();
+        testnetResult.IsSuccess.ShouldBeTrue();
+        mainnetResult2.IsSuccess.ShouldBeTrue();
+
+        // All should resolve to same principal (same credential)
+        mainnetResult1.Value.AxonUserId.ShouldBe(testnetResult.Value.AxonUserId);
+        testnetResult.Value.AxonUserId.ShouldBe(mainnetResult2.Value.AxonUserId);
+
+        // Verify only one principal exists
+        await VerifyOnlyOnePrincipalExists(principal.Id);
+    }
+
+    #endregion
+
     #region Helper Methods
 
     /// <summary>
@@ -435,7 +622,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: subject,
                 Email: "test@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>()
             ));
     }
@@ -449,7 +636,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
             new ExchangeUserData(
                 AxonUserId: "unknown_user_" + Guid.NewGuid().ToString("N")[..8],
                 Email: "test@example.com",
-                EnvironmentId: TestDataFixtures.MainnetEnvironment,
+                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
                 Wallets: new List<ExchangeWalletData>
                 {
                     new(TestDataFixtures.SolanaMainnetChain, walletAddress)

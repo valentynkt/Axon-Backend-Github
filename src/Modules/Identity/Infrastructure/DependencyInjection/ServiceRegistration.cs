@@ -179,8 +179,9 @@ public static class ServiceRegistration
         // Register Wallet Verification Service for Story 5.4 - Transaction guards
         services.AddScoped<IWalletVerificationService, WalletVerificationService>();
 
-        // Register Network Environment Resolver for NetworkEnvironment mapping
-        services.AddScoped<INetworkEnvironmentResolver, NetworkEnvironmentResolver>();
+
+        // Register Wallet Signature Verifier as Singleton (stateless service)
+        services.AddSingleton<IWalletSignatureVerifier, Ed25519SignatureVerifier>();
 
         // CRITICAL FIX: Register ICurrentUserService implementation
         // This is required by all command/query handlers in the application

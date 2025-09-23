@@ -101,10 +101,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         // Create missing wallets - EF retry strategy will handle any race conditions
         foreach (var spec in missingSpecs)
         {
-            // TODO: Update walletSpecs to include network environment information
-            // For now, default to mainnet for production safety
-            var networkEnvironment = Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet;
-            var wallet = Wallet.Create(null, networkEnvironment, spec.chainId, spec.address);
+            var wallet = Wallet.Create(null, spec.chainId, spec.address);
             await DbSet.AddAsync(wallet, ct);
             result[spec] = wallet.Id;
         }
@@ -119,15 +116,13 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
     }
 
     public async Task<Wallet> UpsertWalletAsync(
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken = default)
     {
-        // First try to find existing wallet by triple-key lookup
+        // First try to find existing wallet by dual-key lookup
         var existingWallet = await DbSet
             .FirstOrDefaultAsync(w =>
-                w.NetworkEnvironment == networkEnvironment &&
                 w.ChainId == chainId.Value &&
                 w.Address == address,
                 cancellationToken);
@@ -138,7 +133,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         }
 
         // Create new wallet if not found
-        var newWallet = Wallet.Create(null, networkEnvironment, chainId.Value, address);
+        var newWallet = Wallet.Create(null, chainId.Value, address);
         await DbSet.AddAsync(newWallet, cancellationToken);
 
         // Save changes to persist the new wallet

@@ -479,7 +479,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var reloadedPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
         reloadedPrincipal.ShouldNotBeNull();
 
-        var chainDefaultResult = reloadedPrincipal.ApplyChainDefaultsBatch(NetworkEnvironment.From("mainnet"), new[] { ("1", wallet.Id) });
+        var chainDefaultResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("ethereum-mainnet", wallet.Id) });
 
         // Assert: Should fail at domain level
         chainDefaultResult.IsFailure.ShouldBeTrue();

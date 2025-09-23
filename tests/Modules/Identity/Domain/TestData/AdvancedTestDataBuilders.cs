@@ -117,7 +117,7 @@ public static class AdvancedTestDataBuilders
         {
             var principalId = _id ?? AxonUserId.New();
             var effectiveWalletId = walletId ?? _ownerships.FirstOrDefault()?.WalletId ?? WalletId.New();
-            var chainDefault = PrincipalChainDefault.Create(principalId, NetworkEnvironment.Mainnet, chainId, effectiveWalletId);
+            var chainDefault = PrincipalChainDefault.Create(principalId, chainId, effectiveWalletId);
             _chainDefaults.Add(chainDefault);
             return this;
         }
@@ -250,7 +250,7 @@ public static class AdvancedTestDataBuilders
         public Wallet Build()
         {
             var effectiveAddress = _address ?? (_chainId.Contains("solana", StringComparison.OrdinalIgnoreCase) ? Builders.SolanaAddress : Builders.EthereumAddress);
-            return Wallet.Create(_id, NetworkEnvironment.Mainnet, _chainId, effectiveAddress, _timestamp);
+            return Wallet.Create(_id, _chainId, effectiveAddress, _timestamp);
         }
     }
 

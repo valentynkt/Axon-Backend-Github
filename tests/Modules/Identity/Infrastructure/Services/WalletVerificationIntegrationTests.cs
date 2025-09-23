@@ -303,8 +303,7 @@ public class WalletVerificationIntegrationTests
     {
         var wallet = Wallet.Create(
             walletId,
-            NetworkEnvironment.Mainnet,
-            "solana",
+            "solana-mainnet",
             Address.Create("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM").Value);
 
         await _writeContext.Wallets.AddAsync(wallet);

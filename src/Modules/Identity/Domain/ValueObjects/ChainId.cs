@@ -39,7 +39,9 @@ public readonly partial struct ChainId
         "arbitrum-one",
         "arbitrum-goerli",
         "optimism-mainnet",
-        "base-mainnet"
+        "base-mainnet",
+        "avalanche-mainnet",
+        "binance-mainnet"
     };
 
     // Vogen will call this before Validate and before storing the value
@@ -91,6 +93,7 @@ public readonly partial struct ChainId
     }
 
     public static IEnumerable<string> GetSupportedChains() => SupportedChains;
+
 
     public override string ToString() => Value;
 }

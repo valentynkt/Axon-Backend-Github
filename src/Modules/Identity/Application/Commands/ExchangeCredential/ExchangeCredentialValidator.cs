@@ -31,11 +31,11 @@ public sealed class ExchangeCredentialCommandValidator : AbstractValidator<Excha
                 .MaximumLength(320)
                 .WithMessage("Email must not exceed 320 characters");
 
-            RuleFor(x => x.UserData.EnvironmentId)
+            RuleFor(x => x.UserData.DynamicEnvironmentId)
                 .NotEmpty()
-                .WithMessage("Environment ID is required")
+                .WithMessage("Dynamic Environment ID is required")
                 .MaximumLength(256)
-                .WithMessage("Environment ID must not exceed 256 characters");
+                .WithMessage("Dynamic Environment ID must not exceed 256 characters");
 
             RuleFor(x => x.UserData.Wallets)
                 .NotNull()

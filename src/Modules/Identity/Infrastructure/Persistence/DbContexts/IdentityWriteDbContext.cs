@@ -40,11 +40,6 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
         base.ConfigureConventions(configurationBuilder);
 
-        // Configure NetworkEnvironment value objects globally
-        configurationBuilder.Properties<NetworkEnvironment>()
-            .HaveConversion<NetworkEnvironment.EfCoreValueConverter>()
-            .HaveMaxLength(50);
-
         // Configure Address value objects globally
         configurationBuilder.Properties<Address>()
             .HaveConversion<Address.EfCoreValueConverter>()

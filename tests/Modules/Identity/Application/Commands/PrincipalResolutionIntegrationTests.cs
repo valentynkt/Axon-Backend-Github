@@ -183,7 +183,6 @@ public class PrincipalResolutionIntegrationTests
     public async Task ResolveAsync_Performance_ShouldCompleteUnder100ms_P95()
     {
         // Arrange - Create test data
-        var networkEnv = NetworkEnvironment.Mainnet;
         var chainId = "solana";
         var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
@@ -201,7 +200,6 @@ public class PrincipalResolutionIntegrationTests
                 ProviderType.Dynamic,
                 "dynamic.xyz",
                 $"user{i}",
-                networkEnv,
                 ChainId.From(chainId),
                 address,
                 CancellationToken.None);
@@ -233,15 +231,13 @@ public class PrincipalResolutionIntegrationTests
     public async Task ResolveAsync_TripleKeyLookup_ShouldUseIndex()
     {
         // Arrange
-        var networkEnv = NetworkEnvironment.Mainnet;
-        var chainId = "solana";
+                var chainId = "solana";
         var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
         // Create a wallet first
         var wallet = Wallet.Create(
             null,
-            networkEnv,
-            chainId,
+            $"{chainId}-mainnet",
             address);
         await _walletWriteRepository.AddAsync(wallet, CancellationToken.None);
         await _writeContext.SaveChangesAsync();
@@ -291,8 +287,7 @@ public class PrincipalResolutionIntegrationTests
         var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
         var devnetWallet = Wallet.Create(
             WalletId.New(),
-            NetworkEnvironment.Devnet,
-            "solana",
+            "solana-devnet",
             address);
         await _walletWriteRepository.AddAsync(devnetWallet, CancellationToken.None);
 
@@ -310,7 +305,6 @@ public class PrincipalResolutionIntegrationTests
             ProviderType.Dynamic,
             "dynamic.xyz",
             "user123",
-            NetworkEnvironment.Mainnet,
             ChainId.From("solana"),
             address,
             CancellationToken.None);
@@ -324,8 +318,7 @@ public class PrincipalResolutionIntegrationTests
     public async Task ResolveAsync_ConcurrentCreation_ShouldHandleRaceCondition()
     {
         // Arrange
-        var networkEnv = NetworkEnvironment.Mainnet;
-        var chainId = "solana";
+                var chainId = "solana";
         var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
         // Act - Run concurrent resolutions
@@ -336,7 +329,6 @@ public class PrincipalResolutionIntegrationTests
                 ProviderType.Dynamic,
                 "dynamic.xyz",
                 $"concurrent{i}",
-                networkEnv,
                 ChainId.From(chainId),
                 address,
                 CancellationToken.None));
@@ -375,8 +367,7 @@ public class PrincipalResolutionIntegrationTests
         var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
         var devnetWallet = Wallet.Create(
             WalletId.New(),
-            NetworkEnvironment.Devnet,
-            "solana",
+            "solana-devnet",
             address);
         await _walletWriteRepository.AddAsync(devnetWallet, CancellationToken.None);
 
@@ -394,7 +385,6 @@ public class PrincipalResolutionIntegrationTests
             ProviderType.Dynamic,
             "dynamic.xyz",
             "user123",
-            NetworkEnvironment.Mainnet,
             ChainId.From("solana"),
             address,
             CancellationToken.None);
@@ -406,8 +396,7 @@ public class PrincipalResolutionIntegrationTests
 
         // Verify mainnet wallet was created
         var mainnetWallet = await _walletReadRepository.FindWalletAsync(
-            NetworkEnvironment.Mainnet,
-            ChainId.From("solana"),
+            ChainId.From("solana-mainnet"),
             address,
             CancellationToken.None);
         mainnetWallet.ShouldNotBeNull();

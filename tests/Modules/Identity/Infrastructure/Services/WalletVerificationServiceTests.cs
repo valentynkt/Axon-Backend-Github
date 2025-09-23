@@ -415,8 +415,7 @@ public class WalletVerificationServiceTests
     {
         return Wallet.Create(
             walletId,
-            NetworkEnvironment.Mainnet,
-            "solana",
+            "solana-mainnet",
             Address.Create("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM").Value);
     }
 

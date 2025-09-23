@@ -126,7 +126,6 @@ public abstract class IdentityPersistenceTestBase
     {
         return Wallet.Create(
             id,
-            Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet,
             chainId,
             Address.Create(address ?? $"0x{Guid.NewGuid():N}").Value);
     }

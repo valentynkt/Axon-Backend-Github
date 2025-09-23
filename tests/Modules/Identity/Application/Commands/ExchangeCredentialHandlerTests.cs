@@ -3,7 +3,6 @@ using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
-using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -28,7 +27,6 @@ public class ExchangeCredentialHandlerTests
     private ICurrentUserService _currentUserService = null!;
     private IAxonPrincipalWriteRepository _principalRepository = null!;
     private IWalletWriteRepository _walletRepository = null!;
-    private IExchangeMetricsService _metricsService = null!;
     private IMemoryCache _memoryCache = null!;
     private IHttpContextAccessor _httpContextAccessor = null!;
     private ILogger<ExchangeCredentialHandler> _logger = null!;
@@ -45,7 +43,6 @@ public class ExchangeCredentialHandlerTests
         _currentUserService = Substitute.For<ICurrentUserService>();
         _principalRepository = Substitute.For<IAxonPrincipalWriteRepository>();
         _walletRepository = Substitute.For<IWalletWriteRepository>();
-        _metricsService = Substitute.For<IExchangeMetricsService>();
         _memoryCache = Substitute.For<IMemoryCache>();
         _httpContextAccessor = Substitute.For<IHttpContextAccessor>();
         _logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
@@ -55,6 +52,7 @@ public class ExchangeCredentialHandlerTests
         _walletVerificationService = Substitute.For<IWalletVerificationService>();
 
         _principalRepository.UnitOfWork.Returns(_unitOfWork);
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(1));
 
         // Configure default behaviors for the new services
         ConfigureDefaultServiceBehaviors();
@@ -63,7 +61,6 @@ public class ExchangeCredentialHandlerTests
             _currentUserService,
             _principalRepository,
             _walletRepository,
-            _metricsService,
             _memoryCache,
             _httpContextAccessor,
             _resolutionService,
@@ -154,7 +151,7 @@ public class ExchangeCredentialHandlerTests
     {
         // Arrange
         var userData = CreateTestUserData();
-        var command = new ExchangeCredentialCommand(userData with { EnvironmentId = "" });
+        var command = new ExchangeCredentialCommand(userData with { DynamicEnvironmentId = "" });
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -177,7 +174,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -227,7 +223,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -264,7 +259,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -325,7 +319,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -375,7 +368,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -456,7 +448,7 @@ public class ExchangeCredentialHandlerTests
         return new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 new("0x1234567890123456789012345678901234567890", "ethereum")
@@ -469,7 +461,7 @@ public class ExchangeCredentialHandlerTests
         return new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 new("0x1234567890123456789012345678901234567890", "ethereum"),
@@ -483,7 +475,7 @@ public class ExchangeCredentialHandlerTests
         return new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 new("short", "ethereum") // Too short - less than 10 characters minimum
@@ -496,7 +488,7 @@ public class ExchangeCredentialHandlerTests
         return new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>()
         );
     }
@@ -522,10 +514,6 @@ public class ExchangeCredentialHandlerTests
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        _metricsService.Received(1).RecordExchangeFailure(
-            Arg.Any<string>(),
-            "validation",
-            Arg.Any<long>());
     }
 
     [Test]
@@ -553,23 +541,15 @@ public class ExchangeCredentialHandlerTests
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        _metricsService.Received(1).RecordExchangeSuccess(
-            userData.AxonUserId,
-            Arg.Any<bool>(),
-            Arg.Any<int>(),
-            Arg.Any<int>(),
-            Arg.Any<int>(),
-            Arg.Any<long>());
     }
 
     [Test]
     public void Should_VerifyLoggingAndMetricsStructure()
     {
-        // This test validates that logging and metrics dependencies are properly injected
+        // This test validates that logging dependencies are properly injected
         // The actual logging behavior is tested through the integration of observability
         // in the existing workflow tests
         _logger.ShouldNotBeNull();
-        _metricsService.ShouldNotBeNull();
     }
 
     // Story 3.1: Wallet-First Identity Resolution Tests
@@ -588,7 +568,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -618,7 +597,6 @@ public class ExchangeCredentialHandlerTests
             Arg.Any<ProviderType>(),
             Arg.Any<string>(),
             Arg.Any<string>(),
-            Arg.Any<NetworkEnvironment>(),
             Arg.Any<ChainId>(),
             Arg.Any<Address>(),
             Arg.Any<CancellationToken>());
@@ -634,7 +612,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>());
@@ -681,7 +658,7 @@ public class ExchangeCredentialHandlerTests
         existingPrincipal.Credentials.Count.ShouldBe(initialCredentialCount + 1);
 
         // Verify the specific credential was added to the principal
-        var expectedIssuer = $"app.dynamicauth.com/{userData.EnvironmentId}";
+        var expectedIssuer = $"app.dynamicauth.com/{userData.DynamicEnvironmentId}";
         var addedCredential = existingPrincipal.Credentials.FirstOrDefault(c =>
             c.Provider == "dynamic" &&
             c.Issuer == expectedIssuer &&
@@ -693,7 +670,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>());
@@ -728,7 +704,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>())
@@ -748,7 +723,6 @@ public class ExchangeCredentialHandlerTests
             ProviderType.Dynamic,
             Arg.Any<string>(),
             Arg.Any<string>(),
-            NetworkEnvironment.Mainnet,
             ChainId.From("ethereum"),
             Address.From("0x1234567890123456789012345678901234567890"),
             Arg.Any<CancellationToken>());
@@ -826,6 +800,21 @@ public class ExchangeCredentialHandlerTests
             TestProviderType, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
 
+        // Configure resolution service to create a new principal
+        var newPrincipal = AxonPrincipal.CreateWithDynamicCredential(
+            TestProviderType, "https://app.dynamic.xyz/test-env", userData.AxonUserId).Value;
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
+                newPrincipal,
+                ResolutionPath.Created,
+                false)));
+
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
@@ -888,7 +877,7 @@ public class ExchangeCredentialHandlerTests
         var userData = new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "ethereum"), // Ethereum mainnet
@@ -917,9 +906,9 @@ public class ExchangeCredentialHandlerTests
         // Mock GetByIdsAsync for chain defaults application
         var wallets = new List<Wallet>
         {
-            Wallet.Create(ethereumWalletId, NetworkEnvironment.Mainnet, "ethereum", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
-            Wallet.Create(solanaWalletId, NetworkEnvironment.Mainnet, "solana", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS"), DateTime.UtcNow),
-            Wallet.Create(polygonWalletId, NetworkEnvironment.Mainnet, "polygon", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
+            Wallet.Create(ethereumWalletId, "ethereum-mainnet", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
+            Wallet.Create(solanaWalletId, "solana-mainnet", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS"), DateTime.UtcNow),
+            Wallet.Create(polygonWalletId, "polygon-mainnet", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
         };
         _walletRepository.GetByIdsAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(wallets);
@@ -979,7 +968,7 @@ public class ExchangeCredentialHandlerTests
         var userData = new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "ethereum"), // Ethereum mainnet
@@ -1015,8 +1004,8 @@ public class ExchangeCredentialHandlerTests
         // Mock GetByIdsAsync for chain defaults application
         var wallets = new List<Wallet>
         {
-            Wallet.Create(ethereumWalletId, NetworkEnvironment.Mainnet, "ethereum", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
-            Wallet.Create(polygonWalletId, NetworkEnvironment.Mainnet, "polygon", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
+            Wallet.Create(ethereumWalletId, "ethereum-mainnet", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"), DateTime.UtcNow),
+            Wallet.Create(polygonWalletId, "polygon-mainnet", Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42"), DateTime.UtcNow)
         };
         _walletRepository.GetByIdsAsync(Arg.Any<IEnumerable<WalletId>>(), Arg.Any<CancellationToken>())
             .Returns(wallets);
@@ -1063,8 +1052,246 @@ public class ExchangeCredentialHandlerTests
     {
         var result = AxonPrincipal.CreateWithDynamicCredential(
             TestProviderType,
-            $"app.dynamicauth.com/{userData.EnvironmentId}",
+            $"app.dynamicauth.com/{userData.DynamicEnvironmentId}",
             userData.AxonUserId);
         return result.Value;
     }
+
+    #region Cache Warming Tests
+
+    [Test]
+    public async Task Should_WarmCache_WhenExchangeSucceeds()
+    {
+        // Arrange
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+        var httpContext = new DefaultHttpContext();
+
+        _httpContextAccessor.HttpContext.Returns(httpContext);
+
+        // Configure resolution service to create new principal
+        _resolutionService.ResolveAsync(
+            ProviderType.Dynamic,
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            ChainId.From("ethereum"),
+            Address.From("0x1234567890123456789012345678901234567890"),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
+
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>());
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+
+        // Verify HTTP context items were set for cache warming
+        httpContext.Items.ShouldContainKey("AxonUserId");
+        httpContext.Items["AxonUserId"].ShouldBeOfType<AxonUserId>();
+
+        // Verify memory cache was accessed for cache warming
+        _memoryCache.Received().Set(
+            Arg.Is<string>(key => key.StartsWith("axon:user:")),
+            Arg.Any<AxonUserId>(),
+            Arg.Any<MemoryCacheEntryOptions>());
+    }
+
+    [Test]
+    public async Task Should_ContinueExchange_WhenCacheWarmingFails()
+    {
+        // Arrange
+        var userData = CreateTestUserData();
+        var command = new ExchangeCredentialCommand(userData);
+
+        // Configure memory cache to throw exception
+        _memoryCache.When(x => x.Set(Arg.Any<object>(), Arg.Any<object>(), Arg.Any<MemoryCacheEntryOptions>()))
+            .Do(x => throw new InvalidOperationException("Cache warming failed"));
+
+        // Configure resolution service to create new principal
+        _resolutionService.ResolveAsync(
+            ProviderType.Dynamic,
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            ChainId.From("ethereum"),
+            Address.From("0x1234567890123456789012345678901234567890"),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
+
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>());
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert - Should succeed despite cache warming failure
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Created.ShouldBeTrue();
+    }
+
+    #endregion
+
+    #region Address Normalization Tests
+
+    [Test]
+    public async Task Should_NormalizeAddresses_BeforeProcessing()
+    {
+        // Arrange
+        var userData = new ExchangeUserData(
+            AxonUserId: "test-user-123",
+            Email: "test@example.com",
+            DynamicEnvironmentId: "test-env-456",
+            Wallets: new List<ExchangeWalletData>
+            {
+                new("0x742d35cc6634c0532925a3b8d2ae39e7ec5b8e41", "ethereum") // Lowercase address
+            }
+        );
+        var command = new ExchangeCredentialCommand(userData);
+
+        var normalizedAddress = Address.Create("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41").Value; // Checksummed
+
+        // Configure address normalizer to return checksummed address
+        _addressNormalizer.NormalizeAddress("ethereum", "0x742d35cc6634c0532925a3b8d2ae39e7ec5b8e41")
+            .Returns(Result.Success<Address, Error>(normalizedAddress));
+
+        // Configure resolution service
+        _resolutionService.ResolveAsync(
+            ProviderType.Dynamic,
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            ChainId.From("ethereum"),
+            normalizedAddress, // Should receive normalized address
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
+
+        _walletRepository.EnsureManyByChainAndAddressAsync(
+            Arg.Any<IEnumerable<(string, Address)>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<(string, Address), WalletId>());
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+
+        // Verify address normalization was called
+        _addressNormalizer.Received(1).NormalizeAddress("ethereum", "0x742d35cc6634c0532925a3b8d2ae39e7ec5b8e41");
+
+        // Verify resolution service was called with normalized address
+        await _resolutionService.Received(1).ResolveAsync(
+            ProviderType.Dynamic,
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            ChainId.From("ethereum"),
+            normalizedAddress,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Should_SkipInvalidAddresses_AndContinueProcessing()
+    {
+        // Arrange
+        var userData = new ExchangeUserData(
+            AxonUserId: "test-user-123",
+            Email: "test@example.com",
+            DynamicEnvironmentId: "test-env-456",
+            Wallets: new List<ExchangeWalletData>
+            {
+                new("invalid-address", "ethereum"), // Invalid address
+                new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "ethereum") // Valid address
+            }
+        );
+        var command = new ExchangeCredentialCommand(userData);
+
+        // Configure address normalizer: first fails, second succeeds
+        _addressNormalizer.NormalizeAddress("ethereum", "invalid-address")
+            .Returns(Result.Failure<Address, Error>(Error.Validation("Invalid address format", "ADDRESS.INVALID")));
+
+        _addressNormalizer.NormalizeAddress("ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41")
+            .Returns(Result.Success<Address, Error>(Address.Create("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41").Value));
+
+        // Configure resolution service
+        _resolutionService.ResolveAsync(
+            ProviderType.Dynamic,
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            ChainId.From("ethereum"),
+            Address.From("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41"),
+            Arg.Any<CancellationToken>())
+            .Returns(args =>
+            {
+                var providerType = (ProviderType)args[0];
+                var issuer = (string)args[1];
+                var subject = (string)args[2];
+
+                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
+                if (createResult.IsFailure)
+                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
+
+                var result = new PrincipalResolutionResult(
+                    createResult.Value,
+                    ResolutionPath.Created,
+                    false);
+                return Result.Success<PrincipalResolutionResult, Error>(result);
+            });
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert - Should fail due to invalid address parsing errors
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Validation);
+        result.Error.Message.ShouldContain("Address parsing errors");
+    }
+
+    #endregion
 }

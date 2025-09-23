@@ -12,14 +12,7 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.ToTable("wallet", "identity", t =>
-        {
-            // Check constraint for Solana network validation using modern EF Core 9 approach
-            t.HasCheckConstraint(
-                "check_wallet_solana_network_environment",
-                "chain_id != 'solana' OR network_environment IN ('mainnet', 'devnet', 'testnet')"
-            );
-        });
+        builder.ToTable("wallet", "identity");
 
         builder.HasKey(w => w.Id);
         
@@ -28,12 +21,6 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasColumnName("id")
             .HasColumnType("uuid");
 
-        builder.Property(w => w.NetworkEnvironment)
-            .HasConversion(new NetworkEnvironment.EfCoreValueConverter())
-            .HasColumnName("network_environment")
-            .HasMaxLength(50)
-            .IsRequired()
-            .HasComment("Network for on-chain artifacts (mainnet/devnet/testnet)");
 
         builder.Property(w => w.ChainId)
             .HasColumnName("chain_id")
@@ -73,15 +60,10 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
 
-        // Partial unique index for network environment isolation - triple key constraint
-        builder.HasIndex(w => new { w.NetworkEnvironment, w.ChainId, w.Address })
-            .IsUnique()
-            .HasDatabaseName("ux_wallet_netenv_chain_addr")
-            .HasFilter("is_deleted = false");
-
-        // Performance index for cross-environment lookups
+        // Unique index on compound chain ID and address
         builder.HasIndex(w => new { w.ChainId, w.Address })
-            .HasDatabaseName("idx_wallet_chain_addr_active")
+            .IsUnique()
+            .HasDatabaseName("ux_wallet_chain_addr")
             .HasFilter("is_deleted = false");
 
         // Performance indexes

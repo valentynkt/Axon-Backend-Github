@@ -44,14 +44,12 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         ProviderType provider,
         string issuer,
         string subject,
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken = default)
     {
         using var activity = ActivitySource.StartActivity("PrincipalResolution.Resolve");
         activity?.SetTag("provider", provider.ToString(CultureInfo.InvariantCulture));
-        activity?.SetTag("network_environment", networkEnvironment.Value);
         activity?.SetTag("chain_id", chainId.Value);
 
         var stopwatch = Stopwatch.StartNew();
@@ -60,29 +58,29 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         {
             // Step 1: Credential-first resolution
             var credentialResult = await ResolveByCredentialAsync(
-                provider, issuer, subject, networkEnvironment, chainId, address, cancellationToken);
+                provider, issuer, subject, chainId, address, cancellationToken);
 
             if (credentialResult.IsSuccess)
             {
-                LogResolution("credential", networkEnvironment, chainId, address, stopwatch.ElapsedMilliseconds);
+                LogResolution("credential", chainId, address, stopwatch.ElapsedMilliseconds);
                 return credentialResult;
             }
 
             // Step 2: Wallet-fallback resolution with tie-breaking
             var walletResult = await ResolveByWalletAsync(
-                networkEnvironment, chainId, address, cancellationToken);
+                chainId, address, cancellationToken);
 
             if (walletResult.IsSuccess)
             {
-                LogResolution("wallet", networkEnvironment, chainId, address, stopwatch.ElapsedMilliseconds);
+                LogResolution("wallet", chainId, address, stopwatch.ElapsedMilliseconds);
                 return walletResult;
             }
 
             // Step 3: Create new principal with race protection
             var createResult = await CreateNewPrincipalWithRaceProtectionAsync(
-                networkEnvironment, chainId, address, cancellationToken);
+                chainId, address, cancellationToken);
 
-            LogResolution("created", networkEnvironment, chainId, address, stopwatch.ElapsedMilliseconds);
+            LogResolution("created", chainId, address, stopwatch.ElapsedMilliseconds);
             return createResult;
         }
         finally
@@ -95,7 +93,6 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         ProviderType provider,
         string issuer,
         string subject,
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken)
@@ -121,13 +118,13 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
             if (principal.Id == principalB.Id)
             {
-                // A == B: Same principal - auto-link wallet for current network_env
+                // A == B: Same principal - auto-link wallet for current chain
                 _logger.LogInformation(
-                    "Auto-linking wallet for principal {PrincipalId} to network environment {NetworkEnvironment}",
-                    principal.Id, networkEnvironment.Value);
+                    "Auto-linking wallet for principal {PrincipalId} to chain {ChainId}",
+                    principal.Id, chainId.Value);
 
                 var wallet = await _walletWriteRepository.UpsertWalletAsync(
-                    networkEnvironment, chainId, address, cancellationToken);
+                    chainId, address, cancellationToken);
 
                 await _ownershipRepository.CreateOwnershipAsync(
                     principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
@@ -154,7 +151,6 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
     }
 
     private async Task<Result<PrincipalResolutionResult, Error>> ResolveByWalletAsync(
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken)
@@ -163,7 +159,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         // MUST use triple-key lookup
         var wallet = await _walletReadRepository.FindWalletAsync(
-            networkEnvironment, chainId, address, cancellationToken);
+            chainId, address, cancellationToken);
 
         if (wallet is null)
         {
@@ -178,7 +174,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
                     crossEnvOwnership.PrincipalId);
 
                 var newWallet = await _walletWriteRepository.UpsertWalletAsync(
-                    networkEnvironment, chainId, address, cancellationToken);
+                    chainId, address, cancellationToken);
 
                 await _ownershipRepository.CreateOwnershipAsync(
                     crossEnvOwnership.PrincipalId, newWallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
@@ -219,8 +215,8 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         foreach (var ownership in ownerships.Where(o => o.Id != winner.Id))
         {
             _logger.LogInformation(
-                "Auto-revoking ownership {OwnershipId} reason=conflict_lost for {NetworkEnvironment}:{ChainId}:{Address}",
-                ownership.Id, networkEnvironment.Value, chainId.Value, address.Value);
+                "Auto-revoking ownership {OwnershipId} reason=conflict_lost for {ChainId}:{Address}",
+                ownership.Id, chainId.Value, address.Value);
 
             await _ownershipRepository.RevokeOwnershipAsync(ownership.Id, "conflict_lost", cancellationToken);
         }
@@ -247,7 +243,6 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
     };
 
     private async Task<Result<PrincipalResolutionResult, Error>> CreateNewPrincipalWithRaceProtectionAsync(
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         CancellationToken cancellationToken)
@@ -256,11 +251,11 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         // Upsert wallet first to prevent race conditions
         var wallet = await _walletWriteRepository.UpsertWalletAsync(
-            networkEnvironment, chainId, address, cancellationToken);
+            chainId, address, cancellationToken);
 
         // Re-read wallet and re-resolve ownerships
         var rereadWallet = await _walletReadRepository.FindWalletAsync(
-            networkEnvironment, chainId, address, cancellationToken);
+            chainId, address, cancellationToken);
 
         if (rereadWallet is null)
         {
@@ -299,14 +294,13 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
     private void LogResolution(
         string path,
-        NetworkEnvironment networkEnvironment,
         ChainId chainId,
         Address address,
         long elapsedMs)
     {
         _logger.LogInformation(
-            "Principal resolution completed: resolution_path={ResolutionPath} network_environment={NetworkEnvironment} " +
+            "Principal resolution completed: resolution_path={ResolutionPath} " +
             "chain_id={ChainId} address={Address} duration_ms={Duration}",
-            path, networkEnvironment.Value, chainId.Value, address.Value, elapsedMs);
+            path, chainId.Value, address.Value, elapsedMs);
     }
 }

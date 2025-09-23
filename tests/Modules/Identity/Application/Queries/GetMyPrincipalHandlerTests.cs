@@ -545,7 +545,7 @@ public class GetMyPrincipalHandlerTests
     {
         var principal = CreateTestPrincipalWithOwnerships();
         var walletId = principal.WalletOwnerships.First().WalletId;
-        principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", walletId);
+        principal.ApplyChainDefault("ethereum-mainnet", walletId);
         return principal;
     }
 
@@ -589,7 +589,7 @@ public class GetMyPrincipalHandlerTests
         {
             var walletIds = principal.WalletOwnerships.Select(o => o.WalletId).ToList();
             var wallets = walletIds.Select(id =>
-                Wallet.Create(id, NetworkEnvironment.Mainnet, "ethereum-mainnet", Builders.EthereumAddress)).ToList();
+                Wallet.Create(id, "ethereum-mainnet", Builders.EthereumAddress)).ToList();
 
             _walletRepository.GetByIdsAsync(
                 Arg.Is<IList<WalletId>>(ids => ids.SequenceEqual(walletIds)),
@@ -647,7 +647,7 @@ public class GetMyPrincipalHandlerTests
 
         var walletIds = principal.WalletOwnerships.Select(o => o.WalletId).ToList();
         var wallets = walletIds.Select(id =>
-            Wallet.Create(id, NetworkEnvironment.Mainnet, "ethereum-mainnet", Builders.EthereumAddress)).ToList();
+            Wallet.Create(id, "ethereum-mainnet", Builders.EthereumAddress)).ToList();
 
         _walletRepository.GetByIdsAsync(
             Arg.Any<IList<WalletId>>(), false, Arg.Any<CancellationToken>())

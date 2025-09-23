@@ -29,9 +29,8 @@ public sealed class ChallengeRequestDtoValidator : AbstractValidator<ChallengeRe
             .WithMessage("Wallet address must be 100 characters or less");
 
         RuleFor(x => x.Audience)
-            .NotEmpty()
-            .WithMessage("Audience is required")
             .MaximumLength(100)
-            .WithMessage("Audience must be 100 characters or less");
+            .WithMessage("Audience must be 100 characters or less")
+            .When(x => !string.IsNullOrEmpty(x.Audience));
     }
 }

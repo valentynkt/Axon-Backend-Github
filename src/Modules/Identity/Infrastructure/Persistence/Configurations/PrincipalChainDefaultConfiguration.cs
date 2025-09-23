@@ -25,11 +25,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
             .HasColumnType("uuid")
             .IsRequired();
 
-        // NetworkEnvironment property - conversion configured globally, column name specified here
-        builder.Property(d => d.NetworkEnvironment)
-            .HasColumnName("network_environment")
-            .IsRequired()
-            .HasComment("Network environment for chain default isolation");
+        // NetworkEnvironment removed - ChainId now contains compound format with all network information
 
         builder.Property(d => d.ChainId)
             .HasColumnName("chain_id")
@@ -60,8 +56,8 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
 
-        // Partial unique index for chain default constraint with network environment
-        builder.HasIndex(d => new { d.PrincipalId, d.NetworkEnvironment, d.ChainId })
+        // Partial unique index for chain default constraint - one default per principal per chain
+        builder.HasIndex(d => new { d.PrincipalId, d.ChainId })
             .IsUnique()
             .HasDatabaseName("ux_chain_default")
             .HasFilter("is_deleted = false");

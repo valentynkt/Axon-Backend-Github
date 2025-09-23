@@ -39,6 +39,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
     <PackageReference Include="Ardalis.Specification.EntityFrameworkCore" Version="9.3.0" />
+    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+    <PackageReference Include="SimpleBase" Version="4.0.0" />
   </ItemGroup>
 
   <ItemGroup>
