@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
@@ -9,7 +10,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// Generic Entity Framework write repository implementation
 /// Handles aggregates with domain events and transactional consistency
 /// </summary>
-public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, TId>
+public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TAggregate, TId> : IWriteRepository<TAggregate, TId>
     where TAggregate : class, IAggregateRoot<TId>
     where TId : notnull
 {
@@ -200,7 +201,9 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 }
 
-public class EfWriteRepository<TAggregate> : EfWriteRepository<TAggregate, Guid>, IWriteRepository<TAggregate>
+[UnconditionalSuppressMessage("ReflectionAnalysis", "IL2091",
+    Justification = "Entity Framework repository pattern requires reflection for entity operations")]
+public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TAggregate> : EfWriteRepository<TAggregate, Guid>, IWriteRepository<TAggregate>
     where TAggregate : class, IAggregateRoot<Guid>
 {
     public EfWriteRepository(DbContext context) : base(context) { }

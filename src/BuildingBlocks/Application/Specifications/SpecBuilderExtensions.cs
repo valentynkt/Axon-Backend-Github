@@ -46,6 +46,8 @@ public static class SpecBuilderExtensions
         TProp value)
         where T : class
     {
+        ArgumentNullException.ThrowIfNull(propertySelector);
+
         // Create a safe equality comparison expression
         var parameter = propertySelector.Parameters[0];
         var property = propertySelector.Body;
@@ -89,6 +91,8 @@ public static class SpecBuilderExtensions
         string searchText)
         where T : class
     {
+        ArgumentNullException.ThrowIfNull(propertySelector);
+
         if (string.IsNullOrWhiteSpace(searchText))
             return builder;
 
@@ -124,6 +128,8 @@ public static class SpecBuilderExtensions
         DateTime? toDate)
         where T : class
     {
+        ArgumentNullException.ThrowIfNull(dateSelector);
+
         if (fromDate.HasValue)
         {
             builder = builder.Where(CreateDateComparisonExpression(dateSelector, fromDate.Value, true));

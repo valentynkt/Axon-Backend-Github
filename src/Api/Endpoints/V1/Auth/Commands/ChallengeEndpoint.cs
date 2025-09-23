@@ -2,8 +2,8 @@ using Axon.Api.Contracts.V1.Auth;
 using Axon.Api.Modules;
 using Axon.Api.Validators.V1.Auth;
 using Axon.Modules.Identity.Application.Commands.GenerateChallenge;
-using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Utilities;
 using CSharpFunctionalExtensions;
 using MediatR;
 
@@ -67,23 +67,18 @@ public sealed class ChallengeEndpoint
         ChallengeRequestDto request,
         CancellationToken ct)
     {
-        // Validate environment
-        var envResult = NetworkEnvironment.Create(request.NetworkEnvironment);
-        if (envResult.IsFailure)
-        {
-            Logger.LogWarning("Invalid environment: {Environment}", request.NetworkEnvironment);
-            return Task.FromResult(Result.Failure<GenerateChallengeCommand, Error>(envResult.Error));
-        }
-
         // Validate required fields
-        var chainId = request.ChainId.Trim().ToLowerInvariant();
+        var rawChainId = request.ChainId.Trim();
         var rawAddress = request.WalletAddress.Trim();
 
-        if (string.IsNullOrWhiteSpace(rawAddress) || string.IsNullOrWhiteSpace(chainId))
+        if (string.IsNullOrWhiteSpace(rawAddress) || string.IsNullOrWhiteSpace(rawChainId))
         {
             return Task.FromResult(Result.Failure<GenerateChallengeCommand, Error>(
                 Error.Validation("Chain ID and wallet address are required")));
         }
+
+        // Convert to compound chainId format (e.g., "solana" -> "solana-mainnet")
+        var compoundChainId = ChainIdConverter.ConvertToCompoundChainId(rawChainId);
 
         var audience = string.IsNullOrWhiteSpace(request.Audience) ? null : request.Audience.Trim();
 
@@ -92,8 +87,7 @@ public sealed class ChallengeEndpoint
         HttpContext.Response.Headers.Pragma = "no-cache";
 
         var command = new GenerateChallengeCommand(
-            NetworkEnvironment: envResult.Value,
-            ChainId: chainId,
+            ChainId: compoundChainId,
             WalletAddress: rawAddress,
             Audience: audience
         );
@@ -105,15 +99,17 @@ public sealed class ChallengeEndpoint
     {
         var response = new ChallengeResponseDto(
             Message: result.Message,
-            NetworkEnvironment: result.NetworkEnvironment,
             ChainId: result.ChainId,
             Address: result.Address,
             IssuedAt: result.IssuedAt,
             ExpiresAt: result.ExpiresAt,
             Nonce: result.Nonce,
-            Audience: result.Audience
+            Audience: result.Audience,
+            Mac: result.Mac,
+            Mkv: result.Mkv
         );
 
         return Task.FromResult(Result.Success<ChallengeResponseDto, Error>(response));
     }
+
 }

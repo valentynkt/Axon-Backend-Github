@@ -31,9 +31,10 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
     public IExecutionStrategy CreateExecutionStrategy() => Database.CreateExecutionStrategy();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder
-    )
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
 
         // Configure MassTransit outbox entities for the module schema

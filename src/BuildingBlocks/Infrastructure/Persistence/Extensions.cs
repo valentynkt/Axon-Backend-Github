@@ -41,6 +41,8 @@ public static class Extensions
         Action<DbContextOptionsBuilder, DatabaseOptions, Type>? configureProvider = null)
         where TContext : DbContext, IDbContext
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         services.AddOptions<DatabaseOptions>()
             .Bind(configuration.GetSection(nameof(DatabaseOptions)));
 

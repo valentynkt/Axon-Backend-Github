@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.AspNetCore.Builder;
@@ -11,21 +12,26 @@ namespace BuildingBlocks.Infrastructure.Persistence.Postgres;
 public static class PostgresExtensions
 {
     // ---------- Builder overload ----------
-    public static IServiceCollection AddPostgresDbContext<TContext>(
+    public static IServiceCollection AddPostgresDbContext<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(
         this WebApplicationBuilder builder,
         string? connectionName = "DefaultConnection",
         Action<PostgresOptions>? configure = null)
         where TContext : DbContext, IDbContext
-        => builder.Services.AddPostgresDbContext<TContext>(builder.Configuration, connectionName, configure);
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return builder.Services.AddPostgresDbContext<TContext>(builder.Configuration, connectionName, configure);
+    }
 
     // ---------- Services overload ----------
-    public static IServiceCollection AddPostgresDbContext<TContext>(
+    public static IServiceCollection AddPostgresDbContext<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] TContext>(
         this IServiceCollection services,
         IConfiguration configuration,
         string? connectionName = "DefaultConnection",
         Action<PostgresOptions>? configure = null)
         where TContext : DbContext, IDbContext
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         // Bind PG options (and allow caller overrides)
         var section = configuration.GetSection(PostgresOptions.SectionName);
         services.AddOptions<PostgresOptions>().Bind(section);
@@ -70,6 +76,8 @@ public static class PostgresExtensions
 
     public static string GetPostgresConnectionString(this IConfiguration configuration, string? name = "DefaultConnection")
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         var pg = configuration.GetSection(PostgresOptions.SectionName).Get<PostgresOptions>();
         if (pg is not null)
         {
@@ -84,6 +92,8 @@ public class ValidatePostgresOptions : IValidateOptions<PostgresOptions>
 {
     public ValidateOptionsResult Validate(string? name, PostgresOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         var errors = new List<string>();
 
         if (!options.UseInMemory && string.IsNullOrWhiteSpace(options.ConnectionString) && (options.ConnectionStrings?.Count ?? 0) == 0)

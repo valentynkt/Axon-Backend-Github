@@ -19,6 +19,8 @@ public static class DIValidationHelpers
     public static void TestServiceResolution<T>(IServiceProvider serviceProvider, List<string> errors, string serviceName, string layerPrefix = "GENERIC")
         where T : class
     {
+        ArgumentNullException.ThrowIfNull(errors);
+
         try
         {
             var service = serviceProvider.GetService<T>();
@@ -43,13 +45,15 @@ public static class DIValidationHelpers
     /// <param name="serviceName">Descriptive name for error messages</param>
     /// <param name="layerPrefix">Layer prefix for categorization</param>
     public static void ValidateImplementationType<TInterface>(
-        IServiceProvider serviceProvider, 
-        List<string> errors, 
-        string expectedImplementationName, 
-        string serviceName, 
+        IServiceProvider serviceProvider,
+        List<string> errors,
+        string expectedImplementationName,
+        string serviceName,
         string layerPrefix = "GENERIC")
         where TInterface : class
     {
+        ArgumentNullException.ThrowIfNull(errors);
+
         try
         {
             var service = serviceProvider.GetService<TInterface>();
@@ -80,12 +84,15 @@ public static class DIValidationHelpers
     /// <param name="errors">Error list to append to</param>
     /// <param name="layerPrefix">Layer prefix for categorization</param>
     public static void ValidateServiceLifetime(
-        IServiceProvider serviceProvider, 
-        Type serviceType, 
-        ServiceLifetime expectedLifetime, 
-        List<string> errors, 
+        IServiceProvider serviceProvider,
+        Type serviceType,
+        ServiceLifetime expectedLifetime,
+        List<string> errors,
         string layerPrefix = "GENERIC")
     {
+        ArgumentNullException.ThrowIfNull(serviceType);
+        ArgumentNullException.ThrowIfNull(errors);
+
         try
         {
             if (serviceProvider is IServiceCollection services)
@@ -120,6 +127,11 @@ public static class DIValidationHelpers
         List<string> errors,
         string layerPrefix = "GENERIC")
     {
+        ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(genericInterfaceType);
+        ArgumentNullException.ThrowIfNull(errors);
+
         try
         {
             // Find all concrete types that implement the generic interface
@@ -164,6 +176,10 @@ public static class DIValidationHelpers
         List<string> errors,
         string layerPrefix = "GENERIC")
     {
+        ArgumentNullException.ThrowIfNull(dependencyChain);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(errors);
+
         for (int i = 0; i < dependencyChain.Count; i++)
         {
             var serviceType = dependencyChain[i];
@@ -197,6 +213,9 @@ public static class DIValidationHelpers
         List<string> errors,
         string layerPrefix = "GENERIC")
     {
+        ArgumentNullException.ThrowIfNull(serviceTypes);
+        ArgumentNullException.ThrowIfNull(errors);
+
         foreach (var serviceType in serviceTypes)
         {
             try
@@ -205,7 +224,7 @@ public static class DIValidationHelpers
                 var service = scope.ServiceProvider.GetService(serviceType);
                 // If we can create it without exception, no circular dependency
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("circular dependency") || ex.Message.Contains("cycle"))
+            catch (InvalidOperationException ex) when (ex.Message.Contains("circular dependency", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase))
             {
                 errors.Add($"{layerPrefix}: Circular dependency detected for {serviceType.Name}: {ex.Message}");
             }
@@ -233,6 +252,8 @@ public static class DIValidationHelpers
         string serviceName,
         string layerPrefix = "GENERIC")
     {
+        ArgumentNullException.ThrowIfNull(errors);
+
         try
         {
             var services = serviceProvider.GetServices(collectionServiceType);

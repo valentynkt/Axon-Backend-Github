@@ -342,6 +342,10 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         return false;
     }
 
+    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2060:MakeGenericMethod",
+        Justification = "Result pattern rehydration requires reflection for generic method construction")]
+    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2057:GetType",
+        Justification = "Type resolution for deserialization is intentional and safe")]
     private static bool TryRehydrateResult(EnvelopeV2 env, out TResponse response)
     {
         response = default!;

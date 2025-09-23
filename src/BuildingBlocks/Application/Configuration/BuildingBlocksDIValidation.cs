@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using BuildingBlocks.Application.Behaviors;
 using BuildingBlocks.Core.Abstractions.Caching;
 using BuildingBlocks.Core.Abstractions.Idempotency;
@@ -9,7 +11,6 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using System.Reflection;
 using BuildingBlocks.Core.Abstractions.CQRS;
 
 namespace BuildingBlocks.Application.Configuration;
@@ -140,6 +141,8 @@ public static class BuildingBlocksDIValidation
         }
     }
 
+    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2075:GetInterfaces",
+        Justification = "Type interfaces are needed for CQRS validation, GetInterfaces() is safe here")]
     private static void ValidateCommandQueryInheritance(List<string> errors)
     {
         try
@@ -165,6 +168,7 @@ public static class BuildingBlocksDIValidation
 
                     foreach (var type in types)
                     {
+                        // Suppress IL2075 warning for GetInterfaces() call
                         var interfaces = type.GetInterfaces();
                         bool isCommand = interfaces.Any(i => 
                             (i.IsGenericType && i.GetGenericTypeDefinition() == commandInterfaceType) ||

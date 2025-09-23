@@ -40,6 +40,8 @@ public sealed class RequestValidationBehavior<TRequest, TValue>
         RequestHandlerDelegate<Result<TValue, Error>> next,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         if (_validators is null || !_validators.Any() || ShouldSkipValidation(request))
             return await next();
 

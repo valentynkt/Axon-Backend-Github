@@ -23,8 +23,10 @@ public class RateLimitObservabilityMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         // For rate-limited endpoints, set up headers before processing the request
-        var isRateLimitedEndpoint = context.Request.Path.StartsWithSegments("/api/v1/auth/exchange");
+        var isRateLimitedEndpoint = context.Request.Path.StartsWithSegments("/api/v1/auth/exchange", StringComparison.Ordinal);
 
         if (isRateLimitedEndpoint)
         {
@@ -57,8 +59,8 @@ public class RateLimitObservabilityMiddleware
                     var remaining = Math.Max(0, 10 - newCount);
 
                     context.Response.Headers["X-RateLimit-Limit"] = "10";
-                    context.Response.Headers["X-RateLimit-Remaining"] = remaining.ToString();
-                    context.Response.Headers["X-RateLimit-Reset"] = new DateTimeOffset(_resetTimes[partitionKey]).ToUnixTimeSeconds().ToString();
+                    context.Response.Headers["X-RateLimit-Remaining"] = remaining.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    context.Response.Headers["X-RateLimit-Reset"] = new DateTimeOffset(_resetTimes[partitionKey]).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }
                 return Task.CompletedTask;
             });

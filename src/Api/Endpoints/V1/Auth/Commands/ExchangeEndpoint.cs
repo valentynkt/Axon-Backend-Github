@@ -6,6 +6,7 @@ using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Utilities;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
@@ -20,7 +21,7 @@ namespace Axon.Api.Endpoints.V1.Auth;
 public sealed class ExchangeEndpoint
     : BaseIdentityCommandEndpoint<
         ExchangeTokenRequestDto,
-        ExchangeTokenResponseDto,
+        AuthTokenResponseDto,
         ExchangeCredentialCommand,
         ExchangeOutcome>
 {
@@ -136,7 +137,7 @@ public sealed class ExchangeEndpoint
         foreach (var wallet in dynamicUser.Wallets)
         {
             // Convert simple chain IDs from Dynamic to compound format
-            var compoundChainId = ConvertToCompoundChainId(wallet.Chain);
+            var compoundChainId = ChainIdConverter.ConvertToCompoundChainId(wallet.Chain);
 
             // Apply address normalization at API edge per Story 5.3 AC#13
             var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(compoundChainId, wallet.Address);
@@ -182,14 +183,14 @@ public sealed class ExchangeEndpoint
         return Result.Success<ExchangeCredentialCommand, Error>(new ExchangeCredentialCommand(userData));
     }
 
-    protected override async Task<Result<ExchangeTokenResponseDto, Error>> MapDomainToResponseAsync(ExchangeOutcome outcome, CancellationToken ct)
+    protected override async Task<Result<AuthTokenResponseDto, Error>> MapDomainToResponseAsync(ExchangeOutcome outcome, CancellationToken ct)
     {
         // Extract provider context from the exchange request
         var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             Logger.LogWarning("MapDomainToResponseAsync: Missing Authorization header during token generation");
-            return Result.Failure<ExchangeTokenResponseDto, Error>(
+            return Result.Failure<AuthTokenResponseDto, Error>(
                 Error.Internal("Unable to generate access token: missing authorization context", "EXCHANGE.MISSING_AUTH_CONTEXT"));
         }
 
@@ -200,7 +201,7 @@ public sealed class ExchangeEndpoint
         if (rawClaimsResult.IsFailure)
         {
             Logger.LogWarning("MapDomainToResponseAsync: Failed to get raw claims for token generation: {Error}", rawClaimsResult.Error.Message);
-            return Result.Failure<ExchangeTokenResponseDto, Error>(
+            return Result.Failure<AuthTokenResponseDto, Error>(
                 Error.Internal("Unable to generate access token: invalid authorization context", "EXCHANGE.INVALID_AUTH_CONTEXT"));
         }
 
@@ -212,72 +213,38 @@ public sealed class ExchangeEndpoint
         var providerTypeResult = ProviderType.Create("dynamic");
         if (providerTypeResult.IsFailure)
         {
-            return Result.Failure<ExchangeTokenResponseDto, Error>(providerTypeResult.Error);
+            return Result.Failure<AuthTokenResponseDto, Error>(providerTypeResult.Error);
         }
 
-        // Generate Axon JWT refresh token (includes access token) using unified service
-        var refreshTokenResult = await _authenticationService.GenerateRefreshTokenAsync(
+        // Generate Axon JWT access token using unified service (uses configuration default expiration)
+        var accessTokenResult = await _authenticationService.GenerateAccessTokenAsync(
             outcome.AxonUserId,
             providerTypeResult.Value,
             issuer,
             subject,
+            -1, // Use configuration default
             ct);
 
-        if (refreshTokenResult.IsFailure)
+        if (accessTokenResult.IsFailure)
         {
-            Logger.LogError("Failed to generate Axon JWT tokens for AxonUserId={AxonUserId}: {Error}",
-                outcome.AxonUserId.Value, refreshTokenResult.Error.Message);
-            return Result.Failure<ExchangeTokenResponseDto, Error>(refreshTokenResult.Error);
+            Logger.LogError("Failed to generate Axon JWT token for AxonUserId={AxonUserId}: {Error}",
+                outcome.AxonUserId.Value, accessTokenResult.Error.Message);
+            return Result.Failure<AuthTokenResponseDto, Error>(accessTokenResult.Error);
         }
 
-        var tokens = refreshTokenResult.Value;
+        var token = accessTokenResult.Value;
 
-        var response = new ExchangeTokenResponseDto(
-            AccessToken:            tokens.AccessToken,
-            RefreshToken:           tokens.RefreshToken,
-            TokenType:              tokens.TokenType,
-            ExpiresIn:              tokens.ExpiresIn,
-            AxonUserId:             outcome.AxonUserId.ToString(),
-            Created:                outcome.Created,
-            WalletsProcessed:       outcome.WalletsProcessed,
-            WalletsLinked:          outcome.WalletsLinked,
-            DefaultsApplied:        outcome.DefaultsApplied,
-            Skipped:                outcome.Skipped,
-            Conflicts:              outcome.Conflicts,
-            IssuedAt:               tokens.IssuedAt,
-            AccessTokenExpiresAt:   tokens.AccessTokenExpiresAt,
-            RefreshTokenExpiresAt:  tokens.RefreshTokenExpiresAt
+        var response = new AuthTokenResponseDto(
+            AccessToken:        token.AccessToken,
+            TokenType:          token.TokenType,
+            ExpiresIn:          token.ExpiresIn,
+            AxonUserId:         outcome.AxonUserId.ToString(),
+            Created:            outcome.Created,
+            WalletsLinked:      outcome.WalletsLinked,
+            Conflicts:          outcome.Conflicts
         );
 
-        return Result.Success<ExchangeTokenResponseDto, Error>(response);
+        return Result.Success<AuthTokenResponseDto, Error>(response);
     }
 
-    /// <summary>
-    /// Converts Dynamic's simple chain IDs to compound format with network suffix.
-    /// Dynamic sends chains like "solana", "ethereum" - we convert to "solana-mainnet", "ethereum-mainnet".
-    /// Defaults to mainnet for production safety.
-    /// </summary>
-    /// <param name="simpleChainId">Simple chain ID from Dynamic (e.g., "solana")</param>
-    /// <returns>Compound chain ID (e.g., "solana-mainnet")</returns>
-    private static string ConvertToCompoundChainId(string simpleChainId)
-    {
-        // If already compound format, return as-is
-        if (simpleChainId.Contains('-', StringComparison.Ordinal))
-            return simpleChainId;
-
-        // Convert simple chain IDs to compound format with mainnet suffix
-        // TODO: This could be enhanced to use Dynamic environment context for testnet detection
-        return simpleChainId.ToLowerInvariant() switch
-        {
-            "solana" => "solana-mainnet",
-            "ethereum" => "ethereum-mainnet",
-            "polygon" => "polygon-mainnet",
-            "arbitrum" => "arbitrum-one", // Arbitrum mainnet is called "arbitrum-one"
-            "optimism" => "optimism-mainnet",
-            "base" => "base-mainnet",
-            "avalanche" => "avalanche-mainnet", // Note: This may need validation against ChainId
-            "binance" => "binance-mainnet", // Note: This may need validation against ChainId
-            _ => $"{simpleChainId}-mainnet" // Default pattern for unknown chains
-        };
-    }
 }

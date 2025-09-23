@@ -25,6 +25,8 @@ public static class OpenTelemetryRegistration
         IConfiguration configuration,
         Action<ObservabilityOptions>? configure = null)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         var opts = new ObservabilityOptions();
         configuration.GetSection("Observability").Bind(opts);
         configure?.Invoke(opts);

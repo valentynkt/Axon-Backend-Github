@@ -68,6 +68,9 @@ public static class HybridCache
         string key,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(memory);
+        ArgumentNullException.ThrowIfNull(distributed);
+
         memory.Remove(key);
         await distributed.RemoveAsync(key, ct);
     }

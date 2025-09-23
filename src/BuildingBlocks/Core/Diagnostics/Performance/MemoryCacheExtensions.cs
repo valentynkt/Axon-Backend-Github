@@ -36,6 +36,8 @@ public static class MemoryCacheExtensions
     /// <exception cref="NotSupportedException">Thrown when the underlying implementation doesn't support compaction</exception>
     public static void Compact(this IMemoryCache memoryCache, double compactionPercentage)
     {
+        ArgumentNullException.ThrowIfNull(memoryCache);
+
         if (!TryCompact(memoryCache, compactionPercentage))
         {
             throw new NotSupportedException(

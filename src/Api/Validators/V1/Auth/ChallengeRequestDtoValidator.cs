@@ -10,12 +10,6 @@ public sealed class ChallengeRequestDtoValidator : AbstractValidator<ChallengeRe
 {
     public ChallengeRequestDtoValidator()
     {
-        RuleFor(x => x.NetworkEnvironment)
-            .NotEmpty()
-            .WithMessage("Network environment is required")
-            .Must(x => x is "mainnet" or "devnet" or "testnet")
-            .WithMessage("Network environment must be one of: mainnet, devnet, testnet");
-
         RuleFor(x => x.ChainId)
             .NotEmpty()
             .WithMessage("Chain ID is required")

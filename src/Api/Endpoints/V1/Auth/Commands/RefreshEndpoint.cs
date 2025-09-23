@@ -75,14 +75,18 @@ public sealed class RefreshEndpoint
 
     protected override Task<Result<RefreshTokenResponseDto, Error>> MapDomainToResponseAsync(RefreshTokenResult result, CancellationToken ct)
     {
+        // Calculate ExpiresIn from domain result timestamps to ensure consistency
+        var now = DateTimeOffset.UtcNow;
+        var expiresIn = Math.Max(0, (int)(result.ExpiresAt - now).TotalSeconds);
+
         var response = new RefreshTokenResponseDto
         {
             Success = true,
             AccessToken = result.AccessToken,
             RefreshToken = result.RefreshToken,
             TokenType = "Bearer",
-            ExpiresIn = (int)(result.ExpiresAt - DateTime.UtcNow).TotalSeconds,
-            IssuedAt = DateTimeOffset.UtcNow,
+            ExpiresIn = expiresIn,
+            IssuedAt = now,
             AccessTokenExpiresAt = result.ExpiresAt,
             RefreshTokenExpiresAt = result.RefreshExpiresAt
         };

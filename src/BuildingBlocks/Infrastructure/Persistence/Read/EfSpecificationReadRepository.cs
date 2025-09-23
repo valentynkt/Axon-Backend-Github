@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Diagnostics.CodeAnalysis;
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
 using BuildingBlocks.Application;
@@ -13,7 +14,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 /// Optimized for read-only operations with AsNoTracking by default.
 /// </summary>
 /// <typeparam name="T">The entity type to query</typeparam>
-public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificationReadRepository<T>
+public class EfSpecificationReadRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T> : RepositoryBase<T>, ISpecificationReadRepository<T>
     where T : class
 {
     private readonly DbContext _context;
