@@ -67,3 +67,27 @@ public class IdentityContext : IdentityDbContext<AxonUserAuth, IdentityRole<Guid
             .HasDatabaseName("IX_AspNetRoleClaims_RoleId");
     }
 }
+
+/// <summary>
+/// Design-time factory for IdentityContext to support EF Core tools (migrations, etc.)
+/// </summary>
+public sealed class IdentityContextFactory : IDesignTimeDbContextFactory<IdentityContext>
+{
+    public IdentityContext CreateDbContext(string[] args)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<IdentityContext>();
+
+        // Get connection string from environment or use default
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+            ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
+
+        optionsBuilder.UseNpgsql(connectionString, opt =>
+        {
+            opt.MigrationsAssembly(typeof(IdentityContext).Assembly.FullName);
+            opt.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+        })
+        .UseSnakeCaseNamingConvention();
+
+        return new IdentityContext(optionsBuilder.Options);
+    }
+}

@@ -82,5 +82,29 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasFilter("is_deleted = false");
 
         builder.HasIndex(o => o.Status).HasDatabaseName("idx_ownership_status");
+
+        // Additional properties configuration
+        builder.Property(o => o.VerificationSource)
+            .HasConversion<string>()
+            .HasColumnName("verification_source")
+            .HasMaxLength(50);
+
+        builder.Property(o => o.VerifiedAt)
+            .HasColumnName("verified_at")
+            .HasColumnType("timestamptz");
+
+        builder.Property(o => o.RevokedAt)
+            .HasColumnName("revoked_at")
+            .HasColumnType("timestamptz");
+
+        builder.Property(o => o.RevokeReason)
+            .HasColumnName("revoke_reason")
+            .HasMaxLength(500);
+
+        // Navigation property configuration
+        builder.HasOne(o => o.Principal)
+            .WithMany()
+            .HasForeignKey(o => o.PrincipalId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

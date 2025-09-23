@@ -176,6 +176,10 @@ public static class ServiceRegistration
         // Authentication service - JWT validation handled by middleware
         services.AddScoped<IAuthenticationService, AuthenticationService>();
 
+        // Add Authentication Orchestrator with feature flag (Story 7 - Service Consolidation)
+        // This will replace AuthenticationService and DynamicAuthService when enabled
+        services.AddAuthenticationOrchestratorWithFeatureFlag(configuration);
+
         // Add Microsoft Identity Framework with AxonUserAuth (Story 5 - Identity Integration)
         services.AddAxonIdentityWithFeatureFlag(configuration);
 

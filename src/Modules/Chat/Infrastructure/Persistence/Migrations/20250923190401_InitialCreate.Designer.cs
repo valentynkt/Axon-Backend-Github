@@ -9,10 +9,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Chat.Infrastructure.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
-    [Migration("20250915215638_InitialCreate")]
+    [Migration("20250923190401_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -361,7 +361,7 @@ namespace Axon.Modules.Chat.Infrastructure.Migrations
             modelBuilder.Entity("Axon.Modules.Chat.Domain.Entities.Message", b =>
                 {
                     b.HasOne("Axon.Modules.Chat.Domain.Aggregates.Conversation.Conversation", null)
-                        .WithMany("_messages")
+                        .WithMany("Messages")
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
@@ -384,7 +384,7 @@ namespace Axon.Modules.Chat.Infrastructure.Migrations
 
             modelBuilder.Entity("Axon.Modules.Chat.Domain.Aggregates.Conversation.Conversation", b =>
                 {
-                    b.Navigation("_messages");
+                    b.Navigation("Messages");
                 });
 #pragma warning restore 612, 618
         }

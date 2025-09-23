@@ -50,8 +50,4 @@
     <Compile Remove="Persistence\Migrations\20250804212744_InitDB.Designer.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Persistence\Migrations\" />
-  </ItemGroup>
-
 </Project>
