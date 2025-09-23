@@ -73,7 +73,7 @@ public sealed class RefreshEndpoint
         return Task.FromResult(Result.Success<RefreshTokenCommand, Error>(command));
     }
 
-    protected override Result<RefreshTokenResponseDto, Error> MapDomainToResponse(RefreshTokenResult result)
+    protected override Task<Result<RefreshTokenResponseDto, Error>> MapDomainToResponseAsync(RefreshTokenResult result, CancellationToken ct)
     {
         var response = new RefreshTokenResponseDto
         {
@@ -87,6 +87,6 @@ public sealed class RefreshEndpoint
             RefreshTokenExpiresAt = result.RefreshExpiresAt
         };
 
-        return Result.Success<RefreshTokenResponseDto, Error>(response);
+        return Task.FromResult(Result.Success<RefreshTokenResponseDto, Error>(response));
     }
 }

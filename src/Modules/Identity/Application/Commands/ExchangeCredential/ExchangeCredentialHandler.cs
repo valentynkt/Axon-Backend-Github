@@ -237,12 +237,10 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
 
         var (providerType, issuer, subject) = credentialResult.Value;
 
-        // Step 2: Get network environment from userData
-        var networkEnvResult = NetworkEnvironment.Create(userData.EnvironmentId);
-        if (networkEnvResult.IsFailure)
-            return networkEnvResult.Error;
-
-        var networkEnvironment = networkEnvResult.Value;
+        // Step 2: Determine network environment based on business logic
+        // For production exchanges, default to mainnet unless specific testnet requirements
+        // The EnvironmentId is for Dynamic JWT issuer validation, not blockchain network
+        var networkEnvironment = NetworkEnvironment.Mainnet;
 
         // Step 3: Resolve or create Principal using new resolution service
         var principalResult = await ResolveOrCreatePrincipalWithNewService(

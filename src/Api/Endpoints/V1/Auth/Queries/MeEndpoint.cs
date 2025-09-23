@@ -8,34 +8,27 @@ using Axon.Modules.Identity.Application.Contracts.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Axon.Api.Endpoints.V1.Auth;
 
 /// <summary>
 /// GET /auth/me - Get current user information
-/// Uses unified bearer token validation to support both Dynamic JWT and Axon Access Tokens
+/// Uses Axon JWT authentication scheme
 /// </summary>
+[Authorize(AuthenticationSchemes = "AxonJwt")]
 public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
 {
-    private readonly IAuthenticationService _authenticationService;
-    private readonly IBearerTokenExtractor _bearerTokenExtractor;
-
     public MeEndpoint(
         IMediator mediator,
-        ILogger<MeEndpoint> logger,
-        IAuthenticationService authenticationService,
-        IBearerTokenExtractor bearerTokenExtractor)
+        ILogger<MeEndpoint> logger)
         : base(mediator, logger)
     {
-        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
-        _bearerTokenExtractor = bearerTokenExtractor ?? throw new ArgumentNullException(nameof(bearerTokenExtractor));
     }
 
     public override void Configure()
     {
         base.Configure();
-        // Allow anonymous access since we'll handle token validation manually
-        AllowAnonymous();
 
         // Apply rate limiting for auth endpoints
         Options(x => x.RequireRateLimiting("AuthExchange"));
@@ -49,11 +42,11 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         """
         Returns information about the currently authenticated user with ETag caching support.
 
-        **Requires**: Valid Dynamic JWT or Axon Access Token in Authorization header
+        **Requires**: Valid Axon Access Token in Authorization header
 
-        **Supported Token Types**:
-        - Dynamic JWT (from Dynamic.xyz authentication)
-        - Axon Access Token (from /auth/exchange endpoint)
+        **Authentication**:
+        - Uses AxonJwt authentication scheme
+        - Token must be obtained from /auth/exchange endpoint
 
         **ETag Support**:
         - Server returns `ETag` header with fingerprint of user data
@@ -66,38 +59,42 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
     protected override async Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
     {
-        // Extract bearer token from Authorization header
-        var tokenResult = _bearerTokenExtractor.ExtractBearerToken(HttpContext);
-        if (tokenResult.IsFailure)
+        // User is already authenticated via [Authorize] attribute
+        var principal = HttpContext.User;
+
+        if (principal?.Identity?.IsAuthenticated != true)
         {
-            return Result.Failure<GetMyPrincipalQuery, Error>(tokenResult.Error);
+            return Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("User is not authenticated", "AUTH.NOT_AUTHENTICATED"));
         }
 
-        var bearerToken = tokenResult.Value;
+        // Extract claims from authenticated principal
+        var subject = principal.FindFirst("sub")?.Value ?? "";
+        var issuer = principal.FindFirst("iss")?.Value ?? "axon-api";
 
-        // Validate token using unified authentication service
-        var tokenValidationResult = await _authenticationService.ValidateTokenAsync(bearerToken, ct);
-        if (tokenValidationResult.IsFailure)
+        if (string.IsNullOrEmpty(subject))
         {
-            Logger.LogWarning("Token validation failed for /auth/me: {Error}", tokenValidationResult.Error.Message);
-            return Result.Failure<GetMyPrincipalQuery, Error>(tokenValidationResult.Error);
+            return Result.Failure<GetMyPrincipalQuery, Error>(
+                Error.Unauthorized("Invalid token: missing subject claim", "AUTH.MISSING_SUBJECT"));
         }
 
-        var tokenContext = tokenValidationResult.Value;
-
-        // Provider type is already available in validated token context
-        var providerType = tokenContext.ProviderType;
+        // Create provider type for Axon tokens
+        var providerTypeResult = ProviderType.Create("axon");
+        if (providerTypeResult.IsFailure)
+        {
+            return Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error);
+        }
 
         // Extract If-None-Match header for ETag support
         var ifNoneMatch = HttpContext.Request.Headers.IfNoneMatch.FirstOrDefault();
 
-        Logger.LogDebug("Retrieving user info for AxonUserId: {AxonUserId}, TokenType: {TokenType}",
-            tokenContext.AxonUserId.Value, tokenContext.TokenType);
+        Logger.LogDebug("Retrieving user info for Subject: {Subject}, Issuer: {Issuer}",
+            subject, issuer);
 
         var query = new GetMyPrincipalQuery(
-            ProviderType: providerType,
-            Issuer: tokenContext.Issuer,
-            Subject: tokenContext.Subject,
+            ProviderType: providerTypeResult.Value,
+            Issuer: issuer,
+            Subject: subject,
             IfNoneMatch: ifNoneMatch
         );
 

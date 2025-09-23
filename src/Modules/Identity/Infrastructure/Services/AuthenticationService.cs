@@ -54,7 +54,9 @@ public sealed class AuthenticationService : IAuthenticationService
         _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
+        _signingKey = new SymmetricSecurityKey(TryBase64(_options.SigningKey, out var signingKeyBytes)
+            ? signingKeyBytes
+            : Encoding.UTF8.GetBytes(_options.SigningKey));
         _hmacKey = TryBase64(_options.HmacSecret, out var raw)
             ? raw
             : Encoding.UTF8.GetBytes(_options.HmacSecret);

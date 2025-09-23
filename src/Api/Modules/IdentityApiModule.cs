@@ -4,6 +4,7 @@ using Axon.Modules.Identity.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -37,75 +38,140 @@ public sealed class IdentityApiModule : IApiModule
 
     private static void AddJwtAuthentication(IServiceCollection services, IConfiguration configuration)
     {
-        // Get JWT configuration from appsettings
-        var jwtSection = configuration.GetSection("Axon");
-        var issuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("Axon:Issuer configuration is required");
-        var audience = jwtSection["Audience"] ?? "axon-api";
-        var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("Axon:SigningKey configuration is required");
+        // Prevent implicit claim remapping globally
+        JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
-        // Add standard JWT Bearer authentication
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+        // Get configuration sections
+        var dynamicSection = configuration.GetSection("Dynamic");
+        var axonSection = configuration.GetSection("Axon");
+        var authSection = configuration.GetSection("Authentication");
+
+        // Dynamic JWT configuration
+        var dynamicAuthority = dynamicSection["Authority"];
+        var dynamicAudience = dynamicSection["Audience"];
+        var dynamicJwksUri = dynamicSection["JwksUri"];
+        var dynamicIssuer = dynamicSection["Issuer"];
+
+        // Axon JWT configuration
+        var axonIssuer = axonSection["Issuer"] ?? throw new InvalidOperationException("Axon:Issuer configuration is required");
+        var axonAudience = axonSection["Audience"] ?? "axon-api";
+        var axonSigningKey = axonSection["SigningKey"] ?? throw new InvalidOperationException("Axon:SigningKey configuration is required");
+
+        // Clock skew configuration
+        var clockSkewSeconds = authSection.GetValue("ClockSkewSeconds", 60);
+
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = "AxonJwt";
+            options.DefaultChallengeScheme = "AxonJwt";
+        })
+        .AddJwtBearer("DynamicJwt", options =>
+        {
+            options.MapInboundClaims = false;
+            options.RequireHttpsMetadata = true;
+
+            // Configure Dynamic JWT validation
+            if (!string.IsNullOrEmpty(dynamicAuthority))
             {
-                // Keep JWT claims as-is; avoid automatic mapping to WS-* claim types
-                options.MapInboundClaims = false;
+                // Use OIDC discovery if Authority is provided
+                options.Authority = dynamicAuthority;
+                options.Audience = dynamicAudience;
+            }
+            else if (!string.IsNullOrEmpty(dynamicJwksUri))
+            {
+                // Alternative: Use JWKS URI directly
+                options.MetadataAddress = dynamicJwksUri;
+            }
 
-                // Recommended for public APIs
-                options.RequireHttpsMetadata = true;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = dynamicIssuer ?? "https://app.dynamic.xyz",
+                ValidateAudience = !string.IsNullOrEmpty(dynamicAudience),
+                ValidAudience = dynamicAudience,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
+                NameClaimType = "sub",
+                RoleClaimType = "role"
+            };
 
-                options.TokenValidationParameters = new TokenValidationParameters
+            // Diagnostics for Dynamic JWT
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = context =>
                 {
-                    // Issuer / audience validation - STRICT
-                    ValidateIssuer = true,
-                    ValidIssuer = issuer,
-                    ValidateAudience = !string.IsNullOrEmpty(audience),
-                    ValidAudience = audience,
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Auth.DynamicJwt");
 
-                    // Signature validation - MANDATORY
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-                    RequireSignedTokens = true,
-
-                    // Lifetime validation - SHORT EXPIRY
-                    ValidateLifetime = true,
-                    RequireExpirationTime = true,
-                    ClockSkew = TimeSpan.FromSeconds(30), // Reduced from 60 seconds for tighter security
-
-                    // Token type validation - SECURITY BEST PRACTICE
-                    ValidTypes = new[] { "JWT", "at+jwt" }, // Only allow specific token types
-                    ValidateTokenReplay = false, // Handled by our replay protection service
-
-                    // Use "sub" as the name claim
-                    NameClaimType = "sub",
-                    RoleClaimType = "role"
-                };
-
-                // Diagnostics
-                options.Events = new JwtBearerEvents
+                    logger.LogWarning(context.Exception, "Dynamic JWT authentication failed");
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
                 {
-                    OnAuthenticationFailed = context =>
-                    {
-                        var logger = context.HttpContext.RequestServices
-                            .GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("Auth.JwtBearer");
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Auth.DynamicJwt");
 
-                        logger.LogWarning(context.Exception, "JWT authentication failed");
-                        return Task.CompletedTask;
-                    },
-                    OnTokenValidated = context =>
-                    {
-                        var logger = context.HttpContext.RequestServices
-                            .GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("Auth.JwtBearer");
+                    var subject = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
+                    logger.LogDebug("Dynamic JWT validated for sub={Subject}", subject);
+                    return Task.CompletedTask;
+                }
+            };
+        })
+        .AddJwtBearer("AxonJwt", options =>
+        {
+            options.MapInboundClaims = false;
+            options.RequireHttpsMetadata = true;
 
-                        var subject = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
-                        logger.LogDebug("JWT validated for sub={Subject}", subject);
-                        return Task.CompletedTask;
-                    }
-                };
-            });
+            // Convert Base64 signing key
+            var keyBytes = Convert.FromBase64String(axonSigningKey);
+            var key = new SymmetricSecurityKey(keyBytes);
 
-        // Add authorization using AddAuthorizationBuilder for modern ASP.NET Core
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidIssuer = axonIssuer,
+                ValidateIssuer = true,
+                ValidateAudience = !string.IsNullOrEmpty(axonAudience),
+                ValidAudience = axonAudience,
+                IssuerSigningKey = key,
+                ValidateIssuerSigningKey = true,
+                ValidateLifetime = true,
+                RequireExpirationTime = true,
+                ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
+                ValidTypes = new[] { "JWT", "at+jwt" },
+                ValidateTokenReplay = false,
+                NameClaimType = "sub",
+                RoleClaimType = "role"
+            };
+
+            // Diagnostics for Axon JWT
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = context =>
+                {
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Auth.AxonJwt");
+
+                    logger.LogWarning(context.Exception, "Axon JWT authentication failed");
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Auth.AxonJwt");
+
+                    var subject = context.Principal?.FindFirst("sub")?.Value ?? "unknown";
+                    logger.LogDebug("Axon JWT validated for sub={Subject}", subject);
+                    return Task.CompletedTask;
+                }
+            };
+        });
+
+        // Add authorization policies
         services.AddAuthorizationBuilder()
             .AddPolicy("Authenticated", policy =>
             {
@@ -136,6 +202,17 @@ public sealed class IdentityApiModule : IApiModule
                     {
                         AutoReplenishment = true,
                         PermitLimit = 10, // 10 requests per minute per IP
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
+
+            // Specific policy for auth challenge endpoint (stricter limits)
+            options.AddPolicy("AuthChallenge", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                    factory: partition => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = 15, // 15 requests per minute per IP (slightly higher than exchange)
                         Window = TimeSpan.FromMinutes(1)
                     }));
 

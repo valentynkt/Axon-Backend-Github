@@ -53,15 +53,15 @@ public abstract class BaseIdentityCommandEndpoint<TRequest, TResponse, TCommand,
         if (domainResult.IsFailure)
             return Result.Failure<TResponse, Error>(domainResult.Error);
             
-        return MapDomainToResponse(domainResult.Value);
+        return await MapDomainToResponseAsync(domainResult.Value, ct);
     }
-    
+
     /// <summary>
     /// Maps domain result to response. Override this if custom mapping is needed.
     /// </summary>
-    protected virtual Result<TResponse, Error> MapDomainToResponse(TDomainResult domainResult)
+    protected virtual Task<Result<TResponse, Error>> MapDomainToResponseAsync(TDomainResult domainResult, CancellationToken ct)
     {
-        return MapResponse<TDomainResult>(domainResult);
+        return Task.FromResult(MapResponse<TDomainResult>(domainResult));
     }
 
     /// <summary>

@@ -101,7 +101,7 @@ public sealed class ChallengeEndpoint
         return Task.FromResult(Result.Success<GenerateChallengeCommand, Error>(command));
     }
 
-    protected override Result<ChallengeResponseDto, Error> MapDomainToResponse(GenerateChallengeResult result)
+    protected override Task<Result<ChallengeResponseDto, Error>> MapDomainToResponseAsync(GenerateChallengeResult result, CancellationToken ct)
     {
         var response = new ChallengeResponseDto(
             Message: result.Message,
@@ -114,6 +114,6 @@ public sealed class ChallengeEndpoint
             Audience: result.Audience
         );
 
-        return Result.Success<ChallengeResponseDto, Error>(response);
+        return Task.FromResult(Result.Success<ChallengeResponseDto, Error>(response));
     }
 }

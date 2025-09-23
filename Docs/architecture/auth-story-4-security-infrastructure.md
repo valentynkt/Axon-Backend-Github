@@ -18,50 +18,78 @@ Implement security infrastructure including rate limiting policies, security hea
 - [ ] Define "AuthChallenge" policy (10 req/min/IP)
 - [ ] Define "AuthVerify" policy (5 req/min/IP + wallet)
 - [ ] Configure sliding window for smoother throttling
+- [ ] Use partitioned rate limiting for per-caller isolation
 
 ```csharp
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // Challenge endpoint - fixed window by IP
-    options.AddFixedWindowLimiter("AuthChallenge", limiterOptions =>
+    // /auth/challenge: 10 req/min per IP (fixed window)
+    options.AddPolicy("AuthChallenge", httpContext =>
     {
-        limiterOptions.PermitLimit = 10;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        limiterOptions.QueueLimit = 2;
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 2,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
     });
 
-    // Verify endpoint - sliding window by IP + wallet
-    options.AddSlidingWindowLimiter("AuthVerify", limiterOptions =>
+    // /auth/verify: 5 req/min per (IP + wallet) (sliding window)
+    // Client MUST send X-Wallet-Address header for proper partitioning
+    options.AddPolicy("AuthVerify", httpContext =>
     {
-        limiterOptions.PermitLimit = 5;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.SegmentsPerWindow = 2;
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        limiterOptions.QueueLimit = 1;
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var addr = httpContext.Request.Headers.TryGetValue("X-Wallet-Address", out var h)
+            ? h.ToString().Trim()
+            : string.Empty;
+
+        var key = string.IsNullOrEmpty(addr) ? ip : $"{ip}:{addr}";
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: key,
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 2,
+                QueueLimit = 1,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
     });
 
-    // Exchange endpoint - can reuse or create specific
-    options.AddFixedWindowLimiter("AuthExchange", limiterOptions =>
+    // /auth/exchange: 20 req/min per IP (fixed window)
+    options.AddPolicy("AuthExchange", httpContext =>
     {
-        limiterOptions.PermitLimit = 20;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        limiterOptions.QueueLimit = 5;
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 5,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
     });
 });
 
 // Enable rate limiting middleware
 app.UseRateLimiter();
+
+// In endpoints, use: Options(o => o.RequireRateLimiting("AuthChallenge"))
 ```
 
 ### Task 4.2: Create Security Headers Preprocessor
 **File:** `src/Api/Middleware/SecurityHeadersPreProcessor.cs`
 
-- [ ] Add no-cache headers for auth responses
-- [ ] Consider security headers for CORS if needed
+- [ ] Add strong no-cache headers for auth responses
+- [ ] Add referrer policy for privacy
+- [ ] Keep CORS configuration separate
 
 ```csharp
 namespace Axon.Api.Middleware;
@@ -74,7 +102,7 @@ public sealed class SecurityHeadersPreProcessor<TRequest> : IPreProcessor<TReque
     {
         var response = context.HttpContext.Response;
 
-        // Prevent caching of authentication responses
+        // Prevent caching of authentication responses (strongest settings)
         response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
         response.Headers["Pragma"] = "no-cache";
         response.Headers["Expires"] = "0";
@@ -82,6 +110,9 @@ public sealed class SecurityHeadersPreProcessor<TRequest> : IPreProcessor<TReque
         // Additional security headers
         response.Headers["X-Content-Type-Options"] = "nosniff";
         response.Headers["X-Frame-Options"] = "DENY";
+        response.Headers["Referrer-Policy"] = "no-referrer";
+
+        // Note: CORS headers should be configured separately via CORS middleware
 
         return Task.CompletedTask;
     }
@@ -146,6 +177,27 @@ public static class SecureLogger
             mkv,
             success);
     }
+
+    /// <summary>
+    /// Logs exception safely without leaking sensitive information
+    /// </summary>
+    public static void LogAuthException(
+        ILogger logger,
+        Exception ex,
+        string operation)
+    {
+        // Log only exception type and error code, never the message from token libs
+        logger.LogError(
+            "Auth {Operation} failed: {ExceptionType} {ErrorCode}",
+            operation,
+            ex.GetType().Name,
+            ex.HResult);
+
+        // In debug mode only, can log more details
+        #if DEBUG
+        logger.LogDebug(ex, "Auth exception details");
+        #endif
+    }
 }
 ```
 
@@ -155,22 +207,26 @@ public static class SecureLogger
 - [ ] Configure memory cache with size limits
 - [ ] Set eviction policies
 - [ ] Monitor cache memory usage
+- [ ] Set Size=1 on each cache entry for proper eviction
 
 ```csharp
 // Configure memory cache with size limits
 builder.Services.AddMemoryCache(options =>
 {
-    options.SizeLimit = 10000; // Maximum number of entries
-    options.CompactionPercentage = 0.25; // Compact by 25% when limit reached
+    options.SizeLimit = 10_000;                 // Maximum number of nonce entries
+    options.CompactionPercentage = 0.25;        // Compact by 25% when limit reached
     options.ExpirationScanFrequency = TimeSpan.FromMinutes(1); // Scan for expired items
 });
 
-// Optional: Add distributed cache for scaling
-builder.Services.AddStackExchangeRedisCache(options =>
+// When setting cache entries, MUST specify Size for limit enforcement:
+_cache.Set(cacheKey, true, new MemoryCacheEntryOptions
 {
-    options.Configuration = configuration.GetConnectionString("Redis");
-    options.InstanceName = "AxonAuth";
+    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(remaining),
+    Size = 1  // Required when SizeLimit is configured
 });
+
+// Note: Redis support deferred to future scaling requirements
+// IMemoryCache is sufficient for single-instance deployments
 ```
 
 ### Task 4.5: Create Comprehensive Test Suite
@@ -281,9 +337,9 @@ public class AuthenticationServiceTests
 **File:** `tests/Api/RateLimitingIntegrationTests.cs`
 
 - [ ] Test rate limiting on challenge endpoint
-- [ ] Test rate limiting on verify endpoint
+- [ ] Test rate limiting on verify endpoint with X-Wallet-Address header
 - [ ] Verify 429 responses
-- [ ] Test queue behavior
+- [ ] Test partitioning by IP+wallet
 
 ```csharp
 [TestFixture]
@@ -308,10 +364,55 @@ public class RateLimitingIntegrationTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task VerifyEndpoint_DifferentWallets_IndependentLimits()
+    public async Task VerifyEndpoint_DifferentWalletHeaders_IndependentLimits()
     {
-        // Test that rate limiting is partitioned by wallet address
-        // Each wallet should have its own limit
+        var wallet1 = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+        var wallet2 = "8YtNMqUxvQRAyrZzDsGYdLVL9zYtAWWM9WzDXwBbmkg";
+
+        // Make 5 requests for wallet1 (should succeed)
+        for (int i = 0; i < 5; i++)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/verify");
+            request.Headers.Add("X-Wallet-Address", wallet1);
+            request.Content = JsonContent.Create(new { /* verify data */ });
+
+            var response = await Client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        // Make request for wallet2 (should succeed - different partition)
+        var wallet2Request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/verify");
+        wallet2Request.Headers.Add("X-Wallet-Address", wallet2);
+        wallet2Request.Content = JsonContent.Create(new { /* verify data */ });
+
+        var wallet2Response = await Client.SendAsync(wallet2Request);
+        wallet2Response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // 6th request for wallet1 should be rate limited
+        var limitedRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/verify");
+        limitedRequest.Headers.Add("X-Wallet-Address", wallet1);
+        limitedRequest.Content = JsonContent.Create(new { /* verify data */ });
+
+        var limitedResponse = await Client.SendAsync(limitedRequest);
+        limitedResponse.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+    }
+
+    [Test]
+    public async Task VerifyEndpoint_NoWalletHeader_FallsBackToIPOnly()
+    {
+        // Test that requests without X-Wallet-Address header
+        // fall back to IP-only rate limiting
+        for (int i = 0; i < 5; i++)
+        {
+            var response = await Client.PostAsJsonAsync("/api/v1/auth/verify",
+                new { /* verify data */ });
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        // 6th request should be rate limited (IP-only partition)
+        var limitedResponse = await Client.PostAsJsonAsync("/api/v1/auth/verify",
+            new { /* verify data */ });
+        limitedResponse.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
     }
 }
 ```
@@ -322,6 +423,7 @@ public class RateLimitingIntegrationTests : IntegrationTestBase
 - [ ] Load test replay cache under pressure
 - [ ] Verify memory usage stays within limits
 - [ ] Test cache eviction behavior
+- [ ] Verify Size parameter enforces limits
 
 ```csharp
 [TestFixture]
@@ -346,7 +448,7 @@ public class AuthenticationLoadTests
                 var key = $"nonce:v1:{Guid.NewGuid()}";
                 cache.Set(key, true, new MemoryCacheEntryOptions
                 {
-                    Size = 1,
+                    Size = 1,  // MUST set Size when SizeLimit is configured
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
                 });
             }));
@@ -356,6 +458,26 @@ public class AuthenticationLoadTests
 
         // Verify cache respects size limit
         cache.Count.Should().BeLessOrEqualTo(1000);
+    }
+
+    [Test]
+    public void MemoryCache_WithoutSize_IgnoresSizeLimit()
+    {
+        // This test demonstrates why Size must be set on entries
+        var cache = new MemoryCache(new MemoryCacheOptions
+        {
+            SizeLimit = 10
+        });
+
+        // Add entries WITHOUT Size - limit will be ignored
+        for (int i = 0; i < 100; i++)
+        {
+            cache.Set($"key{i}", i, TimeSpan.FromMinutes(1));
+        }
+
+        // Without Size, the limit is not enforced
+        // This is why we MUST set Size=1 on each entry
+        cache.Count.Should().BeGreaterThan(10); // Proves limit ignored
     }
 }
 ```
@@ -437,7 +559,22 @@ public class AuthenticationLoadTests
 - Authentication failure rate anomaly
 
 ## Deployment Considerations
-- Redis cache for horizontal scaling
-- Rate limit synchronization across instances
+- IMemoryCache for single-instance deployments
+- Redis cache consideration for future horizontal scaling
+- Rate limit synchronization across instances (future)
 - Memory cache warm-up strategy
 - Graceful degradation if cache fails
+
+## API Documentation Updates
+
+### /auth/verify Endpoint
+**Required Headers:**
+- `X-Wallet-Address`: Wallet address for rate limit partitioning
+  - Used ONLY for rate limiting, not authentication
+  - If absent, falls back to IP-only rate limiting
+  - The address in the header should match the one in the request body
+
+**Rate Limits:**
+- With `X-Wallet-Address` header: 5 requests/minute per IP+wallet combination
+- Without header: 5 requests/minute per IP only
+- Different wallet addresses on same IP have independent limits
