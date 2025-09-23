@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Services;
@@ -8,6 +9,7 @@ using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
+using MediatR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -29,6 +31,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
     private readonly IJwksService _jwksService;
     private readonly TimeSpan _tokenCacheExpiration;
     private Timer? _backgroundRefreshTimer;
+    private static readonly object ReplayLock = new();
 
     // Cache keys
     private const string JWKS_CACHE_KEY = "dynamic:jwks:keys";
@@ -49,8 +52,8 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
         _claimNormalizer = claimNormalizer ?? throw new ArgumentNullException(nameof(claimNormalizer));
         _jwksService = jwksService ?? throw new ArgumentNullException(nameof(jwksService));
 
-        // Cache validated tokens for 5 minutes to avoid repeated validation
-        _tokenCacheExpiration = TimeSpan.FromMinutes(5);
+        // Cache validated tokens to avoid repeated validation (configurable)
+        _tokenCacheExpiration = TimeSpan.FromMinutes(_validationOptions.TokenCacheMinutes);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -111,7 +114,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
         {
             _logger.LogWarning("Token validation attempted with empty token");
             return Result.Failure<DynamicUserData, Error>(
-                Error.Validation("Token is required", "AUTH.TOKEN_REQUIRED"));
+                Error.Validation("Token is required", AuthErrors.TokenRequired));
         }
 
         // Check cache first
@@ -162,9 +165,15 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
                     expiresAt = DateTimeOffset.FromUnixTimeSeconds(expUnix);
                 }
 
-                // TODO: Extract replay prevention to a separate service to avoid circular dependency
-                // For now, we'll rely on the token's expiration for protection
-                _logger.LogDebug("JWT token has jti claim: {Jti} - replay protection temporarily disabled pending refactor", jtiClaim.Value);
+                // Implement replay protection using same pattern as AuthenticationService
+                var replayCheckResult = CheckAndMarkJwtUsed(jtiClaim.Value, expiresAt);
+                if (replayCheckResult.IsFailure)
+                {
+                    _logger.LogWarning("JWT replay attempt detected for jti: {Jti}", jtiClaim.Value);
+                    return replayCheckResult.Error;
+                }
+
+                _logger.LogDebug("JWT token replay check passed for jti: {Jti}", jtiClaim.Value);
             }
             else
             {
@@ -445,6 +454,62 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
         var bytes = System.Text.Encoding.UTF8.GetBytes(token);
         var hash = System.Security.Cryptography.SHA256.HashData(bytes);
         return Convert.ToBase64String(hash);
+    }
+
+    /// <summary>
+    /// Checks if a JWT token has already been used and marks it as used to prevent replay attacks.
+    /// Uses the same pattern as AuthenticationService to ensure consistency.
+    /// </summary>
+    /// <param name="jti">The JWT ID (jti claim) to check</param>
+    /// <param name="expiresAt">When the token expires</param>
+    /// <returns>Success if token is valid and not replayed, failure if already used</returns>
+    private Result<Unit, Error> CheckAndMarkJwtUsed(string jti, DateTimeOffset expiresAt)
+    {
+        if (string.IsNullOrWhiteSpace(jti))
+        {
+            _logger.LogWarning("JWT replay check attempted with empty jti");
+            return Result.Failure<Unit, Error>(
+                Error.Validation("JWT ID (jti) is required for replay protection", "AUTH.JWT_ID_REQUIRED"));
+        }
+
+        try
+        {
+            var cacheKey = $"jwt_used_{jti}";
+
+            lock (ReplayLock)
+            {
+                if (_cache.TryGetValue(cacheKey, out _))
+                {
+                    _logger.LogWarning("JWT replay attempt detected for jti: {Jti}", jti);
+                    return Result.Failure<Unit, Error>(
+                        Error.Unauthorized("JWT token has already been used", AuthErrors.TokenReplayed));
+                }
+
+                var cacheExpiration = expiresAt.Subtract(DateTimeOffset.UtcNow);
+
+                if (cacheExpiration <= TimeSpan.Zero)
+                {
+                    _logger.LogWarning("Attempt to cache expired JWT with jti: {Jti}", jti);
+                    return Result.Failure<Unit, Error>(
+                        Error.Unauthorized("JWT token has expired", AuthErrors.TokenExpired));
+                }
+
+                // Add buffer time for clock skew (configurable)
+                var bufferTime = TimeSpan.FromMinutes(_validationOptions.ReplayBufferMinutes);
+                var effectiveExpiration = cacheExpiration.Add(bufferTime);
+
+                _cache.Set(cacheKey, true, effectiveExpiration);
+
+                _logger.LogDebug("JWT jti marked as used: {Jti}, expires in: {Duration}", jti, effectiveExpiration);
+                return Result.Success<Unit, Error>(Unit.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during JWT replay check for jti: {Jti}", jti);
+            return Result.Failure<Unit, Error>(
+                Error.External("JWT replay check failed", "AUTH.REPLAY_CHECK_ERROR", ex));
+        }
     }
 
     public void Dispose()

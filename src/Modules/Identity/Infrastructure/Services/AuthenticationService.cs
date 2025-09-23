@@ -4,18 +4,19 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.IdentityModel.Tokens;
 using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Configuration;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Utilities;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Axon.Modules.Identity.Infrastructure.Services;
 
@@ -64,7 +65,7 @@ public sealed class AuthenticationService : IAuthenticationService
         ProviderType providerType,
         string issuer,
         string subject,
-        int expiresIn = 3600,
+        int expiresIn = -1, // Use configuration default when -1
         CancellationToken cancellationToken = default)
     {
         try
@@ -153,8 +154,7 @@ public sealed class AuthenticationService : IAuthenticationService
     }
 
     public Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
-        NetworkEnvironment networkEnvironment,
-        string chainId,
+        string chainId,      // Compound format e.g. "solana-mainnet"
         string walletAddress,
         string audience,
         CancellationToken cancellationToken = default)
@@ -175,32 +175,40 @@ public sealed class AuthenticationService : IAuthenticationService
         var expiration = now.AddSeconds(_options.MaxTtlSeconds).ToUnixTimeSeconds();
         var nonce = GenerateBase64UrlNonce(32);
 
+        // Extract network environment for legacy message format
+        var networkEnv = ChainIdConverter.ExtractNetworkEnvironment(chainId) ?? "mainnet";
+        var baseChain = ChainIdConverter.ExtractBaseChain(chainId);
+
         var message = BuildChallengeMessage(
-            networkEnvironment.Value,
-            chainIdVo.Value.Value,
+            networkEnv,
+            baseChain,
             addressVo.Value.Value,
             issuedAt,
             expiration,
             nonce,
             audience);
 
+        // Generate MAC for challenge
+        var keyVersion = _options.CurrentKeyVersion;
+        var mac = GenerateMacForChallenge(message, keyVersion);
+
         var result = new AuthenticationChallenge(
-            NetworkEnvironment: networkEnvironment.Value,
-            ChainId: chainIdVo.Value.Value,
+            ChainId: chainId,
             Address: addressVo.Value.Value,
             IssuedAt: issuedAt,
             Exp: expiration,
             Nonce: nonce,
             Aud: audience,
-            Message: message);
+            Message: message,
+            Mac: mac,
+            Mkv: keyVersion);
 
         return Task.FromResult(Result.Success<AuthenticationChallenge, Error>(result));
     }
 
-    public Result<bool, Error> ValidateChallengeAsync(
+    public Result<bool, Error> ValidateChallenge(
         string message,
-        NetworkEnvironment expectedNetworkEnvironment,
-        string expectedChainId,
+        string expectedChainId,      // Compound format e.g. "solana-mainnet"
         string expectedWalletAddress,
         string expectedAudience)
     {
@@ -223,11 +231,15 @@ public sealed class AuthenticationService : IAuthenticationService
                 return Result.Failure<bool, Error>(Error.Validation("Message missing required fields", AuthErrors.ChallengeMissingFields));
             }
 
-            if (!string.Equals(env, expectedNetworkEnvironment.Value, StringComparison.Ordinal))
-                return Fail($"Network environment mismatch: expected {expectedNetworkEnvironment.Value}, got {env}", AuthErrors.ChallengeNetworkMismatch);
+            // Extract expected values from compound chain ID for validation
+            var expectedEnv = ChainIdConverter.ExtractNetworkEnvironment(expectedChainId) ?? "mainnet";
+            var expectedBaseChain = ChainIdConverter.ExtractBaseChain(expectedChainId);
 
-            if (!string.Equals(chain, expectedChainId, StringComparison.Ordinal))
-                return Fail($"Chain ID mismatch: expected {expectedChainId}, got {chain}", AuthErrors.ChallengeChainMismatch);
+            if (!string.Equals(env, expectedEnv, StringComparison.Ordinal))
+                return Fail($"Network environment mismatch: expected {expectedEnv}, got {env}", AuthErrors.ChallengeNetworkMismatch);
+
+            if (!string.Equals(chain, expectedBaseChain, StringComparison.Ordinal))
+                return Fail($"Chain ID mismatch: expected {expectedBaseChain}, got {chain}", AuthErrors.ChallengeChainMismatch);
 
             if (!string.Equals(address, expectedWalletAddress, StringComparison.Ordinal))
                 return Fail($"Address mismatch: expected {expectedWalletAddress}, got {address}", AuthErrors.ChallengeAddressMismatch);
@@ -312,6 +324,74 @@ public sealed class AuthenticationService : IAuthenticationService
             return Task.FromResult(Result.Failure<Unit, Error>(
                 Error.External("JWT replay check failed", AuthErrors.ReplayCheckError, ex)));
         }
+    }
+
+    public string GenerateMacForChallenge(string canonicalJson, string keyVersion)
+    {
+        if (!_options.HmacKeys.TryGetValue(keyVersion, out var keyBase64))
+        {
+            throw new InvalidOperationException($"HMAC key version '{keyVersion}' not found");
+        }
+
+        var key = Convert.FromBase64String(keyBase64);
+        using var hmac = new HMACSHA256(key);
+        var messageBytes = Encoding.UTF8.GetBytes(canonicalJson);
+        var hash = hmac.ComputeHash(messageBytes);
+        return Base64UrlEncoder.Encode(hash);
+    }
+
+    public Result<bool, Error> ValidateMac(string message, string mac, string keyVersion)
+    {
+        try
+        {
+            var expectedMac = GenerateMacForChallenge(message, keyVersion);
+            var expectedBytes = Base64UrlEncoder.DecodeBytes(expectedMac);
+            var actualBytes = Base64UrlEncoder.DecodeBytes(mac);
+
+            if (!CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes))
+            {
+                return Result.Failure<bool, Error>(
+                    Error.Unauthorized("Invalid MAC", AuthErrors.MacInvalid));
+            }
+
+            return Result.Success<bool, Error>(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MAC validation failed");
+            return Result.Failure<bool, Error>(
+                Error.Internal("MAC validation error", AuthErrors.MacValidationError));
+        }
+    }
+
+    public async Task<Result<Unit, Error>> CheckAndMarkNonceUsedAsync(
+        string signedMessage, string mkv, CancellationToken ct = default)
+    {
+        using var doc = JsonDocument.Parse(signedMessage);
+        var nonce = doc.RootElement.GetProperty("nonce").GetString();
+        if (string.IsNullOrWhiteSpace(nonce))
+            return Result.Failure<Unit, Error>(Error.Validation("Missing nonce", AuthErrors.NonceRequired));
+
+        var cacheKey = $"nonce:{mkv}:{nonce}";
+
+        // Compute remaining TTL with skew (don't cache past expiration)
+        var iat = doc.RootElement.GetProperty("issued_at").GetInt64();
+        var exp = doc.RootElement.GetProperty("exp").GetInt64();
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var remaining = Math.Max(0, (int)(exp - now) + _options.ClockSkewSeconds);
+
+        if (remaining <= 0)
+            return Result.Failure<Unit, Error>(Error.Validation("Challenge expired", AuthErrors.ChallengeExpired));
+
+        if (_cache.TryGetValue(cacheKey, out _))
+        {
+            _logger.LogWarning("Replay attempt detected for nonce {Nonce}", nonce[..Math.Min(8, nonce.Length)]);
+            return Result.Failure<Unit, Error>(
+                Error.Conflict("Message already used", AuthErrors.TokenReplayed));
+        }
+
+        _cache.Set(cacheKey, true, TimeSpan.FromSeconds(remaining));
+        return Result.Success<Unit, Error>(Unit.Value);
     }
 
     // Private helper methods
@@ -453,8 +533,20 @@ public sealed class AuthenticationService : IAuthenticationService
                 return Result.Failure<AuthenticatedContext, Error>(providerTypeResult.Error);
             }
 
-            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(long.Parse(iatClaim));
-            var expiresAt = DateTimeOffset.FromUnixTimeSeconds(long.Parse(expClaim));
+            if (!long.TryParse(iatClaim, out var iatValue))
+            {
+                return Result.Failure<AuthenticatedContext, Error>(
+                    Error.Validation("Invalid issued at timestamp format", AuthErrors.TokenInvalidClaims));
+            }
+
+            if (!long.TryParse(expClaim, out var expValue))
+            {
+                return Result.Failure<AuthenticatedContext, Error>(
+                    Error.Validation("Invalid expiration timestamp format", AuthErrors.TokenInvalidClaims));
+            }
+
+            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(iatValue);
+            var expiresAt = DateTimeOffset.FromUnixTimeSeconds(expValue);
 
             var context = new AuthenticatedContext(
                 TokenType: TokenType.AxonAccessToken,
@@ -610,9 +702,21 @@ public sealed class AuthenticationService : IAuthenticationService
                     Error.Validation("Refresh token missing required claims", AuthErrors.TokenInvalidClaims));
             }
 
-            // Check if refresh token is in cache (not revoked)
+            // Atomically check and revoke refresh token to prevent replay attacks
             var refreshTokenCacheKey = $"refresh_token_{jtiClaim}";
-            if (!_cache.TryGetValue(refreshTokenCacheKey, out var cachedUserId))
+            bool tokenExists;
+
+            lock (ReplayLock)
+            {
+                tokenExists = _cache.TryGetValue(refreshTokenCacheKey, out var cachedUserId);
+                if (tokenExists)
+                {
+                    // Immediately revoke the token to prevent concurrent use
+                    _cache.Remove(refreshTokenCacheKey);
+                }
+            }
+
+            if (!tokenExists)
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Refresh token is invalid or revoked", AuthErrors.TokenInvalid));
@@ -632,9 +736,6 @@ public sealed class AuthenticationService : IAuthenticationService
                     Error.Validation("Invalid provider type in refresh token", AuthErrors.TokenInvalidClaims));
             }
             var providerType = providerTypeResult.Value;
-
-            // Revoke the old refresh token
-            _cache.Remove(refreshTokenCacheKey);
 
             // Generate new token pair
             return await GenerateRefreshTokenAsync(

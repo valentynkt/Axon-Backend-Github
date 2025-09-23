@@ -6,6 +6,7 @@ using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
+using Axon.Modules.Identity.Infrastructure.Persistence.Context;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Services.Configuration;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
@@ -44,6 +45,26 @@ public static class ServiceRegistration
             ?? configuration.GetConnectionString("DefaultConnection")
             ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
         
+        // Identity DbContext for Microsoft Identity Framework
+        services.AddDbContext<IdentityContext>(options =>
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
+                    errorCodesToAdd: null);
+            })
+            .UseSnakeCaseNamingConvention();
+
+#if DEBUG
+            // Enable detailed logging in development
+            options.EnableSensitiveDataLogging(true);
+            options.EnableDetailedErrors(true);
+#endif
+        });
+
         // Write DbContext
         services.AddDbContext<IdentityWriteDbContext>(options =>
         {
@@ -147,13 +168,18 @@ public static class ServiceRegistration
         services.Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName));
 
         // Register focused authentication services
-        // NOTE: These are replaced by the unified AuthenticationService (Story 5.5)
-        // services.AddScoped<IJwtTokenService, JwtTokenService>();
-        // services.AddScoped<IChallengeService, ChallengeService>();
+        // NOTE: JwtTokenService uses AxonUserAuth with Microsoft Identity Framework
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IBearerTokenExtractor, BearerTokenExtractor>();
 
         // Register unified authentication service (orchestrates the focused services)
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+
+        // Add Microsoft Identity Framework with AxonUserAuth (Story 5 - Identity Integration)
+        services.AddAxonIdentityWithFeatureFlag(configuration);
+
+        // Register AxonUserStore directly for injection
+        services.AddScoped<Persistence.Stores.AxonUserStore>();
 
         // Register modern claims transformation for Dynamic.xyz integration
         services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, DynamicClaimsTransformation>();

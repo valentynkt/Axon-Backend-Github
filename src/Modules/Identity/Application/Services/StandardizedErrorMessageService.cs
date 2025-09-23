@@ -9,12 +9,12 @@ namespace Axon.Modules.Identity.Application.Services;
 public static class StandardizedErrorMessageService
 {
     /// <summary>
-    /// Creates error for wallet already verified on a specific network
+    /// Creates error for wallet already verified on a specific chain
     /// </summary>
-    public static Error WalletAlreadyVerified(NetworkEnvironment networkEnvironment, string chainId)
+    public static Error WalletAlreadyVerified(string chainId)
     {
         return Error.Conflict(
-            $"Wallet already verified on {networkEnvironment.Value}/{chainId}",
+            $"Wallet already verified on {chainId}",
             "WALLET.ALREADY_VERIFIED");
     }
 

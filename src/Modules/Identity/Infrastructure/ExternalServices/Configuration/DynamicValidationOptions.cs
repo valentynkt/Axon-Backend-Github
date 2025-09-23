@@ -51,4 +51,16 @@ public sealed class DynamicValidationOptions
     /// </summary>
     [Range(5, 25)]
     public int BackgroundRefreshMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Token cache expiration in minutes (default: 5)
+    /// </summary>
+    [Range(1, 15)]
+    public int TokenCacheMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// Replay protection buffer time in minutes (default: 5)
+    /// </summary>
+    [Range(1, 10)]
+    public int ReplayBufferMinutes { get; set; } = 5;
 }
