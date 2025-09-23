@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Application.Contracts.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Utilities;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -28,8 +29,11 @@ public sealed class GenerateChallengeHandler : IRequestHandler<GenerateChallenge
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Extract base chain for address normalization
+        var baseChain = ChainIdConverter.ExtractBaseChain(request.ChainId);
+
         // Apply address normalization at application layer per Story 5.3 AC#13
-        var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(request.ChainId, request.WalletAddress);
+        var normalizedAddressResult = _addressNormalizationService.NormalizeAddress(baseChain, request.WalletAddress);
         if (normalizedAddressResult.IsFailure)
         {
             _logger.LogWarning("Failed to normalize address {Address} for chain {Chain}: {Error}",
@@ -41,7 +45,6 @@ public sealed class GenerateChallengeHandler : IRequestHandler<GenerateChallenge
 
         // Generate challenge via unified authentication service
         var challengeResult = await _authenticationService.GenerateChallengeAsync(
-            request.NetworkEnvironment,
             request.ChainId,
             normalizedAddress,
             request.Audience ?? string.Empty,
@@ -57,17 +60,18 @@ public sealed class GenerateChallengeHandler : IRequestHandler<GenerateChallenge
 
         var result = new GenerateChallengeResult(
             Message: challenge.Message,
-            NetworkEnvironment: challenge.NetworkEnvironment,
             ChainId: challenge.ChainId,
             Address: challenge.Address,
             IssuedAt: challenge.IssuedAt,
             ExpiresAt: challenge.Exp,
             Nonce: challenge.Nonce,
-            Audience: challenge.Aud
+            Audience: challenge.Aud,
+            Mac: challenge.Mac,
+            Mkv: challenge.Mkv
         );
 
-        _logger.LogInformation("Generated challenge for {Address} on {Environment}",
-            normalizedAddress, challenge.NetworkEnvironment);
+        _logger.LogInformation("Generated challenge for {Address} on {ChainId}",
+            normalizedAddress, request.ChainId);
 
         return Result.Success<GenerateChallengeResult, Error>(result);
     }

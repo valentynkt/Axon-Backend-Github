@@ -27,7 +27,6 @@ public class PrincipalResolutionServiceTests
     private ILogger<PrincipalResolutionService> _logger = null!;
 
     private ProviderType _dynamicProvider;
-    private NetworkEnvironment _mainnetEnv;
     private ChainId _solanaChain;
     private Address _testAddress;
 
@@ -51,8 +50,7 @@ public class PrincipalResolutionServiceTests
 
         // Test data setup
         _dynamicProvider = ProviderType.Create("dynamic").Value;
-        _mainnetEnv = NetworkEnvironment.Create("mainnet").Value;
-        _solanaChain = ChainId.Create("solana").Value;
+        _solanaChain = ChainId.Create("solana:mainnet").Value;
         _testAddress = Address.Create("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM").Value;
     }
 

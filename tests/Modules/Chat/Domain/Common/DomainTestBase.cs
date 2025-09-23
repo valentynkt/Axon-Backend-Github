@@ -1,4 +1,5 @@
 using Axon.Modules.Chat.Domain.Tests.TestDoubles;
+using Axon.Modules.Chat.Domain.Tests.Builders;
 using CSharpFunctionalExtensions;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 
@@ -171,6 +172,11 @@ public abstract class DomainTestBase
     {
         aggregate.ClearDomainEvents();
     }
+
+    /// <summary>
+    /// Creates a ConversationBuilder for test scenarios.
+    /// </summary>
+    protected static ConversationBuilder CreateConversationBuilder() => ConversationBuilder.New();
 
     /// <summary>
     /// Creates test data for edge case scenarios.

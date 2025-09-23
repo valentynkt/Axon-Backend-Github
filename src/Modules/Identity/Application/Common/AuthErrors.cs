@@ -43,6 +43,11 @@ public static class AuthErrors
     public const string ReplayCheckError = "AUTH.REPLAY_CHECK_ERROR";
     public const string ReplayRaceCondition = "AUTH.REPLAY_RACE_CONDITION";
 
+    // MAC and Cryptographic Errors
+    public const string MacInvalid = "AUTH.MAC_INVALID";
+    public const string MacValidationError = "AUTH.MAC_VALIDATION_ERROR";
+    public const string NonceRequired = "AUTH.NONCE_REQUIRED";
+
     // Signature Verification Errors
     public const string SignatureInvalidAddress = "SIGNATURE.INVALID_ADDRESS";
     public const string SignatureInvalidPublicKey = "SIGNATURE.INVALID_PUBLIC_KEY";

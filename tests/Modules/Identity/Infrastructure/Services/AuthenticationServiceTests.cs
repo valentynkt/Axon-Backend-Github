@@ -390,19 +390,17 @@ public class AuthenticationServiceTests
     public async Task GenerateChallengeAsync_WithValidParameters_ReturnsChallenge()
     {
         // Arrange
-        var networkEnvironment = NetworkEnvironment.Mainnet;
-        var chainId = "ethereum";
+        var compoundChainId = "ethereum-mainnet";
         var walletAddress = "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41";
         var audience = "test-audience";
 
         // Act
         var result = await _authService.GenerateChallengeAsync(
-            networkEnvironment, chainId, walletAddress, audience, CancellationToken.None);
+            compoundChainId, walletAddress, audience, CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.Value.NetworkEnvironment.ShouldBe(networkEnvironment.Value);
-        result.Value.ChainId.ShouldBe(chainId);
+        result.Value.ChainId.ShouldBe(compoundChainId);
         result.Value.Address.ShouldBe(walletAddress);
         result.Value.Aud.ShouldBe(audience);
         result.Value.Nonce.ShouldNotBeNullOrEmpty();
@@ -412,8 +410,8 @@ public class AuthenticationServiceTests
         // Verify message structure
         var messageDoc = JsonDocument.Parse(result.Value.Message);
         var root = messageDoc.RootElement;
-        root.GetProperty("network_environment").GetString().ShouldBe(networkEnvironment.Value);
-        root.GetProperty("chain_id").GetString().ShouldBe(chainId);
+        root.GetProperty("network_environment").GetString().ShouldBe("mainnet");
+        root.GetProperty("chain_id").GetString().ShouldBe("ethereum");
         root.GetProperty("address").GetString().ShouldBe(walletAddress);
         root.GetProperty("aud").GetString().ShouldBe(audience);
         root.GetProperty("nonce").GetString().ShouldBe(result.Value.Nonce);
@@ -423,14 +421,13 @@ public class AuthenticationServiceTests
     public async Task GenerateChallengeAsync_WithEmptyAudience_UsesDefaultAudience()
     {
         // Arrange
-        var networkEnvironment = NetworkEnvironment.Mainnet;
-        var chainId = "ethereum";
+        var compoundChainId = "ethereum-mainnet";
         var walletAddress = "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41";
         var audience = ""; // Empty audience
 
         // Act
         var result = await _authService.GenerateChallengeAsync(
-            networkEnvironment, chainId, walletAddress, audience, CancellationToken.None);
+            compoundChainId, walletAddress, audience, CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -441,14 +438,13 @@ public class AuthenticationServiceTests
     public async Task GenerateChallengeAsync_WithInvalidChainId_ReturnsValidationError()
     {
         // Arrange
-        var networkEnvironment = NetworkEnvironment.Mainnet;
-        var invalidChainId = ""; // Empty chain ID
+        var compoundChainId = ""; // Empty chain ID
         var walletAddress = "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41";
         var audience = "test-audience";
 
         // Act
         var result = await _authService.GenerateChallengeAsync(
-            networkEnvironment, invalidChainId, walletAddress, audience, CancellationToken.None);
+            compoundChainId, walletAddress, audience, CancellationToken.None);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -459,14 +455,13 @@ public class AuthenticationServiceTests
     public async Task GenerateChallengeAsync_WithInvalidAddress_ReturnsValidationError()
     {
         // Arrange
-        var networkEnvironment = NetworkEnvironment.Mainnet;
-        var chainId = "ethereum";
+        var compoundChainId = "ethereum-mainnet";
         var invalidAddress = "invalid-address";
         var audience = "test-audience";
 
         // Act
         var result = await _authService.GenerateChallengeAsync(
-            networkEnvironment, chainId, invalidAddress, audience, CancellationToken.None);
+            compoundChainId, invalidAddress, audience, CancellationToken.None);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -478,23 +473,22 @@ public class AuthenticationServiceTests
     #region Challenge Validation Tests
 
     [Test]
-    public async Task ValidateChallengeAsync_WithValidChallenge_ReturnsSuccess()
+    public async Task ValidateChallenge_WithValidChallenge_ReturnsSuccess()
     {
         // Arrange - Generate challenge first
-        var networkEnvironment = NetworkEnvironment.Mainnet;
-        var chainId = "ethereum";
+        var compoundChainId = "ethereum-mainnet";
         var walletAddress = "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41";
         var audience = "test-audience";
 
         var challengeResult = await _authService.GenerateChallengeAsync(
-            networkEnvironment, chainId, walletAddress, audience, CancellationToken.None);
+            compoundChainId, walletAddress, audience, CancellationToken.None);
         challengeResult.IsSuccess.ShouldBeTrue();
 
         var challenge = challengeResult.Value;
 
         // Act
-        var result = _authService.ValidateChallengeAsync(
-            challenge.Message, networkEnvironment, chainId, walletAddress, audience);
+        var result = _authService.ValidateChallenge(
+            challenge.Message, compoundChainId, walletAddress, audience);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -502,15 +496,15 @@ public class AuthenticationServiceTests
     }
 
     [Test]
-    public void ValidateChallengeAsync_WithNetworkMismatch_ReturnsValidationError()
+    public void ValidateChallenge_WithNetworkMismatch_ReturnsValidationError()
     {
         // Arrange
         var message = CreateTestChallengeMessage("mainnet", "ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
-        var expectedNetwork = NetworkEnvironment.Testnet; // Different network
+        var expectedChainId = "ethereum-testnet"; // Different network
 
         // Act
-        var result = _authService.ValidateChallengeAsync(
-            message, expectedNetwork, "ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
+        var result = _authService.ValidateChallenge(
+            message, expectedChainId, "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -519,15 +513,15 @@ public class AuthenticationServiceTests
     }
 
     [Test]
-    public void ValidateChallengeAsync_WithChainMismatch_ReturnsValidationError()
+    public void ValidateChallenge_WithChainMismatch_ReturnsValidationError()
     {
         // Arrange
         var message = CreateTestChallengeMessage("mainnet", "ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
         var expectedChain = "polygon"; // Different chain
 
         // Act
-        var result = _authService.ValidateChallengeAsync(
-            message, NetworkEnvironment.Mainnet, expectedChain, "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
+        var result = _authService.ValidateChallenge(
+            message, $"{expectedChain}-mainnet", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -536,7 +530,7 @@ public class AuthenticationServiceTests
     }
 
     [Test]
-    public void ValidateChallengeAsync_WithExpiredChallenge_ReturnsValidationError()
+    public void ValidateChallenge_WithExpiredChallenge_ReturnsValidationError()
     {
         // Arrange - Create expired challenge
         var expiredTime = DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds();
@@ -544,8 +538,8 @@ public class AuthenticationServiceTests
         var message = CreateTestChallengeMessage("mainnet", "ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test", issuedTime, expiredTime);
 
         // Act
-        var result = _authService.ValidateChallengeAsync(
-            message, NetworkEnvironment.Mainnet, "ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
+        var result = _authService.ValidateChallenge(
+            message, "ethereum-mainnet", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -554,14 +548,14 @@ public class AuthenticationServiceTests
     }
 
     [Test]
-    public void ValidateChallengeAsync_WithInvalidJson_ReturnsValidationError()
+    public void ValidateChallenge_WithInvalidJson_ReturnsValidationError()
     {
         // Arrange
         var invalidMessage = "{ invalid json }";
 
         // Act
-        var result = _authService.ValidateChallengeAsync(
-            invalidMessage, NetworkEnvironment.Mainnet, "ethereum", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
+        var result = _authService.ValidateChallenge(
+            invalidMessage, "ethereum-mainnet", "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "test");
 
         // Assert
         result.IsFailure.ShouldBeTrue();

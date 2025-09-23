@@ -336,7 +336,7 @@ public sealed class ExchangeE2ETests : E2ETestBase
         {
             var content = CreateJsonContent("{}");
             contentObjects.Add(content);
-            tasks.Add(_client.PostAsync("/api/v1/auth/exchange", content));
+            tasks.Add(HttpClient.PostAsync("/api/v1/auth/exchange", content));
         }
 
         var responses = await Task.WhenAll(tasks);
@@ -447,8 +447,8 @@ public sealed class ExchangeE2ETests : E2ETestBase
             new Claim("sub", userId),
             new Claim("iss", issuer),
             new Claim("aud", "test-audience"),
-            new Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            new Claim("exp", DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds().ToString())
+            new Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new Claim("exp", DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture))
         };
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "Dynamic"));
@@ -459,19 +459,6 @@ public sealed class ExchangeE2ETests : E2ETestBase
         // In a real scenario, this would be a valid JWT from Dynamic
         // For testing purposes, we return a mock token that will be handled by our mock service
         return $"dynamic.jwt.{userId}";
-    }
-
-    private async Task CleanDatabase()
-    {
-        using var scope = _factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.DbContext>();
-
-        // Clean in dependency order
-        await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownerships CASCADE");
-        await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.principal_chain_defaults CASCADE");
-        await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.credentials CASCADE");
-        await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallets CASCADE");
-        await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.axon_principals CASCADE");
     }
 
     private sealed record ExchangeTokenResponseDto(

@@ -18,7 +18,7 @@ public interface IAuthenticationService
         ProviderType providerType,
         string issuer,
         string subject,
-        int expiresIn = 900, // Default to 15 minutes for security
+        int expiresIn = -1, // Use configuration default when -1
         CancellationToken cancellationToken = default);
 
     Task<Result<AuthenticatedContext, Error>> ValidateTokenAsync(
@@ -39,16 +39,14 @@ public interface IAuthenticationService
 
     // Challenge Operations
     Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
-        NetworkEnvironment networkEnvironment,
-        string chainId,
+        string chainId,      // Compound format e.g. "solana-mainnet"
         string walletAddress,
         string audience,
         CancellationToken cancellationToken = default);
 
-    Result<bool, Error> ValidateChallengeAsync(
+    Result<bool, Error> ValidateChallenge(
         string message,
-        NetworkEnvironment expectedNetworkEnvironment,
-        string expectedChainId,
+        string expectedChainId,      // Compound format e.g. "solana-mainnet"
         string expectedWalletAddress,
         string expectedAudience);
 
@@ -57,6 +55,12 @@ public interface IAuthenticationService
         string jti,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default);
+
+    // HMAC Operations for Challenge Verification
+    string GenerateMacForChallenge(string canonicalJson, string keyVersion);
+    Result<bool, Error> ValidateMac(string message, string mac, string keyVersion);
+    Task<Result<Unit, Error>> CheckAndMarkNonceUsedAsync(
+        string signedMessage, string mkv, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -86,14 +90,15 @@ public record AuthenticatedContext(
 /// Simplified challenge response
 /// </summary>
 public record AuthenticationChallenge(
-    string NetworkEnvironment,
-    string ChainId,
+    string ChainId,      // Compound format e.g. "solana-mainnet"
     string Address,
     long IssuedAt,
     long Exp,
     string Nonce,
     string Aud,
-    string Message);
+    string Message,
+    string Mac,
+    string Mkv);
 
 /// <summary>
 /// Token type enumeration
