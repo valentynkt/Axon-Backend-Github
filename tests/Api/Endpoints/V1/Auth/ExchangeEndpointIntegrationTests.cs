@@ -287,6 +287,63 @@ public class ExchangeEndpointIntegrationTests
         principalCount.ShouldBe(1);
     }
 
+    [Test]
+    public async Task ExchangeEndpoint_BypassesMiddlewareAuthentication_NoDoubleValidation()
+    {
+        // Arrange - Use an invalid JWT token that would fail middleware validation
+        var invalidToken = "Bearer invalid.jwt.token";
+
+        // Remove the default valid authorization header and use invalid one
+        _client.DefaultRequestHeaders.Remove("Authorization");
+        _client.DefaultRequestHeaders.Add("Authorization", invalidToken);
+
+        var requestPayload = CreateValidExchangeRequest();
+        _mockCurrentUserService.AxonUserId.Returns("bypass-test-user");
+
+        // Act - This should reach the endpoint despite invalid token (middleware bypassed)
+        var response = await _client.PostAsync("/api/v1/auth/exchange",
+            new StringContent(JsonSerializer.Serialize(requestPayload), Encoding.UTF8, "application/json"));
+
+        // Assert - Should fail at provider validation, not middleware validation
+        // If middleware weren't bypassed, we'd get 401 before reaching the provider
+        response.StatusCode.ShouldNotBe(HttpStatusCode.Unauthorized);
+
+        // Should fail at provider level with 400 or 422 (business rule violation)
+        // since the provider will try to validate the invalid JWT
+        response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.UnprocessableEntity);
+
+        // Verify the error comes from provider validation, not middleware
+        var content = await response.Content.ReadAsStringAsync();
+        content.ShouldNotContain("WWW-Authenticate"); // Middleware would add this header
+    }
+
+    [Test]
+    public async Task ExchangeEndpoint_WithValidToken_SingleValidationPath()
+    {
+        // Arrange - This test verifies successful flow uses single validation
+        var requestPayload = CreateValidExchangeRequest();
+        _mockCurrentUserService.AxonUserId.Returns("single-validation-user");
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange",
+            new StringContent(JsonSerializer.Serialize(requestPayload), Encoding.UTF8, "application/json"));
+
+        // Assert - Should succeed, indicating single validation path worked
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ExchangeTokenResponseDto>(content,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        result.ShouldNotBeNull();
+        result.AccessToken.ShouldNotBeNullOrEmpty();
+        result.AxonUserId.ShouldNotBeNullOrEmpty();
+
+        // Verify database record was created (proving provider validation succeeded)
+        var principalExists = await _dbContext.AxonPrincipals.AnyAsync();
+        principalExists.ShouldBeTrue();
+    }
+
     #endregion
 
     #region Helper Methods

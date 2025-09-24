@@ -178,10 +178,11 @@ public sealed class HttpContextUserService : ICurrentUserService
             // Layer 1: Request-scoped cache (0ms)
             if (_httpContextAccessor.HttpContext?.Items.TryGetValue("AxonUserId", out var cached) == true && cached is AxonUserId cachedAxonUserId)
             {
-                _logger.LogDebug("AxonUserId cache hit (request-scoped)");
+                _logger.LogDebug("AxonUserId cache hit (request-scoped): {AxonUserId}", cachedAxonUserId.Value);
                 CacheHitCounter.Add(1, new KeyValuePair<string, object?>("source", "request"));
                 activity?.SetTag("cache_source", "request");
                 activity?.SetTag("cache_hit", true);
+                activity?.SetTag("axon_user_id", cachedAxonUserId.Value.ToString());
 
                 stopwatch.Stop();
                 ResolutionLatency.Record(stopwatch.Elapsed.TotalMilliseconds,
@@ -203,13 +204,16 @@ public sealed class HttpContextUserService : ICurrentUserService
 
             // Layer 2: Memory cache (<1ms) - NEW for Story 4b.3
             var cacheKey = $"axon:user:{dynamicAxonUserId}";
+            _logger.LogDebug("Attempting memory cache lookup with key: {CacheKey}", cacheKey);
+
             var axonAxonUserId = await _memoryCache.GetOrCreateAsync(
                 cacheKey,
                 async entry =>
                 {
-                    _logger.LogDebug("AxonUserId memory cache miss, fetching from database for {DynamicAxonUserId}", dynamicAxonUserId);
+                    _logger.LogInformation("AxonUserId memory cache miss for key {CacheKey}, fetching from database", cacheKey);
                     CacheMissCounter.Add(1, new KeyValuePair<string, object?>("source", "memory"));
                     activity?.SetTag("cache_source", "database");
+                    activity?.SetTag("cache_miss", true);
 
                     // Configure cache entry options (Task 2 requirements)
                     entry.SlidingExpiration = TimeSpan.FromMinutes(15);
@@ -223,6 +227,16 @@ public sealed class HttpContextUserService : ICurrentUserService
                         dynamicAxonUserId,
                         cancellationToken);
 
+                    if (principal != null)
+                    {
+                        _logger.LogInformation("Found principal in database for {DynamicAxonUserId}: {PrincipalId}",
+                            dynamicAxonUserId, principal.Id.Value);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No principal found in database for {DynamicAxonUserId}", dynamicAxonUserId);
+                    }
+
                     return principal?.Id;
                 });
 
@@ -231,14 +245,17 @@ public sealed class HttpContextUserService : ICurrentUserService
             if (axonAxonUserId.HasValue && httpContext != null)
             {
                 httpContext.Items["AxonUserId"] = axonAxonUserId.Value;
-                _logger.LogDebug("AxonUserId cached for request from memory cache: {AxonUserId}", axonAxonUserId.Value);
+                _logger.LogDebug("AxonUserId cached for request from memory cache: {AxonUserId} using key: {CacheKey}",
+                    axonAxonUserId.Value, cacheKey);
                 CacheHitCounter.Add(1, new KeyValuePair<string, object?>("source", "memory"));
                 activity?.SetTag("cache_source", "memory");
+                activity?.SetTag("cache_hit", true);
                 activity?.SetTag("axon_user_id", axonAxonUserId.Value.ToString());
                 activity?.SetTag("cache_populated", true);
             }
             else
             {
+                _logger.LogWarning("Failed to resolve AxonUserId for key: {CacheKey}", cacheKey);
                 activity?.SetTag("cache_populated", false);
                 activity?.SetTag("principal_found", axonAxonUserId.HasValue);
             }

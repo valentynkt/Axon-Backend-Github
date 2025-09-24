@@ -82,7 +82,7 @@ public sealed class IdentityApiModule : IApiModule
         {
             options.ForwardDefaultSelector = context =>
             {
-                // Check authorization header to determine which scheme to use
+                // Exchange endpoint is excluded from middleware, so this won't be called for that route
                 var authorization = context.Request.Headers.Authorization.FirstOrDefault();
                 if (string.IsNullOrEmpty(authorization))
                     return "AxonJwt";
@@ -99,10 +99,20 @@ public sealed class IdentityApiModule : IApiModule
                             var jwtToken = handler.ReadJwtToken(token);
                             // Dynamic tokens have issuer starting with app.dynamicauth.com
                             if (jwtToken.Issuer?.StartsWith("app.dynamicauth.com", StringComparison.OrdinalIgnoreCase) == true)
+                            {
+                                // Log when Dynamic JWT is handled by middleware (should be rare now)
+                                var logger = context.RequestServices.GetRequiredService<ILogger<IdentityApiModule>>();
+                                logger.LogDebug("Dynamic JWT processed by middleware for path: {Path}", context.Request.Path);
                                 return "DynamicJwt";
+                            }
                         }
                     }
-                    catch { /* Fallback to Axon */ }
+                    catch (Exception ex)
+                    {
+                        // Log token parsing failures
+                        var logger = context.RequestServices.GetRequiredService<ILogger<IdentityApiModule>>();
+                        logger.LogDebug(ex, "Failed to parse JWT for scheme selection, defaulting to AxonJwt");
+                    }
                 }
 
                 return "AxonJwt";

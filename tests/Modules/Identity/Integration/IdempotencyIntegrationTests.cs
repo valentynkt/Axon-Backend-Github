@@ -1,5 +1,6 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
+using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
@@ -57,27 +58,45 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         await base.TearDownDerived();
     }
 
-    private ExchangeCredentialHandler CreateExchangeHandler()
+    private static ExchangeCredentialHandler CreateExchangeHandler()
     {
         // Create mock dependencies using NSubstitute
         var currentUserService = Substitute.For<ICurrentUserService>();
-        var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
-        var resolutionService = Substitute.For<IPrincipalResolutionService>();
-        var addressNormalizer = Substitute.For<IAddressNormalizationService>();
-        var walletVerificationService = Substitute.For<IWalletVerificationService>();
         var logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
 
-        // Use real repositories from base class for integration testing
+        // Use new simplified constructor for integration testing
+        var orchestrator = Substitute.For<IAuthenticationOrchestrator>();
+        var jwtTokenService = Substitute.For<IJwtTokenService>();
+
+        ConfigureMockOrchestrator(orchestrator);
+
         return new ExchangeCredentialHandler(
             currentUserService,
-            PrincipalRepository,  // Real repository from base class
-            WalletRepository,     // Real repository from base class
-            _memoryCache,         // Use field to avoid disposal warning
-            httpContextAccessor,
-            resolutionService,
-            addressNormalizer,
-            walletVerificationService,
+            orchestrator,
+            jwtTokenService,
             logger);
+    }
+
+    private static void ConfigureMockOrchestrator(IAuthenticationOrchestrator orchestrator)
+    {
+        // Configure default orchestrator behavior - success with mock response
+        var mockResponse = new AuthenticationResponse(
+            AccessToken: "mock-access-token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "dynamic",
+            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
+            AdditionalData: new Dictionary<string, object>
+            {
+                ["created"] = false,
+                ["wallets_processed"] = 0,
+                ["wallets_linked"] = 0,
+                ["defaults_applied"] = 0,
+                ["skipped"] = 0,
+                ["conflicts"] = 0
+            });
+
+        orchestrator.ExchangeDynamicTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
     }
 
     #endregion
@@ -96,13 +115,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Create exchange command for existing credential
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>()
-            ));
+        var command = new ExchangeCredentialCommand("valid-bearer-token-idempotent");
 
         // Act: Execute same command multiple times
         var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -141,13 +154,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Create exchange command
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>()
-            ));
+        var command = new ExchangeCredentialCommand("valid-bearer-token-timestamps");
 
         // Act: Advance time and re-submit
         _timeProvider.Advance(TimeSpan.FromMinutes(30));
@@ -175,13 +182,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         await PrincipalRepository.AddAsync(principal, CancellationToken.None);
         await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>()
-            ));
+        var command = new ExchangeCredentialCommand("valid-bearer-token-test");
 
         // Act: Execute concurrently using separate contexts
         var (exception1, exception2) = await ExecuteConcurrentOperations(
@@ -215,16 +216,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Create exchange command with wallet proof
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: "unknown_user_12345",
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
-                }
-            ));
+        var command = new ExchangeCredentialCommand("bearer-token-unknown-user");
+        // Note: Wallet data no longer needed - handled by orchestrator
 
         // Act: Execute same wallet proof multiple times within TTL
         var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -273,16 +266,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Create exchange command with wallet proof
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: "different_user_54321",
-                Email: "test2@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
-                }
-            ));
+        var command = new ExchangeCredentialCommand("bearer-token-different-user");
+        // Note: Wallet data no longer needed - handled by orchestrator
 
         // Act: Execute wallet proof
         var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -321,16 +306,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         // Clear change tracker
         ClearChangeTracker();
 
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: "test_user_67890",
-                Email: "test3@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
-                }
-            ));
+        var command = new ExchangeCredentialCommand("bearer-token-test-user");
+        // Note: Wallet data no longer needed - handled by orchestrator
 
         // Act: Execute proof (should verify the pending ownership)
         var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -406,16 +383,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Command with both credential and wallet data
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
-                }
-            ));
+        var command = new ExchangeCredentialCommand("bearer-token-solana-test");
 
         // Act - Execute multiple times
         var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -456,13 +424,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
 
         ClearChangeTracker();
 
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>()
-            ));
+        var command = new ExchangeCredentialCommand("valid-bearer-token-test");
 
         // Act - Simulate cache expiry by advancing time significantly
         _timeProvider.Advance(TimeSpan.FromHours(25)); // Beyond typical cache TTL
@@ -497,16 +459,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
 
         ClearChangeTracker();
 
-        var command = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: "transition_test_user",
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new(TestDataFixtures.SolanaMainnetChain, TestDataFixtures.W1MainAddress)
-                }
-            ));
+        var command = new ExchangeCredentialCommand("bearer-token-transition-test");
+        // Note: Wallet data no longer needed - handled by orchestrator
 
         // Act - Execute multiple times as ownership transitions from pending to verified
         var result1 = await ExecuteExchangeWithIdempotencyCheck(command);
@@ -538,27 +492,12 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Commands for different environments (but same user)
-        var mainnetCommand = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "ethereum")
-                }
-            ));
+        var mainnetCommand = new ExchangeCredentialCommand("bearer-token-mainnet-test");
+        // Note: Wallet data no longer needed - handled by orchestrator
 
-        var testnetCommand = new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: TestDataFixtures.DynA_Subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new("0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e42", "ethereum") // Different testnet address
-                }
-            ));
+        var testnetCommand = new ExchangeCredentialCommand("bearer-token-testnet-test");
+        // Note: Wallet data no longer needed - handled by orchestrator
+                // Note: Address data now handled by orchestrator
 
         // Act - Switch between environments
         var mainnetResult1 = await ExecuteExchangeWithIdempotencyCheck(mainnetCommand);
@@ -618,13 +557,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// </summary>
     private static ExchangeCredentialCommand CreateCredentialCommand(string subject)
     {
-        return new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: subject,
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>()
-            ));
+        return new ExchangeCredentialCommand($"bearer-token-{subject}");
     }
 
     /// <summary>
@@ -632,16 +565,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// </summary>
     private static ExchangeCredentialCommand CreateWalletCommand(string walletAddress)
     {
-        return new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: "unknown_user_" + Guid.NewGuid().ToString("N")[..8],
-                Email: "test@example.com",
-                DynamicEnvironmentId: TestDataFixtures.DynamicEnvironmentId,
-                Wallets: new List<ExchangeWalletData>
-                {
-                    new(TestDataFixtures.SolanaMainnetChain, walletAddress)
-                }
-            ));
+        return new ExchangeCredentialCommand($"bearer-token-wallet-{walletAddress[..8]}");
     }
 
     /// <summary>
@@ -693,6 +617,8 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
 
         ownershipGroups.ShouldBe(0, "Should have no duplicate wallet ownerships");
     }
+
+    // Note: ConfigureMockOrchestrator method moved to line 80
 
     #endregion
 }

@@ -4,9 +4,8 @@ using Axon.Modules.Identity.Application.DTOs.Exchange;
 namespace Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 
 /// <summary>
-/// Command to exchange validated Dynamic credential data for Axon identity with atomic operations.
-/// Implements the comprehensive exchange flow with batch wallet operations, ownership linking,
-/// defaults application, and conflict detection in a single transaction.
+/// Command to exchange Dynamic JWT bearer token for Axon access token.
+/// All validation and processing is delegated to the AuthenticationOrchestrator.
 /// </summary>
-/// <param name="UserData">Validated and normalized user data from Dynamic JWT including wallets</param>
-public sealed record ExchangeCredentialCommand(ExchangeUserData UserData) : IdentityBaseCommand<ExchangeOutcome>;
+/// <param name="BearerToken">The raw Dynamic JWT bearer token to exchange</param>
+public sealed record ExchangeCredentialCommand(string BearerToken) : IdentityBaseCommand<ExchangeOutcome>;

@@ -53,20 +53,14 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
         // Initialize mocks for Domain-level tests
         InitializeMocks();
 
-        // Create handler with mocked dependencies
-        var mockResolutionService = Substitute.For<IPrincipalResolutionService>();
-        var mockAddressNormalizer = Substitute.For<IAddressNormalizationService>();
-        var mockWalletVerificationService = Substitute.For<IWalletVerificationService>();
+        // Create handler with mocked dependencies for new simplified constructor
+        var mockOrchestrator = Substitute.For<IAuthenticationOrchestrator>();
+        var mockJwtTokenService = Substitute.For<IJwtTokenService>();
 
         ExchangeHandler = new ExchangeCredentialHandler(
             MockCurrentUserService,
-            MockPrincipalRepository,
-            MockWalletRepository,
-            MockMemoryCache,
-            MockHttpContextAccessor,
-            mockResolutionService,
-            mockAddressNormalizer,
-            mockWalletVerificationService,
+            mockOrchestrator,
+            mockJwtTokenService,
             MockLogger);
     }
 
@@ -106,16 +100,9 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// Creates an ExchangeCredentialCommand for Dynamic JWT resolution testing.
     /// </summary>
     protected static ExchangeCredentialCommand CreateDynamicExchangeCommand(
-        string axonUserId = "test_user_123",
-        string environmentId = TestDataFixtures.MainnetEnvironment,
-        List<ExchangeWalletData>? wallets = null)
+        string axonUserId = "test_user_123")
     {
-        return new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: axonUserId,
-                Email: "test@example.com",
-                DynamicEnvironmentId: environmentId,
-                Wallets: wallets ?? new List<ExchangeWalletData>()));
+        return new ExchangeCredentialCommand($"bearer-token-{axonUserId}");
     }
 
     /// <summary>
@@ -215,9 +202,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
         var principal = TestDataFixtures.CreatePrincipalA();
 
         // Create command that should resolve to this principal via credential
-        var command = CreateDynamicExchangeCommand(
-            TestDataFixtures.DynA_Subject,
-            TestDataFixtures.MainnetEnvironment);
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock repository to return this principal for credential lookup
         MockCredentialResolution(principal);
@@ -240,8 +225,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand("test_user_123");
 
         // Mock no credential match (force wallet resolution)
         MockNoCredentialMatch();
@@ -294,8 +278,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand("test_user_123");
 
         // Mock no credential and no verified owners (will need domain logic for tie-breaking)
         MockNoCredentialMatch();
@@ -318,10 +301,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     protected ExchangeCredentialCommand SetupNewPrincipalScenario()
     {
         // Create command with unknown credential and wallet
-        var walletData = CreateWalletExchangeData("UnknownWalletAddress123");
-        var command = CreateDynamicExchangeCommand(
-            "unknown_user_789",
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand("unknown_user_789");
 
         // Mock no matches anywhere
         MockNoCredentialMatch();

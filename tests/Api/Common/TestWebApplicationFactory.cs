@@ -92,14 +92,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.AddDbContext<ChatDbContext>(options =>
             {
                 options.UseSqlite($"Data Source={_databaseName}_Chat.db");
-                options.UseSnakeCaseNamingConvention();
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
             services.AddDbContext<ChatReadDbContext>(options =>
             {
                 options.UseSqlite($"Data Source={_databaseName}_Chat.db");
-                options.UseSnakeCaseNamingConvention();
                 options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
@@ -107,14 +105,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.AddDbContext<IdentityWriteDbContext>(options =>
             {
                 options.UseSqlite($"Data Source={_databaseName}_Identity.db");
-                options.UseSnakeCaseNamingConvention();
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
             services.AddDbContext<IdentityReadDbContext>(options =>
             {
                 options.UseSqlite($"Data Source={_databaseName}_Identity.db");
-                options.UseSnakeCaseNamingConvention();
                 options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);

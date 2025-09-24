@@ -182,10 +182,10 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
                     Error.NotSupported("Dynamic authentication not configured"));
             }
 
-            // Create exchange request
+            // Create exchange request with the raw token
             var exchangeRequest = new DynamicExchangeRequest(dynamicToken);
 
-            // Process through provider
+            // Process through provider - this now handles ALL the complex logic
             var providerResult = await provider.AuthenticateAsync(exchangeRequest, cancellationToken);
             if (providerResult.IsFailure)
             {
@@ -211,12 +211,29 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var accessToken = tokenResult.Value.AccessToken;
 
+            // Ensure we have all the metrics in additional data for the response
+            var additionalData = authData.AdditionalClaims ?? new Dictionary<string, object>();
+
+            // The provider should have set these, but we ensure they exist
+            if (!additionalData.ContainsKey("created"))
+                additionalData["created"] = false;
+            if (!additionalData.ContainsKey("wallets_processed"))
+                additionalData["wallets_processed"] = 0;
+            if (!additionalData.ContainsKey("wallets_linked"))
+                additionalData["wallets_linked"] = 0;
+            if (!additionalData.ContainsKey("defaults_applied"))
+                additionalData["defaults_applied"] = 0;
+            if (!additionalData.ContainsKey("skipped"))
+                additionalData["skipped"] = 0;
+            if (!additionalData.ContainsKey("conflicts"))
+                additionalData["conflicts"] = 0;
+
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
                 UserId: authData.User.Id,
                 ProviderType: "dynamic",
                 ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(30),
-                AdditionalData: authData.AdditionalClaims);
+                AdditionalData: additionalData);
 
             _logger.LogInformation("Dynamic token exchange successful for principal {PrincipalId} in {Duration}ms",
                 authData.User.AxonPrincipalId.Value, stopwatch.ElapsedMilliseconds);

@@ -11,7 +11,7 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.ToTable("credential", "identity");
+        builder.ToTable("Credential", "identity");
 
         builder.HasKey(c => c.Id);
         

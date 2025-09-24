@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -102,7 +103,7 @@ public class ExchangeCredentialConcurrencyTests
         // Arrange - Multiple requests with same credential
         const int concurrentRequests = 5;
         var userData = CreateTestUserData("concurrent-user-001");
-        var command = new ExchangeCredentialCommand(userData);
+        var command = new ExchangeCredentialCommand("valid-bearer-token");
 
         var tasks = new List<Task<Result<ExchangeOutcome, Error>>>();
 
@@ -154,7 +155,7 @@ public class ExchangeCredentialConcurrencyTests
         {
             var userData = CreateTestUserDataWithWallet($"claimant-user-{i:D3}",
                 "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41", "ethereum");
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             tasks.Add(Task.Run(async () =>
             {
@@ -194,7 +195,7 @@ public class ExchangeCredentialConcurrencyTests
         for (int i = 0; i < highConcurrency; i++)
         {
             var userData = CreateTestUserData($"load-test-user-{i:D3}");
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             tasks.Add(Task.Run(async () =>
             {
@@ -237,7 +238,7 @@ public class ExchangeCredentialConcurrencyTests
             using var scope = _serviceProvider.CreateScope();
             using var handler = CreateHandler(scope.ServiceProvider);
             var userData = CreateTestUserDataWithWallet("deadlock-user-1", wallet1.Address.Value, "ethereum");
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
             return await handler.Handle(command, CancellationToken.None);
         });
 
@@ -246,7 +247,7 @@ public class ExchangeCredentialConcurrencyTests
             using var scope = _serviceProvider.CreateScope();
             using var handler = CreateHandler(scope.ServiceProvider);
             var userData = CreateTestUserDataWithWallet("deadlock-user-2", wallet2.Address.Value, "solana");
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
             return await handler.Handle(command, CancellationToken.None);
         });
 
@@ -295,7 +296,7 @@ public class ExchangeCredentialConcurrencyTests
 
                 using var scopedProvider = services.BuildServiceProvider();
                 using var handler = CreateHandler(scopedProvider);
-                var command = new ExchangeCredentialCommand(userData);
+                var command = new ExchangeCredentialCommand("valid-bearer-token");
 
                 return await handler.Handle(command, CancellationToken.None);
             }));
@@ -323,15 +324,14 @@ public class ExchangeCredentialConcurrencyTests
     {
         var currentUserService = serviceProvider.GetRequiredService<ICurrentUserService>();
         var dbContext = serviceProvider.GetRequiredService<IdentityWriteDbContext>();
-        var memoryCache = serviceProvider.GetRequiredService<IMemoryCache>();
-        var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();
-        var resolutionService = serviceProvider.GetRequiredService<IPrincipalResolutionService>();
-        var addressNormalizer = serviceProvider.GetRequiredService<IAddressNormalizationService>();
-        var walletVerificationService = serviceProvider.GetRequiredService<IWalletVerificationService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ExchangeCredentialHandler>>();
 
-        // Configure mocks with realistic behavior
-        ConfigureMockBehaviors(resolutionService, addressNormalizer, walletVerificationService);
+        // Create mocks for the simplified constructor
+        var orchestrator = Substitute.For<IAuthenticationOrchestrator>();
+        var jwtTokenService = Substitute.For<IJwtTokenService>();
+
+        // Configure orchestrator mock with realistic behavior
+        ConfigureMockOrchestrator(orchestrator);
 
         // Create repositories from the scoped context - these will be disposed by the wrapper
         var principalRepository = new AxonPrincipalWriteRepository(dbContext);
@@ -339,78 +339,33 @@ public class ExchangeCredentialConcurrencyTests
 
         var handler = new ExchangeCredentialHandler(
             currentUserService,
-            principalRepository,
-            walletRepository,
-            memoryCache,
-            httpContextAccessor,
-            resolutionService,
-            addressNormalizer,
-            walletVerificationService,
+            orchestrator,
+            jwtTokenService,
             logger);
 
         return new DisposableExchangeCredentialHandler(handler, principalRepository, walletRepository);
     }
 
-    private static void ConfigureMockBehaviors(
-        IPrincipalResolutionService resolutionService,
-        IAddressNormalizationService addressNormalizer,
-        IWalletVerificationService walletVerificationService)
+    private static void ConfigureMockOrchestrator(IAuthenticationOrchestrator orchestrator)
     {
-        // Configure address normalizer to pass through addresses
-        addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
-            .Returns(args =>
+        // Configure orchestrator to return successful authentication response
+        var mockResponse = new AuthenticationResponse(
+            AccessToken: "mock-access-token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "dynamic",
+            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
+            AdditionalData: new Dictionary<string, object>
             {
-                var address = (string)args[1];
-                return Address.Create(address);
+                ["created"] = true,
+                ["wallets_processed"] = 1,
+                ["wallets_linked"] = 1,
+                ["defaults_applied"] = 0,
+                ["skipped"] = 0,
+                ["conflicts"] = 0
             });
 
-        // Configure resolution service to create new principals
-        resolutionService.ResolveAsync(
-            Arg.Any<ProviderType>(),
-            Arg.Any<string>(),
-            Arg.Any<string>(),
-            Arg.Any<ChainId>(),
-            Arg.Any<Address>(),
-            Arg.Any<CancellationToken>())
-            .Returns(args =>
-            {
-                var providerType = (ProviderType)args[0];
-                var issuer = (string)args[1];
-                var subject = (string)args[2];
-
-                var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
-                if (createResult.IsFailure)
-                    return Result.Failure<PrincipalResolutionResult, Error>(createResult.Error);
-
-                var result = new PrincipalResolutionResult(
-                    createResult.Value,
-                    ResolutionPath.Created,
-                    false);
-                return Result.Success<PrincipalResolutionResult, Error>(result);
-            });
-
-        // Configure wallet verification to succeed
-        walletVerificationService.VerifyWalletOwnershipAsync(
-            Arg.Any<WalletId>(),
-            Arg.Any<AxonUserId>(),
-            Arg.Any<Domain.Enums.AccessMode>(),
-            Arg.Any<Domain.Enums.VerificationSource>(),
-            Arg.Any<CancellationToken>())
-            .Returns(args =>
-            {
-                var walletId = (WalletId)args[0];
-                var principalId = (AxonUserId)args[1];
-                var accessMode = (Domain.Enums.AccessMode)args[2];
-                var verificationSource = (Domain.Enums.VerificationSource)args[3];
-
-                var ownership = WalletOwnership.Create(
-                    principalId,
-                    walletId,
-                    accessMode,
-                    Domain.Enums.OwnershipStatus.Verified,
-                    verificationSource);
-                return Result.Success<WalletOwnership, Error>(ownership);
-            });
+        orchestrator.ExchangeDynamicTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
     }
 
     private static ExchangeUserData CreateTestUserData(string userId)

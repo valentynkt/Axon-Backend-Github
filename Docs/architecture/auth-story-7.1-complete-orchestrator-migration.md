@@ -1,644 +1,480 @@
-# Auth Story 7.1: Complete Orchestrator Implementation with Aggressive Refactoring
-
-**Story ID**: AUTH-007.1
-**Title**: Replace Legacy Authentication with Clean Orchestrator Architecture
-**Priority**: HIGH (Clean up authentication architecture)
-**Estimated Effort**: 2-3 days
-**Dependencies**: AUTH-007 (Orchestrator pattern implemented)
-**Approach**: AGGRESSIVE REFACTORING (No production, no compatibility, NO FEATURE FLAGS)
+# Authentication Architecture - Story 7.1: Complete Orchestrator Migration
 
 ## Overview
 
-Complete the Orchestrator pattern implementation from Story 7 by aggressively refactoring the authentication module. Delete all legacy services, remove feature flags, and implement the clean architecture without any backward compatibility concerns.
+This document describes the refactored authentication architecture following Story 7.1, which enforces strict separation of concerns through the Authentication Orchestrator pattern. All authentication flows now follow a consistent, layered approach where business logic is properly encapsulated and JWT token generation is centralized.
 
-## Problem Statement
-
-### Current State: Architectural Confusion
-
-1. **Both Architectures Exist**:
-   - Old: `AuthenticationService` (516 lines) still registered and used by handlers
-   - New: `AuthenticationOrchestrator` (400 lines) implemented but not used
-   - Result: 1,000+ lines of overlapping code
-
-2. **Duplicate Services Everywhere**:
-   - `TokenService.cs` (182 lines) - duplicate of JwtTokenService
-   - `DynamicAuthService.cs` (518 lines) - should be provider logic
-   - Multiple claims transformations doing similar things
-
-3. **Feature Flags for Nothing**:
-   - Feature flag exists but handlers ignore it
-   - Both services registered regardless
-   - Just adds complexity with no benefit
-
-4. **Handlers Use Wrong Interface**:
-   - All handlers inject `IAuthenticationService`
-   - Orchestrator pattern not actually used
-   - Architecture diagram doesn't match reality
-
-### The Real Problem
-
-We implemented Story 7's Orchestrator pattern but didn't finish the job. We have a beautiful new architecture sitting unused while the old architecture continues to run everything.
-
-## Solution: Aggressive Refactoring
-
-### DELETE Everything Legacy
-
-No migrations, no bridges, no compatibility. Just rip out the old and wire up the new.
-
-### ABSOLUTELY NO FEATURE FLAGS
-
-- **NO** `UseAuthenticationOrchestrator` flag
-- **NO** `UseNewTokenService` flag
-- **NO** conditional service registration
-- **NO** A/B testing infrastructure
-- **Just ONE architecture - the clean one**
-
-### Target Architecture (From Story 7)
+## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    API Endpoints                         │
-│  (JWT Bearer middleware validates tokens automatically)  │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────┐
-│              Authentication Orchestrator                 │
-│        (Business logic and flow coordination)            │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────┐
-│              Provider Strategy Layer                     │
-│   ┌─────────────────┐  ┌─────────────────┐            │
-│   │ Manual Wallet   │  │  Dynamic.xyz    │            │
-│   │   Provider      │  │   Provider      │            │
-│   └─────────────────┘  └─────────────────┘            │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────┐
-│                 Domain Services                          │
-│  (Principal resolution, wallet ownership, etc.)          │
-└─────────────────────────────────────────────────────────┘
+┌─────────────┐     ┌──────────┐     ┌─────────┐     ┌──────────────┐     ┌──────────┐     ┌──────────┐
+│ API Endpoint│────▶│ Command  │────▶│ Handler │────▶│ Orchestrator │────▶│ Provider │────▶│ Services │
+└─────────────┘     └──────────┘     └─────────┘     └──────────────┘     └──────────┘     └──────────┘
+      │                   │                │                 │                   │                │
+      │                   │                │                 │                   │                │
+   Extract            Validate         Delegate          Coordinate          Business         Domain
+   Token              Request         to Orch.           & Generate         Logic           Operations
+                                                          JWT Token
+
 ```
 
-## Acceptance Criteria
+## Core Principles
 
-### ✅ Must Have
+1. **API Endpoints have NO business logic** - Only extract data from HTTP context
+2. **Commands are simple DTOs** - Carry minimal data between layers
+3. **Handlers are thin wrappers** - Delegate everything to orchestrator
+4. **Orchestrator coordinates** - Manages provider selection and JWT generation
+5. **Providers encapsulate logic** - All provider-specific business logic
+6. **Services handle domain operations** - Reusable domain logic
 
-1. **Delete Legacy Services**:
-   - [x] Remove `AuthenticationService.cs` completely
-   - [x] Remove `TokenService.cs` completely
-   - [x] Remove all feature flag code
-   - [x] Remove adapter/bridge patterns
+## Exchange Endpoint Flow (Dynamic.xyz Integration)
 
-2. **Update All Handlers**:
-   - [x] `VerifyWalletSignatureHandler` → Use `IAuthenticationOrchestrator`
-   - [x] `GenerateChallengeHandler` → Use `IChallengeService` directly
-   - [x] `RefreshTokenHandler` → Use `IAuthenticationOrchestrator`
-   - [x] `ExchangeCredentialHandler` → Use `IAuthenticationOrchestrator`
+### 1. API Endpoint Layer
+**File**: `src/Api/Endpoints/V1/Auth/Commands/ExchangeEndpoint.cs`
 
-3. **Consolidate Services**:
-   - [x] Single token service: `IJwtTokenService`
-   - [x] Single orchestrator: `IAuthenticationOrchestrator`
-   - [x] Two providers: Wallet + Dynamic
-   - [x] Clear domain services
+**Responsibilities**:
+- Extract Bearer token from Authorization header
+- Create command with bearer token
+- Return HTTP response
 
-4. **Clean Registration**:
-   - [x] No feature flags
-   - [x] No duplicate registrations
-   - [x] Clear service boundaries
+**What it does NOT do**:
+- Validate JWT tokens (bypassed in middleware)
+- Make any service calls
+- Process any business logic
 
-## Technical Specification
-
-### 1. Services to KEEP (Essential Architecture)
+**Important**: The exchange endpoint is excluded from ASP.NET Core authentication middleware to prevent double token validation. JWT validation is performed entirely by the DynamicAuthenticationProvider.
 
 ```csharp
-// ORCHESTRATION LAYER
-IAuthenticationOrchestrator / AuthenticationOrchestrator (400 lines)
-├── Coordinates all auth flows
-├── Delegates to providers
-└── Manages token generation via IJwtTokenService
-
-// PROVIDER LAYER
-IAuthenticationProvider (interface)
-├── WalletAuthenticationProvider (300 lines)
-│   └── Handles manual wallet signature auth
-└── DynamicAuthenticationProvider (323 lines)
-    └── Handles Dynamic.xyz JWT exchange
-
-// TOKEN SERVICES
-IJwtTokenService / JwtTokenService (451 lines)
-└── All JWT operations (generate, validate, refresh)
-
-// DOMAIN SERVICES (Keep all - they serve specific domain needs)
-IPrincipalResolutionService / PrincipalResolutionService (305 lines)
-├── Resolves and creates principals
-└── Core domain logic
-
-IWalletVerificationService / WalletVerificationService (618 lines)
-├── Transaction authorization
-└── Wallet ownership verification
-
-// SUPPORT SERVICES
-IChallengeService / ChallengeService (104 lines)
-├── HMAC generation/validation
-└── Nonce tracking for replay protection
-
-IWalletSignatureVerifier / Ed25519SignatureVerifier (213 lines)
-└── Cryptographic signature verification
-
-// EXTERNAL INTEGRATION
-IDynamicAuthService / DynamicAuthService (518 lines)
-├── Keep but slim down
-├── Should ONLY validate Dynamic.xyz JWTs
-└── Remove any duplication with provider
-
-// MIDDLEWARE SUPPORT (Keep for JWT pipeline)
-JwtEventHandlers (251 lines)
-└── JWT Bearer event handling
-
-DistributedReplayProtection (207 lines)
-└── Replay attack prevention
-```
-
-### 2. Services to DELETE (Redundant/Legacy)
-
-```csharp
-// DELETE THESE FILES COMPLETELY:
-AuthenticationService.cs (516 lines) // Replaced by Orchestrator
-TokenService.cs (182 lines) // Duplicate of JwtTokenService
-AuthenticationServiceAdapter.cs // No compatibility needed
-AuthenticationOrchestratorExtensions.cs // DELETE - feature flag garbage
-IdentityConfiguration.cs (feature flag sections) // DELETE all flag logic
-Any file with "FeatureFlag" in name // DELETE ALL
-
-// CONSIDER CONSOLIDATING:
-DynamicClaimNormalizer.cs (433 lines) // Move logic to DynamicAuthenticationProvider
-WalletClaimsTransformation.cs (191 lines) // Keep if needed by middleware
-DynamicClaimsTransformation.cs (118 lines) // Keep if needed by middleware
-```
-
-### 3. Enhanced Orchestrator Interface
-
-```csharp
-namespace Axon.Modules.Identity.Application.Contracts.Services;
-
-/// <summary>
-/// Complete authentication orchestrator handling all auth flows
-/// </summary>
-public interface IAuthenticationOrchestrator
+protected override Task<Result<ExchangeCredentialCommand, Error>> ExecuteCommand(
+    ExchangeTokenRequestDto _,
+    CancellationToken ct)
 {
-    // Primary Authentication Methods
-    Task<Result<AuthenticationResponse, Error>> AuthenticateWithWalletAsync(
-        WalletAuthenticationRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<Result<AuthenticationResponse, Error>> ExchangeDynamicTokenAsync(
-        string dynamicToken,
-        CancellationToken cancellationToken = default);
-
-    // Token Operations
-    Task<Result<AuthenticationResponse, Error>> RefreshTokenAsync(
-        string refreshToken,
-        CancellationToken cancellationToken = default);
-
-    Task<Result<AxonToken, Error>> GenerateAccessTokenAsync(
-        AxonUserId userId,
-        ProviderType providerType,
-        string issuer,
-        string subject,
-        int expiresIn = -1,
-        CancellationToken cancellationToken = default);
-
-    // User Operations
-    Task<Result<AxonUserAuth, Error>> GetCurrentUserAsync(
-        ClaimsPrincipal principal,
-        CancellationToken cancellationToken = default);
-
-    Task<UnitResult<Error>> InvalidateSessionAsync(
-        Guid userId,
-        CancellationToken cancellationToken = default);
-
-    // Challenge Operations (if needed by endpoints)
-    Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
-        string chainId,
-        string walletAddress,
-        string audience,
-        CancellationToken cancellationToken = default);
-}
-```
-
-### 4. Updated Handler Example
-
-```csharp
-// BEFORE (using IAuthenticationService)
-public sealed class VerifyWalletSignatureHandler
-{
-    private readonly IAuthenticationService _authService;
-
-    public async Task<Result<VerifyWalletSignatureResult, Error>> Handle(
-        VerifyWalletSignatureCommand command, CancellationToken ct)
+    var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
+    if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
     {
-        // Validate MAC
-        var macResult = _authService.ValidateMac(
-            command.SignedMessage, command.Mac, command.Mkv);
-
-        // Generate token
-        var tokenResult = await _authService.GenerateAccessTokenAsync(...);
-    }
-}
-
-// AFTER (using IAuthenticationOrchestrator)
-public sealed class VerifyWalletSignatureHandler
-{
-    private readonly IAuthenticationOrchestrator _orchestrator;
-
-    public async Task<Result<VerifyWalletSignatureResult, Error>> Handle(
-        VerifyWalletSignatureCommand command, CancellationToken ct)
-    {
-        // Create wallet auth request
-        var request = new WalletAuthenticationRequest(
-            ChainId: command.ChainId,
-            Address: command.Address,
-            SignedMessage: command.SignedMessage,
-            Signature: command.Signature,
-            Mac: command.Mac,
-            Mkv: command.Mkv);
-
-        // Delegate everything to orchestrator
-        var result = await _orchestrator.AuthenticateWithWalletAsync(request, ct);
-
-        if (result.IsFailure)
-            return Result.Failure<VerifyWalletSignatureResult, Error>(result.Error);
-
-        return Result.Success<VerifyWalletSignatureResult, Error>(
-            new VerifyWalletSignatureResult(
-                AccessToken: result.Value.AccessToken,
-                TokenType: result.Value.TokenType,
-                ExpiresIn: result.Value.ExpiresIn,
-                AxonUserId: result.Value.UserId.ToString(),
-                Created: result.Value.Created,
-                WalletsLinked: result.Value.WalletsLinked));
-    }
-}
-```
-
-### 5. Clean Service Registration
-
-```csharp
-namespace Axon.Modules.Identity.Infrastructure.DependencyInjection;
-
-public static class ServiceRegistration
-{
-    public static IServiceCollection AddIdentityInfrastructure(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        // ... existing DbContext and repository registrations ...
-
-        // AUTHENTICATION ORCHESTRATION
-        services.AddScoped<IAuthenticationOrchestrator, AuthenticationOrchestrator>();
-
-        // PROVIDERS
-        services.AddScoped<IAuthenticationProvider, WalletAuthenticationProvider>();
-        services.AddScoped<IAuthenticationProvider, DynamicAuthenticationProvider>();
-
-        // TOKEN SERVICE (single implementation)
-        services.AddScoped<IJwtTokenService, JwtTokenService>();
-
-        // DOMAIN SERVICES
-        services.AddScoped<IPrincipalResolutionService, PrincipalResolutionService>();
-        services.AddScoped<IWalletVerificationService, WalletVerificationService>();
-
-        // SUPPORT SERVICES
-        services.AddScoped<IChallengeService, ChallengeService>();
-        services.AddSingleton<IWalletSignatureVerifier, Ed25519SignatureVerifier>();
-
-        // EXTERNAL INTEGRATION
-        services.AddScoped<IDynamicAuthService, DynamicAuthService>();
-        services.AddHostedService<DynamicAuthService>(); // For JWKS pre-warming
-
-        // CLAIMS TRANSFORMATION (if needed by middleware)
-        services.AddTransient<IClaimsTransformation, WalletClaimsTransformation>();
-
-        // DELETE ALL OF THIS GARBAGE:
-        // services.AddScoped<IAuthenticationService, AuthenticationService>(); ❌ DELETE
-        // services.AddScoped<TokenService>(); ❌ DELETE
-        // services.AddAuthenticationOrchestratorWithFeatureFlag(configuration); ❌ NO FLAGS!
-        // if (useOrchestrator) { ... } ❌ NO CONDITIONAL REGISTRATION!
-        // services.GetValue<bool>("FeatureFlags:...") ❌ NO FEATURE FLAGS EVER!
-
-        return services;
-    }
-}
-```
-
-### 6. Slimmed Down DynamicAuthService
-
-```csharp
-namespace Axon.Modules.Identity.Infrastructure.ExternalServices;
-
-/// <summary>
-/// ONLY handles Dynamic.xyz JWT validation - nothing else
-/// </summary>
-public sealed class DynamicAuthService : IDynamicAuthService
-{
-    private readonly HttpClient _httpClient;
-    private readonly IOptions<DynamicValidationOptions> _options;
-    private IConfigurationManager<OpenIdConnectConfiguration>? _configManager;
-
-    public async Task<Result<DynamicUserData, Error>> ValidateDynamicTokenAsync(
-        string token, CancellationToken ct = default)
-    {
-        // ONLY validate Dynamic JWT
-        // ONLY extract claims
-        // ONLY return user data
-        // NO principal creation
-        // NO token generation
-        // NO database operations
+        return Task.FromResult(Result.Failure<ExchangeCredentialCommand, Error>(
+            Error.Unauthorized("Missing or invalid Authorization header")));
     }
 
-    // Remove all other methods
+    var bearerToken = authHeader["Bearer ".Length..].Trim();
+    var command = new ExchangeCredentialCommand(bearerToken);
+    return Task.FromResult(Result.Success<ExchangeCredentialCommand, Error>(command));
 }
 ```
 
-## Implementation Tasks
+### 2. Command Layer
+**File**: `src/Modules/Identity/Application/Commands/ExchangeCredential/ExchangeCredentialCommand.cs`
 
-### Day 1: Delete Legacy Code
+**Structure**:
+```csharp
+public sealed record ExchangeCredentialCommand(string BearerToken)
+    : IdentityBaseCommand<ExchangeOutcome>;
+```
 
-1. **Delete Files**:
-   - [ ] Delete `AuthenticationService.cs`
-   - [ ] Delete `TokenService.cs`
-   - [ ] Delete feature flag extensions
-   - [ ] Delete any adapter/bridge code
+**Validation**: `ExchangeCredentialCommandValidator.cs`
+- Validates token format (3 parts separated by dots)
+- Basic JWT structure validation only
 
-2. **Update Service Registration**:
-   - [ ] Remove all feature flag logic
-   - [ ] Remove duplicate registrations
-   - [ ] Clean registration as specified
+### 3. Handler Layer
+**File**: `src/Modules/Identity/Application/Commands/ExchangeCredential/ExchangeCredentialHandler.cs`
 
-### Day 2: Update Handlers
+**Responsibilities**:
+- Receive command
+- Call orchestrator's `ExchangeDynamicTokenAsync`
+- Map orchestrator response to `ExchangeOutcome`
 
-1. **Update Command Handlers**:
-   - [ ] Update `VerifyWalletSignatureHandler`
-   - [ ] Update `GenerateChallengeHandler`
-   - [ ] Update `RefreshTokenHandler`
-   - [ ] Update `ExchangeCredentialHandler`
+```csharp
+public override async Task<Result<ExchangeOutcome, Error>> Handle(
+    ExchangeCredentialCommand command,
+    CancellationToken cancellationToken)
+{
+    // Delegate EVERYTHING to orchestrator
+    var exchangeResult = await _orchestrator.ExchangeDynamicTokenAsync(
+        command.BearerToken,
+        cancellationToken);
 
-2. **Update Query Handlers**:
-   - [ ] Update any query handlers using auth services
-   - [ ] Ensure they use orchestrator
+    if (exchangeResult.IsFailure)
+        return Result.Failure<ExchangeOutcome, Error>(exchangeResult.Error);
 
-### Day 3: Testing & Cleanup
+    // Map response to outcome
+    var response = exchangeResult.Value;
+    var outcome = new ExchangeOutcome(
+        AccessToken: response.AccessToken,
+        TokenType: "Bearer",
+        ExpiresIn: (int)(response.ExpiresAt - DateTime.UtcNow).TotalSeconds,
+        AxonUserId: new AxonUserId(response.UserId),
+        Created: response.AdditionalData["created"],
+        WalletsProcessed: response.AdditionalData["wallets_processed"],
+        // ... other metrics
+    );
 
-1. **Fix Compilation**:
-   - [ ] Fix all compilation errors
-   - [ ] Update namespaces
-   - [ ] Remove unused usings
+    return Result.Success<ExchangeOutcome, Error>(outcome);
+}
+```
 
-2. **Test Everything**:
-   - [ ] Test wallet authentication flow
-   - [ ] Test Dynamic.xyz exchange
-   - [ ] Test token refresh
-   - [ ] Test challenge generation
+### 4. Orchestrator Layer
+**File**: `src/Modules/Identity/Application/Services/AuthenticationOrchestrator.cs`
 
-3. **Final Cleanup**:
-   - [ ] Remove unused test files
-   - [ ] Update integration tests
-   - [ ] Clean up documentation
+**Responsibilities**:
+- Find appropriate provider ("dynamic")
+- Create provider-specific request
+- Call provider's `AuthenticateAsync`
+- Generate JWT token via `IJwtTokenService`
+- Return unified `AuthenticationResponse`
+
+```csharp
+public async Task<Result<AuthenticationResponse, Error>> ExchangeDynamicTokenAsync(
+    string dynamicToken,
+    CancellationToken cancellationToken)
+{
+    // Find Dynamic provider
+    var provider = GetProvider("dynamic");
+
+    // Create exchange request
+    var exchangeRequest = new DynamicExchangeRequest(dynamicToken);
+
+    // Process through provider - handles ALL business logic
+    var providerResult = await provider.AuthenticateAsync(exchangeRequest, cancellationToken);
+
+    // Generate Axon JWT token
+    var tokenResult = await _tokenService.GenerateAccessTokenAsync(
+        authData.User.AxonPrincipalId,
+        ProviderType.From(authData.ProviderType),
+        authData.User.OriginalSubject,
+        authData.User.OriginalIssuer,
+        30, // 30 minutes
+        cancellationToken);
+
+    // Return complete response with token and metrics
+    return new AuthenticationResponse(
+        AccessToken: tokenResult.Value.AccessToken,
+        UserId: authData.User.Id,
+        ProviderType: "dynamic",
+        ExpiresAt: DateTime.UtcNow.AddMinutes(30),
+        AdditionalData: authData.AdditionalClaims);
+}
+```
+
+### 5. Provider Layer
+**File**: `src/Modules/Identity/Application/Providers/DynamicAuthenticationProvider.cs`
+
+**Responsibilities** (ALL Dynamic-specific business logic):
+- Validate Dynamic JWT token
+- Extract user data from token
+- Normalize wallet addresses
+- Resolve or create AxonPrincipal
+- Process wallet ownership batch
+- Apply chain defaults
+- Create/update Identity user
+- Persist changes
+- Warm caches
+- Return metrics
+
+**Key Methods**:
+```csharp
+public async Task<Result<AuthenticationData, Error>> AuthenticateAsync(
+    AuthenticationRequest request,
+    CancellationToken cancellationToken)
+{
+    // Step 1: Validate Dynamic token
+    var validationResult = await _dynamicAuthService.ValidateTokenAsync(
+        dynamicRequest.Token, cancellationToken);
+
+    // Step 2: Normalize wallets
+    var exchangeWallets = NormalizeWallets(dynamicUserData.Wallets);
+
+    // Step 3: Process exchange (principal resolution, wallet linking, defaults)
+    var exchangeResult = await ProcessExchange(userData, cancellationToken);
+
+    // Step 4: Get or create Identity user
+    var identityUser = await GetOrCreateIdentityUserAsync(principal, dynamicUserData);
+
+    // Step 5: Persist changes
+    await _principalRepo.UnitOfWork.SaveChangesAsync(cancellationToken);
+
+    // Step 6: Warm caches
+    await WarmUserContextCaches(dynamicUserData.AxonUserId, principal.Id);
+
+    // Return complete authentication data with metrics
+    return new AuthenticationData(
+        User: identityUser,
+        ProviderType: "dynamic",
+        AdditionalClaims: metrics);
+}
+```
+
+## Service Responsibilities
+
+### Core Authentication Services
+
+#### `IAuthenticationOrchestrator`
+- **Purpose**: Single entry point for all authentication flows
+- **Location**: `Application/Services/AuthenticationOrchestrator.cs`
+- **Responsibilities**:
+  - Provider selection and routing
+  - JWT token generation coordination
+  - Response standardization
+  - Error handling and logging
+
+#### `IJwtTokenService`
+- **Purpose**: Generate and manage Axon JWT tokens
+- **Location**: `Infrastructure/Services/JwtTokenService.cs`
+- **Responsibilities**:
+  - JWT token creation with claims
+  - Token signing (Azure Key Vault or local)
+  - Token expiration management
+  - Refresh token handling
+
+#### `IChallengeService`
+- **Purpose**: Generate and validate authentication challenges
+- **Location**: `Infrastructure/Services/ChallengeService.cs`
+- **Responsibilities**:
+  - Nonce generation for wallet signing
+  - Challenge validation
+  - Replay protection
+  - SIWS message formatting
+
+### Domain Services
+
+#### `IPrincipalResolutionService`
+- **Purpose**: Resolve identity conflicts across authentication methods
+- **Location**: `Application/Services/PrincipalResolutionService.cs`
+- **Responsibilities**:
+  - Find existing principals by credential/wallet
+  - Handle cross-network identity conflicts
+  - Create new principals when appropriate
+  - Maintain identity uniqueness
+
+#### `IWalletVerificationService`
+- **Purpose**: Verify wallet ownership claims
+- **Location**: `Application/Services/WalletVerificationService.cs`
+- **Responsibilities**:
+  - Validate wallet ownership
+  - Check for conflicts with other principals
+  - Set verification status and access modes
+  - Handle attestation sources
+
+#### `IAddressNormalizationService`
+- **Purpose**: Normalize blockchain addresses
+- **Location**: `Application/Services/AddressNormalizationService.cs`
+- **Responsibilities**:
+  - Chain-specific address normalization
+  - Checksum validation
+  - Format standardization
+  - Cross-chain compatibility
+
+### External Services
+
+#### `IDynamicAuthService`
+- **Purpose**: Integration with Dynamic.xyz
+- **Location**: `Infrastructure/ExternalServices/DynamicAuthService.cs`
+- **Responsibilities**:
+  - JWT token validation against Dynamic JWKS
+  - User data extraction from tokens
+  - JWKS caching and rotation
+  - Dynamic-specific claim normalization
+- **Note**: Should ONLY be used by `DynamicAuthenticationProvider`
+
+## Middleware Configuration
+
+**File**: `src/Api/Program.cs`
+
+The exchange endpoint is explicitly excluded from JWT authentication middleware to prevent double validation:
+
+```csharp
+// Authentication and authorization (skip JWT validation for exchange endpoint)
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api/v1/auth/exchange"),
+    appBuilder =>
+    {
+        appBuilder.UseAuthentication();
+        appBuilder.UseAuthorization();
+    });
+```
+
+This ensures:
+- Single token validation path (in DynamicAuthenticationProvider only)
+- No redundant JWT parsing and JWKS validation
+- Clear separation of authentication concerns
+
+## Data Flow Example: Dynamic Token Exchange
+
+```
+1. Client Request:
+   POST /api/v1/auth/exchange
+   Authorization: Bearer <dynamic_jwt_token>
+
+2. Middleware:
+   - Authentication/Authorization BYPASSED for this route
+   - Request proceeds directly to endpoint
+
+3. ExchangeEndpoint:
+   - Extracts bearer token from header
+   - Creates ExchangeCredentialCommand(bearerToken)
+
+4. ExchangeCredentialHandler:
+   - Calls orchestrator.ExchangeDynamicTokenAsync(bearerToken)
+
+5. AuthenticationOrchestrator:
+   - Finds DynamicAuthenticationProvider
+   - Creates DynamicExchangeRequest(bearerToken)
+   - Calls provider.AuthenticateAsync(request)
+   - Receives AuthenticationData with metrics
+   - Generates Axon JWT via IJwtTokenService
+   - Returns AuthenticationResponse
+
+6. DynamicAuthenticationProvider:
+   - Validates token via IDynamicAuthService
+   - Extracts user data (id, email, wallets)
+   - Resolves/creates principal via IPrincipalResolutionService
+   - Links wallets via IWalletVerificationService
+   - Applies chain defaults
+   - Creates/updates Identity user
+   - Saves to database
+   - Warms caches
+   - Returns AuthenticationData with all metrics
+
+7. Response to Client:
+   {
+     "access_token": "axon_jwt_token",
+     "token_type": "Bearer",
+     "expires_in": 1800,
+     "axon_user_id": "01234567-89ab-cdef",
+     "created": false,
+     "wallets_processed": 3,
+     "wallets_linked": 2,
+     "defaults_applied": 2,
+     "skipped": 1,
+     "conflicts": 0
+   }
+```
+
+## Key Architecture Decisions
+
+### 1. No Business Logic in API Endpoints
+**Rationale**: Endpoints should only handle HTTP concerns (headers, status codes, response formatting)
+**Benefit**: Business logic can be tested independently of HTTP layer
+
+### 2. Orchestrator as Single Entry Point
+**Rationale**: Centralized coordination ensures consistent token generation and error handling
+**Benefit**: All auth flows follow same pattern, easier to maintain and audit
+
+### 3. Provider Pattern for Authentication Methods
+**Rationale**: Each auth method (Dynamic, Wallet, OAuth) has unique requirements
+**Benefit**: New providers can be added without modifying orchestrator
+
+### 4. Domain Services for Reusable Logic
+**Rationale**: Principal resolution, wallet verification used across multiple providers
+**Benefit**: Consistent business rules, avoiding duplication
+
+### 5. Metrics in Additional Claims
+**Rationale**: Operation metrics (wallets processed, conflicts) needed for monitoring
+**Benefit**: Client can track operation success without additional API calls
+
+## Migration Impact
+
+### Before (Story 7.0)
+- Endpoints directly called services
+- Business logic scattered across layers
+- JWT generation inconsistent
+- No clear separation of concerns
+
+### After (Story 7.1)
+- Clean architectural layers
+- All business logic in providers
+- Centralized JWT generation
+- Clear service responsibilities
+- Testable components
 
 ## Testing Strategy
 
-### No Migration Testing Needed!
+### Unit Tests
+- Providers: Mock all injected services, test business logic
+- Orchestrator: Mock providers and token service
+- Handlers: Mock orchestrator only
+- Services: Test domain logic in isolation
 
-Since we're not in production:
-- No A/B testing
-- No feature flags
-- No gradual rollout
-- Just test the new architecture works
+### Integration Tests
+- Full flow from endpoint to database
+- Token generation and validation
+- Cache warming verification
+- Transaction rollback scenarios
 
-### Focus Testing On:
+### Key Test Scenarios
+1. New user registration with wallets
+2. Existing user with new wallets
+3. Wallet ownership conflicts
+4. Identity resolution across providers
+5. Token expiration and refresh
+6. Cache hit rates
 
-```csharp
-[TestFixture]
-public class AuthenticationOrchestratorTests
-{
-    [Test]
-    public async Task WalletAuthentication_Complete_Flow()
-    {
-        // 1. Generate challenge
-        // 2. Sign message
-        // 3. Authenticate with wallet
-        // 4. Receive token
-    }
+## Security Considerations
 
-    [Test]
-    public async Task DynamicExchange_Complete_Flow()
-    {
-        // 1. Receive Dynamic JWT
-        // 2. Exchange for Axon token
-        // 3. Verify claims mapped correctly
-    }
-}
-```
+1. **Single Token Validation**: Exchange endpoint bypasses middleware to prevent double validation
+2. **Token Validation**: Dynamic tokens validated against JWKS in provider only
+3. **Replay Protection**: Challenges include nonces and timestamps
+4. **Wallet Ownership**: Verified through signature or attestation
+5. **Principal Isolation**: Each principal has unique identity across system
+6. **Audit Trail**: All authentications logged with correlation IDs
 
-## Code Reduction Analysis
+## Performance Optimizations
 
-### Before (Current Mess):
-```
-AuthenticationService.cs: 516 lines ❌
-TokenService.cs: 182 lines ❌
-DynamicAuthService.cs: 518 lines (keep but slim to ~200)
-AuthenticationOrchestrator.cs: 400 lines ✅
-Providers: 623 lines ✅
-Feature flag code: ~200 lines ❌
+1. **JWKS Caching**: Dynamic JWKS cached for 24 hours
+2. **Batch Processing**: Wallets processed in single query
+3. **Cache Warming**: User context cached for 15-30 minutes
+4. **Connection Pooling**: EF Core connection pooling enabled
+5. **Async Operations**: All I/O operations fully async
 
-Total: ~2,439 lines
-```
+## Monitoring and Observability
 
-### After (Clean Architecture):
-```
-AuthenticationOrchestrator.cs: 400 lines
-WalletAuthenticationProvider.cs: 300 lines
-DynamicAuthenticationProvider.cs: 323 lines
-JwtTokenService.cs: 451 lines
-ChallengeService.cs: 104 lines
-DynamicAuthService.cs: ~200 lines (slimmed)
+### Key Metrics
+- Authentication success/failure rates by provider
+- Token generation latency
+- Cache hit rates
+- Wallet processing metrics
+- Identity conflict rates
 
-Total: ~1,778 lines (27% reduction)
-```
+### Logging
+- Structured logging with correlation IDs
+- Provider-specific log scopes
+- Performance timing on all operations
+- Error details with stack traces
 
-## Success Criteria
+### Distributed Tracing
+- Activity spans for each layer
+- Cross-service correlation
+- Database query timing
+- External service calls
 
-### Technical Success:
-- ✅ All handlers use orchestrator
-- ✅ No duplicate services
-- ✅ No feature flags
-- ✅ Clean architecture diagram matches code
+## Future Enhancements
 
-### Quality Success:
-- ✅ Reduced code by 600+ lines
-- ✅ Clear service boundaries
-- ✅ Single responsibility per service
-- ✅ Easy to add new providers
+1. **Additional Providers**
+   - OAuth (Google, GitHub, Discord)
+   - Sign-In with Ethereum (SIWE)
+   - Email/Password (traditional)
 
-### Business Success:
-- ✅ All authentication flows work
-- ✅ No performance degradation
-- ✅ Easier to maintain
-- ✅ Ready for multi-chain expansion
+2. **Enhanced Security**
+   - Multi-factor authentication
+   - Device fingerprinting
+   - Anomaly detection
 
-## No Risk Mitigation Needed!
+3. **Performance**
+   - Redis distributed cache
+   - Read replicas for queries
+   - GraphQL subscriptions
 
-Since we're not in production:
-- Break things freely
-- No rollback plan needed
-- No compatibility concerns
-- Just make it work correctly
-
-## Future Benefits
-
-After this cleanup:
-
-1. **Adding EVM Provider**: Just implement `IAuthenticationProvider`
-2. **Adding Social Auth**: Just implement `IAuthenticationProvider`
-3. **Adding MFA**: Extend orchestrator with MFA step
-4. **Clear Architecture**: New developers understand immediately
-
-## 🚀 IMPLEMENTATION COMPLETE - December 2024
-
-### Developer Notes & Key Decisions
-
-#### What Was Actually Implemented:
-
-1. **Enhanced IAuthenticationOrchestrator Interface**:
-   - Added HMAC validation methods: `ValidateMac()`, `ValidateChallenge()`
-   - Added replay protection: `CheckAndMarkNonceUsedAsync()`
-   - Added challenge generation: `GenerateChallengeAsync()`
-   - Fixed return type for `RefreshTokenAsync()` to return `RefreshTokenResponse`
-
-2. **Created Common Authentication Types**:
-   - New file: `AuthenticationTypes.cs` in Application.Common
-   - Defined: `AuthenticationChallenge`, `AxonToken`, `RefreshTokenResponse`, `AuthenticatedContext`
-   - These were previously scattered in deleted AuthenticationService
-
-3. **Updated Authentication Request DTOs**:
-   - Changed `WalletAuthenticationRequest` from byte arrays to strings
-   - Simplified: `SignedMessage`, `Signature`, `Mac`, `Mkv` all strings now
-   - Provider handles conversion internally
-
-4. **Deleted Legacy Files (700+ lines)**:
-   - ✅ `AuthenticationService.cs` (516 lines)
-   - ✅ `TokenService.cs` (182 lines)
-   - ✅ `AuthenticationOrchestratorExtensions.cs` (feature flags)
-   - ✅ `IAuthenticationService` interface
-
-5. **Updated ALL Command Handlers**:
-   - `VerifyWalletSignatureHandler`: Now uses orchestrator + simplified flow
-   - `GenerateChallengeHandler`: Direct orchestrator challenge generation
-   - `RefreshTokenHandler`: Uses orchestrator's refresh method
-   - `ExchangeCredentialHandler`: No changes needed (doesn't use auth service)
-
-6. **Clean Service Registration**:
-   ```csharp
-   // NO FEATURE FLAGS - Direct registration only
-   services.AddScoped<IAuthenticationOrchestrator, AuthenticationOrchestrator>();
-   services.AddScoped<IJwtTokenService, JwtTokenService>();
-   services.AddScoped<IChallengeService, ChallengeService>();
-   // Providers registered individually
-   ```
-
-#### Key Implementation Decisions:
-
-1. **No Backward Compatibility**:
-   - Decision: Complete break from old system
-   - Rationale: Not in production, clean slate approach
-   - Result: Saved weeks of migration complexity
-
-2. **String-based DTOs Instead of Byte Arrays**:
-   - Decision: Changed WalletAuthenticationRequest to use strings
-   - Rationale: Simpler API contracts, providers handle encoding
-   - Impact: Cleaner handler code, less Base64 juggling
-
-3. **Orchestrator Gets HMAC/Challenge Methods**:
-   - Decision: Added validation methods directly to orchestrator
-   - Alternative considered: Separate validation service
-   - Rationale: Single entry point for ALL auth operations
-   - Benefit: Handlers don't need multiple service dependencies
-
-4. **Kept Orchestrator Slim**:
-   - The orchestrator implementation stayed at ~600 lines
-   - HMAC logic implemented inline (simple, no need for abstraction)
-   - Delegates complex logic to providers and services
-
-5. **RefreshToken Returns Different Type**:
-   - Changed: `RefreshTokenAsync()` returns `RefreshTokenResponse` not `AuthenticationResponse`
-   - Reason: Refresh includes both access AND refresh tokens
-   - This required creating the RefreshTokenResponse type
-
-#### Challenges Encountered & Solutions:
-
-1. **Missing Type Definitions**:
-   - Problem: Deleted AuthenticationService contained type definitions
-   - Solution: Created `AuthenticationTypes.cs` with all DTOs
-   - Learning: Check for embedded types before deleting files
-
-2. **Provider Expected Byte Arrays**:
-   - Problem: WalletAuthenticationProvider expected byte[] but we changed to strings
-   - Solution: Provider converts internally: `Encoding.UTF8.GetBytes()`
-   - Better approach: Keep conversion at boundaries
-
-3. **Bulk Replace Gone Wrong**:
-   - Mistake: Used replace_all changing ALL Result types
-   - Fixed: Reverted and manually fixed only RefreshTokenAsync
-   - Lesson: Be specific with automated replacements
-
-#### What Works Now:
-
-✅ **Wallet Authentication Flow**:
-```
-Handler → Orchestrator.AuthenticateWithWalletAsync() → WalletProvider → Token
-```
-
-✅ **Dynamic.xyz Exchange**:
-```
-Handler → Orchestrator.ExchangeDynamicTokenAsync() → DynamicProvider → Token
-```
-
-✅ **Challenge Generation**:
-```
-Handler → Orchestrator.GenerateChallengeAsync() → Returns challenge with HMAC
-```
-
-✅ **Token Refresh**:
-```
-Handler → Orchestrator.RefreshTokenAsync() → IJwtTokenService → New tokens
-```
-
-#### Architecture Benefits Realized:
-
-1. **Single Entry Point**: All auth flows go through orchestrator
-2. **Clear Boundaries**: Each service has ONE responsibility
-3. **No Feature Flags**: Just one clean implementation
-4. **Provider Pattern**: Adding new auth methods = new provider
-5. **Testable**: Clean interfaces, mockable dependencies
-
-#### Next Steps for Future Stories:
-
-1. **Add EVM Provider**: Implement `IAuthenticationProvider` for MetaMask
-2. **Social Auth Provider**: Google/GitHub via Dynamic or direct
-3. **MFA Enhancement**: Add MFA step in orchestrator flow
-4. **Session Management**: Extend orchestrator with session tracking
+4. **Compliance**
+   - GDPR data handling
+   - Audit log retention
+   - PII encryption
 
 ## Conclusion
 
-Story 7.1 successfully completed the aggressive refactoring approach. By choosing NO FEATURE FLAGS and NO COMPATIBILITY, we achieved in 1 day what would have taken weeks with a careful migration. The authentication system is now clean, maintainable, and ready for expansion.
+The Story 7.1 refactoring successfully establishes a clean, maintainable authentication architecture with:
+- Clear separation of concerns
+- Centralized token generation
+- Provider-based extensibility
+- Comprehensive metrics and monitoring
+- Production-ready security
 
-The key insight: Sometimes the best migration is no migration - just rip and replace when you're not in production.
-
----
-**Story Points**: 5 (completed in 1 day instead of estimated 2-3)
-**Actual Effort**: ~6 hours
-**Risk Level**: Low (no production impact)
-**Business Value**: HIGH (clean, extensible architecture)
-**Technical Debt Reduction**: 700+ lines deleted, 25% code reduction
-**Developer Satisfaction**: 🚀 MASSIVE (no more feature flags!)
+All authentication flows now follow the same pattern, making the system easier to understand, test, and maintain.

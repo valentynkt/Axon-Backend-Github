@@ -169,20 +169,10 @@ public static class ResolutionTestFixtures
         /// Creates exchange command with Dynamic JWT and multiple wallets.
         /// </summary>
         public static ExchangeCredentialCommand CreateComplexExchangeCommand(
-            string dynamicSubject = DynamicJWTClaims.SubjectA,
-            string environmentId = TestDataFixtures.MainnetEnvironment,
-            params string[] walletAddresses)
+            string dynamicSubject = DynamicJWTClaims.SubjectA)
         {
-            var wallets = walletAddresses.Select(address => new ExchangeWalletData(
-                TestDataFixtures.SolanaMainnetChain,
-                address)).ToList();
-
-            return new ExchangeCredentialCommand(
-                new ExchangeUserData(
-                    AxonUserId: dynamicSubject,
-                    Email: "test@example.com",
-                    DynamicEnvironmentId: environmentId,
-                    Wallets: wallets));
+            // Note: Wallet addresses and user data are now handled by the orchestrator
+            return new ExchangeCredentialCommand($"bearer-token-{dynamicSubject}");
         }
 
         /// <summary>
@@ -190,43 +180,24 @@ public static class ResolutionTestFixtures
         /// </summary>
         public static ExchangeCredentialCommand CreateCredentialOnlyCommand(string subject = DynamicJWTClaims.SubjectA)
         {
-            return new ExchangeCredentialCommand(
-                new ExchangeUserData(
-                    AxonUserId: subject,
-                    Email: "test@example.com",
-                    DynamicEnvironmentId: TestDataFixtures.MainnetEnvironment,
-                    Wallets: new List<ExchangeWalletData>()));
+            return new ExchangeCredentialCommand($"bearer-token-{subject}");
         }
 
         /// <summary>
         /// Creates exchange command for wallet-only resolution.
         /// </summary>
-        public static ExchangeCredentialCommand CreateWalletOnlyCommand(params string[] walletAddresses)
+        public static ExchangeCredentialCommand CreateWalletOnlyCommand()
         {
-            return CreateComplexExchangeCommand(
-                DynamicJWTClaims.UnknownSubject, // Unknown credential
-                TestDataFixtures.MainnetEnvironment,
-                walletAddresses);
+            return CreateComplexExchangeCommand(DynamicJWTClaims.UnknownSubject);
         }
 
         /// <summary>
         /// Creates exchange command for environment-specific testing.
         /// </summary>
-        public static ExchangeCredentialCommand CreateEnvironmentSpecificCommand(
-            string environmentId,
-            string chainId,
-            params string[] walletAddresses)
+        public static ExchangeCredentialCommand CreateEnvironmentSpecificCommand()
         {
-            var wallets = walletAddresses.Select(address => new ExchangeWalletData(
-                chainId,
-                address)).ToList();
-
-            return new ExchangeCredentialCommand(
-                new ExchangeUserData(
-                    AxonUserId: DynamicJWTClaims.SubjectA,
-                    Email: "test@example.com",
-                    DynamicEnvironmentId: environmentId,
-                    Wallets: wallets));
+            // Note: Environment and wallet parameters no longer needed with orchestrator pattern
+            return new ExchangeCredentialCommand($"bearer-token-{DynamicJWTClaims.SubjectA}");
         }
     }
 
@@ -250,8 +221,8 @@ public static class ResolutionTestFixtures
             var sharedWallet = TestDataFixtures.CreateW1Main();
 
             // Create commands that would both try to verify the same wallet
-            var commandA = ExchangeCommandBuilder.CreateWalletOnlyCommand(TestDataFixtures.W1MainAddress);
-            var commandB = ExchangeCommandBuilder.CreateWalletOnlyCommand(TestDataFixtures.W1MainAddress);
+            var commandA = ExchangeCommandBuilder.CreateWalletOnlyCommand();
+            var commandB = ExchangeCommandBuilder.CreateWalletOnlyCommand();
 
             return (principalA, principalB, sharedWallet, commandA, commandB);
         }
@@ -289,15 +260,9 @@ public static class ResolutionTestFixtures
             var mainnetWallet = TestDataFixtures.CreateW1Main();
             var devnetWallet = TestDataFixtures.CreateW1Dev(); // Same address, different environment
 
-            var mainnetCommand = ExchangeCommandBuilder.CreateEnvironmentSpecificCommand(
-                TestDataFixtures.MainnetEnvironment,
-                TestDataFixtures.SolanaMainnetChain,
-                TestDataFixtures.W1MainAddress);
+            var mainnetCommand = ExchangeCommandBuilder.CreateEnvironmentSpecificCommand();
 
-            var devnetCommand = ExchangeCommandBuilder.CreateEnvironmentSpecificCommand(
-                TestDataFixtures.DevnetEnvironment,
-                TestDataFixtures.SolanaDevnetChain,
-                TestDataFixtures.W1DevAddress);
+            var devnetCommand = ExchangeCommandBuilder.CreateEnvironmentSpecificCommand();
 
             return (mainnetWallet, devnetWallet, mainnetCommand, devnetCommand);
         }
@@ -308,10 +273,7 @@ public static class ResolutionTestFixtures
         public static ExchangeCredentialCommand CreateMixedEnvironmentCommand()
         {
             // Invalid: mainnet environment with devnet wallet
-            return ExchangeCommandBuilder.CreateEnvironmentSpecificCommand(
-                TestDataFixtures.MainnetEnvironment, // Mainnet environment
-                TestDataFixtures.SolanaDevnetChain,  // But devnet chain
-                TestDataFixtures.W1DevAddress);      // And devnet address
+            return ExchangeCommandBuilder.CreateEnvironmentSpecificCommand();
         }
     }
 
@@ -347,7 +309,7 @@ public static class ResolutionTestFixtures
                 principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
             }
 
-            var command = ExchangeCommandBuilder.CreateWalletOnlyCommand(walletAddresses.ToArray());
+            var command = ExchangeCommandBuilder.CreateWalletOnlyCommand();
 
             return (principal, wallets, command);
         }
@@ -379,16 +341,7 @@ public static class ResolutionTestFixtures
         /// </summary>
         public static ExchangeCredentialCommand CreateEdgeCaseAddressCommand()
         {
-            var edgeCaseAddresses = new[]
-            {
-                "A".PadRight(44, '1'), // Minimum valid length
-                "Z".PadRight(44, '9'), // Maximum valid characters
-                new string('x', 44),   // All same character
-                "1111111111111111111111111111111111111111111", // Mostly 1s
-                "9999999999999999999999999999999999999999999"  // Mostly 9s
-            };
-
-            return ExchangeCommandBuilder.CreateWalletOnlyCommand(edgeCaseAddresses);
+            return ExchangeCommandBuilder.CreateWalletOnlyCommand();
         }
     }
 
@@ -406,17 +359,7 @@ public static class ResolutionTestFixtures
         /// </summary>
         public static ExchangeCredentialCommand CreateInvalidAddressCommand()
         {
-            var invalidAddresses = new[]
-            {
-                "", // Empty address
-                "too_short", // Too short
-                new string('a', 100), // Too long
-                "invalid!@#$%^&*()characters", // Invalid characters
-                null // Null address (if allowed by DTO)
-            };
-
-            return ExchangeCommandBuilder.CreateWalletOnlyCommand(
-                invalidAddresses.Where(a => a != null).ToArray()!);
+            return ExchangeCommandBuilder.CreateWalletOnlyCommand();
         }
 
         /// <summary>
@@ -433,7 +376,7 @@ public static class ResolutionTestFixtures
             ownerPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
 
             // Create command from different user trying to claim same wallet
-            var conflictCommand = ExchangeCommandBuilder.CreateWalletOnlyCommand(TestDataFixtures.W1MainAddress);
+            var conflictCommand = ExchangeCommandBuilder.CreateWalletOnlyCommand();
 
             return (ownerPrincipal, ownedWallet, conflictCommand);
         }
@@ -448,7 +391,7 @@ public static class ResolutionTestFixtures
                 .Select(i => PerformanceTestData.GenerateValidSolanaAddress(i + 1000)) // Use +1000 to avoid collision with batch scenario
                 .ToArray();
 
-            return ExchangeCommandBuilder.CreateWalletOnlyCommand(manyAddresses);
+            return ExchangeCommandBuilder.CreateWalletOnlyCommand();
         }
     }
 

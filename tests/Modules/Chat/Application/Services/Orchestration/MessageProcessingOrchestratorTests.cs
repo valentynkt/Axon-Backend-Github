@@ -80,6 +80,22 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
         // Arrange
         var cancellationToken = CancellationToken.None;
 
+        // Setup AI processing success for happy path
+        var assistantContent = MessageContent.Create("AI assistant response").Value;
+        var aiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, _testConversation.Id, null, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
+
+        // Setup repository operations success
+        _mockRepository
+            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => Task.FromResult(callInfo.ArgAt<Conversation>(0)));
+        _mockRepository.UnitOfWork
+            .SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(1));
+
         // Act
         var result = await _orchestrator.ProcessUserMessageAsync(
             _testConversation,
@@ -122,6 +138,22 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
         _testConversation.AppendAssistantResponseToConversation(assistantContent, previousAiResponseId, _timeProvider);
 
         var cancellationToken = CancellationToken.None;
+
+        // Setup AI processing success
+        var newAssistantContent = MessageContent.Create("New AI assistant response").Value;
+        var newAiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, _testConversation.Id, previousAiResponseId, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(newAssistantContent, newAiResponseId, TimeSpan.FromMilliseconds(100))));
+
+        // Setup repository operations success
+        _mockRepository
+            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => Task.FromResult(callInfo.ArgAt<Conversation>(0)));
+        _mockRepository.UnitOfWork
+            .SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(1));
 
         // Act
         var result = await _orchestrator.ProcessUserMessageAsync(
@@ -167,7 +199,7 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
 
         // Should not proceed to AI processing
         await _mockAiProcessingService.DidNotReceive().ProcessMessageAsync(
-            Arg.Any<MessageContent>(),
+            Arg.Is<MessageContent>(m => true),
             Arg.Any<ConversationId>(),
             Arg.Any<AiResponseId?>(),
             Arg.Any<McpServerConfig[]>(),
@@ -254,6 +286,14 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
         var completedConversation = CreateCompletedConversation();
         var cancellationToken = CancellationToken.None;
 
+        // Setup AI processing success (needed to reach conversation append phase)
+        var assistantContent = MessageContent.Create("AI assistant response").Value;
+        var aiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, completedConversation.Id, null, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
+
         // Act
         var result = await _orchestrator.ProcessUserMessageAsync(
             completedConversation,
@@ -284,19 +324,29 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
     {
         // Arrange
         var cancellationToken = CancellationToken.None;
+
+        // Setup AI processing success (needed to reach repository operations)
+        var assistantContent = MessageContent.Create("AI assistant response").Value;
+        var aiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, _testConversation.Id, null, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
+
         _mockRepository
-            .UpdateAsync(_testConversation, cancellationToken)
+            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Database error"));
 
-        // Act & Assert
-        var exception = await Should.ThrowAsync<InvalidOperationException>(() =>
-            _orchestrator.ProcessUserMessageAsync(
-                _testConversation,
-                _testUserMessage,
-                _testUserMessageId,
-                cancellationToken));
+        // Act
+        var result = await _orchestrator.ProcessUserMessageAsync(
+            _testConversation,
+            _testUserMessage,
+            _testUserMessageId,
+            cancellationToken);
 
-        exception.Message.ShouldBe("Database error");
+        // Assert
+        result.ShouldBeFailure();
+        result.Error.Code.ShouldBe(ChatDomainErrors.Processing.UnexpectedErrorCode);
 
         _mockTelemetry.Received(1).TrackMessageProcessed(
             _testConversation.Id.Value,
@@ -309,8 +359,17 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
     {
         // Arrange
         var cancellationToken = CancellationToken.None;
+
+        // Setup AI processing success (needed to reach repository operations)
+        var assistantContent = MessageContent.Create("AI assistant response").Value;
+        var aiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, _testConversation.Id, null, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
+
         _mockRepository.UnitOfWork
-            .SaveChangesAsync(cancellationToken)
+            .SaveChangesAsync(Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Transaction failed"));
 
         // Act & Assert
@@ -340,6 +399,14 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
         var cancellationToken = cancellationTokenSource.Token;
+
+        // Setup AI processing success (needed to reach the cancellation point)
+        var assistantContent = MessageContent.Create("AI assistant response").Value;
+        var aiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, _testConversation.Id, null, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
 
         // Act & Assert
         await Should.ThrowAsync<OperationCanceledException>(() =>
@@ -377,6 +444,22 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
     {
         // Arrange
         var cancellationToken = CancellationToken.None;
+
+        // Setup AI processing success
+        var assistantContent = MessageContent.Create("AI assistant response").Value;
+        var aiResponseId = CreateAiResponseId();
+        _mockAiProcessingService
+            .ProcessMessageAsync(_testUserMessage, _testConversation.Id, null, _testMcpConfigs, cancellationToken)
+            .Returns(Result.Success<AiProcessingResult, Error>(
+                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
+
+        // Setup repository operations success
+        _mockRepository
+            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => Task.FromResult(callInfo.ArgAt<Conversation>(0)));
+        _mockRepository.UnitOfWork
+            .SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(1));
 
         // Act
         var result = await _orchestrator.ProcessUserMessageAsync(
@@ -455,27 +538,9 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
             .ResolveServersAsync(Arg.Any<ConversationId>(), Arg.Any<CancellationToken>())
             .Returns(_testMcpConfigs);
 
-        // AI processing returns success - setup after data is initialized
-        var assistantContent = MessageContent.Create("AI assistant response").Value;
-        var aiResponseId = CreateAiResponseId();
-        _mockAiProcessingService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AiProcessingResult, Error>(
-                new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
+        // No default AI processing setup - each test will set up its own specific behavior
 
-        // Repository operations succeed
-        _mockRepository
-            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
-        _mockRepository.UnitOfWork
-            .SaveChangesAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+        // No default repository setup - each test will set up its own specific behavior when needed
     }
 
     private static Conversation CreateCompletedConversation()

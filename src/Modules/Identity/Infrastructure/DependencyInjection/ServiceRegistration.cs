@@ -60,8 +60,7 @@ public static class ServiceRegistration
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null);
-            })
-            .UseSnakeCaseNamingConvention();
+            });
 
 #if DEBUG
             // Enable detailed logging in development
@@ -80,8 +79,7 @@ public static class ServiceRegistration
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null);
-            })
-            .UseSnakeCaseNamingConvention();
+            });
 
 #if DEBUG
             // Enable detailed logging in development
@@ -101,8 +99,7 @@ public static class ServiceRegistration
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null);
-            })
-            .UseSnakeCaseNamingConvention();
+            });
             
             // Read-specific EF Core optimizations
             options.EnableServiceProviderCaching(true);
@@ -161,6 +158,8 @@ public static class ServiceRegistration
         services.Configure<DynamicValidationOptions>(configuration.GetSection(DynamicValidationOptions.SectionName));
 
         // Register Dynamic auth service with JWKS pre-warming
+        // WARNING: IDynamicAuthService should ONLY be used by DynamicAuthenticationProvider
+        // API endpoints should use IAuthenticationOrchestrator instead to maintain proper architecture
         services.AddScoped<IDynamicAuthService, DynamicAuthService>();
         services.AddHostedService<DynamicAuthService>(); // For JWKS pre-warming
 
@@ -198,6 +197,9 @@ public static class ServiceRegistration
         services.AddScoped<ChallengeTokenProvider>();
         services.AddScoped<RefreshTokenProvider>();
         services.AddScoped<IRefreshTokenProvider>(sp => sp.GetRequiredService<RefreshTokenProvider>());
+
+        // Register user profile service (SOLID refactoring - separates profile concerns from auth)
+        services.AddScoped<IUserProfileService, UserProfileService>();
 
         // Register unified token replay protection service
         services.AddSingleton<Microsoft.IdentityModel.Tokens.ITokenReplayCache, TokenReplayCache>();

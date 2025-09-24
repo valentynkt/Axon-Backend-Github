@@ -11,7 +11,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 {
     public void Configure(EntityTypeBuilder<Message> builder)
     {
-        builder.ToTable("messages");
+        builder.ToTable("Messages");
 
         builder.HasKey(m => m.Id);
         

@@ -11,7 +11,7 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
 {
     public void Configure(EntityTypeBuilder<Conversation> builder)
     {
-        builder.ToTable("conversations");
+        builder.ToTable("Conversations");
 
         builder.HasKey(c => c.Id);
         

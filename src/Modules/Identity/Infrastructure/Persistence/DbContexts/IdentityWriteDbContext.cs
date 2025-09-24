@@ -58,7 +58,6 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
         // No need to duplicate schema configuration
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityWriteDbContext).Assembly);
-        modelBuilder.ToSnakeCaseTables();
     }
 }
 
@@ -75,6 +74,5 @@ public sealed class IdentityWriteDbContextFactory : DesignTimeDbContextFactoryBa
         {
             opt.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
             opt.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
-        })
-        .UseSnakeCaseNamingConvention();
+        });
 }

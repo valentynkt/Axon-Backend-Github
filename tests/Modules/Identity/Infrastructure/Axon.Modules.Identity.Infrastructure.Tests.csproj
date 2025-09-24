@@ -36,6 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../src/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Testing/BuildingBlocks.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

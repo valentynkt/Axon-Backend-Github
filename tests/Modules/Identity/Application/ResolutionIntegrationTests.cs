@@ -37,10 +37,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         var (existingPrincipal, _) = SetupCredentialFirstScenario();
 
         // Add wallet data to command for defaults application
-        var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var commandWithWallet = CreateDynamicExchangeCommand(
-            TestDataFixtures.DynA_Subject,
-            wallets: new List<ExchangeWalletData> { walletData });
+        var commandWithWallet = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock repository behavior
         MockCredentialResolution(existingPrincipal);
@@ -90,10 +87,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
         var (principal, _) = SetupWalletVerifiedScenario();
 
         // Add a second wallet to the exchange
-        var secondWalletData = CreateWalletExchangeData(TestDataFixtures.W2MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            "unknown_user", // Force wallet resolution
-            wallets: new List<ExchangeWalletData> { secondWalletData });
+        var command = CreateDynamicExchangeCommand("unknown_user");
 
         // Mock resolution path
         MockNoCredentialMatch();
@@ -137,15 +131,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
     public async Task Integration_NewPrincipalWithMultipleWallets_ShouldCreateAndSetupDefaults()
     {
         // Arrange: Create command with multiple wallets for new principal
-        var walletAddresses = new[]
-        {
-            TestDataFixtures.W1MainAddress,
-            TestDataFixtures.W2MainAddress
-        };
-
-        var command = CreateDynamicExchangeCommand(
-            "brand_new_user_12345",
-            wallets: walletAddresses.Select(addr => CreateWalletExchangeData(addr)).ToList());
+        var command = CreateDynamicExchangeCommand("brand_new_user_12345");
 
         // Mock no existing matches
         MockNoCredentialMatch();
@@ -411,9 +397,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
     public async Task Integration_FirstVerifiedWallet_ShouldAutoSeedDefaults()
     {
         // Arrange: Create new principal with first verified wallet
-        var command = CreateDynamicExchangeCommand(
-            "new_user_auto_seed",
-            wallets: new List<ExchangeWalletData> { CreateWalletExchangeData(TestDataFixtures.W1MainAddress) });
+        var command = CreateDynamicExchangeCommand("new_user_auto_seed");
 
         MockNoCredentialMatch();
         MockNoWalletOwners();

@@ -12,7 +12,7 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.ToTable("wallet", "identity");
+        builder.ToTable("Wallet", "identity");
 
         builder.HasKey(w => w.Id);
         

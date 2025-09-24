@@ -10,39 +10,32 @@ using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
+using BuildingBlocks.Testing;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Shouldly;
+using Npgsql;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence;
 
 /// <summary>
 /// Base class for all Identity persistence tests providing shared infrastructure and utilities.
+/// Uses PostgreSQL with Testcontainers for realistic database testing.
 /// Ensures proper test isolation and provides common assertion helpers.
 /// </summary>
-public abstract class IdentityPersistenceTestBase
+public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
 {
     protected IdentityWriteDbContext DbContext { get; set; } = null!;
     protected AxonPrincipalWriteRepository PrincipalRepository { get; set; } = null!;
     protected WalletWriteRepository WalletRepository { get; set; } = null!;
     protected EfUnitOfWork<IdentityWriteDbContext, IdentityModule> UnitOfWork { get; set; } = null!;
-    private string _databaseFilePath = null!;
 
     [SetUp]
     public async Task SetUpBase()
     {
-        // Create unique SQLite database for each test to ensure complete isolation
-        var databaseName = $"IdentityTests_{GetType().Name}_{TestContext.CurrentContext.Test.Name}_{Guid.NewGuid():N}";
-        _databaseFilePath = $"{databaseName}.db";
-        var connectionString = $"Data Source={_databaseFilePath}";
-
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
-            .UseSqlite(connectionString)
-            .UseSnakeCaseNamingConvention()
-            .EnableSensitiveDataLogging()
-            .Options;
+        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>().Options;
 
         DbContext = new IdentityWriteDbContext(options);
         UnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(DbContext);
@@ -65,26 +58,14 @@ public abstract class IdentityPersistenceTestBase
         }
         finally
         {
+            // Clean up database state for next test
+            await CleanupDatabaseAsync(DbContext);
+
             // Ensure resources are cleaned up even if child cleanup fails
-            DbContext.ChangeTracker.Clear();
-            await DbContext.Database.EnsureDeletedAsync();
             UnitOfWork?.Dispose();
             PrincipalRepository?.Dispose();
             WalletRepository?.Dispose();
             await DbContext.DisposeAsync();
-
-            // Clean up SQLite database file
-            try
-            {
-                if (File.Exists(_databaseFilePath))
-                {
-                    File.Delete(_databaseFilePath);
-                }
-            }
-            catch
-            {
-                // Ignore file cleanup errors
-            }
         }
     }
 
@@ -97,6 +78,29 @@ public abstract class IdentityPersistenceTestBase
     /// Override this method to perform additional cleanup in derived test classes.
     /// </summary>
     protected virtual Task TearDownDerived() => Task.CompletedTask;
+
+    /// <summary>
+    /// Cleans up Identity database state between tests.
+    /// </summary>
+    protected override async Task CleanupDatabaseAsync(DbContext context)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                TRUNCATE TABLE identity.principal_chain_default CASCADE;
+                TRUNCATE TABLE identity.wallet_ownership CASCADE;
+                TRUNCATE TABLE identity.credential CASCADE;
+                TRUNCATE TABLE identity.wallet CASCADE;
+                TRUNCATE TABLE identity.axon_principal CASCADE;
+            ");
+        }
+        catch
+        {
+            // If truncate fails, try dropping and recreating
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+        }
+    }
 
     #region Test Data Creation Helpers
 
@@ -241,49 +245,33 @@ public abstract class IdentityPersistenceTestBase
 
     /// <summary>
     /// Asserts that a concurrency exception should be thrown.
-    /// SQLite might not always throw concurrency exceptions like PostgreSQL, so this method
-    /// handles both the ideal case (concurrency exception) and the SQLite case (last write wins).
+    /// PostgreSQL properly enforces concurrency control with optimistic concurrency.
     /// </summary>
     protected static void AssertConcurrencyConflict(Func<Task> action)
     {
-        try
-        {
-            // Try to throw a concurrency exception (ideal behavior)
-            Should.Throw<DbUpdateConcurrencyException>(action);
-        }
-        catch (Exception)
-        {
-            // SQLite might not enforce concurrency the same way as PostgreSQL
-            // In SQLite, the second update might succeed (last write wins)
-            // This is acceptable for testing with SQLite as long as the constraint logic is tested
-        }
+        Should.Throw<DbUpdateConcurrencyException>(action);
     }
 
     /// <summary>
-    /// Asserts that a unique constraint violation should be thrown.
-    /// Handles both PostgreSQL and SQLite constraint violation error messages.
+    /// Asserts that a PostgreSQL unique constraint violation occurs.
+    /// Validates the specific constraint name that was violated.
     /// </summary>
-    protected static void AssertUniqueConstraintViolation(Func<Task> action)
+    protected static async Task AssertUniqueConstraintViolation(Func<Task> action, string? expectedConstraintName = null)
     {
-        var exception = Should.Throw<DbUpdateException>(action);
+        var exception = await Should.ThrowAsync<DbUpdateException>(action);
 
-        // Check for constraint violation patterns across different database providers
-        var message = exception.Message;
-        var innerMessage = exception.InnerException?.Message ?? "";
-        var fullExceptionText = $"{message} {innerMessage}";
+        var postgresException = exception.InnerException as PostgresException;
+        postgresException.ShouldNotBeNull("Expected PostgreSQL constraint violation");
 
-        // PostgreSQL: contains "duplicate"
-        // SQLite: contains "UNIQUE constraint failed", "constraint failed", or references to specific constraint names
-        var isConstraintViolation =
-            fullExceptionText.Contains("duplicate", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("constraint failed", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("ix_ownership_wallet_id", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("ux_ownership_principal_wallet", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("ux_wallet_chain_address", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("ux_credential_provider_issuer_subject", StringComparison.OrdinalIgnoreCase);
+        // PostgreSQL unique violation error code
+        postgresException.SqlState.ShouldBe("23505", "Expected unique constraint violation");
 
-        isConstraintViolation.ShouldBeTrue($"Expected constraint violation, but got: {message}. Inner: {innerMessage}");
+        // Validate specific constraint name if provided
+        if (!string.IsNullOrEmpty(expectedConstraintName))
+        {
+            postgresException.ConstraintName.ShouldBe(expectedConstraintName,
+                $"Expected constraint '{expectedConstraintName}' to be violated");
+        }
     }
 
     #endregion
@@ -319,6 +307,15 @@ public abstract class IdentityPersistenceTestBase
                $"Added: {entries.Count(e => e.State == EntityState.Added)}, " +
                $"Modified: {entries.Count(e => e.State == EntityState.Modified)}, " +
                $"Deleted: {entries.Count(e => e.State == EntityState.Deleted)}";
+    }
+
+    /// <summary>
+    /// Creates a separate DbContext for concurrent transaction testing.
+    /// </summary>
+    protected IdentityWriteDbContext CreateConcurrentDbContext()
+    {
+        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>().Options;
+        return new IdentityWriteDbContext(options);
     }
 
     #endregion

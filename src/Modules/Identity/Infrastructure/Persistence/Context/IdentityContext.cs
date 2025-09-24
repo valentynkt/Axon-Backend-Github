@@ -86,8 +86,7 @@ public sealed class IdentityContextFactory : IDesignTimeDbContextFactory<Identit
         {
             opt.MigrationsAssembly(typeof(IdentityContext).Assembly.FullName);
             opt.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
-        })
-        .UseSnakeCaseNamingConvention();
+        });
 
         return new IdentityContext(optionsBuilder.Options);
     }

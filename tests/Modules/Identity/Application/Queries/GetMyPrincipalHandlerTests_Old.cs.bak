@@ -1,11 +1,6 @@
-using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
-using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
-using Axon.Modules.Identity.Domain.Aggregates.Wallet;
-using Axon.Modules.Identity.Domain.Entities;
-using Axon.Modules.Identity.Domain.Enums;
-using Axon.Modules.Identity.Domain.Tests.TestData;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;

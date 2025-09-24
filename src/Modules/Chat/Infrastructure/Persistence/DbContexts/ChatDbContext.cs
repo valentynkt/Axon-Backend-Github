@@ -45,7 +45,6 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
         var messageConfig = new Persistence.Configurations.MessageConfiguration();
         messageConfig.Configure(modelBuilder.Entity<Message>());
 
-        modelBuilder.ToSnakeCaseTables();
     }
 
     protected override void ApplyAuditInformation()
@@ -93,6 +92,5 @@ public sealed class ChatDbContextFactory : DesignTimeDbContextFactoryBase<ChatDb
         {
             opt.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
             opt.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-        })
-        .UseSnakeCaseNamingConvention();
+        });
 }

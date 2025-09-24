@@ -26,44 +26,35 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("created_at");
+                        .HasColumnType("timestamptz");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("RiskTier")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("risk_tier");
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("type");
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("updated_at");
+                        .HasColumnType("timestamptz");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
-                        .HasColumnName("version");
+                        .HasColumnType("bigint");
 
-                    b.HasKey("Id")
-                        .HasName("pk_principal");
+                    b.HasKey("Id");
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_principal_created_at");
@@ -74,7 +65,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasIndex("Type")
                         .HasDatabaseName("ix_principal_type");
 
-                    b.ToTable("principal", "identity");
+                    b.ToTable("Principal", "identity");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", b =>
@@ -124,11 +115,9 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
-                        .HasColumnName("version");
+                        .HasColumnType("bigint");
 
-                    b.HasKey("Id")
-                        .HasName("pk_wallet");
+                    b.HasKey("Id");
 
                     b.HasIndex("ChainId")
                         .HasDatabaseName("idx_wallet_chain_id");
@@ -141,161 +130,136 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasDatabaseName("ux_wallet_chain_addr")
                         .HasFilter("is_deleted = false");
 
-                    b.ToTable("wallet", "identity");
+                    b.ToTable("Wallet", "identity");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.AxonUserAuth", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("access_failed_count");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("AxonPrincipalId")
                         .HasColumnType("uuid")
-                        .HasColumnName("axon_principal_id");
+                        .HasColumnName("AxonPrincipalId");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("concurrency_stamp");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("DynamicEnvironmentId")
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("dynamic_environment_id");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("DynamicUserId")
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("dynamic_user_id");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("email");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("email_confirmed");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("FirstAuthenticatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("first_authenticated_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("LastAuthenticatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_authenticated_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("lockout_enabled");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("lockout_end");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("normalized_email");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("NormalizedUserName")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("normalized_user_name");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("OriginalIssuer")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("original_issuer");
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("OriginalSubject")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("original_subject");
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("PasswordHash")
-                        .HasColumnType("text")
-                        .HasColumnName("password_hash");
+                        .HasColumnType("text");
 
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("phone_number");
+                        .HasColumnType("character varying(50)");
 
                     b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("phone_number_confirmed");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("PrimaryChainId")
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("primary_chain_id");
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("PrimaryWalletAddress")
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("primary_wallet_address");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("ProviderType")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("provider_type");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("SecurityStamp")
                         .IsConcurrencyToken()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("security_stamp");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("two_factor_enabled");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("user_name");
+                        .HasColumnType("character varying(256)");
 
-                    b.HasKey("Id")
-                        .HasName("pk_axon_user_auth");
+                    b.HasKey("Id");
 
                     b.HasIndex("AxonPrincipalId")
                         .IsUnique()
-                        .HasDatabaseName("ix_axon_user_auth_axon_principal_id");
+                        .HasDatabaseName("IX_AxonUserAuth_AxonPrincipalId");
 
                     b.HasIndex("DynamicUserId")
-                        .HasDatabaseName("ix_axon_user_auth_dynamic_user_id")
+                        .HasDatabaseName("IX_AxonUserAuth_DynamicUserId")
                         .HasFilter("\"DynamicUserId\" IS NOT NULL");
 
                     b.HasIndex("NormalizedEmail")
-                        .HasDatabaseName("ix_axon_user_auth_normalized_email");
+                        .HasDatabaseName("IX_AxonUserAuth_NormalizedEmail");
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
-                        .HasDatabaseName("ix_axon_user_auth_normalized_user_name");
+                        .HasDatabaseName("IX_AxonUserAuth_NormalizedUserName");
 
                     b.HasIndex("PrimaryWalletAddress")
-                        .HasDatabaseName("ix_axon_user_auth_primary_wallet_address")
+                        .HasDatabaseName("IX_AxonUserAuth_PrimaryWalletAddress")
                         .HasFilter("\"PrimaryWalletAddress\" IS NOT NULL");
 
                     b.HasIndex("ProviderType", "OriginalSubject")
-                        .HasDatabaseName("ix_axon_user_auth_provider_type_original_subject");
+                        .HasDatabaseName("IX_AxonUserAuth_ProviderType_OriginalSubject");
 
-                    b.ToTable("axon_user_auth", "identity");
+                    b.ToTable("AxonUserAuth", "identity");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.IdentityCredential", b =>
@@ -348,8 +312,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
 
-                    b.HasKey("Id")
-                        .HasName("pk_credential");
+                    b.HasKey("Id");
 
                     b.HasIndex("PrincipalId")
                         .HasDatabaseName("idx_credential_principal_id");
@@ -362,7 +325,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasDatabaseName("ux_credential_provider")
                         .HasFilter("is_deleted = false");
 
-                    b.ToTable("credential", "identity");
+                    b.ToTable("Credential", "identity");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", b =>
@@ -404,8 +367,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("wallet_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_principal_chain_default");
+                    b.HasKey("Id");
 
                     b.HasIndex("PrincipalId")
                         .HasDatabaseName("idx_default_principal_id");
@@ -418,7 +380,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasDatabaseName("ux_chain_default")
                         .HasFilter("is_deleted = false");
 
-                    b.ToTable("principal_chain_default", "identity");
+                    b.ToTable("PrincipalChainDefault", "identity");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletOwnership", b =>
@@ -434,8 +396,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnName("access_mode");
 
                     b.Property<Guid?>("AxonPrincipalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("axon_principal_id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamptz")
@@ -488,11 +449,9 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("wallet_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_wallet_ownership");
+                    b.HasKey("Id");
 
-                    b.HasIndex("AxonPrincipalId")
-                        .HasDatabaseName("ix_wallet_ownership_axon_principal_id");
+                    b.HasIndex("AxonPrincipalId");
 
                     b.HasIndex("PrincipalId")
                         .HasDatabaseName("idx_ownership_principal_active")
@@ -511,225 +470,175 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasDatabaseName("ux_ownership_pair")
                         .HasFilter("is_deleted = false");
 
-                    b.ToTable("wallet_ownership", "identity");
+                    b.ToTable("WalletOwnership", "identity");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
+                        .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<DateTime?>("Consumed")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("consumed");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("ConsumerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("consumer_id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("Delivered")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("delivered");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("ExpirationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expiration_time");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("LastSequenceNumber")
-                        .HasColumnType("bigint")
-                        .HasColumnName("last_sequence_number");
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("LockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("lock_id");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("MessageId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("message_id");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("ReceiveCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("receive_count");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("Received")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("received");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea")
-                        .HasColumnName("row_version");
+                        .HasColumnType("bytea");
 
-                    b.HasKey("Id")
-                        .HasName("pk_inbox_state");
+                    b.HasKey("Id");
 
-                    b.HasAlternateKey("MessageId", "ConsumerId")
-                        .HasName("ak_inbox_state_message_id_consumer_id");
+                    b.HasIndex("Delivered");
 
-                    b.HasIndex("Delivered")
-                        .HasDatabaseName("ix_inbox_state_delivered");
-
-                    b.ToTable("inbox_state", "identity");
+                    b.ToTable("InboxState", "identity");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
                 {
                     b.Property<long>("SequenceNumber")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("sequence_number");
+                        .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("SequenceNumber"));
 
                     b.Property<string>("Body")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("body");
+                        .HasColumnType("text");
 
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("content_type");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<Guid?>("ConversationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("conversation_id");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("CorrelationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("correlation_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("DestinationAddress")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("destination_address");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTime?>("EnqueueTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("enqueue_time");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("ExpirationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expiration_time");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FaultAddress")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("fault_address");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("Headers")
-                        .HasColumnType("text")
-                        .HasColumnName("headers");
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("InboxConsumerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("inbox_consumer_id");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("InboxMessageId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("inbox_message_id");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("InitiatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("initiator_id");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("MessageId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("message_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("MessageType")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("message_type");
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("OutboxId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("outbox_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Properties")
-                        .HasColumnType("text")
-                        .HasColumnName("properties");
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("RequestId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("request_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ResponseAddress")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("response_address");
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTime>("SentTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("sent_time");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceAddress")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("source_address");
+                        .HasColumnType("character varying(256)");
 
-                    b.HasKey("SequenceNumber")
-                        .HasName("pk_outbox_message");
+                    b.HasKey("SequenceNumber");
 
-                    b.HasIndex("EnqueueTime")
-                        .HasDatabaseName("ix_outbox_message_enqueue_time");
+                    b.HasIndex("EnqueueTime");
 
-                    b.HasIndex("ExpirationTime")
-                        .HasDatabaseName("ix_outbox_message_expiration_time");
+                    b.HasIndex("ExpirationTime");
 
                     b.HasIndex("OutboxId", "SequenceNumber")
-                        .IsUnique()
-                        .HasDatabaseName("ix_outbox_message_outbox_id_sequence_number");
+                        .IsUnique();
 
                     b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
-                        .IsUnique()
-                        .HasDatabaseName("ix_outbox_message_inbox_message_id_inbox_consumer_id_sequence_");
+                        .IsUnique();
 
-                    b.ToTable("outbox_message", "identity");
+                    b.ToTable("OutboxMessage", "identity");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxState", b =>
                 {
                     b.Property<Guid>("OutboxId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("outbox_id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("Created")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("Delivered")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("delivered");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("LastSequenceNumber")
-                        .HasColumnType("bigint")
-                        .HasColumnName("last_sequence_number");
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("LockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("lock_id");
+                        .HasColumnType("uuid");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea")
-                        .HasColumnName("row_version");
+                        .HasColumnType("bytea");
 
-                    b.HasKey("OutboxId")
-                        .HasName("pk_outbox_state");
+                    b.HasKey("OutboxId");
 
-                    b.HasIndex("Created")
-                        .HasDatabaseName("ix_outbox_state_created");
+                    b.HasIndex("Created");
 
-                    b.ToTable("outbox_state", "identity");
+                    b.ToTable("OutboxState", "identity");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.AxonUserAuth", b =>
@@ -739,7 +648,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasForeignKey("Axon.Modules.Identity.Domain.Entities.AxonUserAuth", "AxonPrincipalId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_axon_user_auth_axon_principal");
+                        .HasConstraintName("FK_AxonUserAuth_AxonPrincipal");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.IdentityCredential", b =>
@@ -748,8 +657,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .WithMany("Credentials")
                         .HasForeignKey("PrincipalId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_credential_principal_principal_id");
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", b =>
@@ -758,30 +666,26 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .WithMany("PrincipalChainDefaults")
                         .HasForeignKey("PrincipalId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_principal_chain_default_principal_principal_id");
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletOwnership", b =>
                 {
                     b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
                         .WithMany("WalletOwnerships")
-                        .HasForeignKey("AxonPrincipalId")
-                        .HasConstraintName("fk_wallet_ownership_principal_axon_principal_id");
+                        .HasForeignKey("AxonPrincipalId");
 
                     b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", "Principal")
                         .WithMany()
                         .HasForeignKey("PrincipalId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_wallet_ownership_principal_principal_id");
+                        .IsRequired();
 
                     b.HasOne("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", null)
                         .WithMany()
                         .HasForeignKey("WalletId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_wallet_ownership_wallet_wallet_id");
+                        .IsRequired();
 
                     b.Navigation("Principal");
                 });
@@ -790,14 +694,12 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 {
                     b.HasOne("MassTransit.EntityFrameworkCoreIntegration.OutboxState", null)
                         .WithMany()
-                        .HasForeignKey("OutboxId")
-                        .HasConstraintName("fk_outbox_message_outbox_state_outbox_id");
+                        .HasForeignKey("OutboxId");
 
                     b.HasOne("MassTransit.EntityFrameworkCoreIntegration.InboxState", null)
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
-                        .HasPrincipalKey("MessageId", "ConsumerId")
-                        .HasConstraintName("fk_outbox_message_inbox_state_inbox_message_id_inbox_consumer_");
+                        .HasPrincipalKey("MessageId", "ConsumerId");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>

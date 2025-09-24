@@ -2,21 +2,20 @@ using Axon.Api.Contracts.V1.Auth;
 using Axon.Api.Modules;
 using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 using Axon.Modules.Identity.Application.DTOs.Responses;
-using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Application.Common.Constants;
-using Axon.Modules.Identity.Application.Contracts.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace Axon.Api.Endpoints.V1.Auth;
 
 /// <summary>
 /// GET /auth/me - Get current user information
-/// Uses Axon JWT authentication scheme
+/// Accepts both Dynamic JWT and Axon JWT tokens
 /// </summary>
-[Authorize(AuthenticationSchemes = "AxonJwt")]
+[Authorize(Policy = "DynamicOrAxon")]
 public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
 {
     public MeEndpoint(
@@ -42,11 +41,12 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         """
         Returns information about the currently authenticated user with ETag caching support.
 
-        **Requires**: Valid Axon Access Token in Authorization header
+        **Requires**: Valid JWT Access Token in Authorization header
 
         **Authentication**:
-        - Uses AxonJwt authentication scheme
-        - Token must be obtained from /auth/exchange endpoint
+        - Accepts both Dynamic JWT and Axon JWT tokens
+        - Dynamic tokens can be used directly without exchange
+        - Axon tokens obtained from /auth/exchange endpoint
 
         **ETag Support**:
         - Server returns `ETag` header with fingerprint of user data
@@ -62,39 +62,26 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
         // User is already authenticated via [Authorize] attribute
         var principal = HttpContext.User;
 
-        if (principal?.Identity?.IsAuthenticated != true)
+        // Extract AxonPrincipalId from JWT token with fallback support
+        var axonPrincipalIdClaim = principal.FindFirst("axon_user_id")?.Value
+            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(axonPrincipalIdClaim) || !Guid.TryParse(axonPrincipalIdClaim, out var principalIdGuid))
         {
             return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("User is not authenticated", "AUTH.NOT_AUTHENTICATED")));
+                Error.Unauthorized("Invalid token: missing or invalid user identifier", "AUTH.MISSING_PRINCIPAL_ID")));
         }
 
-        // Extract claims from authenticated principal
-        var subject = principal.FindFirst("sub")?.Value ?? "";
-        var issuer = principal.FindFirst("iss")?.Value ?? "axon-api";
-
-        if (string.IsNullOrEmpty(subject))
-        {
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("Invalid token: missing subject claim", "AUTH.MISSING_SUBJECT")));
-        }
-
-        // Create provider type for Axon tokens
-        var providerTypeResult = ProviderType.Create("axon");
-        if (providerTypeResult.IsFailure)
-        {
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(providerTypeResult.Error));
-        }
+        var axonPrincipalId = new AxonUserId(principalIdGuid);
 
         // Extract If-None-Match header for ETag support
         var ifNoneMatch = HttpContext.Request.Headers.IfNoneMatch.FirstOrDefault();
 
-        Logger.LogDebug("Retrieving user info for Subject: {Subject}, Issuer: {Issuer}",
-            subject, issuer);
+        Logger.LogDebug("Retrieving user info for AxonPrincipalId: {PrincipalId}",
+            axonPrincipalId.Value);
 
         var query = new GetMyPrincipalQuery(
-            ProviderType: providerTypeResult.Value,
-            Issuer: issuer,
-            Subject: subject,
+            PrincipalId: axonPrincipalId,
             IfNoneMatch: ifNoneMatch
         );
 

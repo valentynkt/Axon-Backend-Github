@@ -12,35 +12,29 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.ToTable("principal", "identity");
+        builder.ToTable("Principal", "identity");
 
         builder.HasKey(p => p.Id);
         
         builder.Property(p => p.Id)
             .HasConversion(id => id.Value, value => new AxonUserId(value))
-            .HasColumnName("id")
             .HasColumnType("uuid");
 
         builder.Property(p => p.Type)
             .HasConversion<string>()
-            .HasColumnName("type")
             .HasMaxLength(20);
 
         builder.Property(p => p.RiskTier)
             .HasConversion<string>()
-            .HasColumnName("risk_tier")
             .HasMaxLength(20);
 
         builder.Property(p => p.CreatedAt)
-            .HasColumnName("created_at")
             .HasColumnType("timestamptz");
 
         builder.Property(p => p.UpdatedAt)
-            .HasColumnName("updated_at")
             .HasColumnType("timestamptz");
 
         builder.Property(p => p.Version)
-            .HasColumnName("version")
             .IsConcurrencyToken();
 
         // Navigation properties with backing field access

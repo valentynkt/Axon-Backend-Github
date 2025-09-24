@@ -65,7 +65,6 @@ public abstract class IdentityDbInvariantsTestBase
     {
         var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
             .UseNpgsql(_connectionString)
-            .UseSnakeCaseNamingConvention()
             .EnableSensitiveDataLogging()
             .Options;
 
@@ -213,7 +212,6 @@ public abstract class IdentityDbInvariantsTestBase
     {
         var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
             .UseNpgsql(_connectionString)
-            .UseSnakeCaseNamingConvention()
             .EnableSensitiveDataLogging()
             .Options;
 

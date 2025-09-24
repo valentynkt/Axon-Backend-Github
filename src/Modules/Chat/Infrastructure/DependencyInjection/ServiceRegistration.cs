@@ -18,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using EFCore.NamingConventions;
 
 namespace Axon.Modules.Chat.Infrastructure.DependencyInjection;
 
@@ -57,8 +58,8 @@ public static class ServiceRegistration
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            })
-            .UseSnakeCaseNamingConvention();
+            });
+            options.UseSnakeCaseNamingConvention(NamingConvention.None); // Use PascalCase naming to match migrations
         });
         
         // Read DbContext with read-specific optimizations
@@ -68,14 +69,14 @@ public static class ServiceRegistration
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
                 npgsqlOptions.CommandTimeout(30); // 30-second timeout for read operations
-            })
-            .UseSnakeCaseNamingConvention();
-            
+            });
+            options.UseSnakeCaseNamingConvention(NamingConvention.None); // Use PascalCase naming to match migrations
+
             // Read-specific EF Core optimizations
             options.EnableServiceProviderCaching(true);
             options.EnableSensitiveDataLogging(false); // Security: disable in production
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-            
+
             // Performance optimizations for read scenarios
             options.ConfigureWarnings(warnings =>
             {
