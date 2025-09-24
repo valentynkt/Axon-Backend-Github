@@ -52,17 +52,21 @@ public static class IdentityConfiguration
             options.Stores.MaxLengthForKeys = 128;
             options.Stores.ProtectPersonalData = false; // Wallet addresses are public anyway
 
-            // Token providers (for future features like recovery codes)
+            // Token providers
             options.Tokens.ProviderMap.Add(
                 "AxonTOTP",
                 new TokenProviderDescriptor(typeof(TotpSecurityStampBasedTokenProvider<AxonUserAuth>)));
+            options.Tokens.ProviderMap.Add(
+                "AxonChallenge",
+                new TokenProviderDescriptor(typeof(ChallengeTokenProvider)));
             options.Tokens.AuthenticatorTokenProvider = "AxonTOTP";
         })
         .AddEntityFrameworkStores<IdentityContext>()
         .AddUserStore<AxonUserStore>()
         .AddUserManager<UserManager<AxonUserAuth>>()
         .AddSignInManager<SignInManager<AxonUserAuth>>()
-        .AddDefaultTokenProviders();
+        .AddDefaultTokenProviders()
+        .AddTokenProvider<ChallengeTokenProvider>("AxonChallenge");
 
         // Add custom claims transformation for wallet-based claims
         services.AddScoped<IClaimsTransformation, WalletClaimsTransformation>();

@@ -11,14 +11,14 @@ namespace Axon.Modules.Identity.Application.Commands.RefreshToken;
 /// </summary>
 public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResult, Error>>
 {
-    private readonly IAuthenticationService _authenticationService;
+    private readonly IAuthenticationOrchestrator _orchestrator;
     private readonly ILogger<RefreshTokenHandler> _logger;
 
     public RefreshTokenHandler(
-        IAuthenticationService authenticationService,
+        IAuthenticationOrchestrator orchestrator,
         ILogger<RefreshTokenHandler> logger)
     {
-        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
+        _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -37,7 +37,7 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, Result<R
 
         _logger.LogDebug("Processing refresh token request");
 
-        var refreshResult = await _authenticationService.RefreshAccessTokenAsync(
+        var refreshResult = await _orchestrator.RefreshTokenAsync(
             request.RefreshToken,
             cancellationToken);
 

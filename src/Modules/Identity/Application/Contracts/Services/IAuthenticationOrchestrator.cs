@@ -1,8 +1,10 @@
 namespace Axon.Modules.Identity.Application.Contracts.Services;
 
 using System.Security.Claims;
+using Common;
 using Providers;
 using Domain.Entities;
+using Domain.ValueObjects;
 using CSharpFunctionalExtensions;
 
 /// <summary>
@@ -11,6 +13,44 @@ using CSharpFunctionalExtensions;
 /// </summary>
 public interface IAuthenticationOrchestrator
 {
+    // ========== Challenge & Validation Methods ==========
+
+    /// <summary>
+    /// Generates an authentication challenge for wallet signing
+    /// </summary>
+    Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
+        string chainId,
+        string walletAddress,
+        string audience,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates the HMAC signature of a message
+    /// </summary>
+    Result<bool, Error> ValidateMac(
+        string message,
+        string mac,
+        string keyVersion);
+
+    /// <summary>
+    /// Validates a challenge message structure and TTL
+    /// </summary>
+    Result<bool, Error> ValidateChallenge(
+        string message,
+        string expectedChainId,
+        string expectedAddress,
+        string expectedAudience);
+
+    /// <summary>
+    /// Checks and marks a nonce as used for replay protection
+    /// </summary>
+    Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
+        string signedMessage,
+        string mkv,
+        CancellationToken cancellationToken = default);
+
+    // ========== Authentication Methods ==========
+
     /// <summary>
     /// Process wallet-based authentication with signature verification
     /// </summary>
@@ -33,6 +73,8 @@ public interface IAuthenticationOrchestrator
         string providerType,
         CancellationToken cancellationToken = default);
 
+    // ========== Token & Session Methods ==========
+
     /// <summary>
     /// Get current authenticated user from claims principal
     /// </summary>
@@ -43,7 +85,7 @@ public interface IAuthenticationOrchestrator
     /// <summary>
     /// Refresh an existing authentication token
     /// </summary>
-    Task<Result<AuthenticationResponse, Error>> RefreshTokenAsync(
+    Task<Result<RefreshTokenResponse, Error>> RefreshTokenAsync(
         string refreshToken,
         CancellationToken cancellationToken = default);
 

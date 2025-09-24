@@ -13,15 +13,8 @@ public sealed class AuthenticationOptions
     public string Audience { get; set; } = "axon-api";
     public string SigningKey { get; set; } = string.Empty;
 
-    // HMAC Key Versioning
-    public Dictionary<string, string> HmacKeys { get; set; } = new();
-    public string CurrentKeyVersion { get; set; } = "v1";
-
     // Dynamic Configuration
     public DynamicAuthOptions Dynamic { get; set; } = new();
-
-    // Challenge Settings
-    public string HmacSecret { get; set; } = string.Empty;
     public string DefaultAudience { get; set; } = "axon-challenge";
 
     // Timing Settings - SECURITY BEST PRACTICES
@@ -43,8 +36,6 @@ public sealed class AuthenticationOptions
         if (string.IsNullOrWhiteSpace(SigningKey))
             throw new InvalidOperationException($"{SectionName}:SigningKey is required");
 
-        if (string.IsNullOrWhiteSpace(HmacSecret))
-            throw new InvalidOperationException($"{SectionName}:HmacSecret is required");
 
         if (ClockSkewSeconds < 0 || ClockSkewSeconds > 300)
             throw new InvalidOperationException($"{SectionName}:ClockSkewSeconds must be between 0 and 300");
@@ -61,11 +52,6 @@ public sealed class AuthenticationOptions
         if (RefreshTokenExpirySeconds <= 0 || RefreshTokenExpirySeconds > 7776000) // Max 90 days
             throw new InvalidOperationException($"{SectionName}:RefreshTokenExpirySeconds must be between 1 and 7776000 seconds (90 days)");
 
-        if (HmacKeys.Count == 0)
-            throw new InvalidOperationException($"{SectionName}:HmacKeys must contain at least one key");
-
-        if (!HmacKeys.ContainsKey(CurrentKeyVersion))
-            throw new InvalidOperationException($"{SectionName}:CurrentKeyVersion '{CurrentKeyVersion}' must exist in HmacKeys");
     }
 }
 

@@ -165,7 +165,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
                     expiresAt = DateTimeOffset.FromUnixTimeSeconds(expUnix);
                 }
 
-                // Implement replay protection using same pattern as AuthenticationService
+                // Implement replay protection for JWT tokens
                 var replayCheckResult = CheckAndMarkJwtUsed(jtiClaim.Value, expiresAt);
                 if (replayCheckResult.IsFailure)
                 {
@@ -458,7 +458,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
 
     /// <summary>
     /// Checks if a JWT token has already been used and marks it as used to prevent replay attacks.
-    /// Uses the same pattern as AuthenticationService to ensure consistency.
+    /// Implements JWT-specific replay protection to prevent token reuse.
     /// </summary>
     /// <param name="jti">The JWT ID (jti claim) to check</param>
     /// <param name="expiresAt">When the token expires</param>

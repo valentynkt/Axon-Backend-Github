@@ -2,7 +2,9 @@ using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Configuration;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Application.Providers;
 using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Infrastructure.ExternalServices;
 using Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration;
@@ -19,6 +21,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.DataProtection;
 using Polly;
 
 namespace Axon.Modules.Identity.Infrastructure.DependencyInjection;
@@ -164,33 +167,37 @@ public static class ServiceRegistration
         // Register memory cache required for unified authentication service
         services.AddMemoryCache();
 
+        // Configure Data Protection API for secure challenge tokens
+        services.AddDataProtection()
+            .SetApplicationName("Axon")
+            .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+
         // Configure unified authentication options
         services.Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName));
 
-        // Register focused authentication services
-        // NOTE: JwtTokenService uses AxonUserAuth with Microsoft Identity Framework
+        // Register authentication services (Story 7.1 - Clean Orchestrator Architecture)
+        // NO FEATURE FLAGS - Clean implementation only
         services.AddScoped<IJwtTokenService, JwtTokenService>();
-        services.AddScoped<IBearerTokenExtractor, BearerTokenExtractor>();
+        services.AddScoped<IChallengeService, ChallengeService>();
+        services.AddScoped<ChallengeTokenProvider>();
 
-        // Register unified authentication service (orchestrates the focused services)
-        // Authentication service - JWT validation handled by middleware
-        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        // Register Authentication Orchestrator - Single entry point for all auth flows
+        services.AddScoped<IAuthenticationOrchestrator, AuthenticationOrchestrator>();
 
-        // Add Authentication Orchestrator with feature flag (Story 7 - Service Consolidation)
-        // This will replace AuthenticationService and DynamicAuthService when enabled
-        services.AddAuthenticationOrchestratorWithFeatureFlag(configuration);
+        // Register Authentication Providers
+        services.AddScoped<Application.Contracts.Providers.IAuthenticationProvider, Application.Providers.WalletAuthenticationProvider>();
+        services.AddScoped<Application.Contracts.Providers.IAuthenticationProvider, Application.Providers.DynamicAuthenticationProvider>();
 
-        // Add Microsoft Identity Framework with AxonUserAuth (Story 5 - Identity Integration)
-        services.AddAxonIdentityWithFeatureFlag(configuration);
+        // Add Microsoft Identity Framework with AxonUserAuth
+        services.AddAxonIdentity();
 
         // Register AxonUserStore directly for injection
         services.AddScoped<Persistence.Stores.AxonUserStore>();
 
-        // Register modern claims transformation for Dynamic.xyz integration
-        services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, DynamicClaimsTransformation>();
+        // Note: DynamicClaimsTransformation was removed - JWT validation handled by DynamicAuthService
 
         // Configure Azure Key Vault options for JWT signing (Story 5.5)
-        // Note: AuthenticationService now handles all JWT operations
+        // Note: IJwtTokenService handles all JWT operations
         var keyVaultSection = configuration.GetSection(AzureKeyVaultOptions.SectionName);
         if (keyVaultSection.Exists() && !string.IsNullOrEmpty(keyVaultSection["VaultUri"]))
         {
@@ -198,7 +205,7 @@ public static class ServiceRegistration
             services.Configure<AzureKeyVaultOptions>(keyVaultSection);
         }
 
-        // Note: Replay protection is now handled directly in AuthenticationService
+        // Note: Replay protection is handled by ChallengeService
         // Removed legacy services: IReplayProtectionService, IApiKeyAudienceService, ICanonicalMessageService
 
         // Register Address Normalization Service for API edge validation

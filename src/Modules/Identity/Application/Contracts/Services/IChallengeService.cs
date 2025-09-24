@@ -1,3 +1,4 @@
+using Axon.Modules.Identity.Application.Common;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 
@@ -9,16 +10,36 @@ namespace Axon.Modules.Identity.Application.Contracts.Services;
 public interface IChallengeService
 {
     /// <summary>
-    /// Generates an authentication challenge for the given address
+    /// Generates an authentication challenge for wallet signing
     /// </summary>
     Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
-        string address,
+        string chainId,
+        string walletAddress,
+        string audience,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Checks if a token has been used for replay protection
+    /// Validates the HMAC signature of a message
     /// </summary>
-    Task<Result<Unit, Error>> CheckAndMarkTokenUsedAsync(
-        string jti,
+    Result<bool, Error> ValidateMac(
+        string message,
+        string mac,
+        string keyVersion);
+
+    /// <summary>
+    /// Validates a challenge message structure and TTL
+    /// </summary>
+    Result<bool, Error> ValidateChallenge(
+        string message,
+        string expectedChainId,
+        string expectedAddress,
+        string expectedAudience);
+
+    /// <summary>
+    /// Checks and marks a nonce as used for replay protection
+    /// </summary>
+    Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
+        string signedMessage,
+        string mkv,
         CancellationToken cancellationToken = default);
 }

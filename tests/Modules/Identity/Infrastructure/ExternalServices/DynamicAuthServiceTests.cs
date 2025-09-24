@@ -26,7 +26,7 @@ public class DynamicAuthServiceTests
     private IOptions<DynamicXyzOptions> _dynamicOptions;
     private IOptions<DynamicValidationOptions> _validationOptions;
     private IDynamicClaimNormalizer _claimNormalizer;
-    private IAuthenticationService _authenticationService;
+    private IAuthenticationOrchestrator _authenticationOrchestrator;
     private IJwksService _jwksService;
     private DynamicAuthService _service;
 
@@ -66,7 +66,7 @@ public class DynamicAuthServiceTests
         });
 
         _claimNormalizer = Substitute.For<IDynamicClaimNormalizer>();
-        _authenticationService = Substitute.For<IAuthenticationService>();
+        _authenticationOrchestrator = Substitute.For<IAuthenticationOrchestrator>();
         _jwksService = Substitute.For<IJwksService>();
 
         _service = new DynamicAuthService(

@@ -1,5 +1,8 @@
+using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using CSharpFunctionalExtensions;
+using Microsoft.AspNetCore.Http;
 
 namespace Axon.Modules.Identity.Application.Contracts.Services;
 
@@ -42,4 +45,11 @@ public interface IJwtTokenService
     Task<Result<RefreshTokenResponse, Error>> RefreshAccessTokenAsync(
         string refreshToken,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Extracts bearer token from Authorization header
+    /// </summary>
+    /// <param name="httpContext">HTTP context containing the request</param>
+    /// <returns>Result containing the bearer token or error if invalid/missing</returns>
+    Result<string, Error> ExtractBearerToken(HttpContext httpContext);
 }

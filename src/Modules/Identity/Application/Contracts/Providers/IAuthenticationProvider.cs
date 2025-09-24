@@ -41,10 +41,10 @@ public abstract record AuthenticationRequest
 public sealed record WalletAuthenticationRequest(
     string ChainId,
     string Address,
-    byte[] Message,
-    byte[] Signature,
+    string SignedMessage,
+    string Signature,
     string Mac,
-    int KeyVersion) : AuthenticationRequest
+    string Mkv) : AuthenticationRequest
 {
     public override string RequestType => "wallet";
 }

@@ -26,24 +26,20 @@ public sealed class ExchangeEndpoint
         ExchangeOutcome>
 {
     private const string JwtIssuerMetadataKey = "jwt_issuer";
-    private readonly Axon.Modules.Identity.Application.Contracts.Services.IAuthenticationService _authenticationService;
+    private readonly IJwtTokenService _jwtTokenService;
     private readonly IDynamicAuthService _dynamicAuthService;
     private readonly IAddressNormalizationService _addressNormalizationService;
-    private readonly IBearerTokenExtractor _bearerTokenExtractor;
-
     public ExchangeEndpoint(
         IMediator mediator,
         ILogger<ExchangeEndpoint> logger,
-        Axon.Modules.Identity.Application.Contracts.Services.IAuthenticationService authenticationService,
+        IJwtTokenService jwtTokenService,
         IDynamicAuthService dynamicAuthService,
-        IAddressNormalizationService addressNormalizationService,
-        IBearerTokenExtractor bearerTokenExtractor)
+        IAddressNormalizationService addressNormalizationService)
         : base(mediator, logger)
     {
-        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
+        _jwtTokenService = jwtTokenService ?? throw new ArgumentNullException(nameof(jwtTokenService));
         _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
         _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
-        _bearerTokenExtractor = bearerTokenExtractor ?? throw new ArgumentNullException(nameof(bearerTokenExtractor));
     }
 
     protected override string GetRoute() => "/api/v1/auth/exchange";
@@ -115,7 +111,7 @@ public sealed class ExchangeEndpoint
         var issuer = principal.FindFirst("iss")?.Value ?? "https://app.dynamic.xyz";
 
         // Extract bearer token for Dynamic service call
-        var tokenResult = _bearerTokenExtractor.ExtractBearerToken(HttpContext);
+        var tokenResult = _jwtTokenService.ExtractBearerToken(HttpContext);
         if (tokenResult.IsFailure)
         {
             return Result.Failure<ExchangeCredentialCommand, Error>(tokenResult.Error);
@@ -216,8 +212,8 @@ public sealed class ExchangeEndpoint
             return Result.Failure<AuthTokenResponseDto, Error>(providerTypeResult.Error);
         }
 
-        // Generate Axon JWT access token using unified service (uses configuration default expiration)
-        var accessTokenResult = await _authenticationService.GenerateAccessTokenAsync(
+        // Generate Axon JWT access token using JWT token service (uses configuration default expiration)
+        var accessTokenResult = await _jwtTokenService.GenerateAccessTokenAsync(
             outcome.AxonUserId,
             providerTypeResult.Value,
             issuer,

@@ -9,16 +9,16 @@ namespace Axon.Modules.Identity.Application.Commands.GenerateChallenge;
 
 public sealed class GenerateChallengeHandler : IRequestHandler<GenerateChallengeCommand, Result<GenerateChallengeResult, Error>>
 {
-    private readonly IAuthenticationService _authenticationService;
+    private readonly IAuthenticationOrchestrator _orchestrator;
     private readonly IAddressNormalizationService _addressNormalizationService;
     private readonly ILogger<GenerateChallengeHandler> _logger;
 
     public GenerateChallengeHandler(
-        IAuthenticationService authenticationService,
+        IAuthenticationOrchestrator orchestrator,
         IAddressNormalizationService addressNormalizationService,
         ILogger<GenerateChallengeHandler> logger)
     {
-        _authenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
+        _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         _addressNormalizationService = addressNormalizationService ?? throw new ArgumentNullException(nameof(addressNormalizationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -43,8 +43,8 @@ public sealed class GenerateChallengeHandler : IRequestHandler<GenerateChallenge
 
         var normalizedAddress = normalizedAddressResult.Value.Value;
 
-        // Generate challenge via unified authentication service
-        var challengeResult = await _authenticationService.GenerateChallengeAsync(
+        // Generate challenge via orchestrator
+        var challengeResult = await _orchestrator.GenerateChallengeAsync(
             request.ChainId,
             normalizedAddress,
             request.Audience ?? string.Empty,

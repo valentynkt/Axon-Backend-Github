@@ -1,7 +1,7 @@
 namespace Axon.Modules.Identity.Infrastructure.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
+using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Domain.Entities;
 using Domain.ValueObjects;
@@ -12,6 +12,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Http;
 
 /// <summary>
 /// JWT Token Service implementation using Microsoft Identity Framework
@@ -337,6 +338,39 @@ public sealed class JwtTokenService : IJwtTokenService
         }
     }
 
+    /// <summary>
+    /// Extracts bearer token from Authorization header
+    /// </summary>
+    /// <param name="httpContext">HTTP context containing the request</param>
+    /// <returns>Result containing the bearer token or error if invalid/missing</returns>
+    public Result<string, Error> ExtractBearerToken(HttpContext httpContext)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        // Extract authorization header
+        var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(authHeader) ||
+            !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Request missing Authorization header or Bearer token for path {Path}",
+                httpContext.Request.Path);
+            return Result.Failure<string, Error>(
+                Error.Unauthorized("Authorization header with Bearer token is required"));
+        }
+
+        // Extract token value
+        var bearerToken = authHeader["Bearer ".Length..].Trim();
+        if (string.IsNullOrWhiteSpace(bearerToken))
+        {
+            _logger.LogWarning("Request has empty Bearer token for path {Path}",
+                httpContext.Request.Path);
+            return Result.Failure<string, Error>(
+                Error.Unauthorized("Bearer token cannot be empty"));
+        }
+
+        return Result.Success<string, Error>(bearerToken);
+    }
+
     private async Task<AxonUserAuth?> FindOrCreateUserAsync(
         AxonUserId userId,
         ProviderType providerType,
@@ -422,19 +456,16 @@ public sealed class JwtTokenService : IJwtTokenService
             throw new InvalidOperationException("Axon:SigningKey not configured");
         }
 
-        // Check if the key is Base64 encoded
-        byte[] keyBytes;
+        // Always expect Base64 encoded key for consistency with middleware
         try
         {
-            keyBytes = Convert.FromBase64String(keyString);
+            var keyBytes = Convert.FromBase64String(keyString);
+            return new SymmetricSecurityKey(keyBytes);
         }
-        catch
+        catch (FormatException ex)
         {
-            // If not Base64, use UTF8 encoding
-            keyBytes = Encoding.UTF8.GetBytes(keyString);
+            throw new InvalidOperationException("Axon:SigningKey must be a valid Base64 encoded string", ex);
         }
-
-        return new SymmetricSecurityKey(keyBytes);
     }
 
     private string? GetJti(string token)

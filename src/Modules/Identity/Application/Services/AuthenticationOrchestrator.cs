@@ -1,6 +1,8 @@
 namespace Axon.Modules.Identity.Application.Services;
 
 using System.Security.Claims;
+using Axon.Modules.Identity.Application.Common;
+using Axon.Modules.Identity.Application.Configuration;
 using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Domain.Entities;
@@ -9,6 +11,7 @@ using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 /// <summary>
 /// Single orchestrator for all authentication flows.
@@ -22,19 +25,75 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     private readonly UserManager<AxonUserAuth> _userManager;
     private readonly IMemoryCache _cache;
     private readonly ILogger<AuthenticationOrchestrator> _logger;
+    private readonly IChallengeService _challengeService;
+    private readonly IOptions<AuthenticationOptions> _authOptions;
 
     public AuthenticationOrchestrator(
         IEnumerable<IAuthenticationProvider> providers,
         IJwtTokenService tokenService,
         UserManager<AxonUserAuth> userManager,
         IMemoryCache cache,
-        ILogger<AuthenticationOrchestrator> logger)
+        ILogger<AuthenticationOrchestrator> logger,
+        IChallengeService challengeService,
+        IOptions<AuthenticationOptions> authOptions)
     {
         _providers = providers ?? throw new ArgumentNullException(nameof(providers));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _challengeService = challengeService ?? throw new ArgumentNullException(nameof(challengeService));
+        _authOptions = authOptions ?? throw new ArgumentNullException(nameof(authOptions));
+    }
+
+    /// <summary>
+    /// Generates an authentication challenge for wallet signing - delegates to ChallengeService
+    /// </summary>
+    public async Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
+        string chainId,
+        string walletAddress,
+        string audience,
+        CancellationToken cancellationToken = default)
+    {
+        // Delegate directly to ChallengeService
+        return await _challengeService.GenerateChallengeAsync(chainId, walletAddress, audience, cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates the protected token (replaces HMAC) - delegates to ChallengeService
+    /// </summary>
+    public Result<bool, Error> ValidateMac(
+        string message,
+        string protectedToken,
+        string keyVersion)
+    {
+        // Delegate directly to ChallengeService (now using Data Protection API)
+        return _challengeService.ValidateMac(message, protectedToken, keyVersion);
+    }
+
+    /// <summary>
+    /// Validates a challenge message structure and TTL - delegates to ChallengeService
+    /// </summary>
+    public Result<bool, Error> ValidateChallenge(
+        string message,
+        string expectedChainId,
+        string expectedAddress,
+        string expectedAudience)
+    {
+        // Delegate directly to ChallengeService
+        return _challengeService.ValidateChallenge(message, expectedChainId, expectedAddress, expectedAudience);
+    }
+
+    /// <summary>
+    /// Checks and marks a nonce as used for replay protection - delegates to ChallengeService
+    /// </summary>
+    public async Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
+        string signedMessage,
+        string mkv,
+        CancellationToken cancellationToken = default)
+    {
+        // Delegate directly to ChallengeService
+        return await _challengeService.CheckAndMarkNonceUsedAsync(signedMessage, mkv, cancellationToken);
     }
 
     /// <summary>
@@ -44,6 +103,8 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
         WalletAuthenticationRequest request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         try
@@ -294,7 +355,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     /// <summary>
     /// Refresh an existing authentication token
     /// </summary>
-    public async Task<Result<AuthenticationResponse, Error>> RefreshTokenAsync(
+    public async Task<Result<RefreshTokenResponse, Error>> RefreshTokenAsync(
         string refreshToken,
         CancellationToken cancellationToken = default)
     {
@@ -306,7 +367,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             if (jsonToken == null)
             {
-                return Result.Failure<AuthenticationResponse, Error>(
+                return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Invalid refresh token"));
             }
 
@@ -314,7 +375,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var jti = jsonToken.Claims.FirstOrDefault(c => c.Type == "jti")?.Value;
             if (string.IsNullOrEmpty(jti))
             {
-                return Result.Failure<AuthenticationResponse, Error>(
+                return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Invalid refresh token"));
             }
 
@@ -322,7 +383,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var cacheKey = $"refresh:used:{jti}";
             if (_cache.TryGetValue(cacheKey, out _))
             {
-                return Result.Failure<AuthenticationResponse, Error>(
+                return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Refresh token already used"));
             }
 
@@ -330,7 +391,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var userIdClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "axon_user_id")?.Value;
             if (!Guid.TryParse(userIdClaim, out var userId))
             {
-                return Result.Failure<AuthenticationResponse, Error>(
+                return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Invalid refresh token"));
             }
 
@@ -338,7 +399,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
-                return Result.Failure<AuthenticationResponse, Error>(
+                return Result.Failure<RefreshTokenResponse, Error>(
                     Error.NotFound("User not found"));
             }
 
@@ -353,28 +414,46 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             if (tokenResult.IsFailure)
             {
-                return Result.Failure<AuthenticationResponse, Error>(tokenResult.Error);
+                return Result.Failure<RefreshTokenResponse, Error>(tokenResult.Error);
             }
 
             var newAccessToken = tokenResult.Value.AccessToken;
 
-            // Mark refresh token as used (prevent replay)
+            // Generate new refresh token
+            var newRefreshTokenResult = await _tokenService.GenerateRefreshTokenAsync(
+                user.AxonPrincipalId,
+                ProviderType.From(user.ProviderType),
+                user.OriginalSubject,
+                user.OriginalIssuer,
+                cancellationToken);
+
+            if (newRefreshTokenResult.IsFailure)
+            {
+                return Result.Failure<RefreshTokenResponse, Error>(newRefreshTokenResult.Error);
+            }
+
+            var newRefreshToken = newRefreshTokenResult.Value.RefreshToken;
+
+            // Mark old refresh token as used (prevent replay)
             _cache.Set(cacheKey, true, TimeSpan.FromDays(30));
 
-            var response = new AuthenticationResponse(
+            var response = new RefreshTokenResponse(
                 AccessToken: newAccessToken,
-                UserId: user.Id,
-                ProviderType: user.ProviderType,
-                ExpiresAt: DateTime.UtcNow.AddMinutes(30));
+                RefreshToken: newRefreshToken,
+                TokenType: "Bearer",
+                ExpiresIn: 1800, // 30 minutes in seconds
+                IssuedAt: DateTimeOffset.UtcNow,
+                AccessTokenExpiresAt: DateTimeOffset.UtcNow.AddMinutes(30),
+                RefreshTokenExpiresAt: DateTimeOffset.UtcNow.AddDays(30));
 
             _logger.LogInformation("Token refreshed successfully for user {UserId}", userId);
 
-            return Result.Success<AuthenticationResponse, Error>(response);
+            return Result.Success<RefreshTokenResponse, Error>(response);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to refresh token");
-            return Result.Failure<AuthenticationResponse, Error>(
+            return Result.Failure<RefreshTokenResponse, Error>(
                 Error.Internal("Failed to refresh token"));
         }
     }
@@ -424,4 +503,5 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             ? $"{address[..4]}...{address[^4..]}"
             : address;
     }
+
 }

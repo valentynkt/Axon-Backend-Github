@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -12,20 +13,20 @@ namespace Axon.Modules.Identity.Application.Commands.VerifyWalletSignature;
 public sealed class VerifyWalletSignatureHandler
     : IRequestHandler<VerifyWalletSignatureCommand, Result<VerifyWalletSignatureResult, Error>>
 {
-    private readonly IAuthenticationService _authService;
+    private readonly IAuthenticationOrchestrator _orchestrator;
     private readonly IWalletSignatureVerifier _signatureVerifier;
     private readonly IPrincipalResolutionService _principalResolver;
     private readonly IAddressNormalizationService _addressNormalizer;
     private readonly ILogger<VerifyWalletSignatureHandler> _logger;
 
     public VerifyWalletSignatureHandler(
-        IAuthenticationService authService,
+        IAuthenticationOrchestrator orchestrator,
         IWalletSignatureVerifier signatureVerifier,
         IPrincipalResolutionService principalResolver,
         IAddressNormalizationService addressNormalizer,
         ILogger<VerifyWalletSignatureHandler> logger)
     {
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         _signatureVerifier = signatureVerifier ?? throw new ArgumentNullException(nameof(signatureVerifier));
         _principalResolver = principalResolver ?? throw new ArgumentNullException(nameof(principalResolver));
         _addressNormalizer = addressNormalizer ?? throw new ArgumentNullException(nameof(addressNormalizer));
@@ -39,7 +40,7 @@ public sealed class VerifyWalletSignatureHandler
         ArgumentNullException.ThrowIfNull(command);
 
         // Step 1: Validate MAC
-        var macResult = _authService.ValidateMac(
+        var macResult = _orchestrator.ValidateMac(
             command.SignedMessage, command.Mac, command.Mkv);
 
         if (macResult.IsFailure)
@@ -53,7 +54,7 @@ public sealed class VerifyWalletSignatureHandler
         var audience = doc.RootElement.GetProperty("aud").GetString() ?? string.Empty;
 
         // Step 3: Validate TTL and canonical message shape
-        var validationResult = _authService.ValidateChallenge(
+        var validationResult = _orchestrator.ValidateChallenge(
             command.SignedMessage,
             command.ChainId,
             command.Address,
@@ -65,7 +66,7 @@ public sealed class VerifyWalletSignatureHandler
         }
 
         // Step 4: Check replay protection
-        var replayResult = await _authService.CheckAndMarkNonceUsedAsync(
+        var replayResult = await _orchestrator.CheckAndMarkNonceUsedAsync(
             command.SignedMessage, command.Mkv, ct);
 
         if (replayResult.IsFailure)
@@ -98,47 +99,31 @@ public sealed class VerifyWalletSignatureHandler
 
         var normalizedAddress = normalizedAddressResult.Value.Value;
 
-        // Step 7: Resolve principal
-        var chainId = ChainId.Create(command.ChainId).Value;
-        var address = Address.Create(normalizedAddress).Value;
+        // Step 7: Use orchestrator to complete authentication
+        var authRequest = new WalletAuthenticationRequest(
+            ChainId: command.ChainId,
+            Address: normalizedAddress,
+            SignedMessage: command.SignedMessage,
+            Signature: command.Signature,
+            Mac: command.Mac,
+            Mkv: command.Mkv);
 
-        var principalResult = await _principalResolver.ResolveAsync(
-            ProviderType.Siws,  // Use Siws for signature-based sign-in
-            $"siws:{baseChain}",
-            normalizedAddress,
-            chainId,
-            address,
-            ct);
+        var authResult = await _orchestrator.AuthenticateWithWalletAsync(authRequest, ct);
 
-        if (principalResult.IsFailure)
+        if (authResult.IsFailure)
         {
-            return Result.Failure<VerifyWalletSignatureResult, Error>(principalResult.Error);
+            return Result.Failure<VerifyWalletSignatureResult, Error>(authResult.Error);
         }
 
-        var principal = principalResult.Value.Principal;
-        var wasCreated = principalResult.Value.Path == ResolutionPath.Created;
-
-        // Step 8: Generate Axon JWT (uses configuration default expiration)
-        var tokenResult = await _authService.GenerateAccessTokenAsync(
-            new AxonUserId(principal.Id.Value),
-            ProviderType.Siws,
-            $"siws:{command.ChainId}",
-            normalizedAddress,
-            -1, // Use configuration default
-            ct);
-
-        if (tokenResult.IsFailure)
-        {
-            return Result.Failure<VerifyWalletSignatureResult, Error>(tokenResult.Error);
-        }
+        var response = authResult.Value;
 
         return Result.Success<VerifyWalletSignatureResult, Error>(
             new VerifyWalletSignatureResult(
-                AccessToken: tokenResult.Value.AccessToken,
+                AccessToken: response.AccessToken,
                 TokenType: "Bearer",
-                ExpiresIn: tokenResult.Value.ExpiresIn,
-                AxonUserId: principal.Id.Value.ToString(),
-                Created: wasCreated,
+                ExpiresIn: (int)(response.ExpiresAt - DateTime.UtcNow).TotalSeconds,
+                AxonUserId: response.UserId.ToString(),
+                Created: response.AdditionalData?.ContainsKey("created") == true && (bool)response.AdditionalData["created"],
                 WalletsLinked: 1,
                 Conflicts: 0));
     }

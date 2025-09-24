@@ -34,11 +34,11 @@ public sealed class IdentityApiModule : IApiModule
         services.AddIdentityApplication();
         services.AddIdentityInfrastructure(configuration);
 
-        // Add replay protection services
-        AddReplayProtection(services, configuration);
-
         // Register JWT Bearer authentication using Dynamic.xyz
         AddJwtAuthentication(services, configuration);
+
+        // Register JWT event handlers (includes replay protection via orchestrator)
+        services.AddScoped<JwtEventHandlers>();
 
         // Register rate limiting for auth endpoints
         AddRateLimiting(services);
@@ -187,24 +187,6 @@ public sealed class IdentityApiModule : IApiModule
             {
                 policy.RequireAuthenticatedUser();
             });
-    }
-
-    private static void AddReplayProtection(IServiceCollection services, IConfiguration configuration)
-    {
-        // Check if Redis is configured for distributed caching
-        var redisConnection = configuration.GetConnectionString("Redis");
-        if (!string.IsNullOrEmpty(redisConnection))
-        {
-            services.AddReplayProtectionWithRedis(redisConnection);
-        }
-        else
-        {
-            // Fallback to memory cache only
-            services.AddReplayProtection();
-        }
-
-        // Register JWT event handlers
-        services.AddScoped<JwtEventHandlers>();
     }
 
     private static void AddRateLimiting(IServiceCollection services)

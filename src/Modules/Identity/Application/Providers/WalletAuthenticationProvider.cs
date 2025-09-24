@@ -1,6 +1,5 @@
 namespace Axon.Modules.Identity.Application.Providers;
 
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Axon.Modules.Identity.Application.Common;
@@ -13,7 +12,6 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -27,8 +25,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
     private readonly IWalletOwnershipRepository _walletOwnershipRepo;
     private readonly IWalletWriteRepository _walletRepo;
     private readonly UserManager<AxonUserAuth> _userManager;
-    private readonly IMemoryCache _cache;
-    private readonly byte[] _hmacKey;
+    private readonly IChallengeService _challengeService;
     private readonly ILogger<WalletAuthenticationProvider> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -43,22 +40,16 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
         IWalletOwnershipRepository walletOwnershipRepo,
         IWalletWriteRepository walletRepo,
         UserManager<AxonUserAuth> userManager,
-        IMemoryCache cache,
-        ILogger<WalletAuthenticationProvider> logger,
-        string hmacSecret)
+        IChallengeService challengeService,
+        ILogger<WalletAuthenticationProvider> logger)
     {
         _signatureVerifier = signatureVerifier ?? throw new ArgumentNullException(nameof(signatureVerifier));
         _principalRepo = principalRepo ?? throw new ArgumentNullException(nameof(principalRepo));
         _walletOwnershipRepo = walletOwnershipRepo ?? throw new ArgumentNullException(nameof(walletOwnershipRepo));
         _walletRepo = walletRepo ?? throw new ArgumentNullException(nameof(walletRepo));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _challengeService = challengeService ?? throw new ArgumentNullException(nameof(challengeService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        // Parse HMAC key (support base64 or plain text)
-        _hmacKey = TryBase64(hmacSecret, out var raw)
-            ? raw
-            : Encoding.UTF8.GetBytes(hmacSecret);
     }
 
     public string ProviderType => "wallet";
@@ -84,10 +75,11 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
                 walletRequest.ChainId, MaskAddress(walletRequest.Address));
 
             // Validate challenge MAC and timing
+            var messageBytes = Encoding.UTF8.GetBytes(walletRequest.SignedMessage);
             var challengeValidation = ValidateChallenge(
-                walletRequest.Message,
+                messageBytes,
                 walletRequest.Mac,
-                walletRequest.KeyVersion);
+                int.Parse(walletRequest.Mkv.Replace("v", "")));
 
             if (challengeValidation.IsFailure)
             {
@@ -96,8 +88,8 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             }
 
             // Verify wallet signature
-            var messageString = Encoding.UTF8.GetString(walletRequest.Message);
-            var signatureString = Convert.ToBase64String(walletRequest.Signature);
+            var messageString = walletRequest.SignedMessage;
+            var signatureString = walletRequest.Signature;
 
             var signatureResult = _signatureVerifier.VerifySignature(
                 walletRequest.ChainId,
@@ -168,43 +160,39 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
     {
         try
         {
-            // Parse challenge JSON
             var messageJson = Encoding.UTF8.GetString(message);
+
+            // Parse challenge to extract validation parameters
             using var doc = JsonDocument.Parse(messageJson);
             var root = doc.RootElement;
 
-            // Check expiration
-            if (root.TryGetProperty("exp", out var expElement) && expElement.TryGetInt64(out var exp))
+            var chainId = root.GetProperty("chain_id").GetString();
+            var address = root.GetProperty("wallet_address").GetString();
+            var audience = root.TryGetProperty("aud", out var audElement) ? audElement.GetString() : "axon-challenge";
+
+            if (string.IsNullOrEmpty(chainId) || string.IsNullOrEmpty(address))
             {
-                var expTime = DateTimeOffset.FromUnixTimeSeconds(exp);
-                if (DateTimeOffset.UtcNow > expTime)
-                {
-                    return Result.Failure<bool, Error>(Error.Validation("Challenge has expired"));
-                }
+                return Result.Failure<bool, Error>(Error.Validation("Invalid challenge format"));
             }
 
-            // Verify HMAC
-            using var hmac = new HMACSHA256(_hmacKey);
-            var computedMac = Convert.ToBase64String(hmac.ComputeHash(message));
-
-            if (computedMac != mac)
+            // Delegate to ChallengeService for validation
+            var macValidation = _challengeService.ValidateMac(messageJson, mac, $"v{keyVersion}");
+            if (macValidation.IsFailure || !macValidation.Value)
             {
                 return Result.Failure<bool, Error>(Error.Validation("Invalid challenge MAC"));
             }
 
-            // Check if nonce was already used (replay protection)
-            if (root.TryGetProperty("nonce", out var nonceElement))
+            var challengeValidation = _challengeService.ValidateChallenge(messageJson, chainId ?? "", address ?? "", audience ?? "axon-challenge");
+            if (challengeValidation.IsFailure || !challengeValidation.Value)
             {
-                var nonce = nonceElement.GetString();
-                var nonceKey = $"challenge:nonce:{nonce}";
+                return Result.Failure<bool, Error>(Error.Validation("Invalid challenge"));
+            }
 
-                if (_cache.TryGetValue(nonceKey, out _))
-                {
-                    return Result.Failure<bool, Error>(Error.Validation("Challenge already used"));
-                }
-
-                // Cache nonce for 5 minutes to prevent replay
-                _cache.Set(nonceKey, true, TimeSpan.FromMinutes(5));
+            // Check and mark nonce as used
+            var nonceResult = _challengeService.CheckAndMarkNonceUsedAsync(messageJson, $"v{keyVersion}").Result;
+            if (nonceResult.IsFailure)
+            {
+                return Result.Failure<bool, Error>(nonceResult.Error);
             }
 
             return Result.Success<bool, Error>(true);
@@ -352,17 +340,4 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             : address;
     }
 
-    private static bool TryBase64(string input, out byte[] bytes)
-    {
-        bytes = Array.Empty<byte>();
-        try
-        {
-            bytes = Convert.FromBase64String(input);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }

@@ -5,6 +5,7 @@ using Axon.Modules.Identity.Infrastructure.Persistence.Configurations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
 
 /// <summary>
 /// Identity-specific DbContext that extends IdentityDbContext for Microsoft Identity Framework integration.

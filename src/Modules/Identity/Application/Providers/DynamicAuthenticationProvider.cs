@@ -77,7 +77,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             var dynamicUserData = validationResult.Value;
 
             // Ensure we have at least one wallet
-            if (!dynamicUserData.Wallets.Any())
+            if (dynamicUserData.Wallets.Count == 0)
             {
                 return Result.Failure<AuthenticationData, Error>(
                     Error.Validation("No verified wallets found in Dynamic token"));
