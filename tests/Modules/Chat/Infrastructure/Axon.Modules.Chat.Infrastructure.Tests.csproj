@@ -49,8 +49,7 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.1.0" />
 
     <!-- Entity Framework for Integration Tests -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.8" />
+    <!-- Removed InMemory and SQLite - using PostgreSQL with Testcontainers -->
 
     <!-- Testcontainers for Integration Tests -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.7.0" />

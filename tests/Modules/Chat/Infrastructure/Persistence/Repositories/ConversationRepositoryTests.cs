@@ -122,7 +122,8 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var freshConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
         freshConversation.ShouldNotBeNull();
 
-        // Act
+        // Act - advance time to ensure UpdatedAt will be greater
+        AdvanceTime(TimeSpan.FromMinutes(1));
         var updateResult = freshConversation.UpdateTitle(newTitle, TimeProvider);
         updateResult.IsSuccess.ShouldBeTrue();
 
@@ -315,7 +316,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         // Arrange
         var conversation = await SaveConversationAsync(CreateTestConversation());
 
-        // Get two instances of the same conversation
+        // Load the same conversation twice to simulate two concurrent clients
         ClearChangeTracker();
         var conversation1 = await ConversationRepository.GetByIdAsync(conversation.Id);
         var conversation2 = await ConversationRepository.GetByIdAsync(conversation.Id);
@@ -323,14 +324,16 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         conversation1.ShouldNotBeNull();
         conversation2.ShouldNotBeNull();
 
-        // Act & Assert
-        // First update should succeed
+        // Both should have the same Version initially
+        conversation1.Version.ShouldBe(conversation2.Version);
+
+        // First client updates and saves successfully
         var updateResult1 = conversation1.UpdateTitle("First Update", TimeProvider);
         updateResult1.IsSuccess.ShouldBeTrue();
         await ConversationRepository.UpdateAsync(conversation1);
         await UnitOfWork.SaveChangesAsync();
 
-        // Second update might fail due to concurrency (depends on SQLite behavior)
+        // Second client tries to update with stale version - should fail
         var updateResult2 = conversation2.UpdateTitle("Second Update", TimeProvider);
         updateResult2.IsSuccess.ShouldBeTrue();
 

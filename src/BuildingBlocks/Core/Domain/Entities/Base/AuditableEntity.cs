@@ -25,5 +25,8 @@ public abstract class AuditableEntity<TId> : Entity<TId>, IAuditable
     /// <summary>Mark entity as updated (infra can also overwrite on save).</summary>
     protected void MarkUpdated() => UpdatedAt = TimeProvider.System.GetUtcNow();
 
+    /// <summary>Mark entity as updated with a specific TimeProvider.</summary>
+    protected void MarkUpdated(TimeProvider timeProvider) => UpdatedAt = timeProvider.GetUtcNow();
+
     protected void MarkCreated() => CreatedAt = TimeProvider.System.GetUtcNow();
 }

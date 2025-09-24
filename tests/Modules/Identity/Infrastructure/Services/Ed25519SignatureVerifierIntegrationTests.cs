@@ -2,10 +2,12 @@ using System.Text;
 using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Infrastructure.DependencyInjection;
+using Axon.Modules.Identity.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,24 +27,26 @@ namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
 /// - Real-world authentication flow integration
 /// </summary>
 [TestFixture]
-public class Ed25519SignatureVerifierIntegrationTests
+public class Ed25519SignatureVerifierIntegrationTests : IdentityPersistenceTestBase
 {
     private ServiceProvider _serviceProvider = null!;
-    private IdentityWriteDbContext _dbContext = null!;
     private IWalletSignatureVerifier _verifier = null!;
 
-    [SetUp]
-    public void SetUp()
+    protected override async Task SetUpDerived()
     {
         var services = new ServiceCollection();
 
         // Add logging
         services.AddLogging(builder => builder.AddConsole());
 
-        // Add database context with in-memory database
+        // Add database context with PostgreSQL
         services.AddDbContext<IdentityWriteDbContext>(options =>
         {
-            options.UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString());
+            options.UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+            });
             options.EnableSensitiveDataLogging();
         });
 
@@ -51,15 +55,15 @@ public class Ed25519SignatureVerifierIntegrationTests
         services.AddIdentityInfrastructure(configuration);
 
         _serviceProvider = services.BuildServiceProvider();
-        _dbContext = _serviceProvider.GetRequiredService<IdentityWriteDbContext>();
         _verifier = _serviceProvider.GetRequiredService<IWalletSignatureVerifier>();
+        await Task.CompletedTask;
     }
 
     [TearDown]
-    public void TearDown()
+    protected override async Task TearDownDerived()
     {
         _serviceProvider?.Dispose();
-        _dbContext?.Dispose();
+        await Task.CompletedTask;
     }
 
     #region Service Registration and DI Tests
@@ -120,20 +124,20 @@ public class Ed25519SignatureVerifierIntegrationTests
         var address = Base58.Bitcoin.Encode(publicKeyBytes);
 
         // Simulate some database work
-        await _dbContext.Database.ExecuteSqlRawAsync("SELECT 1");
+        await DbContext.Database.ExecuteSqlRawAsync("SELECT 1");
 
         // Act
         var result = _verifier.VerifySignature("solana", address, message, signature);
 
         // Additional database work after verification
-        await _dbContext.Database.ExecuteSqlRawAsync("SELECT 1");
+        await DbContext.Database.ExecuteSqlRawAsync("SELECT 1");
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
         result.Value.ShouldBeTrue();
 
         // Verify database is still functional
-        var dbWorks = await _dbContext.Database.CanConnectAsync();
+        var dbWorks = await DbContext.Database.CanConnectAsync();
         dbWorks.ShouldBeTrue();
     }
 
@@ -366,7 +370,7 @@ public class Ed25519SignatureVerifierIntegrationTests
 
         for (int cycle = 0; cycle < 10; cycle++)
         {
-            using var tempServiceProvider = CreateTemporaryServiceProvider();
+            using var tempServiceProvider = CreateTemporaryServiceProvider(ConnectionString);
             var tempVerifier = tempServiceProvider.GetRequiredService<IWalletSignatureVerifier>();
 
             // Perform some verifications
@@ -400,12 +404,18 @@ public class Ed25519SignatureVerifierIntegrationTests
             $"Memory increased by {memoryIncrease:N0} bytes, which may indicate a memory leak");
     }
 
-    private static ServiceProvider CreateTemporaryServiceProvider()
+    private static ServiceProvider CreateTemporaryServiceProvider(string connectionString)
     {
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddConsole());
         services.AddDbContext<IdentityWriteDbContext>(options =>
-            options.UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()));
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+            });
+        });
         var configuration = new ConfigurationBuilder().Build();
         services.AddIdentityInfrastructure(configuration);
         return services.BuildServiceProvider();

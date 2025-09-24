@@ -20,8 +20,6 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.8" />
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.7.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="NUnit" Version="4.3.1" />
     <PackageReference Include="NUnit.Analyzers" Version="4.3.0">
@@ -36,7 +34,6 @@
     <ProjectReference Include="../../../../src/Modules/Identity/Application/Axon.Modules.Identity.Application.csproj" />
     <ProjectReference Include="../../../../src/BuildingBlocks/BuildingBlocks.csproj" />
     <ProjectReference Include="../Domain/Axon.Modules.Identity.Domain.Tests.csproj" />
-    <ProjectReference Include="../Infrastructure/Axon.Modules.Identity.Infrastructure.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>

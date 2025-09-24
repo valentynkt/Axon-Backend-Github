@@ -63,7 +63,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(reloadedPrincipal2);
 
         // Assert: Should fail due to unique partial index constraint
-        AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
+        await AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
     }
 
     [Test]
@@ -261,7 +261,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(reloadedPrincipal2);
 
         // Assert: Should fail due to partial unique index
-        AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
+        await AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
     }
 
     [Test]

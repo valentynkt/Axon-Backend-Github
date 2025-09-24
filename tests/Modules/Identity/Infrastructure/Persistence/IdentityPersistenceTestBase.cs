@@ -8,6 +8,7 @@ using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Application.Common.Models;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using BuildingBlocks.Testing;
@@ -35,13 +36,20 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
     [SetUp]
     public async Task SetUpBase()
     {
-        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>().Options;
+        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+            })
+            .Options;
 
         DbContext = new IdentityWriteDbContext(options);
         UnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(DbContext);
         PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork);
         WalletRepository = new WalletWriteRepository(DbContext, UnitOfWork);
 
+        // Create schema using EF model configuration for tests
         await DbContext.Database.EnsureCreatedAsync();
 
         // Allow child classes to perform additional setup
@@ -84,6 +92,8 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
     /// </summary>
     protected override async Task CleanupDatabaseAsync(DbContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         try
         {
             await context.Database.ExecuteSqlRawAsync(@"
@@ -96,7 +106,7 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
         }
         catch
         {
-            // If truncate fails, try dropping and recreating
+            // If truncate fails, try dropping and recreating with EF model
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
         }
@@ -314,8 +324,66 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
     /// </summary>
     protected IdentityWriteDbContext CreateConcurrentDbContext()
     {
-        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>().Options;
+        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
+            })
+            .Options;
         return new IdentityWriteDbContext(options);
+    }
+
+    /// <summary>
+    /// Updates an entity with proper concurrency handling and retry logic.
+    /// Preserves the original Version for optimistic concurrency control.
+    /// </summary>
+    protected async Task<TAggregate> UpdateWithConcurrencyHandling<TAggregate, TId>(
+        TAggregate aggregate,
+        IWriteRepository<TAggregate, TId> repository,
+        IWriteUnitOfWork unitOfWork,
+        int maxRetries = 3)
+        where TAggregate : class, IAggregateRoot<TId>
+        where TId : notnull
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+        ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(unitOfWork);
+
+        var retryCount = 0;
+        while (retryCount < maxRetries)
+        {
+            try
+            {
+                // Preserve the entity's original version for concurrency control
+                var entry = DbContext.Entry(aggregate);
+                if (entry.State == EntityState.Modified || entry.State == EntityState.Added)
+                {
+                    // Ensure the original version is preserved for concurrency checks
+                    if (entry.Property("Version").OriginalValue == null)
+                    {
+                        entry.Property("Version").OriginalValue = entry.Property("Version").CurrentValue;
+                    }
+                }
+
+                await repository.UpdateAsync(aggregate);
+                await unitOfWork.SaveChangesAsync();
+                return aggregate;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (retryCount >= maxRetries - 1)
+                    throw; // Rethrow on final attempt
+
+                retryCount++;
+
+                // Refresh entity and retry
+                var entry = DbContext.Entry(aggregate);
+                await entry.ReloadAsync();
+            }
+        }
+
+        return aggregate;
     }
 
     #endregion

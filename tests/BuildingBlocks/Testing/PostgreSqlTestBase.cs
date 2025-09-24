@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using Testcontainers.PostgreSql;
-using EFCore.NamingConventions;
 
 namespace BuildingBlocks.Testing;
 
@@ -62,13 +61,17 @@ public abstract class PostgreSqlTestBase
     protected virtual Task OnOneTimeTearDownAsync() => Task.CompletedTask;
 
     /// <summary>
+    /// Gets the connection string for external use (e.g., TestWebApplicationFactory).
+    /// </summary>
+    public string GetConnectionString() => ConnectionString;
+
+    /// <summary>
     /// Creates DbContextOptions for PostgreSQL with standard configuration.
     /// </summary>
     protected DbContextOptionsBuilder<T> CreateDbContextOptionsBuilder<T>() where T : DbContext
     {
         return new DbContextOptionsBuilder<T>()
             .UseNpgsql(ConnectionString)
-            .UseSnakeCaseNamingConvention(NamingConvention.None) // Disable automatic snake_case to match production
             .EnableSensitiveDataLogging();
     }
 
@@ -78,6 +81,8 @@ public abstract class PostgreSqlTestBase
     /// </summary>
     protected virtual async Task CleanupDatabaseAsync(DbContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         // Default implementation - derived classes should override with specific cleanup
         try
         {

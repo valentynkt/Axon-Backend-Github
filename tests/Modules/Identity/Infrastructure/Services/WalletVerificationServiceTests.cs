@@ -4,43 +4,26 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
 
 [TestFixture]
-public class WalletVerificationServiceTests
+public class WalletVerificationServiceTests : IdentityPersistenceTestBase
 {
     private WalletVerificationService _service = null!;
-    private IdentityWriteDbContext _dbContext = null!;
 
-    [SetUp]
-    public void SetUp()
+    protected override async Task SetUpDerived()
     {
         var serviceLogger = Substitute.For<ILogger<WalletVerificationService>>();
-        var dbLogger = Substitute.For<ILogger<IdentityWriteDbContext>>();
-
-        // Use in-memory database for testing
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .EnableSensitiveDataLogging()
-            .Options;
-
-        _dbContext = new IdentityWriteDbContext(options, dbLogger);
-        _service = new WalletVerificationService(_dbContext, serviceLogger);
-    }
-
-    [TearDown]
-    public void TearDown()
-    {
-        _dbContext?.Dispose();
+        _service = new WalletVerificationService(DbContext, serviceLogger);
+        await Task.CompletedTask;
     }
 
     [Test]
@@ -52,11 +35,7 @@ public class WalletVerificationServiceTests
         var accessMode = AccessMode.Signing;
         var verificationSource = VerificationSource.DynamicAttested;
 
-        // Setup wallet not found
-        _dbContext.Wallets.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<Wallet>().AsQueryable());
-
-        // Act
+        // Act - No wallet setup, database is empty by default
         var result = await _service.VerifyWalletOwnershipAsync(
             walletId, principalId, accessMode, verificationSource, CancellationToken.None);
 
@@ -64,7 +43,6 @@ public class WalletVerificationServiceTests
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
         result.Error.Code.Should().Be("WALLET.NOT_FOUND");
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
@@ -80,13 +58,10 @@ public class WalletVerificationServiceTests
         var wallet = CreateTestWallet(walletId);
         var existingOwnership = CreateTestWalletOwnership(existingPrincipalId, walletId, AccessMode.Signing, OwnershipStatus.Verified);
 
-        // Setup wallet found
-        _dbContext.Wallets.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<Wallet> { wallet }.AsQueryable());
-
-        // Setup existing ownership found
-        _dbContext.WalletOwnerships.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<WalletOwnership> { existingOwnership }.AsQueryable());
+        // Setup wallet and existing ownership in database
+        await DbContext.Wallets.AddAsync(wallet);
+        await DbContext.WalletOwnerships.AddAsync(existingOwnership);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.VerifyWalletOwnershipAsync(
@@ -96,7 +71,6 @@ public class WalletVerificationServiceTests
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Conflict);
         result.Error.Code.Should().Be("WALLET.OWNERSHIP.ALREADY_VERIFIED");
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
@@ -110,16 +84,9 @@ public class WalletVerificationServiceTests
 
         var wallet = CreateTestWallet(walletId);
 
-        // Setup wallet found
-        _dbContext.Wallets.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<Wallet> { wallet }.AsQueryable());
-
-        // Setup no existing ownerships
-        _dbContext.WalletOwnerships.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<WalletOwnership>().AsQueryable());
-
-        // Setup successful save
-        _dbContext.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        // Setup wallet in database
+        await DbContext.Wallets.AddAsync(wallet);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.VerifyWalletOwnershipAsync(
@@ -132,10 +99,6 @@ public class WalletVerificationServiceTests
         result.Value.WalletId.Should().Be(walletId);
         result.Value.AccessMode.Should().Be(accessMode);
         result.Value.Status.Should().Be(OwnershipStatus.Verified);
-
-        await _dbContext.WalletOwnerships.Received(1).AddAsync(Arg.Any<WalletOwnership>(), Arg.Any<CancellationToken>());
-        await _dbContext.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
@@ -150,16 +113,10 @@ public class WalletVerificationServiceTests
         var wallet = CreateTestWallet(walletId);
         var existingOwnership = CreateTestWalletOwnership(principalId, walletId, AccessMode.WatchOnly, OwnershipStatus.Pending);
 
-        // Setup wallet found
-        _dbContext.Wallets.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<Wallet> { wallet }.AsQueryable());
-
-        // Setup existing ownership found
-        _dbContext.WalletOwnerships.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<WalletOwnership> { existingOwnership }.AsQueryable());
-
-        // Setup successful save
-        _dbContext.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        // Setup wallet and existing ownership in database
+        await DbContext.Wallets.AddAsync(wallet);
+        await DbContext.WalletOwnerships.AddAsync(existingOwnership);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.VerifyWalletOwnershipAsync(
@@ -170,9 +127,6 @@ public class WalletVerificationServiceTests
         result.Value.Should().NotBeNull();
         result.Value.Status.Should().Be(OwnershipStatus.Verified);
         result.Value.AccessMode.Should().Be(accessMode);
-
-        await _dbContext.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
@@ -190,16 +144,11 @@ public class WalletVerificationServiceTests
         var pendingOwnership = CreateTestWalletOwnership(otherPrincipalId1, walletId, AccessMode.Signing, OwnershipStatus.Pending);
         var verifiedOwnership = CreateTestWalletOwnership(otherPrincipalId2, walletId, AccessMode.WatchOnly, OwnershipStatus.Verified);
 
-        // Setup wallet found
-        _dbContext.Wallets.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<Wallet> { wallet }.AsQueryable());
-
-        // Setup existing ownerships
-        _dbContext.WalletOwnerships.FromSqlRaw(Arg.Any<string>(), Arg.Any<object[]>())
-            .Returns(new List<WalletOwnership> { pendingOwnership, verifiedOwnership }.AsQueryable());
-
-        // Setup successful save
-        _dbContext.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        // Setup wallet and existing ownerships in database
+        await DbContext.Wallets.AddAsync(wallet);
+        await DbContext.WalletOwnerships.AddAsync(pendingOwnership);
+        await DbContext.WalletOwnerships.AddAsync(verifiedOwnership);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.VerifyWalletOwnershipAsync(
@@ -208,11 +157,13 @@ public class WalletVerificationServiceTests
         // Assert
         result.IsSuccess.Should().BeTrue();
 
+        // Reload entities from database to check final state
+        await DbContext.Entry(pendingOwnership).ReloadAsync();
+        await DbContext.Entry(verifiedOwnership).ReloadAsync();
+
         // Pending ownership should be revoked, verified ownership should remain unchanged
         pendingOwnership.Status.Should().Be(OwnershipStatus.Revoked);
         verifiedOwnership.Status.Should().Be(OwnershipStatus.Verified);
-
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
@@ -222,47 +173,40 @@ public class WalletVerificationServiceTests
         var ownershipId = WalletOwnershipId.New();
         var reason = "Test revocation";
 
-        // Setup ownership not found
-        _dbContext.WalletOwnerships.FirstOrDefaultAsync(Arg.Any<System.Linq.Expressions.Expression<Func<WalletOwnership, bool>>>(), Arg.Any<CancellationToken>())
-            .Returns((WalletOwnership?)null);
-
-        // Act
+        // Act - No ownership setup, database is empty
         var result = await _service.RevokeOwnershipAsync(ownershipId, reason, CancellationToken.None);
 
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
         result.Error.Code.Should().Be("WALLET.OWNERSHIP.NOT_FOUND");
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
     public async Task RevokeOwnershipAsync_ValidOwnership_ReturnsSuccessResult()
     {
         // Arrange
-        var ownershipId = WalletOwnershipId.New();
         var principalId = AxonUserId.New();
         var walletId = WalletId.New();
         var reason = "Test revocation";
 
         var ownership = CreateTestWalletOwnership(principalId, walletId, AccessMode.Signing, OwnershipStatus.Verified);
 
-        // Setup ownership found
-        _dbContext.WalletOwnerships.FirstOrDefaultAsync(Arg.Any<System.Linq.Expressions.Expression<Func<WalletOwnership, bool>>>(), Arg.Any<CancellationToken>())
-            .Returns(ownership);
+        // Setup ownership in database
+        await DbContext.WalletOwnerships.AddAsync(ownership);
+        await DbContext.SaveChangesAsync();
 
-        // Setup successful save
-        _dbContext.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        var ownershipId = ownership.Id;
 
         // Act
         var result = await _service.RevokeOwnershipAsync(ownershipId, reason, CancellationToken.None);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        ownership.Status.Should().Be(OwnershipStatus.Revoked);
 
-        await _dbContext.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        // Transaction management is now handled internally by the service
+        // Reload entity to check final state
+        await DbContext.Entry(ownership).ReloadAsync();
+        ownership.Status.Should().Be(OwnershipStatus.Revoked);
     }
 
     [Test]
@@ -272,13 +216,7 @@ public class WalletVerificationServiceTests
         var principalId = AxonUserId.New();
         var walletId = WalletId.New();
 
-        // Setup ownership not found
-        _dbContext.WalletOwnerships.AsNoTracking()
-            .Returns(_dbContext.WalletOwnerships);
-        _dbContext.WalletOwnerships.FirstOrDefaultAsync(Arg.Any<System.Linq.Expressions.Expression<Func<WalletOwnership, bool>>>(), Arg.Any<CancellationToken>())
-            .Returns((WalletOwnership?)null);
-
-        // Act
+        // Act - No ownership in database
         var result = await _service.CanSetAsDefaultAsync(principalId, walletId, CancellationToken.None);
 
         // Assert
@@ -295,11 +233,9 @@ public class WalletVerificationServiceTests
 
         var ownership = CreateTestWalletOwnership(principalId, walletId, AccessMode.Signing, OwnershipStatus.Verified);
 
-        // Setup ownership found
-        _dbContext.WalletOwnerships.AsNoTracking()
-            .Returns(_dbContext.WalletOwnerships);
-        _dbContext.WalletOwnerships.FirstOrDefaultAsync(Arg.Any<System.Linq.Expressions.Expression<Func<WalletOwnership, bool>>>(), Arg.Any<CancellationToken>())
-            .Returns(ownership);
+        // Setup ownership in database
+        await DbContext.WalletOwnerships.AddAsync(ownership);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.CanSetAsDefaultAsync(principalId, walletId, CancellationToken.None);
@@ -318,11 +254,9 @@ public class WalletVerificationServiceTests
 
         var ownership = CreateTestWalletOwnership(principalId, walletId, AccessMode.WatchOnly, OwnershipStatus.Verified);
 
-        // Setup ownership found
-        _dbContext.WalletOwnerships.AsNoTracking()
-            .Returns(_dbContext.WalletOwnerships);
-        _dbContext.WalletOwnerships.FirstOrDefaultAsync(Arg.Any<System.Linq.Expressions.Expression<Func<WalletOwnership, bool>>>(), Arg.Any<CancellationToken>())
-            .Returns(ownership);
+        // Setup ownership in database
+        await DbContext.WalletOwnerships.AddAsync(ownership);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.CanSetAsDefaultAsync(principalId, walletId, CancellationToken.None);
@@ -338,16 +272,12 @@ public class WalletVerificationServiceTests
         // Arrange
         var requests = new List<(WalletId WalletId, AxonUserId PrincipalId, AccessMode AccessMode, VerificationSource VerificationSource)>();
 
-        // Setup successful save
-        _dbContext.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
-
         // Act
         var result = await _service.VerifyBatchWalletOwnershipsAsync(requests, CancellationToken.None);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
-        // Transaction management is now handled internally by the service
     }
 
     [Test]
@@ -376,16 +306,9 @@ public class WalletVerificationServiceTests
             CreateTestWallet(walletId3)
         };
 
-        // Setup wallets found
-        _dbContext.Wallets.FromSqlRaw(Arg.Any<string>())
-            .Returns(wallets.AsQueryable());
-
-        // Setup no existing ownerships
-        _dbContext.WalletOwnerships.FromSqlRaw(Arg.Any<string>())
-            .Returns(new List<WalletOwnership>().AsQueryable());
-
-        // Setup successful save
-        _dbContext.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        // Setup wallets in database
+        await DbContext.Wallets.AddRangeAsync(wallets);
+        await DbContext.SaveChangesAsync();
 
         // Act
         var result = await _service.VerifyBatchWalletOwnershipsAsync(requests, CancellationToken.None);
@@ -407,8 +330,6 @@ public class WalletVerificationServiceTests
 
         ownership3.PrincipalId.Should().Be(principalId1);
         ownership3.AccessMode.Should().Be(AccessMode.Signing);
-
-        // Transaction management is now handled internally by the service
     }
 
     private static Wallet CreateTestWallet(WalletId walletId)
@@ -416,7 +337,7 @@ public class WalletVerificationServiceTests
         return Wallet.Create(
             walletId,
             "solana-mainnet",
-            Address.Create("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM").Value);
+            Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"));
     }
 
     private static WalletOwnership CreateTestWalletOwnership(
@@ -433,45 +354,5 @@ public class WalletVerificationServiceTests
             VerificationSource.DynamicAttested);
 
         return ownership;
-    }
-}
-
-// Helper class for testing async enumerables
-public class TestAsyncEnumerable<T> : IAsyncEnumerable<T>
-{
-    private readonly IEnumerable<T> _enumerable;
-
-    public TestAsyncEnumerable(IEnumerable<T> enumerable)
-    {
-        _enumerable = enumerable;
-    }
-
-    public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
-    {
-        return new TestAsyncEnumerator<T>(_enumerable.GetEnumerator());
-    }
-}
-
-public class TestAsyncEnumerator<T> : IAsyncEnumerator<T>
-{
-    private readonly IEnumerator<T> _enumerator;
-
-    public TestAsyncEnumerator(IEnumerator<T> enumerator)
-    {
-        _enumerator = enumerator;
-    }
-
-    public T Current => _enumerator.Current;
-
-    public ValueTask<bool> MoveNextAsync()
-    {
-        return ValueTask.FromResult(_enumerator.MoveNext());
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        _enumerator.Dispose();
-        GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 }

@@ -30,9 +30,6 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatRead
 
         var messageConfig = new Persistence.Configurations.MessageConfiguration();
         messageConfig.Configure(modelBuilder.Entity<Message>());
-
-        // Apply snake_case naming convention
-        modelBuilder.ToSnakeCaseTables();
     }
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)

@@ -7,7 +7,6 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using Microsoft.Extensions.Time.Testing;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -27,7 +26,7 @@ namespace Axon.Modules.Identity.Application;
 /// Provides mock infrastructure for testing resolution algorithm without external dependencies.
 /// </summary>
 [TestFixture]
-public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
+public abstract class IdentityResolutionTestBase : ApplicationTestBase
 {
     #region Test Infrastructure
 
@@ -46,9 +45,9 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     #region Test Setup
 
     [SetUp]
-    public async Task SetUpAsync()
+    public override void SetUp()
     {
-        await base.SetUpBase();
+        base.SetUp();
 
         // Initialize mocks for Domain-level tests
         InitializeMocks();
@@ -84,7 +83,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
         // MockTimeProvider is already set in InitializeMocks
 
         // Configure memory cache to behave normally
-        MockMemoryCache.TryGetValue(Arg.Any<object>(), out Arg.Any<object>()).Returns(false);
+        MockMemoryCache.TryGetValue(Arg.Any<object>(), out Arg.Any<object?>()).Returns(false);
 
         // Configure HTTP context
         var mockHttpContext = Substitute.For<HttpContext>();
@@ -323,12 +322,11 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
     #region Cleanup
 
-    protected override async Task TearDownDerived()
+    [TearDown]
+    public override void TearDown()
     {
         MockMemoryCache?.Dispose();
-        MockPrincipalRepository?.Dispose();
-        MockWalletRepository?.Dispose();
-        await base.TearDownDerived();
+        base.TearDown();
     }
 
     #endregion
@@ -340,6 +338,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// </summary>
     protected static void AssertCredentialResolution(ExchangeOutcome outcome, AxonUserId expectedPrincipalId)
     {
+        ArgumentNullException.ThrowIfNull(outcome);
         outcome.AxonUserId.ShouldBe(expectedPrincipalId);
         outcome.Created.ShouldBeFalse(); // Existing principal
     }
@@ -349,6 +348,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// </summary>
     protected static void AssertWalletResolution(ExchangeOutcome outcome, AxonUserId expectedPrincipalId)
     {
+        ArgumentNullException.ThrowIfNull(outcome);
         outcome.AxonUserId.ShouldBe(expectedPrincipalId);
         outcome.Created.ShouldBeFalse(); // Existing principal
         outcome.WalletsLinked.ShouldBeGreaterThan(0); // Wallet was processed
@@ -359,6 +359,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// </summary>
     protected static void AssertNewPrincipalCreation(ExchangeOutcome outcome)
     {
+        ArgumentNullException.ThrowIfNull(outcome);
         outcome.Created.ShouldBeTrue(); // New principal
         outcome.AxonUserId.ShouldNotBe(default(AxonUserId)); // Principal was created
     }

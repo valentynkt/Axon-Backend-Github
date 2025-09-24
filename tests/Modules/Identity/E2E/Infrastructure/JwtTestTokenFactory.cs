@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -56,8 +57,8 @@ public static class JwtTestTokenFactory
             new("sub", subject),
             new("iss", issuer),
             new("aud", audience),
-            new("iat", new DateTimeOffset(iat).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
-            new("exp", new DateTimeOffset(exp).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new("iat", new DateTimeOffset(iat).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+            new("exp", new DateTimeOffset(exp).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
             new("jti", Guid.NewGuid().ToString())
         };
 

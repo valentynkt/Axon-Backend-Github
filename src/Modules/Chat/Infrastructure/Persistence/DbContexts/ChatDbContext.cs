@@ -4,7 +4,6 @@ using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
 using Axon.Modules.Chat.Domain.Entities;
-using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -44,7 +43,6 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
 
         var messageConfig = new Persistence.Configurations.MessageConfiguration();
         messageConfig.Configure(modelBuilder.Entity<Message>());
-
     }
 
     protected override void ApplyAuditInformation()

@@ -239,7 +239,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.AddAsync(principal2);
 
         // Assert: Should throw a unique constraint violation
-        AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
+        await AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
     }
 
     [Test]
@@ -270,7 +270,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(reloadedPrincipal2);
 
         // Assert: Should throw a unique constraint violation for multiple verified signing owners
-        AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
+        await AssertUniqueConstraintViolation(async () => await UnitOfWork.SaveChangesAsync());
     }
 
     #endregion

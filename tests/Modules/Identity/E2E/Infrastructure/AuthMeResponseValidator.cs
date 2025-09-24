@@ -21,6 +21,7 @@ public static class AuthMeResponseValidator
         int expectedWalletCount = 0,
         int expectedDefaultsCount = 0)
     {
+        ArgumentNullException.ThrowIfNull(response);
         // Validate HTTP status
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -43,6 +44,7 @@ public static class AuthMeResponseValidator
     /// </summary>
     public static void ValidateNotModifiedResponse(HttpResponseMessage response, string expectedETag)
     {
+        ArgumentNullException.ThrowIfNull(response);
         response.StatusCode.ShouldBe(HttpStatusCode.NotModified);
 
         // 304 responses should have no content
@@ -123,6 +125,7 @@ public static class AuthMeResponseValidator
     /// </summary>
     public static string ValidateAndExtractETag(HttpResponseMessage response)
     {
+        ArgumentNullException.ThrowIfNull(response);
         response.Headers.ETag.ShouldNotBeNull("Response should include ETag header");
 
         var etagValue = response.Headers.ETag.Tag;
@@ -164,6 +167,7 @@ public static class AuthMeResponseValidator
     /// </summary>
     public static void ValidateCacheHeaders(HttpResponseMessage response)
     {
+        ArgumentNullException.ThrowIfNull(response);
         // Check for cache-related headers
         response.Headers.ETag.ShouldNotBeNull("Response should include ETag for caching");
 
@@ -184,6 +188,7 @@ public static class AuthMeResponseValidator
         HttpResponseMessage conditionalResponse,
         bool shouldBeNotModified = true)
     {
+        ArgumentNullException.ThrowIfNull(conditionalResponse);
         if (shouldBeNotModified)
         {
             conditionalResponse.StatusCode.ShouldBe(HttpStatusCode.NotModified);
@@ -272,6 +277,7 @@ public static class AuthMeResponseValidator
         string expectedAccessMode = "Signing",
         string expectedStatus = "Verified")
     {
+        ArgumentNullException.ThrowIfNull(responseData);
         var wallet = responseData.Wallets.FirstOrDefault(w => w.Address == expectedAddress);
         wallet.ShouldNotBeNull($"Wallet with address {expectedAddress} should be present");
 
@@ -288,6 +294,7 @@ public static class AuthMeResponseValidator
         string expectedChainId,
         string expectedAddress)
     {
+        ArgumentNullException.ThrowIfNull(responseData);
         var chainDefault = responseData.ChainDefaults.FirstOrDefault(cd => cd.ChainId == expectedChainId);
         chainDefault.ShouldNotBeNull($"Chain default for {expectedChainId} should be present");
 
@@ -301,6 +308,7 @@ public static class AuthMeResponseValidator
         AuthMeResponseData responseData,
         string excludedAddress)
     {
+        ArgumentNullException.ThrowIfNull(responseData);
         var wallet = responseData.Wallets.FirstOrDefault(w => w.Address == excludedAddress);
         wallet.ShouldBeNull($"Wallet with address {excludedAddress} should not be present");
     }

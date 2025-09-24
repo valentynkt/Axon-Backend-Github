@@ -137,7 +137,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             CheckRule(new MessageContentMeetsDomainStandardsRule(content.Value));
 
             var now = timeProvider.GetUtcNow();
-            var message = CreateAndAddUserMessage(content);
+            var message = CreateAndAddUserMessage(content, timeProvider);
 
             RaiseUserMessageEvent(message, content.Value, now);
 
@@ -175,7 +175,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
                 return Result.Success<Message, Error>(existing);
 
             var now = timeProvider.GetUtcNow();
-            var message = CreateAndAddAssistantMessage(content, aiResponseId);
+            var message = CreateAndAddAssistantMessage(content, aiResponseId, timeProvider);
 
             RaiseAssistantMessageEvent(message, content.Value, aiResponseId, now);
             
@@ -213,7 +213,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             {
                 var now = timeProvider.GetUtcNow();
                 Title = newTitle;
-                MarkUpdated();
+                MarkUpdated(timeProvider);
 
                 RaiseDomainEvent(new ConversationTitleUpdatedEvent(Id, Title, now));
             }
@@ -239,7 +239,7 @@ public sealed class Conversation : AggregateRoot<ConversationId>
 
             var now = timeProvider.GetUtcNow();
             Status = ConversationStatus.Completed;
-            MarkUpdated();
+            MarkUpdated(timeProvider);
 
             RaiseDomainEvent(new ConversationCompletedEvent(Id, MessageCount, now));
 
@@ -296,22 +296,22 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     private Message? FindExistingMessageByAiResponseId(AiResponseId aiResponseId)
         => _messages.FirstOrDefault(m => m.AiResponseId?.Equals(aiResponseId) == true);
 
-    private Message CreateAndAddUserMessage(MessageContent content)
+    private Message CreateAndAddUserMessage(MessageContent content, TimeProvider timeProvider)
     {
         var sequence = MessageCount + 1;
         var message = Message.CreateUserMessage(Id, content, sequence);
         _messages.Add(message);
-        MarkUpdated();
+        MarkUpdated(timeProvider);
         return message;
     }
 
-    private Message CreateAndAddAssistantMessage(MessageContent content, AiResponseId aiResponseId)
+    private Message CreateAndAddAssistantMessage(MessageContent content, AiResponseId aiResponseId, TimeProvider timeProvider)
     {
         var sequence = MessageCount + 1;
         var message = Message.CreateAssistantMessage(Id, content, sequence, aiResponseId);
         _messages.Add(message);
         LastAiResponseId = aiResponseId;
-        MarkUpdated();
+        MarkUpdated(timeProvider);
         return message;
     }
 

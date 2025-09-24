@@ -60,38 +60,9 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
         }
         else
         {
-            // For tracked entities, ensure the aggregate is marked as modified
-            entry.State = EntityState.Modified;
-
-            // Explicitly detect and track new entities in navigation collections
-            // This is critical for navigation properties with private backing fields
-            foreach (var navigation in entry.Navigations)
-            {
-                if (navigation.CurrentValue is not null)
-                {
-                    // Handle collection navigations
-                    if (navigation.Metadata.IsCollection)
-                    {
-                        foreach (var item in (System.Collections.IEnumerable)navigation.CurrentValue)
-                        {
-                            var itemEntry = _context.Entry(item);
-                            if (itemEntry.State == EntityState.Detached)
-                            {
-                                itemEntry.State = EntityState.Added;
-                            }
-                        }
-                    }
-                    // Handle reference navigations
-                    else
-                    {
-                        var itemEntry = _context.Entry(navigation.CurrentValue);
-                        if (itemEntry.State == EntityState.Detached)
-                        {
-                            itemEntry.State = EntityState.Added;
-                        }
-                    }
-                }
-            }
+            // For tracked entities, use Update() which handles the entire object graph correctly
+            // This is actually more reliable than trying to manually track navigation changes
+            _dbSet.Update(aggregate);
         }
 
         return Task.FromResult(aggregate);
@@ -156,6 +127,53 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
     }
 
     // ——— H e l p e r  M e t h o d s ———
+
+    /// <summary>
+    /// Determines if an entity is new (not persisted to database yet).
+    /// Checks if the entity has a default ID value or if it's been explicitly marked as new.
+    /// </summary>
+    private static bool IsNewEntity(object entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+
+        // Use reflection to get the Id property
+        var entityType = entity.GetType();
+        var idProperty = entityType.GetProperty("Id");
+
+        if (idProperty == null)
+            return false;
+
+        var idValue = idProperty.GetValue(entity);
+
+        // Check if the ID is default/empty (indicates new entity)
+        if (idValue == null)
+            return true;
+
+        // Handle Guid IDs (most common case)
+        if (idValue is Guid guidId)
+            return guidId == Guid.Empty;
+
+        // Handle integer IDs
+        if (idValue is int intId)
+            return intId == 0;
+
+        // Handle long IDs
+        if (idValue is long longId)
+            return longId == 0;
+
+        // Handle StrongId types that might have a Value property
+        var valueProperty = idValue.GetType().GetProperty("Value");
+        if (valueProperty != null)
+        {
+            var actualValue = valueProperty.GetValue(idValue);
+            if (actualValue is Guid strongGuidId)
+                return strongGuidId == Guid.Empty;
+        }
+
+        // If we can't determine, assume it's not new
+        return false;
+    }
+
     protected virtual Expression<Func<TAggregate, bool>> CreateIdPredicate(TId id)
     {
         var parameter = Expression.Parameter(typeof(TAggregate), "x");

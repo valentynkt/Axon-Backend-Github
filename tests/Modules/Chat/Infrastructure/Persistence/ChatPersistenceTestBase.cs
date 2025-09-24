@@ -61,13 +61,23 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
 
         var serviceProvider = services.BuildServiceProvider();
 
-        // Setup write DbContext with service provider
+        // Setup write DbContext with service provider and Chat-specific configuration
         var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
             .UseInternalServiceProvider(serviceProvider)
             .Options;
 
-        // Setup read DbContext with service provider
+        // Setup read DbContext with service provider and Chat-specific configuration
         var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
             .UseInternalServiceProvider(serviceProvider)
             .Options;
 
@@ -78,8 +88,11 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
 
-        // Only create schema once using the write context to avoid conflicts
+        // Create schema using EF model configuration for tests
         await DbContext.Database.EnsureCreatedAsync();
+
+        // Also ensure schema exists for read context (they share the same database)
+        await ReadDbContext.Database.EnsureCreatedAsync();
 
         // Allow child classes to perform additional setup
         await SetUpDerived();
@@ -130,7 +143,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         }
         catch
         {
-            // If truncate fails, try dropping and recreating
+            // If truncate fails, try dropping and recreating with EF model
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
         }
@@ -402,11 +415,23 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         DbContext?.Dispose();
         ReadDbContext?.Dispose();
 
-        // Recreate write context with new TimeProvider
-        var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>().Options;
+        // Recreate write context with new TimeProvider and Chat-specific configuration
+        var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
+            .Options;
 
-        // Recreate read context with same database connection
-        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>().Options;
+        // Recreate read context with same database connection and Chat-specific configuration
+        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
+            .Options;
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatReadDbContext(readOptions);
