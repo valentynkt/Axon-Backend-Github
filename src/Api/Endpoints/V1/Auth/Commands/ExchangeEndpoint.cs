@@ -110,14 +110,15 @@ public sealed class ExchangeEndpoint
         // Extract token context from authenticated principal
         var issuer = principal.FindFirst("iss")?.Value ?? "https://app.dynamic.xyz";
 
-        // Extract bearer token for Dynamic service call
-        var tokenResult = _jwtTokenService.ExtractBearerToken(HttpContext);
-        if (tokenResult.IsFailure)
+        // Extract bearer token from Authorization header for Dynamic service call
+        var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            return Result.Failure<ExchangeCredentialCommand, Error>(tokenResult.Error);
+            return Result.Failure<ExchangeCredentialCommand, Error>(
+                Error.Unauthorized("Missing or invalid Authorization header"));
         }
 
-        var bearerToken = tokenResult.Value;
+        var bearerToken = authHeader["Bearer ".Length..].Trim();
 
         // For Dynamic JWT tokens, extract user data from Dynamic service
         var dynamicValidationResult = await _dynamicAuthService.ValidateTokenAsync(bearerToken, ct);

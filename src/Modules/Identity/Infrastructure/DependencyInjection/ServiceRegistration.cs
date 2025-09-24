@@ -21,6 +21,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Polly;
 
@@ -39,7 +40,8 @@ public static class ServiceRegistration
     /// <returns>Service collection for chaining</returns>
     public static IServiceCollection AddIdentityInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         
@@ -164,13 +166,27 @@ public static class ServiceRegistration
 
         services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
 
-        // Register memory cache required for unified authentication service
-        services.AddMemoryCache();
+        // Configure environment-specific distributed cache
+        ConfigureDistributedCache(services, configuration, environment);
 
-        // Configure Data Protection API for secure challenge tokens
-        services.AddDataProtection()
+        // Configure enhanced Data Protection API for secure tokens with automatic key rotation
+        var dataProtectionBuilder = services.AddDataProtection()
             .SetApplicationName("Axon")
-            .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+            .SetDefaultKeyLifetime(TimeSpan.FromDays(90)); // Automatic key rotation every 90 days
+
+        // Configure key persistence for production environments
+        if (environment?.IsProduction() == true)
+        {
+            // In production, store keys in a persistent location
+            var keysPath = configuration["DataProtection:KeysPath"] ?? Path.Combine(Path.GetTempPath(), "Axon", "DataProtection-Keys");
+            Directory.CreateDirectory(keysPath);
+            dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+        }
+
+        // Note: Azure Key Vault integration can be added by referencing:
+        // - Microsoft.AspNetCore.DataProtection.AzureKeyVault
+        // - Microsoft.AspNetCore.DataProtection.AzureStorage
+        // And then calling: .ProtectKeysWithAzureKeyVault() and .PersistKeysToAzureBlobStorage()
 
         // Configure unified authentication options
         services.Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName));
@@ -180,6 +196,12 @@ public static class ServiceRegistration
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IChallengeService, ChallengeService>();
         services.AddScoped<ChallengeTokenProvider>();
+        services.AddScoped<RefreshTokenProvider>();
+        services.AddScoped<IRefreshTokenProvider>(sp => sp.GetRequiredService<RefreshTokenProvider>());
+
+        // Register unified token replay protection service
+        services.AddSingleton<Microsoft.IdentityModel.Tokens.ITokenReplayCache, TokenReplayCache>();
+        services.AddScoped<TokenReplayCache>();
 
         // Register Authentication Orchestrator - Single entry point for all auth flows
         services.AddScoped<IAuthenticationOrchestrator, AuthenticationOrchestrator>();
@@ -194,7 +216,10 @@ public static class ServiceRegistration
         // Register AxonUserStore directly for injection
         services.AddScoped<Persistence.Stores.AxonUserStore>();
 
-        // Note: DynamicClaimsTransformation was removed - JWT validation handled by DynamicAuthService
+        // Register custom claims principal factory for enhanced claims
+        services.AddScoped<AxonClaimsPrincipalFactory>();
+
+        // AxonClaimsPrincipalFactory handles all claims generation at authentication time
 
         // Configure Azure Key Vault options for JWT signing (Story 5.5)
         // Note: IJwtTokenService handles all JWT operations
@@ -230,5 +255,47 @@ public static class ServiceRegistration
         services.AddInfrastructure<IdentityWriteDbContext>(configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Configures distributed cache based on environment
+    /// </summary>
+    private static void ConfigureDistributedCache(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment? environment)
+    {
+        var redisConnection = configuration.GetConnectionString("Redis");
+        var useRedis = !string.IsNullOrEmpty(redisConnection) &&
+                      (environment?.IsProduction() == true ||
+                       configuration.GetValue<bool>("Cache:UseRedis", false));
+
+        if (useRedis)
+        {
+            // TODO: Add StackExchange.Redis package reference to enable Redis caching
+            // For now, fall back to distributed memory cache
+            services.AddDistributedMemoryCache(options =>
+            {
+                // Configure memory cache size limits from configuration
+                var cacheSection = configuration.GetSection("Cache:Memory");
+                if (cacheSection.Exists())
+                {
+                    cacheSection.Bind(options);
+                }
+            });
+        }
+        else
+        {
+            // Use in-memory cache for development
+            services.AddDistributedMemoryCache(options =>
+            {
+                // Configure memory cache size limit if specified
+                var sizeLimit = configuration.GetValue<long?>("Cache:Memory:SizeLimit");
+                if (sizeLimit.HasValue)
+                {
+                    options.SizeLimit = sizeLimit.Value;
+                }
+            });
+        }
     }
 }

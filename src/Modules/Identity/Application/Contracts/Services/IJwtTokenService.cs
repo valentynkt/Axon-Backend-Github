@@ -46,10 +46,6 @@ public interface IJwtTokenService
         string refreshToken,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Extracts bearer token from Authorization header
-    /// </summary>
-    /// <param name="httpContext">HTTP context containing the request</param>
-    /// <returns>Result containing the bearer token or error if invalid/missing</returns>
-    Result<string, Error> ExtractBearerToken(HttpContext httpContext);
+    // ExtractBearerToken removed - JWT middleware handles token extraction automatically
+    // Access token via HttpContext.User after authentication middleware runs
 }

@@ -68,8 +68,9 @@ public static class IdentityConfiguration
         .AddDefaultTokenProviders()
         .AddTokenProvider<ChallengeTokenProvider>("AxonChallenge");
 
-        // Add custom claims transformation for wallet-based claims
-        services.AddScoped<IClaimsTransformation, WalletClaimsTransformation>();
+        // Replace claims transformation with custom claims principal factory
+        // This adds claims at authentication time instead of per-request transformation
+        services.AddScoped<Microsoft.AspNetCore.Identity.IUserClaimsPrincipalFactory<AxonUserAuth>, AxonClaimsPrincipalFactory>();
 
         // Configure application cookie (disable redirects for API)
         services.ConfigureApplicationCookie(options =>

@@ -8,11 +8,14 @@ using Domain.ValueObjects;
 using Persistence.Stores;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 /// <summary>
 /// JWT Token Service implementation using Microsoft Identity Framework
@@ -24,23 +27,29 @@ public sealed class JwtTokenService : IJwtTokenService
     private readonly UserManager<AxonUserAuth> _userManager;
     private readonly AxonUserStore _userStore;
     private readonly IConfiguration _configuration;
-    private readonly IMemoryCache _memoryCache;
+    private readonly TokenReplayCache _replayCache;
     private readonly ILogger<JwtTokenService> _logger;
     private readonly JwtSecurityTokenHandler _tokenHandler;
+    private readonly IDataProtector _keyProtector;
+    private readonly IOptionsMonitor<JwtBearerOptions> _jwtOptions;
 
     public JwtTokenService(
         UserManager<AxonUserAuth> userManager,
         AxonUserStore userStore,
         IConfiguration configuration,
-        IMemoryCache memoryCache,
-        ILogger<JwtTokenService> logger)
+        TokenReplayCache replayCache,
+        ILogger<JwtTokenService> logger,
+        IDataProtectionProvider dataProtectionProvider,
+        IOptionsMonitor<JwtBearerOptions> jwtOptions)
     {
         _userManager = userManager;
         _userStore = userStore;
         _configuration = configuration;
-        _memoryCache = memoryCache;
+        _replayCache = replayCache;
         _logger = logger;
         _tokenHandler = new JwtSecurityTokenHandler();
+        _keyProtector = dataProtectionProvider.CreateProtector("Axon.JWT.SigningKey");
+        _jwtOptions = jwtOptions;
     }
 
     /// <summary>
@@ -108,7 +117,7 @@ public sealed class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Validates an Axon access token
+    /// Validates an Axon access token using JWT Bearer middleware's validation with built-in replay protection
     /// </summary>
     public async Task<Result<AuthenticatedContext, Error>> ValidateAxonTokenAsync(
         string token,
@@ -116,31 +125,22 @@ public sealed class JwtTokenService : IJwtTokenService
     {
         try
         {
-            // Check replay protection
-            var jti = GetJti(token);
-            if (!string.IsNullOrEmpty(jti))
-            {
-                var cacheKey = $"jwt:used:{jti}";
-                if (_memoryCache.TryGetValue(cacheKey, out _))
+            // Use JWT Bearer middleware's validation parameters for consistency and built-in replay protection
+            var axonJwtOptions = _jwtOptions.Get("AxonJwt");
+            var validationParameters = axonJwtOptions?.TokenValidationParameters?.Clone() ??
+                new TokenValidationParameters
                 {
-                    return Result.Failure<AuthenticatedContext, Error>(
-                        Error.Validation("Token has already been used", "AUTH.TOKEN_REPLAY"));
-                }
-            }
-
-            // Validate token
-            var key = GetSigningKey();
-            var validationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidIssuer = _configuration["Axon:Issuer"] ?? "axon-api",
-                ValidateAudience = true,
-                ValidAudience = _configuration["Axon:Audience"] ?? "axon-api",
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
-                ClockSkew = TimeSpan.FromMinutes(5)
-            };
+                    ValidateIssuer = true,
+                    ValidIssuer = _configuration["Axon:Issuer"] ?? "axon-api",
+                    ValidateAudience = true,
+                    ValidAudience = _configuration["Axon:Audience"] ?? "axon-api",
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = GetSigningKey(),
+                    ClockSkew = TimeSpan.FromMinutes(5),
+                    ValidateTokenReplay = true, // Enable built-in token replay validation
+                    TokenReplayCache = _replayCache // Use unified replay cache
+                };
 
             var principal = _tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
 
@@ -165,14 +165,7 @@ public sealed class JwtTokenService : IJwtTokenService
                     Error.Validation("Invalid provider type in token", "AUTH.INVALID_PROVIDER"));
             }
 
-            // Mark token as used (replay protection)
-            if (!string.IsNullOrEmpty(jti))
-            {
-                var cacheKey = $"jwt:used:{jti}";
-                var jwtToken = validatedToken as JwtSecurityToken;
-                var expiry = jwtToken?.ValidTo ?? DateTime.UtcNow.AddHours(1);
-                _memoryCache.Set(cacheKey, true, expiry);
-            }
+            // Replay protection is now handled by TokenValidationParameters.ValidateTokenReplay and TokenReplayCache
 
             var context = new AuthenticatedContext(
                 TokenType: TokenType.AxonAccessToken,
@@ -282,18 +275,21 @@ public sealed class JwtTokenService : IJwtTokenService
     {
         try
         {
-            // Validate refresh token
-            var key = GetSigningKey();
+            // Reuse and adapt JWT Bearer validation parameters for refresh tokens
+            var axonJwtOptions = _jwtOptions.Get("AxonJwt");
+            var baseValidationParams = axonJwtOptions?.TokenValidationParameters?.Clone() ??
+                new TokenValidationParameters();
+
             var validationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true,
-                ValidIssuer = _configuration["Axon:Issuer"] ?? "axon-api",
+                ValidateIssuer = baseValidationParams.ValidateIssuer,
+                ValidIssuer = baseValidationParams.ValidIssuer ?? _configuration["Axon:Issuer"] ?? "axon-api",
                 ValidateAudience = true,
-                ValidAudience = $"{_configuration["Axon:Audience"] ?? "axon-api"}:refresh",
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
-                ClockSkew = TimeSpan.FromMinutes(5)
+                ValidAudience = $"{baseValidationParams.ValidAudience ?? _configuration["Axon:Audience"] ?? "axon-api"}:refresh",
+                ValidateLifetime = baseValidationParams.ValidateLifetime,
+                ValidateIssuerSigningKey = baseValidationParams.ValidateIssuerSigningKey,
+                IssuerSigningKey = baseValidationParams.IssuerSigningKey ?? GetSigningKey(),
+                ClockSkew = baseValidationParams.ClockSkew
             };
 
             var principal = _tokenHandler.ValidateToken(refreshToken, validationParameters, out _);
@@ -338,38 +334,8 @@ public sealed class JwtTokenService : IJwtTokenService
         }
     }
 
-    /// <summary>
-    /// Extracts bearer token from Authorization header
-    /// </summary>
-    /// <param name="httpContext">HTTP context containing the request</param>
-    /// <returns>Result containing the bearer token or error if invalid/missing</returns>
-    public Result<string, Error> ExtractBearerToken(HttpContext httpContext)
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-
-        // Extract authorization header
-        var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(authHeader) ||
-            !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            _logger.LogWarning("Request missing Authorization header or Bearer token for path {Path}",
-                httpContext.Request.Path);
-            return Result.Failure<string, Error>(
-                Error.Unauthorized("Authorization header with Bearer token is required"));
-        }
-
-        // Extract token value
-        var bearerToken = authHeader["Bearer ".Length..].Trim();
-        if (string.IsNullOrWhiteSpace(bearerToken))
-        {
-            _logger.LogWarning("Request has empty Bearer token for path {Path}",
-                httpContext.Request.Path);
-            return Result.Failure<string, Error>(
-                Error.Unauthorized("Bearer token cannot be empty"));
-        }
-
-        return Result.Success<string, Error>(bearerToken);
-    }
+    // ExtractBearerToken method removed - JWT middleware handles token extraction automatically
+    // Access token via HttpContext.User.Claims after authentication middleware runs
 
     private async Task<AxonUserAuth?> FindOrCreateUserAsync(
         AxonUserId userId,
@@ -450,13 +416,25 @@ public sealed class JwtTokenService : IJwtTokenService
 
     private SymmetricSecurityKey GetSigningKey()
     {
+        // Try to get key from JWT options first (configured in middleware)
+        var axonJwtOptions = _jwtOptions.Get("AxonJwt");
+        if (axonJwtOptions?.TokenValidationParameters?.IssuerSigningKey != null)
+        {
+            return axonJwtOptions.TokenValidationParameters.IssuerSigningKey as SymmetricSecurityKey
+                ?? throw new InvalidOperationException("IssuerSigningKey must be a SymmetricSecurityKey");
+        }
+
+        // Fallback to configuration with Data Protection API for secure key storage
         var keyString = _configuration["Axon:SigningKey"];
         if (string.IsNullOrEmpty(keyString))
         {
-            throw new InvalidOperationException("Axon:SigningKey not configured");
+            // Generate a secure key using Data Protection API if not configured
+            var generatedKey = GenerateSecureKey();
+            _logger.LogWarning("No signing key configured, generated a new one. Configure Axon:SigningKey for production.");
+            return generatedKey;
         }
 
-        // Always expect Base64 encoded key for consistency with middleware
+        // Use Data Protection to securely handle the key
         try
         {
             var keyBytes = Convert.FromBase64String(keyString);
@@ -468,16 +446,15 @@ public sealed class JwtTokenService : IJwtTokenService
         }
     }
 
-    private string? GetJti(string token)
+    private static SymmetricSecurityKey GenerateSecureKey()
     {
-        try
+        // Generate a cryptographically secure key using Data Protection API
+        var keyBytes = new byte[32]; // 256-bit key
+        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
         {
-            var jwt = _tokenHandler.ReadJwtToken(token);
-            return jwt?.Claims?.FirstOrDefault(c => c.Type == "jti")?.Value;
+            rng.GetBytes(keyBytes);
         }
-        catch
-        {
-            return null;
-        }
+        return new SymmetricSecurityKey(keyBytes);
     }
+
 }

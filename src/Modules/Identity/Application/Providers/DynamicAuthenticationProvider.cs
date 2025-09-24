@@ -104,8 +104,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             var identityUser = await GetOrCreateIdentityUserAsync(
                 principal,
                 dynamicUserData,
-                primaryWallet,
-                cancellationToken);
+                primaryWallet);
 
             if (identityUser == null)
             {
@@ -251,8 +250,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
     private async Task<AxonUserAuth?> GetOrCreateIdentityUserAsync(
         AxonPrincipal principal,
         DynamicUserData dynamicUserData,
-        WalletData primaryWallet,
-        CancellationToken cancellationToken = default)
+        WalletData primaryWallet)
     {
         try
         {

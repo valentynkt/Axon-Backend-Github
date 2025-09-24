@@ -9,7 +9,7 @@ using Domain.Entities;
 using Domain.ValueObjects;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,26 +23,32 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     private readonly IEnumerable<IAuthenticationProvider> _providers;
     private readonly IJwtTokenService _tokenService;
     private readonly UserManager<AxonUserAuth> _userManager;
-    private readonly IMemoryCache _cache;
+    private readonly SignInManager<AxonUserAuth> _signInManager;
+    private readonly IDistributedCache _cache;
     private readonly ILogger<AuthenticationOrchestrator> _logger;
     private readonly IChallengeService _challengeService;
+    private readonly IRefreshTokenProvider _refreshTokenProvider;
     private readonly IOptions<AuthenticationOptions> _authOptions;
 
     public AuthenticationOrchestrator(
         IEnumerable<IAuthenticationProvider> providers,
         IJwtTokenService tokenService,
         UserManager<AxonUserAuth> userManager,
-        IMemoryCache cache,
+        SignInManager<AxonUserAuth> signInManager,
+        IDistributedCache cache,
         ILogger<AuthenticationOrchestrator> logger,
         IChallengeService challengeService,
+        IRefreshTokenProvider refreshTokenProvider,
         IOptions<AuthenticationOptions> authOptions)
     {
         _providers = providers ?? throw new ArgumentNullException(nameof(providers));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+        _signInManager = signInManager ?? throw new ArgumentNullException(nameof(signInManager));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _challengeService = challengeService ?? throw new ArgumentNullException(nameof(challengeService));
+        _refreshTokenProvider = refreshTokenProvider ?? throw new ArgumentNullException(nameof(refreshTokenProvider));
         _authOptions = authOptions ?? throw new ArgumentNullException(nameof(authOptions));
     }
 
@@ -59,17 +65,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
         return await _challengeService.GenerateChallengeAsync(chainId, walletAddress, audience, cancellationToken);
     }
 
-    /// <summary>
-    /// Validates the protected token (replaces HMAC) - delegates to ChallengeService
-    /// </summary>
-    public Result<bool, Error> ValidateMac(
-        string message,
-        string protectedToken,
-        string keyVersion)
-    {
-        // Delegate directly to ChallengeService (now using Data Protection API)
-        return _challengeService.ValidateMac(message, protectedToken, keyVersion);
-    }
 
     /// <summary>
     /// Validates a challenge message structure and TTL - delegates to ChallengeService
@@ -353,7 +348,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     }
 
     /// <summary>
-    /// Refresh an existing authentication token
+    /// Refresh an existing authentication token using Identity's token system
     /// </summary>
     public async Task<Result<RefreshTokenResponse, Error>> RefreshTokenAsync(
         string refreshToken,
@@ -361,18 +356,8 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     {
         try
         {
-            // Parse refresh token to extract user info
-            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
-            var jsonToken = handler.ReadJwtToken(refreshToken);
-
-            if (jsonToken == null)
-            {
-                return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Unauthorized("Invalid refresh token"));
-            }
-
-            // Get JTI for tracking
-            var jti = jsonToken.Claims.FirstOrDefault(c => c.Type == "jti")?.Value;
+            // Extract JTI for replay protection
+            var jti = _refreshTokenProvider.GetJtiFromToken(refreshToken);
             if (string.IsNullOrEmpty(jti))
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
@@ -381,34 +366,48 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             // Check if refresh token was already used (replay protection)
             var cacheKey = $"refresh:used:{jti}";
-            if (_cache.TryGetValue(cacheKey, out _))
+            var existingValue = await _cache.GetStringAsync(cacheKey, cancellationToken);
+            if (!string.IsNullOrEmpty(existingValue))
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Refresh token already used"));
             }
 
-            // Get user ID from token
-            var userIdClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "axon_user_id")?.Value;
-            if (!Guid.TryParse(userIdClaim, out var userId))
+            // Extract user ID from token for direct lookup (performance optimization)
+            var userId = _refreshTokenProvider.GetUserIdFromToken(refreshToken);
+            if (userId == null)
+            {
+                return Result.Failure<RefreshTokenResponse, Error>(
+                    Error.Unauthorized("Invalid refresh token format"));
+            }
+
+            // Direct lookup instead of O(n) iteration
+            var validUser = await _userManager.FindByIdAsync(userId.Value.ToString());
+            if (validUser == null)
+            {
+                return Result.Failure<RefreshTokenResponse, Error>(
+                    Error.Unauthorized("User not found"));
+            }
+
+            // Validate token against the specific user
+            var isValid = await _refreshTokenProvider.ValidateAsync(
+                "RefreshToken",
+                refreshToken,
+                _userManager,
+                validUser);
+
+            if (!isValid)
             {
                 return Result.Failure<RefreshTokenResponse, Error>(
                     Error.Unauthorized("Invalid refresh token"));
             }
 
-            // Get user from database
-            var user = await _userManager.FindByIdAsync(userId.ToString());
-            if (user == null)
-            {
-                return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.NotFound("User not found"));
-            }
-
             // Generate new access token
             var tokenResult = await _tokenService.GenerateAccessTokenAsync(
-                user.AxonPrincipalId,
-                ProviderType.From(user.ProviderType),
-                user.OriginalSubject,
-                user.OriginalIssuer,
+                validUser.AxonPrincipalId,
+                ProviderType.From(validUser.ProviderType),
+                validUser.OriginalSubject,
+                validUser.OriginalIssuer,
                 30, // 30 minutes
                 cancellationToken);
 
@@ -419,23 +418,18 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var newAccessToken = tokenResult.Value.AccessToken;
 
-            // Generate new refresh token
-            var newRefreshTokenResult = await _tokenService.GenerateRefreshTokenAsync(
-                user.AxonPrincipalId,
-                ProviderType.From(user.ProviderType),
-                user.OriginalSubject,
-                user.OriginalIssuer,
-                cancellationToken);
+            // Generate new refresh token using Identity's token system
+            var newRefreshToken = await _refreshTokenProvider.GenerateAsync(
+                "RefreshToken",
+                _userManager,
+                validUser);
 
-            if (newRefreshTokenResult.IsFailure)
+            // Mark old refresh token as used (prevent replay) with sliding expiration
+            var options = new DistributedCacheEntryOptions
             {
-                return Result.Failure<RefreshTokenResponse, Error>(newRefreshTokenResult.Error);
-            }
-
-            var newRefreshToken = newRefreshTokenResult.Value.RefreshToken;
-
-            // Mark old refresh token as used (prevent replay)
-            _cache.Set(cacheKey, true, TimeSpan.FromDays(30));
+                SlidingExpiration = TimeSpan.FromDays(30)
+            };
+            await _cache.SetStringAsync(cacheKey, "used", options, cancellationToken);
 
             var response = new RefreshTokenResponse(
                 AccessToken: newAccessToken,
@@ -446,7 +440,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
                 AccessTokenExpiresAt: DateTimeOffset.UtcNow.AddMinutes(30),
                 RefreshTokenExpiresAt: DateTimeOffset.UtcNow.AddDays(30));
 
-            _logger.LogInformation("Token refreshed successfully for user {UserId}", userId);
+            _logger.LogInformation("Token refreshed successfully for user {UserId}", validUser.Id);
 
             return Result.Success<RefreshTokenResponse, Error>(response);
         }
@@ -459,7 +453,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     }
 
     /// <summary>
-    /// Invalidate a user's current session (logout)
+    /// Invalidate a user's current session using SignInManager for complete cleanup
     /// </summary>
     public async Task<UnitResult<Error>> InvalidateSessionAsync(
         Guid userId,
@@ -473,14 +467,27 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
                 return UnitResult.Failure(Error.NotFound("User not found"));
             }
 
+            // Use SignInManager for complete session cleanup
+            // This updates security stamp and clears cookies/session automatically
+            await _signInManager.SignOutAsync();
+
             // Update security stamp to invalidate all existing tokens
             await _userManager.UpdateSecurityStampAsync(user);
 
-            // Clear any cached data for this user
-            var userCacheKey = $"user:session:{userId}";
-            _cache.Remove(userCacheKey);
+            // Clear distributed cache entries for this user
+            var cacheKeys = new[]
+            {
+                $"user:session:{userId}",
+                $"user:tokens:{userId}",
+                $"user:refresh:{userId}"
+            };
 
-            _logger.LogInformation("Session invalidated for user {UserId}", userId);
+            foreach (var key in cacheKeys)
+            {
+                await _cache.RemoveAsync(key, cancellationToken);
+            }
+
+            _logger.LogInformation("Session completely invalidated for user {UserId} using SignInManager", userId);
 
             return UnitResult.Success<Error>();
         }

@@ -1,5 +1,6 @@
 namespace Axon.Modules.Identity.Application.Providers;
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Axon.Modules.Identity.Application.Common;
@@ -78,8 +79,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             var messageBytes = Encoding.UTF8.GetBytes(walletRequest.SignedMessage);
             var challengeValidation = ValidateChallenge(
                 messageBytes,
-                walletRequest.Mac,
-                int.Parse(walletRequest.Mkv.Replace("v", "")));
+                int.Parse(walletRequest.Mkv.Replace("v", "", StringComparison.Ordinal), CultureInfo.InvariantCulture));
 
             if (challengeValidation.IsFailure)
             {
@@ -120,8 +120,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             // Get or create Identity user
             var identityUser = await GetOrCreateIdentityUserAsync(
                 principal,
-                walletRequest,
-                cancellationToken);
+                walletRequest);
 
             if (identityUser == null)
             {
@@ -156,7 +155,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
         }
     }
 
-    private Result<bool, Error> ValidateChallenge(byte[] message, string mac, int keyVersion = 1)
+    private Result<bool, Error> ValidateChallenge(byte[] message, int keyVersion = 1)
     {
         try
         {
@@ -175,13 +174,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
                 return Result.Failure<bool, Error>(Error.Validation("Invalid challenge format"));
             }
 
-            // Delegate to ChallengeService for validation
-            var macValidation = _challengeService.ValidateMac(messageJson, mac, $"v{keyVersion}");
-            if (macValidation.IsFailure || !macValidation.Value)
-            {
-                return Result.Failure<bool, Error>(Error.Validation("Invalid challenge MAC"));
-            }
-
+            // Validate challenge using Identity token system
             var challengeValidation = _challengeService.ValidateChallenge(messageJson, chainId ?? "", address ?? "", audience ?? "axon-challenge");
             if (challengeValidation.IsFailure || !challengeValidation.Value)
             {
@@ -284,8 +277,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
 
     private async Task<AxonUserAuth?> GetOrCreateIdentityUserAsync(
         AxonPrincipal principal,
-        WalletAuthenticationRequest request,
-        CancellationToken cancellationToken = default)
+        WalletAuthenticationRequest request)
     {
         // Try to find existing Identity user
         var existingUsers = await _userManager.GetUsersForClaimAsync(

@@ -3,27 +3,27 @@ using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Configuration;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.Entities;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Axon.Modules.Identity.Infrastructure.Services;
 
 /// <summary>
-/// Simplified challenge service using Microsoft Data Protection API.
-/// Replaces manual HMAC operations with automatic encryption, key rotation, and tamper protection.
+/// Simplified challenge service using Microsoft Identity's token system and Data Protection API.
+/// Leverages built-in MAC validation and unified TokenReplayCache for production-ready replay protection.
 /// </summary>
 public sealed class ChallengeService : IChallengeService
 {
-    private readonly IDataProtector _challengeProtector;
     private readonly UserManager<AxonUserAuth> _userManager;
-    private readonly IMemoryCache _cache;
+    private readonly ChallengeTokenProvider _tokenProvider;
+    private readonly TokenReplayCache _replayCache;
     private readonly ILogger<ChallengeService> _logger;
-    private readonly IOptions<AuthenticationOptions> _authOptions;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -31,24 +31,21 @@ public sealed class ChallengeService : IChallengeService
     };
 
     public ChallengeService(
-        IDataProtectionProvider dataProtectionProvider,
         UserManager<AxonUserAuth> userManager,
-        IMemoryCache cache,
-        ILogger<ChallengeService> logger,
-        IOptions<AuthenticationOptions> authOptions)
+        ChallengeTokenProvider tokenProvider,
+        TokenReplayCache replayCache,
+        ILogger<ChallengeService> logger)
     {
-        ArgumentNullException.ThrowIfNull(dataProtectionProvider);
-        _challengeProtector = dataProtectionProvider.CreateProtector("Axon.Challenge");
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        _replayCache = replayCache ?? throw new ArgumentNullException(nameof(replayCache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _authOptions = authOptions ?? throw new ArgumentNullException(nameof(authOptions));
     }
 
     /// <summary>
-    /// Generates an authentication challenge for wallet signing using Data Protection API
+    /// Generates an authentication challenge using Identity's token system
     /// </summary>
-    public Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
+    public async Task<Result<AuthenticationChallenge, Error>> GenerateChallengeAsync(
         string chainId,
         string walletAddress,
         string audience,
@@ -60,6 +57,23 @@ public sealed class ChallengeService : IChallengeService
             var issuedAt = now.ToUnixTimeSeconds();
             var exp = now.AddMinutes(5).ToUnixTimeSeconds();
             var nonce = Guid.NewGuid().ToString("N");
+
+            // Find or create a temporary user for challenge generation
+            var tempUserId = $"challenge:{walletAddress.ToLowerInvariant()}";
+            var user = await _userManager.FindByNameAsync(tempUserId) ??
+                       AxonUserAuth.Create(
+                           new AxonUserId(Guid.NewGuid()),
+                           "challenge",
+                           "axon",
+                           walletAddress,
+                           null,
+                           null);
+
+            if (await _userManager.FindByNameAsync(tempUserId) == null)
+            {
+                user.UserName = tempUserId;
+                await _userManager.CreateAsync(user);
+            }
 
             // Create the challenge data
             var challengeData = new Dictionary<string, object>
@@ -74,8 +88,11 @@ public sealed class ChallengeService : IChallengeService
 
             var message = JsonSerializer.Serialize(challengeData, JsonOptions);
 
-            // Use Data Protection API for tamper-proof protection with automatic expiration
-            var protectedChallenge = _challengeProtector.Protect(message, TimeSpan.FromMinutes(5));
+            // Generate protected token using Identity's token provider
+            var protectedChallenge = await _tokenProvider.GenerateAsync(
+                $"Challenge:{chainId}:{audience}",
+                _userManager,
+                user);
 
             var challenge = new AuthenticationChallenge(
                 ChainId: chainId,
@@ -85,61 +102,22 @@ public sealed class ChallengeService : IChallengeService
                 Nonce: nonce,
                 Aud: audience,
                 Message: message,
-                Mac: protectedChallenge, // Protected token instead of HMAC
-                Mkv: "dp_v1"); // Data Protection version
+                Mac: protectedChallenge,
+                Mkv: "dataprotection_v1"); // Using ITimeLimitedDataProtector with automatic MAC versioning
 
-            _logger.LogDebug("Generated protected challenge for wallet {Address} on chain {ChainId}",
+            _logger.LogDebug("Generated challenge for wallet {Address} on chain {ChainId}",
                 MaskAddress(walletAddress), chainId);
 
-            return Task.FromResult(Result.Success<AuthenticationChallenge, Error>(challenge));
+            return Result.Success<AuthenticationChallenge, Error>(challenge);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to generate challenge");
-            return Task.FromResult(Result.Failure<AuthenticationChallenge, Error>(
-                Error.Internal("Failed to generate challenge")));
+            return Result.Failure<AuthenticationChallenge, Error>(
+                Error.Internal("Failed to generate challenge"));
         }
     }
 
-    /// <summary>
-    /// Validates the protected token (replaces HMAC validation)
-    /// </summary>
-    public Result<bool, Error> ValidateMac(
-        string message,
-        string protectedToken,
-        string keyVersion)
-    {
-        try
-        {
-            // Handle legacy HMAC tokens during migration
-            if (keyVersion != "dp_v1")
-            {
-                return ValidateLegacyHmac(message, protectedToken, keyVersion);
-            }
-
-            // Validate using Data Protection API
-            var unprotectedMessage = _challengeProtector.Unprotect(protectedToken);
-            var isValid = string.Equals(unprotectedMessage, message, StringComparison.Ordinal);
-
-            if (!isValid)
-            {
-                _logger.LogWarning("Protected token validation failed");
-            }
-
-            return Result.Success<bool, Error>(isValid);
-        }
-        catch (System.Security.Cryptography.CryptographicException)
-        {
-            _logger.LogWarning("Protected token validation failed - token expired or tampered");
-            return Result.Success<bool, Error>(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to validate protected token");
-            return Result.Failure<bool, Error>(
-                Error.Internal("Failed to validate protected token"));
-        }
-    }
 
     /// <summary>
     /// Validates a challenge message structure and TTL
@@ -250,7 +228,7 @@ public sealed class ChallengeService : IChallengeService
     }
 
     /// <summary>
-    /// Checks and marks a nonce as used for replay protection using memory cache
+    /// Checks and marks a nonce as used for replay protection using unified TokenReplayCache
     /// </summary>
     public async Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
         string signedMessage,
@@ -274,19 +252,24 @@ public sealed class ChallengeService : IChallengeService
                 return UnitResult.Failure(Error.Validation("Missing nonce"));
             }
 
-            // Check if nonce was already used
-            var cacheKey = $"nonce:used:{nonce}";
-            if (_cache.TryGetValue(cacheKey, out _))
+            // Check if nonce was already used using unified TokenReplayCache
+            var isReplay = await _replayCache.TryFindNonceAsync(nonce);
+            if (isReplay)
             {
-                _logger.LogWarning("Nonce replay attempt detected: {Nonce}", nonce);
+                _logger.LogWarning("Nonce replay attempt detected: {NonceHash}", ComputeNonceHash(nonce));
                 return UnitResult.Failure(Error.Unauthorized("Nonce already used"));
             }
 
-            // Mark nonce as used with 5-minute expiration (same as challenge expiration)
-            _cache.Set(cacheKey, true, TimeSpan.FromMinutes(5));
+            // Mark nonce as used with automatic expiration
+            var added = await _replayCache.TryAddNonceAsync(nonce, TimeSpan.FromMinutes(5));
+            if (!added)
+            {
+                _logger.LogWarning("Nonce replay detected during add operation: {NonceHash}", ComputeNonceHash(nonce));
+                return UnitResult.Failure(Error.Unauthorized("Nonce already used"));
+            }
 
-            _logger.LogDebug("Nonce marked as used: {Nonce}", nonce);
-            return await Task.FromResult(UnitResult.Success<Error>());
+            _logger.LogDebug("Nonce marked as used: {NonceHash}", ComputeNonceHash(nonce));
+            return UnitResult.Success<Error>();
         }
         catch (Exception ex)
         {
@@ -295,54 +278,18 @@ public sealed class ChallengeService : IChallengeService
         }
     }
 
-    /// <summary>
-    /// Legacy HMAC validation for backward compatibility during migration
-    /// </summary>
-    private Result<bool, Error> ValidateLegacyHmac(string message, string mac, string keyVersion)
-    {
-        try
-        {
-            var hmacKeys = _authOptions.Value.HmacKeys;
-            if (hmacKeys == null || hmacKeys.Count == 0)
-            {
-                _logger.LogWarning("No legacy HMAC keys configured for key version: {KeyVersion}", keyVersion);
-                return Result.Success<bool, Error>(false);
-            }
-
-            var hmacKey = hmacKeys.GetValueOrDefault(keyVersion);
-            if (hmacKey == null)
-            {
-                _logger.LogWarning("Invalid legacy key version: {KeyVersion}", keyVersion);
-                return Result.Success<bool, Error>(false);
-            }
-
-            using var hmac = System.Security.Cryptography.HMACSHA256.Create();
-            hmac.Key = Convert.FromBase64String(hmacKey);
-            var messageBytes = System.Text.Encoding.UTF8.GetBytes(message);
-            var computedMac = Convert.ToBase64String(hmac.ComputeHash(messageBytes));
-
-            var isValid = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                Convert.FromBase64String(computedMac),
-                Convert.FromBase64String(mac));
-
-            if (!isValid)
-            {
-                _logger.LogWarning("Legacy HMAC validation failed for key version {KeyVersion}", keyVersion);
-            }
-
-            return Result.Success<bool, Error>(isValid);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to validate legacy HMAC");
-            return Result.Success<bool, Error>(false);
-        }
-    }
+    // Legacy HMAC validation removed - using Data Protection API with built-in MAC validation
 
     private static string MaskAddress(string address)
     {
         return address.Length > 8
             ? $"{address[..4]}...{address[^4..]}"
             : address;
+    }
+
+    private static string ComputeNonceHash(string nonce)
+    {
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(nonce));
+        return Convert.ToBase64String(hashBytes)[..12]; // Use first 12 chars for compact logging
     }
 }

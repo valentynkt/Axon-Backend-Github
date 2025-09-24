@@ -4,30 +4,27 @@ using System.Security.Claims;
 using Axon.Modules.Identity.Domain.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-/// Centralized JWT Bearer event handlers for token validation, replay protection, and claims transformation
+/// Centralized JWT Bearer event handlers for token validation and claims transformation.
+/// Replay protection is handled by JWT Bearer middleware with ITokenReplayCache.
 /// </summary>
 public sealed class JwtEventHandlers
 {
-    private readonly IDistributedCache _distributedCache;
     private readonly UserManager<AxonUserAuth>? _userManager;
     private readonly ILogger<JwtEventHandlers> _logger;
 
     public JwtEventHandlers(
-        IDistributedCache distributedCache,
         ILogger<JwtEventHandlers> logger,
         UserManager<AxonUserAuth>? userManager = null)
     {
-        _distributedCache = distributedCache ?? throw new ArgumentNullException(nameof(distributedCache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _userManager = userManager;
     }
 
     /// <summary>
-    /// Validates Axon JWT tokens with replay protection and security stamp validation
+    /// Validates Axon JWT tokens with security stamp validation. Replay protection handled by middleware.
     /// </summary>
     public async Task ValidateAxonTokenAsync(TokenValidatedContext context)
     {
@@ -40,45 +37,7 @@ public sealed class JwtEventHandlers
                 return;
             }
 
-            // Extract JTI for replay protection
-            var jti = principal.FindFirst("jti")?.Value;
-            if (string.IsNullOrEmpty(jti))
-            {
-                _logger.LogWarning("Axon JWT missing JTI claim");
-                context.Fail("Token missing JTI claim");
-                return;
-            }
-
-            // Check for token replay
-            var replayKey = $"axon:jwt:nonce:{jti}";
-            var cachedNonce = await _distributedCache.GetStringAsync(replayKey, context.HttpContext.RequestAborted);
-
-            if (!string.IsNullOrEmpty(cachedNonce))
-            {
-                _logger.LogWarning("Token replay detected for JTI: {Jti}", jti);
-                context.Fail("Token replay detected");
-                return;
-            }
-
-            // Cache the JTI to prevent replay
-            var expClaim = principal.FindFirst("exp")?.Value;
-            if (long.TryParse(expClaim, out var exp))
-            {
-                var expiryTime = DateTimeOffset.FromUnixTimeSeconds(exp);
-                var ttl = expiryTime - DateTimeOffset.UtcNow;
-
-                if (ttl > TimeSpan.Zero)
-                {
-                    await _distributedCache.SetStringAsync(
-                        replayKey,
-                        "used",
-                        new DistributedCacheEntryOptions
-                        {
-                            AbsoluteExpirationRelativeToNow = ttl.Add(TimeSpan.FromMinutes(5)) // Add buffer
-                        },
-                        context.HttpContext.RequestAborted);
-                }
-            }
+            // Replay protection is now handled by JWT Bearer middleware with ValidateTokenReplay and ITokenReplayCache
 
             // Validate security stamp if UserManager is available
             if (_userManager != null)

@@ -32,7 +32,7 @@ public sealed class IdentityApiModule : IApiModule
     {
         // Register Identity Application layer services (handlers, validators, orchestration)
         services.AddIdentityApplication();
-        services.AddIdentityInfrastructure(configuration);
+        services.AddIdentityInfrastructure(configuration, environment);
 
         // Register JWT Bearer authentication using Dynamic.xyz
         AddJwtAuthentication(services, configuration);
@@ -42,6 +42,9 @@ public sealed class IdentityApiModule : IApiModule
 
         // Register rate limiting for auth endpoints
         AddRateLimiting(services);
+
+        // Configure authorization policies for different authentication scenarios
+        ConfigureAuthorizationPolicies(services);
     }
 
     private static void AddJwtAuthentication(IServiceCollection services, IConfiguration configuration)
@@ -70,8 +73,40 @@ public sealed class IdentityApiModule : IApiModule
 
         services.AddAuthentication(options =>
         {
-            options.DefaultAuthenticateScheme = "AxonJwt";
+            // Use policy selector for multiple schemes
+            options.DefaultScheme = "DynamicOrAxon";
+            options.DefaultAuthenticateScheme = "DynamicOrAxon";
             options.DefaultChallengeScheme = "AxonJwt";
+        })
+        .AddPolicyScheme("DynamicOrAxon", "Dynamic or Axon JWT", options =>
+        {
+            options.ForwardDefaultSelector = context =>
+            {
+                // Check authorization header to determine which scheme to use
+                var authorization = context.Request.Headers.Authorization.FirstOrDefault();
+                if (string.IsNullOrEmpty(authorization))
+                    return "AxonJwt";
+
+                // Parse the token to check issuer (without validation)
+                if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    var token = authorization["Bearer ".Length..];
+                    try
+                    {
+                        var handler = new JwtSecurityTokenHandler();
+                        if (handler.CanReadToken(token))
+                        {
+                            var jwtToken = handler.ReadJwtToken(token);
+                            // Dynamic tokens have issuer starting with app.dynamicauth.com
+                            if (jwtToken.Issuer?.StartsWith("app.dynamicauth.com", StringComparison.OrdinalIgnoreCase) == true)
+                                return "DynamicJwt";
+                        }
+                    }
+                    catch { /* Fallback to Axon */ }
+                }
+
+                return "AxonJwt";
+            };
         })
         .AddJwtBearer("DynamicJwt", options =>
         {
@@ -138,6 +173,10 @@ public sealed class IdentityApiModule : IApiModule
             var keyBytes = Convert.FromBase64String(axonSigningKey);
             var key = new SymmetricSecurityKey(keyBytes);
 
+            // Get the TokenReplayCache from DI for replay protection
+            var serviceProvider = services.BuildServiceProvider();
+            var tokenReplayCache = serviceProvider.GetRequiredService<Microsoft.IdentityModel.Tokens.ITokenReplayCache>();
+
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidIssuer = axonIssuer,
@@ -150,7 +189,8 @@ public sealed class IdentityApiModule : IApiModule
                 RequireExpirationTime = true,
                 ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
                 ValidTypes = new[] { "JWT", "at+jwt" },
-                ValidateTokenReplay = false,
+                ValidateTokenReplay = true, // Enable built-in token replay validation
+                TokenReplayCache = tokenReplayCache, // Use unified replay cache
                 NameClaimType = "sub",
                 RoleClaimType = "role"
             };
@@ -231,6 +271,51 @@ public sealed class IdentityApiModule : IApiModule
                 context.HttpContext.Response.StatusCode = 429;
                 await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", token);
             };
+        });
+    }
+
+    private static void ConfigureAuthorizationPolicies(IServiceCollection services)
+    {
+        services.AddAuthorization(options =>
+        {
+            // Policy for endpoints that accept either Dynamic or Axon tokens
+            options.AddPolicy("DynamicOrAxon", policy =>
+                policy.AddAuthenticationSchemes("DynamicJwt", "AxonJwt")
+                      .RequireAuthenticatedUser());
+
+            // Policy for Dynamic-only endpoints
+            options.AddPolicy("DynamicOnly", policy =>
+                policy.AddAuthenticationSchemes("DynamicJwt")
+                      .RequireAuthenticatedUser());
+
+            // Policy for Axon-only endpoints (internal services)
+            options.AddPolicy("AxonOnly", policy =>
+                policy.AddAuthenticationSchemes("AxonJwt")
+                      .RequireAuthenticatedUser()
+                      .RequireClaim("provider_type"));
+
+            // Policy for verified wallet users
+            options.AddPolicy("VerifiedWallet", policy =>
+                policy.RequireAuthenticatedUser()
+                      .RequireClaim("primary_wallet")
+                      .RequireClaim("wallet_count"));
+
+            // Policy for multi-chain users
+            options.AddPolicy("MultiChain", policy =>
+                policy.RequireAuthenticatedUser()
+                      .RequireAssertion(context =>
+                      {
+                          var walletCountClaim = context.User.FindFirst("wallet_count");
+                          if (walletCountClaim != null && int.TryParse(walletCountClaim.Value, out var count))
+                              return count > 1;
+                          return false;
+                      }));
+
+            // Default policy - accepts any authenticated user
+            options.DefaultPolicy = options.GetPolicy("DynamicOrAxon") ??
+                new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
         });
     }
 }

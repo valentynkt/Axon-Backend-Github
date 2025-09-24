@@ -39,17 +39,7 @@ public sealed class VerifyWalletSignatureHandler
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        // Step 1: Validate MAC
-        var macResult = _orchestrator.ValidateMac(
-            command.SignedMessage, command.Mac, command.Mkv);
-
-        if (macResult.IsFailure)
-        {
-            _logger.LogWarning("MAC validation failed for mkv={Mkv}", command.Mkv);
-            return Result.Failure<VerifyWalletSignatureResult, Error>(macResult.Error);
-        }
-
-        // Step 2: Extract audience from signed message for validation
+        // Step 1: Extract audience from signed message for validation
         using var doc = JsonDocument.Parse(command.SignedMessage);
         var audience = doc.RootElement.GetProperty("aud").GetString() ?? string.Empty;
 

@@ -24,13 +24,6 @@ public interface IAuthenticationOrchestrator
         string audience,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Validates the HMAC signature of a message
-    /// </summary>
-    Result<bool, Error> ValidateMac(
-        string message,
-        string mac,
-        string keyVersion);
 
     /// <summary>
     /// Validates a challenge message structure and TTL
