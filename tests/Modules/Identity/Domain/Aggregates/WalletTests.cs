@@ -112,7 +112,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-10);
-            var wallet = CreateWallet();
+            var wallet = CreateWallet(null, TestConstants.SolanaChain, null, initialTimestamp);
             var newerTimestamp = DateTime.UtcNow;
 
             // Act
@@ -128,7 +128,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var recentTimestamp = DateTime.UtcNow;
-            var wallet = CreateWallet();
+            var wallet = CreateWallet(null, TestConstants.SolanaChain, null, recentTimestamp);
             var olderTimestamp = recentTimestamp.AddMinutes(-5);
 
             // Act
@@ -143,7 +143,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var timestamp = DateTime.UtcNow;
-            var wallet = CreateWallet();
+            var wallet = CreateWallet(null, TestConstants.SolanaChain, null, timestamp);
 
             // Act
             wallet.UpdateLastSeen(timestamp);

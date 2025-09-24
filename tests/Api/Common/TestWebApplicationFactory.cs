@@ -1,5 +1,6 @@
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence.Context;
 using BuildingBlocks.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -78,10 +79,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 typeof(ChatReadDbContext),
                 typeof(IdentityWriteDbContext),
                 typeof(IdentityReadDbContext),
+                typeof(IdentityContext),
                 typeof(DbContextOptions<ChatDbContext>),
                 typeof(DbContextOptions<ChatReadDbContext>),
                 typeof(DbContextOptions<IdentityWriteDbContext>),
-                typeof(DbContextOptions<IdentityReadDbContext>)
+                typeof(DbContextOptions<IdentityReadDbContext>),
+                typeof(DbContextOptions<IdentityContext>)
             };
 
             foreach (var contextType in contextsToRemove)
@@ -129,6 +132,13 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
+            // Add IdentityContext for ASP.NET Identity Framework
+            services.AddDbContext<IdentityContext>(options =>
+            {
+                options.UseNpgsql(_testBase.GetConnectionString());
+                options.EnableSensitiveDataLogging();
+            }, ServiceLifetime.Scoped);
+
             // Apply additional service configuration if provided
             _additionalServices?.Invoke(services);
         });
@@ -138,6 +148,9 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
+        // Initialize PostgreSQL container first
+        _testBase.OneTimeSetUpPostgreSql().GetAwaiter().GetResult();
+
         var host = base.CreateHost(builder);
 
         // Create databases after the host is built and service provider is available
@@ -152,6 +165,10 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 // Create Identity database using migrations
                 var identityContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
                 identityContext.Database.Migrate();
+
+                // Create IdentityContext database using migrations
+                var mainIdentityContext = scope.ServiceProvider.GetRequiredService<IdentityContext>();
+                mainIdentityContext.Database.Migrate();
             }
             catch (Exception ex)
             {

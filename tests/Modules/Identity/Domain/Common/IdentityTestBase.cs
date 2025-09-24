@@ -80,12 +80,14 @@ public abstract class IdentityTestBase
     protected static Wallet CreateWallet(
         WalletId? walletId = null,
         string chainId = TestConstants.SolanaChain,
-        Address? address = null)
+        Address? address = null,
+        DateTime? timestamp = null)
     {
         return Wallet.Create(
             walletId,
             chainId,
-            address ?? Builders.SolanaAddress);
+            address ?? Builders.SolanaAddress,
+            timestamp);
     }
 
     /// <summary>
