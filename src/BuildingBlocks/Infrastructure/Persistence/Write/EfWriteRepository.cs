@@ -47,6 +47,18 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
     }
 
     // ——— U P D A T E ———
+    /// <summary>
+    /// Updates an aggregate in the database with optimistic concurrency control.
+    ///
+    /// How PostgreSQL xmin concurrency works:
+    /// 1. The Version property (mapped to xmin) contains the row's transaction ID when last updated
+    /// 2. For detached entities: Attach preserves the original Version value from when entity was loaded
+    /// 3. When SaveChanges executes, EF Core includes "WHERE xmin = @originalVersion" in the UPDATE
+    /// 4. PostgreSQL automatically updates xmin to a new value on successful update
+    /// 5. If another transaction modified the row, the WHERE clause won't match and DbUpdateConcurrencyException is thrown
+    ///
+    /// This provides automatic optimistic concurrency without manual version management.
+    /// </summary>
     public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
@@ -55,27 +67,60 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
 
         if (entry.State == EntityState.Detached)
         {
-            // For detached entities: attach first, then mark as modified
-            // This respects concurrency tokens properly
+            // For detached entities: Attach first, then set to Modified
+            // This preserves the original Version value for the WHERE clause
+            // EF Core + Npgsql will automatically handle xmin concurrency
             _dbSet.Attach(aggregate);
             entry.State = EntityState.Modified;
-        }
 
-        // For already tracked entities (Unchanged, Modified), EF Core's change tracking
-        // will handle everything automatically, including respecting concurrency tokens
+            // CRITICAL: Set the original Version value for concurrency check
+            // Without this, EF won't include "WHERE ... AND xmin = @originalVersion"
+            entry.Property(e => e.Version).IsModified = false;
+            entry.Property(e => e.Version).OriginalValue = aggregate.Version;
+        }
+        else if (entry.State == EntityState.Unchanged || entry.State == EntityState.Modified)
+        {
+            // For tracked entities, only mark as Modified if currently Unchanged
+            // This preserves the change tracking from domain modifications
+            if (entry.State == EntityState.Unchanged)
+            {
+                entry.State = EntityState.Modified;
+            }
+
+            // CRITICAL: Ensure Version property is not modified and preserves its original value
+            // This ensures EF Core includes the concurrency check in the WHERE clause
+            entry.Property(e => e.Version).IsModified = false;
+        }
 
         return Task.FromResult(aggregate);
     }
 
     public virtual Task<IReadOnlyList<TAggregate>> UpdateRangeAsync(
-        IReadOnlyList<TAggregate> aggregates, 
+        IReadOnlyList<TAggregate> aggregates,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
-        
-        var aggregatesList = aggregates.ToList();
-        _dbSet.UpdateRange(aggregatesList);
-        return Task.FromResult<IReadOnlyList<TAggregate>>(aggregatesList.AsReadOnly());
+
+        // Use the same Attach pattern as UpdateAsync to preserve concurrency tokens
+        foreach (var aggregate in aggregates)
+        {
+            var entry = _context.Entry(aggregate);
+
+            if (entry.State == EntityState.Detached)
+            {
+                // For detached entities: Attach first, then set to Modified
+                // This preserves the original Version value for the WHERE clause
+                _dbSet.Attach(aggregate);
+                entry.State = EntityState.Modified;
+
+                // CRITICAL: Preserve original Version for concurrency
+                entry.Property(e => e.Version).IsModified = false;
+                entry.Property(e => e.Version).OriginalValue = aggregate.Version;
+            }
+            // For already tracked entities, EF Core's change tracking handles everything
+        }
+
+        return Task.FromResult(aggregates);
     }
 
     // ——— R E A D (for modification) ———

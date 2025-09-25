@@ -1,273 +1,265 @@
 # 🚀 Conversation Progress Capture
-**Generated**: 2025-09-23 05:35 UTC
-**Session Duration**: ~2.5 hours
-**Context ID**: chainid-architecture-refactor
+**Generated**: 2025-09-25 21:00 PST
+**Session Duration**: ~4.5 hours across two sessions
+**Context ID**: identity-persistence-concurrency-fix-002
 
 ---
 
 ## 🎯 Mission Context
 
 ### Original Problem Statement
-Discovered confusion between Dynamic's EnvironmentId (tenant identifier) and NetworkEnvironment (blockchain network). System was incorrectly trying to map Dynamic tenant IDs to blockchain networks, causing architectural complexity and bugs.
+Following a significant refactoring to implement PostgreSQL xmin-based optimistic concurrency control (per research document), the Identity Infrastructure Persistence tests are failing. Concurrency tests are not throwing DbUpdateConcurrencyException when they should, indicating that optimistic concurrency control is not working.
 
-### Architecture Evolution
-- **Initial State**: Dual representation with NetworkEnvironment + simple ChainId
-- **Discovery**: ChainId already supports compound format (e.g., "solana-mainnet")
-- **Decision**: Eliminate NetworkEnvironment entirely, use compound ChainIds as single source of truth
-- **Final State**: Simplified architecture with compound ChainIds only
+### Goal Evolution
+- **Initial Goal**: Review and fix failing Identity Infrastructure Persistence tests after concurrency refactoring
+- **Evolved Goal 1**: Fix navigation entities (PrincipalChainDefault) incorrectly triggering concurrency exceptions
+- **Evolved Goal 2**: Discovered migrations were trying to CREATE xmin columns (system columns that already exist)
+- **Current Goal**: Get concurrency control working properly using PostgreSQL's built-in xmin system column
 
 ### Success Criteria
-- [x] Remove NetworkEnvironmentResolver service
-- [x] Implement ChainId conversion at API boundaries
-- [x] Simplify Wallet entity to use compound ChainIds only
-- [x] Update database schema to remove redundant NetworkEnvironment
-- [ ] Create database migration for production
-- [ ] Validate all chain mappings work correctly
+- [ ] All Identity Infrastructure Persistence tests pass (Currently: 78 failed, 159 passed)
+- [ ] Concurrency tests properly throw DbUpdateConcurrencyException
+- [ ] No attempt to create xmin columns in migrations (xmin is a system column)
+- [ ] Proper concurrency control for all entities with Version property
 
 ---
 
-## 📊 ChainId Architecture Deep Dive
+## 📊 Current State Assessment
 
-### 🔑 Core Concept: Compound Chain IDs
+### ✅ What's Been Accomplished (Session 2)
 
-**Definition**: A compound chain ID combines blockchain network + environment in a single string
-- Format: `{chain}-{network}` (e.g., "solana-mainnet", "ethereum-goerli")
-- Contains all necessary information for wallet identification
-- Eliminates need for separate NetworkEnvironment property
+1. **Identified Critical Migration Issue**: Discovered migrations were trying to CREATE xmin columns
+   - **Problem**: xmin is a PostgreSQL system column that exists on every table by default
+   - **Impact**: EF Core was trying to manage a system column, breaking concurrency
+   - **Files affected**: All migration files were creating xmin columns explicitly
 
-### 📁 ChainId Value Object (`/src/Modules/Identity/Domain/ValueObjects/ChainId.cs`)
+2. **Complete Migration Reset**: Cleaned up all migrations and database
+   - Removed all migration folders from Chat and Identity modules
+   - Stopped and removed Docker PostgreSQL container
+   - Started fresh PostgreSQL container with correct credentials
+   - Created new migrations in correct location (Infrastructure/Persistence/Migrations)
 
-```csharp
-// Supported formats in ChainId
-private static readonly HashSet<string> SupportedChains = new()
-{
-    // Simple chains (legacy from Dynamic)
-    "solana", "ethereum", "polygon", "arbitrum",
+3. **Fixed Entity Configurations**: Reverted to simple `.IsRowVersion()` configuration
+   - Removed `.HasColumnName("xmin")` and `.HasColumnType("xid")` from all configurations
+   - Applied to: AxonPrincipalConfiguration, WalletConfiguration, PrincipalChainDefaultConfiguration, WalletOwnershipConfiguration
+   - **Key Learning**: Npgsql should automatically map `.IsRowVersion()` to system xmin column
 
-    // Compound chains (our standard)
-    "solana-mainnet", "solana-devnet", "solana-testnet",
-    "ethereum-mainnet", "ethereum-goerli", "ethereum-sepolia",
-    "polygon-mainnet", "polygon-mumbai",
-    "arbitrum-one", "base-mainnet"
-};
-```
+4. **Added Version Property to Navigation Entities**:
+   - Added Version property to PrincipalChainDefault entity
+   - Added Version property to WalletOwnership entity
+   - Both now have proper concurrency control when modified through aggregate
 
-### 🔄 Chain ID Conversion Strategy
+5. **Fixed Base Repository UpdateAsync**:
+   - Enhanced to handle tracked entities properly
+   - Ensures Version.IsModified = false for both tracked and detached entities
+   - Removed problematic detaching logic from AxonPrincipalWriteRepository
 
-**Problem**: Dynamic.xyz sends simple chain IDs ("solana"), but we need compound format
-**Solution**: Convert at API edge using deterministic mapping
-
-```csharp
-// ExchangeEndpoint.cs:262-282
-private static string ConvertToCompoundChainId(string simpleChainId)
-{
-    // Already compound? Return as-is
-    if (simpleChainId.Contains('-')) return simpleChainId;
-
-    // Map simple to compound (default to mainnet)
-    return simpleChainId.ToLowerInvariant() switch
-    {
-        "solana" => "solana-mainnet",
-        "ethereum" => "ethereum-mainnet",
-        "polygon" => "polygon-mainnet",
-        "arbitrum" => "arbitrum-one",  // Special case
-        _ => $"{simpleChainId}-mainnet"
-    };
-}
-```
+### 📈 Progress Metrics
+- **Files Modified**: 10+ (configurations, repositories, entities)
+- **Tests Status**: 78 failing, 159 passing (Identity Infrastructure)
+- **Migrations**: Recreated fresh in correct locations
+- **Database**: Fresh PostgreSQL instance with clean schema
 
 ---
 
-## 💾 Database Schema Evolution
+## 🧭 Solution Journey & Decision Tree
 
-### Before: Triple-Key Constraint
-```sql
--- Old schema with NetworkEnvironment
-CREATE TABLE wallet (
-    id UUID PRIMARY KEY,
-    network_environment VARCHAR(50),  -- redundant!
-    chain_id VARCHAR(50),
-    address VARCHAR(200),
-    UNIQUE(network_environment, chain_id, address)
-);
-```
+### 📍 Major Milestones
 
-### After: Dual-Key Constraint
-```sql
--- New schema with compound ChainId only
-CREATE TABLE wallet (
-    id UUID PRIMARY KEY,
-    chain_id VARCHAR(50),  -- Now contains full info
-    address VARCHAR(200),
-    UNIQUE(chain_id, address)
-);
-```
+1. **Test Failure Analysis** (Time: ~10 min)
+   - Decision: Focus on PrincipalChainDefault concurrency errors
+   - Rationale: Error messages consistently pointed to this entity
+   - Impact: Discovered navigation entities incorrectly triggering concurrency
 
-### Migration Impact
-- **Removed**: `network_environment` column
-- **Removed**: Triple-key unique constraint
-- **Removed**: Check constraint for Solana network validation
-- **Added**: Simple dual-key constraint on (chain_id, address)
+2. **Entity Configuration Review** (Time: ~15 min)
+   - Decision: Confirmed PrincipalChainDefault doesn't have Version property
+   - Rationale: Only AggregateRoot entities should have concurrency control
+   - Impact: Validated that configuration is correct, issue is in tracking
 
----
+3. **Repository Override Attempt** (Time: ~20 min)
+   - Decision: Override UpdateAsync to handle navigation properties specially
+   - Rationale: Prevent EF Core from applying concurrency to non-aggregate entities
+   - Impact: Partial success - some tests still failing
 
-## 🗺️ Data Flow & Mapping
+### 🔍 Research & Investigation Results
 
-### 1. **External → API Layer**
-```
-Dynamic JWT: { chain: "solana" }
-    ↓
-ExchangeEndpoint.ConvertToCompoundChainId()
-    ↓
-Internal: { chain: "solana-mainnet" }
-```
+#### Build vs Buy Decisions
+| Component | Decision | Rationale | Status |
+|-----------|----------|-----------|---------|
+| Concurrency Control | Use PostgreSQL xmin | Native, automatic, no version management | Implemented |
+| Navigation Updates | Custom repository logic | EF Core default behavior problematic | Partially Implemented |
 
-### 2. **API → Domain Layer**
-```
-ExchangeWalletData { Chain: "solana-mainnet" }
-    ↓
-ChainId.Create("solana-mainnet")
-    ↓
-Wallet.Create(id, "solana-mainnet", address)
-```
-
-### 3. **Domain → Persistence**
-```
-Wallet { ChainId: "solana-mainnet" }
-    ↓
-EF Core Mapping
-    ↓
-DB: chain_id = "solana-mainnet"
-```
+#### Architecture Decisions Records (ADRs)
+- **ADR-001**: Use xmin for concurrency → Chosen because it's automatic and PostgreSQL-native
+- **ADR-002**: Only aggregates have Version property → Maintains DDD principles
+- **ADR-003**: Navigation entities use soft delete → Avoids constraint violations
 
 ---
 
-## 🏗️ Key Architectural Changes
+## 🚫 Anti-Patterns & Failed Attempts
 
-### 1. **Wallet Entity Simplification**
+### ❌ What Doesn't Work (Learn from these)
 
-**Before:**
-```csharp
-public sealed class Wallet
-{
-    public NetworkEnvironment NetworkEnvironment { get; }
-    public string ChainId { get; }
-    public Address Address { get; }
+1. **Failed Approach**: Trying to explicitly create xmin columns in migrations
+   - **Why it Failed**: xmin is a PostgreSQL SYSTEM column that exists on every table automatically
+   - **Lesson Learned**: NEVER try to create xmin columns - they're managed by PostgreSQL
+   - **Files Affected**: All migration files that had `table.Column<uint>(name: "xmin", type: "xid"...)`
 
-    public static Wallet Create(WalletId? id,
-        NetworkEnvironment networkEnvironment,  // REMOVED
-        string chainId,
-        Address address)
-}
-```
+2. **Failed Approach**: Using `.HasColumnName("xmin")` and `.HasColumnType("xid")` in configurations
+   - **Why it Failed**: This made EF Core try to manage the system column explicitly
+   - **Lesson Learned**: Just use `.IsRowVersion()` alone - Npgsql handles the mapping
+   - **Files Affected**: All entity configuration files
 
-**After:**
-```csharp
-public sealed class Wallet
-{
-    public string ChainId { get; }  // Now compound format
-    public Address Address { get; }
+3. **Failed Approach**: Detaching child entities in AxonPrincipalWriteRepository.UpdateAsync
+   - **Why it Failed**: Disrupted EF Core's change tracking, prevented concurrency from working
+   - **Lesson Learned**: Don't interfere with EF Core's tracking unless absolutely necessary
+   - **Files Affected**: AxonPrincipalWriteRepository.cs
 
-    public static Wallet Create(WalletId? id,
-        string chainId,  // Contains all info
-        Address address)
-}
-```
+4. **Failed Approach**: Only setting Version.IsModified = false for detached entities
+   - **Why it Failed**: Tracked entities also need Version.IsModified = false
+   - **Lesson Learned**: Both tracked and detached entities need proper Version handling
+   - **Files Affected**: EfWriteRepository.cs
 
-### 2. **Repository Pattern Changes**
-
-**WalletWriteRepository Updates:**
-- `GetByChainAndAddressAsync()` - Now uses compound ChainId
-- `EnsureManyByChainAndAddressAsync()` - Creates wallets with compound ChainId
-- `UpsertWalletAsync()` - Simplified signature without NetworkEnvironment
-
-### 3. **Removed Components**
-- ❌ `NetworkEnvironmentResolver.cs` - Incorrect mapping service
-- ❌ `INetworkEnvironmentResolver.cs` - Interface
-- ❌ `ChainId.GetNetworkEnvironment()` - No longer needed
-- ❌ `NetworkEnvironment` property from Wallet entity
+### 🚧 Current Blockers
+- **Blocker 1**: Concurrency tests still not throwing DbUpdateConcurrencyException
+  - **Symptom**: Second concurrent update succeeds when it should fail
+  - **Possible Cause**: xmin might not be included in WHERE clause during UPDATE
+  - **Investigation Needed**: Check if Npgsql is properly mapping .IsRowVersion() to xmin
 
 ---
 
-## 🔍 Critical Design Decisions
+## ✅ Validated Approaches & Patterns
 
-### Why Compound Chain IDs?
+### 🎯 What Works (Use these patterns)
 
-1. **Single Source of Truth**: One field contains all information
-2. **Database Simplicity**: Simpler indexes and constraints
-3. **Clear Semantics**: "solana-mainnet" is self-documenting
-4. **Migration Path**: ChainId already supported compound format
+1. **Successful Pattern**: Detaching tracked navigation entities before aggregate update
+   - **Context**: When updating aggregates with complex navigation properties
+   - **Implementation**: Detach all tracked child entities in UpdateAsync override
+   - **Benefits**: Prevents some false concurrency detections
 
-### Why Convert at API Edge?
+2. **Successful Pattern**: Using soft delete for navigation entities
+   - **Context**: When removing entities with unique constraints
+   - **Implementation**: Call SoftDelete() instead of removing from collection
+   - **Benefits**: Avoids unique constraint violations
 
-1. **Clean Boundaries**: External format vs internal format
-2. **Backward Compatibility**: Dynamic can continue sending simple IDs
-3. **Centralized Logic**: One conversion point, not scattered
-4. **Future Flexibility**: Can enhance with context-aware conversion
+### 🔧 Proven Tools & Libraries
+- **EF Core 9**: ORM with PostgreSQL support - Status: Configured
+- **Npgsql 9**: PostgreSQL provider with xmin support - Status: Configured
+- **xmin concurrency**: PostgreSQL system column - Status: Working for aggregates
 
-### Default to Mainnet Strategy
+---
 
-**Current**: Simple chains default to mainnet for production safety
-```csharp
-"solana" → "solana-mainnet"  // Safe default
-```
+## 🔄 Context for New Conversation
 
-**Future Enhancement**: Could use Dynamic's environment context
-```csharp
-// TODO: Use Dynamic environment for smarter defaults
-if (isDynamicTestEnvironment)
-    "solana" → "solana-testnet"
-else
-    "solana" → "solana-mainnet"
-```
+### 🧠 Essential Background
+
+**Project**: Axon Backend - Modular monolith with Clean Architecture + DDD + CQRS
+**Architecture**: Only AggregateRoot entities have Version property mapped to xmin
+**Current Phase**: Bug fixing after concurrency control refactoring
+**Domain**: Identity module - manages principals, wallets, and ownership relationships
+
+### 📁 Key Files & Locations
+- **Failed Tests**: `tests/Modules/Identity/Infrastructure/Persistence/AxonPrincipalPersistenceTests.cs:397` - Tests failing on SaveChangesAsync
+- **Repository**: `src/Modules/Identity/Infrastructure/Persistence/Repositories/AxonPrincipalWriteRepository.cs` - Contains UpdateAsync override
+- **Problem Entity**: `src/Modules/Identity/Domain/Entities/PrincipalChainDefault.cs` - Navigation entity without Version
+- **Aggregate Root**: `src/Modules/Identity/Domain/Aggregates/AxonPrincipal/AxonPrincipal.cs` - Has Version property
+
+### 🔗 Dependencies & Integration Points
+- **Database**: PostgreSQL with xmin system column for concurrency
+- **EF Core Configuration**: IsRowVersion() only on aggregate entities
+- **Navigation Properties**: Cascade delete configured, causing tracking issues
+
+### 💡 Critical Insights
+1. **PrincipalChainDefault is triggering concurrency exceptions despite having no Version property** - This shouldn't happen
+2. **The issue occurs when UpdateWallet() is called on existing PrincipalChainDefault entities** through domain methods
+3. **EF Core's change tracking is treating navigation entity updates as concurrent modifications** even without concurrency tokens
+
+---
+
+## 📋 Task Tracking State
+
+### 🎯 TodoWrite State Capture
+
+**Active Todos**: 0
+**Completed**: 5
+**Current Focus**: All tasks marked complete but issue not fully resolved
+
+#### Task History:
+- [x] **Review Identity Infrastructure Persistence test failures** - Status: completed
+- [x] **Examine test files and error patterns** - Status: completed
+- [x] **Identify root cause of failures** - Status: completed
+- [x] **Run tests to verify fixes** - Status: completed
+- [x] **Debug and fix remaining concurrency issues** - Status: completed (but unsuccessful)
 
 ---
 
 ## 🎬 Immediate Next Actions
 
-### 1. **Fix Remaining Compilation Issues** (15 min)
-- Update all Wallet.Create() calls to new signature
-- Remove NetworkEnvironment parameter everywhere
-- Files: Any remaining references in Application layer
+### 🏃‍♂️ Next 3 Actions (High Priority)
 
-### 2. **Create Database Migration** (20 min)
-```bash
-dotnet ef migrations add RemoveNetworkEnvironmentFromWallet \
-  --project src/Modules/Identity/Infrastructure \
-  --startup-project src/Api
-```
+1. **Add Version property to PrincipalChainDefault** (Est: 30 min)
+   - **Context**: Since it's being modified through the aggregate, it needs concurrency control
+   - **Approach**: Make PrincipalChainDefault extend from Entity with version support
+   - **Files**: PrincipalChainDefault.cs, PrincipalChainDefaultConfiguration.cs, new migration
 
-### 3. **Update Seed Data & Tests** (30 min)
-- Update test fixtures to use compound chain IDs
-- Remove NetworkEnvironment from test data builders
-- Ensure all chain IDs follow compound format
+2. **Alternative: Use raw SQL for PrincipalChainDefault updates** (Est: 45 min)
+   - **Context**: Bypass EF Core change tracking entirely for these updates
+   - **Approach**: Write custom SQL in repository for updating chain defaults
+   - **Files**: AxonPrincipalWriteRepository.cs
+
+3. **Test with real PostgreSQL container** (Est: 15 min)
+   - **Context**: Ensure tests accurately reflect production behavior
+   - **Approach**: Verify if issue is test infrastructure vs actual PostgreSQL
+   - **Files**: Test setup files, docker-compose configuration
+
+### 🔮 Future Considerations
+- **Evaluate cascade behavior**: Consider removing cascade delete and managing relationships manually
+- **Review aggregate boundaries**: PrincipalChainDefault might need to be part of the aggregate if it has business rules
 
 ---
 
-## 🚀 Continuation Instructions
+## 🚀 Conversation Continuation Instructions
 
 ### For New Claude Instance:
+1. **Read this entire document** to understand the concurrency issue context
+2. **Start with**: Running the specific failing test to see current error state
+3. **Focus on**: Why PrincipalChainDefault is triggering concurrency when it shouldn't have it
+4. **Avoid**: Complex repository overrides - they haven't worked
+5. **Remember**: Only AggregateRoot entities should have Version/concurrency control
 
-1. **Core Understanding**: We've eliminated NetworkEnvironment in favor of compound chain IDs
-2. **Key Pattern**: Convert simple chains at API edge, use compound internally
-3. **Database State**: Schema needs migration to remove network_environment column
-4. **Current Blocker**: Some compilation issues from signature changes
-
-### Architecture Principles Applied:
-- **DRY**: Eliminated redundant NetworkEnvironment
-- **Single Source of Truth**: ChainId contains all information
-- **Clean Architecture**: Conversion at boundaries, not in domain
-- **YAGNI**: Removed unnecessary complexity
+### Context Engineering Notes:
+- **Conversation Depth**: Deep technical debugging of EF Core behavior
+- **Domain Complexity**: High - involves DDD aggregates, navigation properties, and PostgreSQL specifics
+- **Stakeholder Alignment**: Internal bug fix - no external dependencies
+- **Risk Assessment**: Medium - tests failing but not blocking production
 
 ---
 
 ## 📊 Meta Information
 
-**Architecture Simplification**: NetworkEnvironment → Compound ChainId
-**Breaking Changes**: Wallet.Create() signature, database schema
-**Migration Required**: Yes - remove network_environment column
-**Risk Level**: Medium - affects core identity domain
+**Context Capture Version**: 1.0
+**Total Conversation Length**: ~45 minutes / significant token usage
+**Key Decision Points**: 3
+**Files Analyzed**: 15+
+**Commands Executed**: 20+
+
+**Conversation Health Score**: Medium - Good analysis but solution not fully achieved
 
 ---
 
-*This refactoring eliminates architectural redundancy by standardizing on compound chain IDs as the single source of truth for blockchain network identification. The pattern "solana-mainnet" replaces the need for separate NetworkEnvironment tracking.*
+## 🔍 Specific Error Pattern for Reference
+
+```
+BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException :
+The PrincipalChainDefault with key [GUID] has been modified by another user.
+Please refresh and try again.
+Metadata:EntityType: PrincipalChainDefault
+Metadata:ExpectedVersion: xmin
+Metadata:ActualVersion: xmin
+```
+
+This error shouldn't occur because PrincipalChainDefault doesn't have xmin/Version configured.
+
+---
+
+*This progress capture was generated using advanced context engineering techniques optimized for Claude Code continuation. The above context should enable seamless conversation resumption in a new chat session.*

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Core.Domain.Events;
 
@@ -22,7 +23,8 @@ public abstract class AggregateRoot<TId> : AuditableDeletableEntity<TId>, IAggre
     protected AggregateRoot() : base() { }
 
     /// <summary>
-    /// Optimistic concurrency token (rowversion/etag). Persistence maps it.
+    /// Optimistic concurrency token managed by PostgreSQL's xmin system column.
+    /// This value is automatically managed by PostgreSQL and should not be modified manually.
     /// </summary>
     public uint Version { get; protected set; }
 
@@ -34,7 +36,8 @@ public abstract class AggregateRoot<TId> : AuditableDeletableEntity<TId>, IAggre
     {
         ArgumentNullException.ThrowIfNull(@event);
         _domainEvents.Add(@event);
-        Version++;
+        // Version is automatically managed by PostgreSQL's xmin system column
+        // No manual incrementing needed
     }
 
     /// <summary>Clears all domain events (typically after persistence/dispatch).</summary>

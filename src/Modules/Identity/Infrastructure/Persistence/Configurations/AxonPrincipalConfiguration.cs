@@ -34,8 +34,11 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
         builder.Property(p => p.UpdatedAt)
             .HasColumnType("timestamptz");
 
+        // Version for optimistic concurrency (from AggregateRoot)
+        // Maps to PostgreSQL xmin system column for automatic concurrency control
+        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
         builder.Property(p => p.Version)
-            .IsConcurrencyToken();
+            .IsRowVersion();
 
         // Navigation properties with backing field access
         builder.HasMany(p => p.Credentials)

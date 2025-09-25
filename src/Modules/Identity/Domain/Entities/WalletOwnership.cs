@@ -21,6 +21,7 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     public DateTime? RevokedAt { get; private set; }
     public string? RevokeReason { get; private set; }
 
+
     // Navigation property for resolution
     public AxonPrincipal Principal { get; private set; } = null!;
 

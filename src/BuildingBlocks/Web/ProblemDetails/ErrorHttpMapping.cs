@@ -36,7 +36,7 @@ public static class ErrorHttpMapping
         ErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
         ErrorType.Timeout => StatusCodes.Status504GatewayTimeout,
         ErrorType.Persistence => StatusCodes.Status507InsufficientStorage,
-        ErrorType.Security => StatusCodes.Status403Forbidden,
+        ErrorType.Security => StatusCodes.Status401Unauthorized,
         ErrorType.Cancelled => 499, // Client Closed Request (non-standard but widely supported)
         _ => StatusCodes.Status500InternalServerError
         };

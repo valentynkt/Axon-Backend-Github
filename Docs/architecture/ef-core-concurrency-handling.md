@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-After the recent auth refactoring, we discovered that optimistic concurrency control tests are failing. The root cause is in our `EfWriteRepository.UpdateAsync()` implementation, which uses `DbSet.Update()` in a way that bypasses EF Core's built-in concurrency token checking.
+After the recent auth refactoring, we discovered that optimistic concurrency control tests are failing across ALL modules (Chat, Identity). **UPDATE 2025-09-25**: Initial hypothesis about `EfWriteRepository.UpdateAsync()` was partially correct but the issue is more complex and system-wide than originally thought.
 
 ## The Problem
 
@@ -235,15 +235,145 @@ Proper concurrency control prevents:
 - Data corruption from parallel modifications
 - Inconsistent aggregate states
 
+## Update: Deep Investigation Results (2025-09-25)
+
+### Investigation Conducted
+After implementing the documented fix, all concurrency tests were still failing. A comprehensive investigation was conducted to identify the root cause.
+
+### Findings
+
+#### ✅ What Was Successfully Fixed
+1. **EfWriteRepository Implementation**: Applied the documented fix correctly
+   ```csharp
+   // Fixed implementation
+   public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken ct = default)
+   {
+       ArgumentNullException.ThrowIfNull(aggregate);
+       var entry = _context.Entry(aggregate);
+
+       if (entry.State == EntityState.Detached)
+       {
+           // For detached entities: attach first, then mark as modified
+           _dbSet.Attach(aggregate);
+           entry.State = EntityState.Modified;
+       }
+       // For tracked entities, EF Core handles automatically
+
+       return Task.FromResult(aggregate);
+   }
+   ```
+
+2. **Removed Problematic Code**: Eliminated `_dbSet.Update()` calls that were marking Version as modified
+3. **Removed DetectChanges()**: This was interfering with concurrency token handling
+
+#### ❌ What's Still Failing
+
+**System-Wide Issue Discovered**:
+- **Chat Module**: 8 out of 57 tests failing (all concurrency tests)
+- **Identity Module**: 13 out of 13 concurrency tests failing
+- **Pattern**: All failures show `result.SecondUpdateFailed should be True but was False`
+
+**Failing Test Categories**:
+- Concurrent title updates
+- Concurrent message appending
+- Concurrent status changes
+- Detached entity concurrent updates
+
+### Root Cause Analysis
+
+#### 1. **Type Mismatch Discovered**
+```csharp
+// AggregateRoot.cs
+public uint Version { get; protected set; }  // uint (4 bytes)
+
+// Migration
+Version = table.Column<long>(type: "bigint", nullable: false)  // long (8 bytes)
+```
+
+This type mismatch may be causing EF Core to not properly handle the concurrency token.
+
+#### 2. **Configuration Analysis**
+```csharp
+// ConversationConfiguration.cs - CORRECT
+builder.Property(c => c.Version)
+    .IsConcurrencyToken();  ✅
+
+// Domain Events - CORRECT
+protected void RaiseDomainEvent(IDomainEvent @event)
+{
+    _domainEvents.Add(@event);
+    Version++;  ✅ Increments correctly
+}
+```
+
+#### 3. **Test Infrastructure Analysis**
+- Tests use real PostgreSQL via Testcontainers ✅
+- Separate DbContext instances created properly ✅
+- ConcurrencyTestBase implementation looks correct ✅
+
+### Investigation Steps Taken
+
+1. **Repository Fix Applied**: Implemented the documented solution
+2. **DetectChanges Removal**: Removed interfering change detection
+3. **Type Analysis**: Discovered uint → bigint mismatch
+4. **Cross-Module Testing**: Confirmed issue affects all modules
+5. **SQL Generation**: Attempted to analyze actual SQL (requires deeper investigation)
+6. **Test Pattern Analysis**: Verified test infrastructure is correct
+
+### Likely Root Causes
+
+1. **Primary Suspect - Type Mismatch**: EF Core may not be generating proper WHERE clauses for uint → bigint mapping
+2. **PostgreSQL Configuration**: May need specific PostgreSQL concurrency token configuration
+3. **EF Core Version Issue**: .NET 10 preview + EF Core 9 may have concurrency bugs
+4. **Migration Issue**: Database schema may not match entity configuration
+
+### Next Steps Required
+
+#### Immediate Actions Needed:
+1. **Fix Type Mismatch**:
+   ```csharp
+   // Option 1: Change AggregateRoot to use long
+   public long Version { get; protected set; }
+
+   // Option 2: Explicit conversion in configuration
+   builder.Property(c => c.Version)
+       .IsConcurrencyToken()
+       .HasConversion<long>();
+   ```
+
+2. **Enable SQL Logging**: Add detailed EF Core SQL logging to see generated UPDATE statements
+
+3. **Create Minimal Repro**: Build simple test case outside test framework
+
+4. **Consider PostgreSQL-Specific Solutions**:
+   ```csharp
+   // Use PostgreSQL's xmin system column
+   builder.Property<uint>("xmin")
+       .HasColumnType("xid")
+       .ValueGeneratedOnAddOrUpdate()
+       .IsConcurrencyToken();
+   ```
+
+#### Alternative Approaches:
+1. **Manual Concurrency Check**: Implement explicit version checking in repository
+2. **Database Triggers**: Use PostgreSQL triggers for version management
+3. **Switch to RowVersion**: Use byte[] rowversion approach (if supported in PostgreSQL)
+
+### Impact Assessment
+- **Severity**: HIGH - Concurrency control completely broken
+- **Affected Areas**: ALL aggregates across ALL modules
+- **Production Risk**: CRITICAL - Lost updates and race conditions possible
+- **Urgency**: IMMEDIATE fix required before any production deployment
+
 ## Conclusion
 
-The issue is a simple misuse of EF Core's `Update()` method. The fix is straightforward: use `Attach()` + `EntityState.Modified` for detached entities, which properly respects concurrency tokens. This solution is:
+~~The issue is a simple misuse of EF Core's `Update()` method~~. **UPDATE**: The issue is more complex than initially thought. While the repository fix was necessary and correct, there's a deeper system-wide problem likely related to:
 
-1. **Clean**: Minimal code change, leverages EF Core properly
-2. **Correct**: Follows EF Core best practices
-3. **Simple**: No custom logic or overengineering
+1. Type mismatches between C# (uint) and PostgreSQL (bigint)
+2. EF Core concurrency token handling in PostgreSQL
+3. Possible framework version compatibility issues
 
-The fix aligns with our architecture principles of using framework features correctly rather than building custom solutions.
+**Status**: Repository layer fixed, but core concurrency control still broken. Requires additional investigation and likely architectural changes to the Version property handling.
 
 ## References
 

@@ -13,6 +13,7 @@ public sealed class PrincipalChainDefault :  AuditableDeletableEntity<Guid>
     public string ChainId { get; private set; } = string.Empty;
     public WalletId WalletId { get; private set; }
 
+
     // EF Core constructor
     private PrincipalChainDefault() { }
 

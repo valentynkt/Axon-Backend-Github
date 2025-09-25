@@ -56,6 +56,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
 
+
         // Partial unique index for chain default constraint - one default per principal per chain
         builder.HasIndex(d => new { d.PrincipalId, d.ChainId })
             .IsUnique()

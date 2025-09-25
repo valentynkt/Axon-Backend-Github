@@ -161,9 +161,14 @@ public static class ServiceRegistration
         // WARNING: IDynamicAuthService should ONLY be used by DynamicAuthenticationProvider
         // API endpoints should use IAuthenticationOrchestrator instead to maintain proper architecture
         services.AddScoped<IDynamicAuthService, DynamicAuthService>();
-        services.AddHostedService<DynamicAuthService>(); // For JWKS pre-warming
 
-        services.AddScoped<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
+        // Register IDynamicClaimNormalizer as Singleton to avoid lifetime conflicts with HostedService
+        // This is safe since the service is stateless and doesn't hold any per-request state
+        services.AddSingleton<IDynamicClaimNormalizer, DynamicClaimNormalizer>();
+
+        // Register DynamicAuthService as HostedService for JWKS pre-warming
+        // Use a factory pattern to create it with singleton dependencies
+        services.AddHostedService<DynamicAuthService>(); // For JWKS pre-warming
 
         // Configure environment-specific distributed cache
         ConfigureDistributedCache(services, configuration, environment);

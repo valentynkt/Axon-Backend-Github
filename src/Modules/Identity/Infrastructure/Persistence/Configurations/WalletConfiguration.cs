@@ -47,8 +47,13 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
 
         builder.Property(w => w.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasColumnType("timestamptz")
-            .IsConcurrencyToken();
+            .HasColumnType("timestamptz");
+
+        // Version for optimistic concurrency (from AggregateRoot)
+        // Maps to PostgreSQL xmin system column for automatic concurrency control
+        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
+        builder.Property(w => w.Version)
+            .IsRowVersion();
 
         // Soft delete support
         builder.Property(w => w.IsDeleted)

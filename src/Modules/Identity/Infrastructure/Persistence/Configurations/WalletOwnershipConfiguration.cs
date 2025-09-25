@@ -60,6 +60,7 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
 
+
         // Partial unique index for ownership pair (principal_id, wallet_id)
         builder.HasIndex(o => new { o.PrincipalId, o.WalletId })
             .IsUnique()

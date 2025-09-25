@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Migrations
+namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(IdentityWriteDbContext))]
-    [Migration("20250924173034_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20250925181551_RemoveNavigationEntityConcurrency")]
+    partial class RemoveNavigationEntityConcurrency
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -53,9 +53,11 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
-                    b.Property<long>("Version")
+                    b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -112,13 +114,14 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnName("last_seen_at");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
-                        .IsConcurrencyToken()
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
 
-                    b.Property<long>("Version")
+                    b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -642,16 +645,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasIndex("Created");
 
                     b.ToTable("OutboxState", "identity");
-                });
-
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.AxonUserAuth", b =>
-                {
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithOne()
-                        .HasForeignKey("Axon.Modules.Identity.Domain.Entities.AxonUserAuth", "AxonPrincipalId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_AxonUserAuth_AxonPrincipal");
                 });
 
             modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.IdentityCredential", b =>

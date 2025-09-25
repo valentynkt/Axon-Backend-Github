@@ -254,17 +254,26 @@ public class DomainSecurityTests
         [Test]
         public void AggregateVersioning_ShouldBeSecurelyIncremented()
         {
-            // Arrange - Given initial version
+            // Arrange - Given initial state
             var initialVersion = _principal.Version;
+            var initialEventCount = _principal.DomainEvents.Count;
 
             // Act - When performing state-changing operations
-            _principal.UpdateRiskTier(RiskTier.Medium); // Should increment
-            _principal.UpdateRiskTier(RiskTier.Medium); // No-op, should not increment
-            _principal.UpdateRiskTier(RiskTier.High);   // Should increment
+            _principal.UpdateRiskTier(RiskTier.Medium); // Should raise event
+            _principal.UpdateRiskTier(RiskTier.Medium); // No-op, should not raise event
+            _principal.UpdateRiskTier(RiskTier.High);   // Should raise event
 
-            // Assert - Then version should be securely incremented
-            _principal.Version.ShouldBe(initialVersion + 2); // Only actual changes increment
-            ((int)_principal.Version).ShouldBeGreaterThan(0);
+            // Assert - Then domain events should be raised for actual changes
+            // Note: Version is now managed by PostgreSQL's xmin system column,
+            // so in unit tests (without DB context), version remains 0.
+            // However, domain events are still raised for state changes.
+            _principal.DomainEvents.Count.ShouldBe(initialEventCount + 2); // Only actual changes raise events
+            
+            // Version in unit tests stays 0 (managed by PostgreSQL in real scenarios)
+            _principal.Version.ShouldBe(initialVersion); // Still 0 in unit tests
+            
+            // Verify the actual state changes occurred
+            _principal.RiskTier.ShouldBe(RiskTier.High);
         }
     }
 

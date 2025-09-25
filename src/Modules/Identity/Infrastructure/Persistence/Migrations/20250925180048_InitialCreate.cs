@@ -4,7 +4,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Migrations
+namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -14,6 +14,42 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
         {
             migrationBuilder.EnsureSchema(
                 name: "identity");
+
+            migrationBuilder.CreateTable(
+                name: "AxonUserAuth",
+                schema: "identity",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    AxonPrincipalId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProviderType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    OriginalIssuer = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    OriginalSubject = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    DynamicEnvironmentId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DynamicUserId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    FirstAuthenticatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastAuthenticatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    PrimaryChainId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    PrimaryWalletAddress = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    PasswordHash = table.Column<string>(type: "text", nullable: true),
+                    SecurityStamp = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    NormalizedUserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    NormalizedEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    EmailConfirmed = table.Column<bool>(type: "boolean", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    PhoneNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    PhoneNumberConfirmed = table.Column<bool>(type: "boolean", nullable: false),
+                    TwoFactorEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    LockoutEnd = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    LockoutEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    AccessFailedCount = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AxonUserAuth", x => x.Id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "InboxState",
@@ -68,7 +104,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    Version = table.Column<long>(type: "bigint", nullable: false)
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -89,7 +125,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     deleted_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
-                    Version = table.Column<long>(type: "bigint", nullable: false)
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -142,49 +178,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AxonUserAuth",
-                schema: "identity",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    AxonPrincipalId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ProviderType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    OriginalIssuer = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    OriginalSubject = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    DynamicEnvironmentId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    DynamicUserId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    FirstAuthenticatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastAuthenticatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    PrimaryChainId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    PrimaryWalletAddress = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    PasswordHash = table.Column<string>(type: "text", nullable: true),
-                    SecurityStamp = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    NormalizedUserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    NormalizedEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    EmailConfirmed = table.Column<bool>(type: "boolean", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    PhoneNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    PhoneNumberConfirmed = table.Column<bool>(type: "boolean", nullable: false),
-                    TwoFactorEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    LockoutEnd = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LockoutEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    AccessFailedCount = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AxonUserAuth", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AxonUserAuth_AxonPrincipal",
-                        column: x => x.AxonPrincipalId,
-                        principalSchema: "identity",
-                        principalTable: "Principal",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Credential",
                 schema: "identity",
                 columns: table => new
@@ -221,6 +214,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     principal_id = table.Column<Guid>(type: "uuid", nullable: false),
                     chain_id = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     wallet_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
@@ -252,6 +246,7 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     verified_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
                     revoked_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
                     revoke_reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     AxonPrincipalId = table.Column<Guid>(type: "uuid", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),

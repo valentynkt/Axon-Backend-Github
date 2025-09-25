@@ -3,20 +3,17 @@ using System;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Migrations
+namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(IdentityWriteDbContext))]
-    [Migration("20250924200327_RemoveAxonPrincipalRelationship")]
-    partial class RemoveAxonPrincipalRelationship
+    partial class IdentityWriteDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -53,9 +50,11 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
-                    b.Property<long>("Version")
+                    b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -112,13 +111,14 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .HasColumnName("last_seen_at");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
-                        .IsConcurrencyToken()
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
 
-                    b.Property<long>("Version")
+                    b.Property<uint>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 

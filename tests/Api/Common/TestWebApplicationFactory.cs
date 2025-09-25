@@ -55,15 +55,20 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration(configBuilder =>
+        builder.ConfigureAppConfiguration((context, configBuilder) =>
         {
+            // Build configuration to get existing settings first
+            var existingConfig = configBuilder.Build();
+
             // Override configuration to disable automatic migrations and use test connection
+            // Add these settings with higher priority to ensure they override appsettings files
             var testConfig = new Dictionary<string, string>
             {
                 {"DatabaseOptions:EnableAutomaticMigrations", "false"},
                 {"ConnectionStrings:DefaultConnection", _testBase.GetConnectionString()}
             };
 
+            // Add as the last configuration source to ensure highest priority
             configBuilder.AddInMemoryCollection(testConfig!);
         });
 

@@ -1,5 +1,4 @@
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Configurations;
-using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -117,12 +116,8 @@ public class AxonUserAuthConfiguration : IEntityTypeConfiguration<AxonUserAuth>
             .HasDatabaseName("IX_AxonUserAuth_PrimaryWalletAddress")
             .HasFilter("\"PrimaryWalletAddress\" IS NOT NULL");
 
-        // Relationship with AxonPrincipal
-        // Note: We use shadow foreign key since AxonPrincipal is in a different bounded context
-        builder.HasOne<AxonPrincipal>()
-            .WithOne()
-            .HasForeignKey<AxonUserAuth>(x => x.AxonPrincipalId)
-            .OnDelete(DeleteBehavior.Cascade)
-            .HasConstraintName("FK_AxonUserAuth_AxonPrincipal");
+        // Note: We don't configure a direct EF relationship with AxonPrincipal here
+        // since AxonPrincipal is in a different bounded context (Write/Read DbContexts).
+        // The AxonPrincipalId is stored as a foreign key value only.
     }
 }
