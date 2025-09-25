@@ -103,4 +103,41 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
                 c.Subject == subject), ct);
     }
 
+    public async Task<int> RevokePendingOwnershipsForWalletAsync(
+        WalletId walletId,
+        AxonUserId excludePrincipalId,
+        CancellationToken ct = default)
+    {
+        // Find all principals with pending ownership of this wallet (excluding the specified principal)
+        var principalsWithPendingOwnership = await GetPrincipalWithIncludes()
+            .Where(p => p.Id != excludePrincipalId &&
+                       p.WalletOwnerships.Any(wo => wo.WalletId == walletId &&
+                                                   wo.Status == OwnershipStatus.Pending &&
+                                                   !wo.IsDeleted))
+            .ToListAsync(ct);
+
+        int revokedCount = 0;
+
+        foreach (var principal in principalsWithPendingOwnership)
+        {
+            // Find the specific pending ownerships for this wallet
+            var pendingOwnerships = principal.WalletOwnerships
+                .Where(wo => wo.WalletId == walletId &&
+                           wo.Status == OwnershipStatus.Pending &&
+                           !wo.IsDeleted)
+                .ToList();
+
+            foreach (var ownership in pendingOwnerships)
+            {
+                var revokeResult = ownership.Revoke("Auto-revoked due to exclusivity constraint");
+                if (revokeResult.IsSuccess)
+                {
+                    revokedCount++;
+                }
+            }
+        }
+
+        return revokedCount;
+    }
+
 }

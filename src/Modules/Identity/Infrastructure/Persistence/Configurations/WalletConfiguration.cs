@@ -51,8 +51,9 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
 
         // Version for optimistic concurrency (from AggregateRoot)
         // Maps to PostgreSQL xmin system column for automatic concurrency control
-        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
         builder.Property(w => w.Version)
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
             .IsRowVersion();
 
         // Soft delete support

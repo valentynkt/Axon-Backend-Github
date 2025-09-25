@@ -1,5 +1,4 @@
 using BuildingBlocks.Core.Domain.Entities.Base;
-using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using Axon.Modules.Identity.Domain.ValueObjects;
 
 namespace Axon.Modules.Identity.Domain.Entities;
@@ -7,15 +6,13 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// <summary>
 /// Maps a principal's default wallet per blockchain.
 /// ChainId now contains compound format (e.g., "solana-mainnet") with all network information.
+/// This is a child entity that relies on the parent aggregate's concurrency control.
 /// </summary>
-public sealed class PrincipalChainDefault : AuditableDeletableEntity<Guid>, IVersioned
+public sealed class PrincipalChainDefault : AuditableDeletableEntity<Guid>
 {
     public AxonUserId PrincipalId { get; private set; }
     public string ChainId { get; private set; } = string.Empty;
     public WalletId WalletId { get; private set; }
-
-    /// <summary>Version for optimistic concurrency control.</summary>
-    public uint Version { get; private set; }
 
 
     // EF Core constructor

@@ -316,21 +316,29 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         // Arrange
         var conversation = await SaveConversationAsync(CreateTestConversation());
 
-        // Load the same conversation twice to simulate two concurrent clients
+        // Simulate first client: Load in fresh context
         ClearChangeTracker();
         var conversation1 = await ConversationRepository.GetByIdAsync(conversation.Id);
-        var conversation2 = await ConversationRepository.GetByIdAsync(conversation.Id);
-
         conversation1.ShouldNotBeNull();
+
+        // Simulate second client: Load in separate tracking (detached after load)
+        ClearChangeTracker();
+        var conversation2 = await ConversationRepository.GetByIdAsync(conversation.Id);
         conversation2.ShouldNotBeNull();
+
+        // Detach conversation2 to simulate a separate context
+        DbContext.Entry(conversation2).State = EntityState.Detached;
 
         // Both should have the same Version initially
         conversation1.Version.ShouldBe(conversation2.Version);
 
-        // First client updates and saves successfully
-        var updateResult1 = conversation1.UpdateTitle("First Update", TimeProvider);
+        // First client updates and saves successfully (with fresh tracking)
+        ClearChangeTracker();
+        var freshConversation1 = await ConversationRepository.GetByIdAsync(conversation.Id);
+        freshConversation1.ShouldNotBeNull();
+        var updateResult1 = freshConversation1.UpdateTitle("First Update", TimeProvider);
         updateResult1.IsSuccess.ShouldBeTrue();
-        await ConversationRepository.UpdateAsync(conversation1);
+        await ConversationRepository.UpdateAsync(freshConversation1);
         await UnitOfWork.SaveChangesAsync();
 
         // Second client tries to update with stale version - should fail
@@ -440,20 +448,34 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
     public async Task UpdateAsync_WithDetachedEntity_ShouldHandleGracefully()
     {
         // Arrange
-        var conversation = CreateTestConversation();
+        // First save a conversation
+        var conversation = await SaveConversationAsync(CreateTestConversation());
+        var originalTitle = conversation.Title;
 
-        // Act & Assert - This should either work or throw a specific exception
-        // The exact behavior depends on EF Core configuration
-        try
-        {
-            await ConversationRepository.UpdateAsync(conversation);
-            await UnitOfWork.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            // Expected for detached entities
-            ex.ShouldBeOfType<InvalidOperationException>();
-        }
+        // Clear the change tracker to detach all entities
+        ClearChangeTracker();
+
+        // Load the conversation again to get a detached copy
+        var detachedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        detachedConversation.ShouldNotBeNull();
+
+        // Detach it from the context
+        DbContext.Entry(detachedConversation).State = EntityState.Detached;
+
+        // Modify the detached entity
+        var updateResult = detachedConversation.UpdateTitle("Updated Title", TimeProvider);
+        updateResult.IsSuccess.ShouldBeTrue();
+
+        // Act - Update the detached entity
+        await ConversationRepository.UpdateAsync(detachedConversation);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Assert - Verify it was saved
+        ClearChangeTracker();
+        var saved = await ConversationRepository.GetByIdAsync(conversation.Id);
+        saved.ShouldNotBeNull();
+        saved.Title.ShouldBe("Updated Title");
+        saved.Title.ShouldNotBe(originalTitle);
     }
 
     #endregion

@@ -47,8 +47,9 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
 
         // Version for optimistic concurrency (from AggregateRoot)
         // Maps to PostgreSQL xmin system column for automatic concurrency control
-        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
         builder.Property(c => c.Version)
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
             .IsRowVersion();
 
         // Configure Messages navigation property using the public property that exposes the private field

@@ -582,6 +582,28 @@ public class ExchangeCredentialConcurrencyTests
             return result;
         }
 
+        public async Task<int> RevokePendingOwnershipsForWalletAsync(WalletId walletId, AxonUserId excludePrincipalId, CancellationToken cancellationToken = default)
+        {
+            // Implementation for the test - revoke all pending ownerships for a wallet except for the specified principal
+            var principals = await _context.AxonPrincipals
+                .Include(p => p.WalletOwnerships)
+                .Where(p => p.Id != excludePrincipalId &&
+                           p.WalletOwnerships.Any(wo => wo.WalletId == walletId && wo.Status == OwnershipStatus.Pending))
+                .ToListAsync(cancellationToken);
+
+            int revokedCount = 0;
+            foreach (var principal in principals)
+            {
+                var ownership = principal.WalletOwnerships.FirstOrDefault(wo => wo.WalletId == walletId && wo.Status == OwnershipStatus.Pending);
+                if (ownership != null)
+                {
+                    ownership.Revoke("Auto-revoked due to exclusivity constraint");
+                    revokedCount++;
+                }
+            }
+            return revokedCount;
+        }
+
         public void Dispose()
         {
             UnitOfWork.Dispose();

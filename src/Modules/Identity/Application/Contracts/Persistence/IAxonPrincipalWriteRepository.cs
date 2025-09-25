@@ -59,4 +59,17 @@ public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal,
         string issuer,
         string subject,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes all pending ownerships for the specified wallet across all principals.
+    /// Used to maintain exclusivity constraint when a wallet ownership is verified.
+    /// </summary>
+    /// <param name="walletId">The wallet ID for which to revoke pending ownerships</param>
+    /// <param name="excludePrincipalId">Principal to exclude from revocation (the one getting verified)</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Number of ownerships revoked</returns>
+    Task<int> RevokePendingOwnershipsForWalletAsync(
+        WalletId walletId,
+        AxonUserId excludePrincipalId,
+        CancellationToken ct = default);
 }

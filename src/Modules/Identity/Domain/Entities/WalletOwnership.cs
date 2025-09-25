@@ -3,15 +3,15 @@ using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Domain.Entities.Base;
-using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Links a principal to a wallet with ownership details.
+/// This is a child entity that relies on the parent aggregate's concurrency control.
 /// </summary>
-public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>, IVersioned
+public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>
 {
     public AxonUserId PrincipalId { get; private set; }
     public WalletId WalletId { get; private set; }
@@ -21,9 +21,6 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     public DateTime? VerifiedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
     public string? RevokeReason { get; private set; }
-
-    /// <summary>Version for optimistic concurrency control.</summary>
-    public uint Version { get; private set; }
 
     // Navigation property for resolution
     public AxonPrincipal Principal { get; private set; } = null!;
@@ -153,4 +150,12 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     /// Checks if this ownership is active (not revoked).
     /// </summary>
     public bool IsActive => Status != OwnershipStatus.Revoked;
+
+    /// <summary>
+    /// Revokes this ownership with the specified reason.
+    /// </summary>
+    public Result<Unit, Error> Revoke(string reason = "Auto-revoked due to exclusivity constraint")
+    {
+        return UpdateStatus(OwnershipStatus.Revoked, reason);
+    }
 }

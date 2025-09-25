@@ -123,6 +123,19 @@ public sealed partial class AxonPrincipal
             ownership.Status.ToString()
         ));
 
+        // If this is a verified signing ownership, raise additional event for auto-revocation
+        if (ownership.IsVerifiedSigning)
+        {
+            RaiseDomainEvent(new OwnershipChangedEvent(
+                Id,
+                ownership.WalletId,
+                "verified_signing_added",
+                ownership.AccessMode.ToString(),
+                ownership.Status.ToString(),
+                new Dictionary<string, string> { { "RequiresAutoRevocation", "true" } }
+            ));
+        }
+
         return Result.Success<Unit, Error>(Unit.Value);
     }
 

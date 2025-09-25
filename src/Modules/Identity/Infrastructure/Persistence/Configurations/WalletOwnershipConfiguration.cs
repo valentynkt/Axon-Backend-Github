@@ -98,11 +98,7 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasColumnName("revoke_reason")
             .HasMaxLength(500);
 
-        // Version for optimistic concurrency (from IVersioned)
-        // Maps to PostgreSQL xmin system column for automatic concurrency control
-        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
-        builder.Property(o => o.Version)
-            .IsRowVersion();
+        // Version property was removed - relying on parent aggregate's concurrency control
 
         // Navigation property configuration
         builder.HasOne(o => o.Principal)

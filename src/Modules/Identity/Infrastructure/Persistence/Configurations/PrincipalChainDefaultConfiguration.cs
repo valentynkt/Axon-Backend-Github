@@ -56,12 +56,7 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
 
-        // Version for optimistic concurrency (from IVersioned)
-        // Maps to PostgreSQL xmin system column for automatic concurrency control
-        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
-        builder.Property(d => d.Version)
-            .IsRowVersion();
-
+        // No Version property - this entity relies on parent aggregate's concurrency control
 
         // Partial unique index for chain default constraint - one default per principal per chain
         builder.HasIndex(d => new { d.PrincipalId, d.ChainId })

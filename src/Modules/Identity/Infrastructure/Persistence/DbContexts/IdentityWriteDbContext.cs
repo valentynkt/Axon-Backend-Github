@@ -4,7 +4,6 @@ using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -73,21 +72,35 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
     private void HandleChildEntityConcurrency()
     {
-        var addedChildEntities = ChangeTracker.Entries()
-            .Where(e => e.State == EntityState.Added &&
-                       (e.Entity is PrincipalChainDefault || e.Entity is WalletOwnership))
+        // Child entities (navigation properties of aggregates) should not have independent concurrency control
+        // They rely on their parent aggregate's concurrency control
+        var childEntityEntries = ChangeTracker.Entries()
+            .Where(e => (e.State == EntityState.Added || e.State == EntityState.Modified) &&
+                       (e.Entity is PrincipalChainDefault ||
+                        e.Entity is WalletOwnership ||
+                        e.Entity is IdentityCredential))
             .ToList();
 
-        foreach (var entry in addedChildEntities)
+        foreach (var entry in childEntityEntries)
         {
-            // For new child entities, don't track the Version property for concurrency
-            // They will get their xmin value after insertion
-            var versionProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == nameof(IVersioned.Version));
+            // Remove any Version property from concurrency tracking
+            // These entities no longer have Version properties after our fix
+            var versionProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Version");
             if (versionProperty != null)
             {
+                // This shouldn't happen after removing Version from entities, but handle it defensively
                 versionProperty.IsModified = false;
-                // Set to default value for new entities
-                versionProperty.CurrentValue = (uint)0;
+                if (entry.State == EntityState.Added)
+                {
+                    versionProperty.CurrentValue = (uint)0;
+                }
+            }
+
+            // Ensure xmin (row version) is not tracked for child entities
+            var xminProperty = entry.Properties.FirstOrDefault(p => p.Metadata.IsConcurrencyToken);
+            if (xminProperty != null)
+            {
+                xminProperty.IsModified = false;
             }
         }
     }
