@@ -55,15 +55,14 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
 
         if (entry.State == EntityState.Detached)
         {
-            // For detached entities, Update() handles the entire graph correctly
-            _dbSet.Update(aggregate);
+            // For detached entities: attach first, then mark as modified
+            // This respects concurrency tokens properly
+            _dbSet.Attach(aggregate);
+            entry.State = EntityState.Modified;
         }
-        else
-        {
-            // For tracked entities, use Update() which handles the entire object graph correctly
-            // This is actually more reliable than trying to manually track navigation changes
-            _dbSet.Update(aggregate);
-        }
+
+        // For already tracked entities (Unchanged, Modified), EF Core's change tracking
+        // will handle everything automatically, including respecting concurrency tokens
 
         return Task.FromResult(aggregate);
     }
