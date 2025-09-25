@@ -58,54 +58,10 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
         builder.Navigation(p => p.WalletOwnerships)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
-        // Configure PrincipalChainDefaults as owned entities to prevent concurrency conflicts
-        // This ensures their version tracking is handled through the parent aggregate
-        builder.OwnsMany(p => p.PrincipalChainDefaults, pcd =>
-        {
-            pcd.ToTable("PrincipalChainDefault", "identity");
-            pcd.WithOwner().HasForeignKey("PrincipalId");
-            pcd.Property<Guid>("Id").HasColumnName("id");
-
-            // Configure all properties that were previously in PrincipalChainDefaultConfiguration
-            pcd.Property(d => d.ChainId)
-                .HasColumnName("chain_id")
-                .HasMaxLength(50)
-                .IsRequired();
-
-            pcd.Property(d => d.WalletId)
-                .HasConversion(id => id.Value, value => new WalletId(value))
-                .HasColumnName("wallet_id")
-                .HasColumnType("uuid")
-                .IsRequired();
-
-            pcd.Property(d => d.CreatedAt)
-                .HasColumnName("created_at")
-                .HasColumnType("timestamptz");
-
-            pcd.Property(d => d.UpdatedAt)
-                .HasColumnName("updated_at")
-                .HasColumnType("timestamptz");
-
-            pcd.Property(d => d.IsDeleted)
-                .HasColumnName("is_deleted")
-                .HasDefaultValue(false)
-                .IsRequired();
-
-            pcd.Property(d => d.DeletedAt)
-                .HasColumnName("deleted_at")
-                .HasColumnType("timestamptz");
-
-            // Owned entities don't need their own version - they inherit from parent
-            pcd.Ignore(d => d.Version);
-
-            // Configure indexes for owned entity
-            pcd.HasIndex(d => new { d.ChainId })
-                .IsUnique()
-                .HasDatabaseName("ux_chain_default")
-                .HasFilter("is_deleted = false");
-
-            pcd.HasIndex(d => d.WalletId).HasDatabaseName("idx_default_wallet_id");
-        });
+        builder.HasMany(p => p.PrincipalChainDefaults)
+            .WithOne()
+            .HasForeignKey("PrincipalId")
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(p => p.PrincipalChainDefaults)
             .UsePropertyAccessMode(PropertyAccessMode.Field);

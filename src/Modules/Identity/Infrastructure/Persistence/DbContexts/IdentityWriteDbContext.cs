@@ -4,6 +4,7 @@ using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -58,6 +59,37 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
         // No need to duplicate schema configuration
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityWriteDbContext).Assembly);
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        // Fix concurrency issue with child entities that are added to existing aggregates
+        // When new child entities (PrincipalChainDefault, WalletOwnership) are added to tracked aggregates,
+        // EF Core tries to apply concurrency control to them, but they don't have xmin values yet
+        HandleChildEntityConcurrency();
+
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void HandleChildEntityConcurrency()
+    {
+        var addedChildEntities = ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added &&
+                       (e.Entity is PrincipalChainDefault || e.Entity is WalletOwnership))
+            .ToList();
+
+        foreach (var entry in addedChildEntities)
+        {
+            // For new child entities, don't track the Version property for concurrency
+            // They will get their xmin value after insertion
+            var versionProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == nameof(IVersioned.Version));
+            if (versionProperty != null)
+            {
+                versionProperty.IsModified = false;
+                // Set to default value for new entities
+                versionProperty.CurrentValue = (uint)0;
+            }
+        }
     }
 }
 

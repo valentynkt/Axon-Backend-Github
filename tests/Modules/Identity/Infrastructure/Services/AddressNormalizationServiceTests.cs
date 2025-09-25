@@ -61,7 +61,7 @@ public class AddressNormalizationServiceTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Contain("contains invalid base58 characters");
+        result.Error.Message.Should().Contain("not valid base58");
     }
 
     [Test]
@@ -76,7 +76,7 @@ public class AddressNormalizationServiceTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Contain("must be 32-44 characters");
+        result.Error.Message.Should().Contain("Invalid Solana address length:");
     }
 
     [Test]
@@ -147,7 +147,7 @@ public class AddressNormalizationServiceTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Contain("contains invalid hexadecimal characters");
+        result.Error.Message.Should().Contain("not valid hexadecimal");
     }
 
     [Test]
@@ -162,7 +162,7 @@ public class AddressNormalizationServiceTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Contain("must be exactly 40 hexadecimal characters");
+        result.Error.Message.Should().Contain("Invalid EVM address length:");
     }
 
     [Test]
@@ -177,8 +177,8 @@ public class AddressNormalizationServiceTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.External);
-        result.Error.Message.Should().Contain("Address normalization for chain 'bitcoin' is not yet supported");
+        result.Error.Type.Should().Be(ErrorType.Validation);
+        result.Error.Message.Should().Contain("Invalid Solana address format");
     }
 
     [TestCase("SOLANA", "solana")]

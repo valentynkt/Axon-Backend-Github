@@ -5,9 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Configurations;
 
-// DISABLED: PrincipalChainDefault is now configured as owned entity in AxonPrincipalConfiguration
-// This prevents concurrency conflicts with version tracking
-/*
 public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<PrincipalChainDefault>
 {
     public void Configure(EntityTypeBuilder<PrincipalChainDefault> builder)
@@ -78,5 +75,10 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
 
         // Note: Business logic constraint (verified signing wallet) enforced in domain layer
         // PostgreSQL check constraints with subqueries require custom functions - implemented later
+
+        // Override the global soft delete query filter
+        // This entity is a navigation property of AxonPrincipal aggregate
+        // EF Core doesn't allow query filters on owned/navigation entities
+        builder.HasQueryFilter(e => true);
     }
 }

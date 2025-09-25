@@ -71,5 +71,10 @@ public class CredentialConfiguration : IEntityTypeConfiguration<IdentityCredenti
         // Performance indexes
         builder.HasIndex(c => c.PrincipalId).HasDatabaseName("idx_credential_principal_id");
         builder.HasIndex(c => c.Provider).HasDatabaseName("idx_credential_provider");
+
+        // Override the global soft delete query filter
+        // This entity is a navigation property of AxonPrincipal aggregate
+        // EF Core doesn't allow query filters on owned/navigation entities
+        builder.HasQueryFilter(e => true);
     }
 }

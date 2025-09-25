@@ -109,5 +109,10 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .WithMany()
             .HasForeignKey(o => o.PrincipalId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Override the global soft delete query filter
+        // This entity is a navigation property of AxonPrincipal aggregate
+        // EF Core doesn't allow query filters on owned/navigation entities
+        builder.HasQueryFilter(e => true);
     }
 }

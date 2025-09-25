@@ -51,7 +51,12 @@ public class Ed25519SignatureVerifierIntegrationTests : IdentityPersistenceTestB
         });
 
         // Register Identity services including signature verifier
-        var configuration = new ConfigurationBuilder().Build();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = ConnectionString
+            })
+            .Build();
         services.AddIdentityInfrastructure(configuration);
 
         _serviceProvider = services.BuildServiceProvider();
@@ -416,7 +421,12 @@ public class Ed25519SignatureVerifierIntegrationTests : IdentityPersistenceTestB
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             });
         });
-        var configuration = new ConfigurationBuilder().Build();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = connectionString
+            })
+            .Build();
         services.AddIdentityInfrastructure(configuration);
         return services.BuildServiceProvider();
     }

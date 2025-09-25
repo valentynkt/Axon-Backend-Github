@@ -45,10 +45,23 @@ public static class ServiceRegistration
     {
         ArgumentNullException.ThrowIfNull(configuration);
         
-        // Get connection string - falls back to shared database (axon_chat)
-        var connectionString = configuration.GetConnectionString("IdentityDb") 
-            ?? configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
+        // Get connection string - falls back to shared database (axon_chat) only in development
+        var connectionString = configuration.GetConnectionString("IdentityDb")
+            ?? configuration.GetConnectionString("DefaultConnection");
+
+        // Only use hardcoded fallback in Development environment for local development
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            if (environment?.IsDevelopment() == true)
+            {
+                connectionString = "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "Database connection string not found. Please configure 'ConnectionStrings:IdentityDb' or 'ConnectionStrings:DefaultConnection' in appsettings.");
+            }
+        }
         
         // Identity DbContext for Microsoft Identity Framework
         services.AddDbContext<IdentityContext>(options =>
