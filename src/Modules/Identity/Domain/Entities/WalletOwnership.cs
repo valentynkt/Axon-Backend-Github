@@ -3,6 +3,7 @@ using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Core.Domain.Entities.Base;
+using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using CSharpFunctionalExtensions;
 
 namespace Axon.Modules.Identity.Domain.Entities;
@@ -10,7 +11,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// <summary>
 /// Links a principal to a wallet with ownership details.
 /// </summary>
-public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipId>
+public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>, IVersioned
 {
     public AxonUserId PrincipalId { get; private set; }
     public WalletId WalletId { get; private set; }
@@ -21,6 +22,8 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     public DateTime? RevokedAt { get; private set; }
     public string? RevokeReason { get; private set; }
 
+    /// <summary>Version for optimistic concurrency control.</summary>
+    public uint Version { get; private set; }
 
     // Navigation property for resolution
     public AxonPrincipal Principal { get; private set; } = null!;

@@ -6,6 +6,7 @@ using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using BuildingBlocks.Application;
 using Axon.Modules.Identity.Application.Common.Models;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 
 namespace Axon.Modules.Identity.Application.Commands;
 
@@ -33,6 +34,7 @@ public class PrincipalResolutionIntegrationTests
     private PostgreSqlContainer _postgres = null!;
     private IdentityWriteDbContext _writeContext = null!;
     private IdentityReadDbContext _readContext = null!;
+    private EfUnitOfWork<IdentityWriteDbContext, IdentityModule> _unitOfWork = null!;
     private IPrincipalResolutionService _resolutionService = null!;
     private IWalletReadRepository _walletReadRepository = null!;
     private IWalletWriteRepository _walletWriteRepository = null!;
@@ -78,14 +80,15 @@ public class PrincipalResolutionIntegrationTests
 
         await CreateIndexes();
 
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
+        // Use real EfUnitOfWork instead of mock to properly handle SaveChangesAsync
+        _unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(_writeContext);
         var addressLogger = Substitute.For<ILogger<AddressNormalizationService>>();
 
         _walletReadRepository = new WalletReadRepository(_readContext);
-        _walletWriteRepository = new WalletWriteRepository(_writeContext, mockUnitOfWork);
-        _walletOwnershipRepository = new WalletOwnershipRepository(_writeContext, _readContext, mockUnitOfWork);
+        _walletWriteRepository = new WalletWriteRepository(_writeContext, _unitOfWork);
+        _walletOwnershipRepository = new WalletOwnershipRepository(_writeContext, _readContext, _unitOfWork);
         _principalReadRepository = new AxonPrincipalReadRepository(_readContext);
-        _principalWriteRepository = new AxonPrincipalWriteRepository(_writeContext, mockUnitOfWork);
+        _principalWriteRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork);
         _addressNormalization = new AddressNormalizationService(addressLogger);
         _logger = Substitute.For<ILogger<PrincipalResolutionService>>();
 
@@ -106,6 +109,7 @@ public class PrincipalResolutionIntegrationTests
         await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownership CASCADE");
         await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.credential CASCADE");
 
+        _unitOfWork?.Dispose();
         _walletWriteRepository?.Dispose();
         _principalWriteRepository?.Dispose();
         await _writeContext.DisposeAsync();
@@ -318,20 +322,54 @@ public class PrincipalResolutionIntegrationTests
     public async Task ResolveAsync_ConcurrentCreation_ShouldHandleRaceCondition()
     {
         // Arrange
-                var chainId = "solana";
+        var chainId = "solana";
         var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
-        // Act - Run concurrent resolutions
-        var tasks = new List<Task<Result<PrincipalResolutionResult, Error>>>();
-        for (int i = 0; i < 10; i++)
+        // Create a task factory to create independent resolution service instances for each concurrent operation
+        Func<int, Task<Result<PrincipalResolutionResult, Error>>> createResolutionTask = async (int i) =>
         {
-            tasks.Add(_resolutionService.ResolveAsync(
+            // Create separate DbContext instances for each concurrent operation
+            var writeOptions = new DbContextOptionsBuilder<IdentityWriteDbContext>()
+                .UseNpgsql(_postgres.GetConnectionString())
+                .Options;
+
+            var readOptions = new DbContextOptionsBuilder<IdentityReadDbContext>()
+                .UseNpgsql(_postgres.GetConnectionString())
+                .Options;
+
+            using var localWriteContext = new IdentityWriteDbContext(writeOptions);
+            using var localReadContext = new IdentityReadDbContext(readOptions);
+            using var localUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(localWriteContext);
+
+            var localWalletReadRepository = new WalletReadRepository(localReadContext);
+            using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
+            var localWalletOwnershipRepository = new WalletOwnershipRepository(localWriteContext, localReadContext, localUnitOfWork);
+            var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
+            using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork);
+            var localLogger = Substitute.For<ILogger<PrincipalResolutionService>>();
+
+            var localResolutionService = new PrincipalResolutionService(
+                localPrincipalReadRepository,
+                localPrincipalWriteRepository,
+                localWalletReadRepository,
+                localWalletWriteRepository,
+                localWalletOwnershipRepository,
+                localLogger);
+
+            return await localResolutionService.ResolveAsync(
                 ProviderType.Dynamic,
                 "dynamic.xyz",
                 $"concurrent{i}",
                 ChainId.From(chainId),
                 address,
-                CancellationToken.None));
+                CancellationToken.None);
+        };
+
+        // Act - Run concurrent resolutions with separate DbContext instances
+        var tasks = new List<Task<Result<PrincipalResolutionResult, Error>>>();
+        for (int i = 0; i < 10; i++)
+        {
+            tasks.Add(createResolutionTask(i));
         }
 
         var results = await Task.WhenAll(tasks);

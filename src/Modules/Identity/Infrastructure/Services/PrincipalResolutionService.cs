@@ -9,6 +9,7 @@ using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Infrastructure.Services;
@@ -283,13 +284,37 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         await _principalWriteRepository.AddAsync(principal, cancellationToken);
         await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Link wallet to new principal
-        await _ownershipRepository.CreateOwnershipAsync(
-            principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
-            VerificationSource.DynamicAttested, cancellationToken);
+        try
+        {
+            // Link wallet to new principal
+            await _ownershipRepository.CreateOwnershipAsync(
+                principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
+                VerificationSource.DynamicAttested, cancellationToken);
 
-        return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
-            principal, ResolutionPath.Created, WasAutoLinked: false));
+            return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
+                principal, ResolutionPath.Created, WasAutoLinked: false));
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            // Another thread created ownership for this wallet - re-query to get the winner
+            _logger.LogInformation(
+                "Race condition during ownership creation for wallet {WalletId}, re-querying for existing ownership",
+                wallet.Id);
+
+            var existingOwnerships = await _ownershipRepository.FindActiveOwnershipsByWalletAsync(
+                wallet.Id, cancellationToken);
+
+            if (existingOwnerships.Any())
+            {
+                var winner = existingOwnerships[0];
+                return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
+                    winner.Principal, ResolutionPath.Wallet, WasAutoLinked: false));
+            }
+
+            // This shouldn't happen but handle gracefully
+            throw new InvalidOperationException(
+                $"Failed to retrieve ownership after race condition for wallet {wallet.Id}");
+        }
     }
 
     private void LogResolution(

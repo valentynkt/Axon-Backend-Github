@@ -6,6 +6,7 @@ using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
@@ -155,9 +156,26 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         var newWallet = Wallet.Create(null, chainId.Value, address);
         await DbSet.AddAsync(newWallet, cancellationToken);
 
-        // Save changes to persist the new wallet
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            // Save changes to persist the new wallet
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return newWallet;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            // Handle race condition - another thread already created the wallet
+            // Clear the tracked entity and re-query for the existing wallet
+            DbSet.Entry(newWallet).State = EntityState.Detached;
 
-        return newWallet;
+            var raceSafeWallet = await DbSet
+                .FirstOrDefaultAsync(w =>
+                    w.ChainId == chainId.Value &&
+                    w.Address == address,
+                    cancellationToken);
+
+            return raceSafeWallet ?? throw new InvalidOperationException(
+                $"Failed to retrieve wallet after race condition for {chainId.Value}:{address}");
+        }
     }
 }

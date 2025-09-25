@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Configurations;
 
+// DISABLED: PrincipalChainDefault is now configured as owned entity in AxonPrincipalConfiguration
+// This prevents concurrency conflicts with version tracking
+/*
 public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<PrincipalChainDefault>
 {
     public void Configure(EntityTypeBuilder<PrincipalChainDefault> builder)
@@ -55,6 +58,12 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
         builder.Property(d => d.DeletedAt)
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
+
+        // Version for optimistic concurrency (from IVersioned)
+        // Maps to PostgreSQL xmin system column for automatic concurrency control
+        // Only IsRowVersion() is needed - Npgsql automatically handles xmin mapping
+        builder.Property(d => d.Version)
+            .IsRowVersion();
 
 
         // Partial unique index for chain default constraint - one default per principal per chain
