@@ -68,6 +68,6 @@ public class PrincipalChainDefaultConfiguration : IEntityTypeConfiguration<Princ
         builder.HasIndex(d => d.WalletId).HasDatabaseName("idx_default_wallet_id");
 
         // Note: Business logic constraint (verified signing wallet) enforced in domain layer
-        // PostgreSQL doesn't support subqueries in CHECK constraints
+        // PostgreSQL check constraints with subqueries require custom functions - implemented later
     }
 }

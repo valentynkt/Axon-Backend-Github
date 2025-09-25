@@ -74,10 +74,6 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasFilter("status = 'Verified' AND access_mode = 'Signing' AND is_deleted = false");
 
         // Performance indexes with soft delete filters
-        builder.HasIndex(o => o.WalletId)
-            .HasDatabaseName("idx_ownership_wallet_active")
-            .HasFilter("is_deleted = false");
-
         builder.HasIndex(o => o.PrincipalId)
             .HasDatabaseName("idx_ownership_principal_active")
             .HasFilter("is_deleted = false");

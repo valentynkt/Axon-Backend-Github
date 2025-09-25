@@ -46,12 +46,12 @@ public static class TestDataFixtures
     #region Wallet Addresses
 
     /// <summary>
-    /// Wallet address W1 for mainnet - same base58 as devnet but different environment.
+    /// Wallet address W1 for mainnet chain.
     /// </summary>
     public const string W1MainAddress = "DhQ7ZbWfF5h7j8K2mN9pL3rS4tU6vX8yA1bC2dE3fG4h";
 
     /// <summary>
-    /// Wallet address W1 for devnet - same base58 as mainnet but different environment.
+    /// Wallet address W1 for devnet chain - same address but different chain.
     /// </summary>
     public const string W1DevAddress = "DhQ7ZbWfF5h7j8K2mN9pL3rS4tU6vX8yA1bC2dE3fG4h";
 
@@ -135,8 +135,7 @@ public static class TestDataFixtures
     #region Wallet Factory Methods
 
     /// <summary>
-    /// Creates wallet W1 for mainnet environment.
-    /// NOTE: Currently missing environment parameter - will be added during refactoring.
+    /// Creates wallet W1 for mainnet chain.
     /// </summary>
     public static Wallet CreateW1Main(WalletId? id = null)
     {
@@ -147,8 +146,7 @@ public static class TestDataFixtures
     }
 
     /// <summary>
-    /// Creates wallet W1 for devnet environment.
-    /// NOTE: Currently missing environment parameter - will be added during refactoring.
+    /// Creates wallet W1 for devnet chain.
     /// </summary>
     public static Wallet CreateW1Dev(WalletId? id = null)
     {
@@ -159,7 +157,7 @@ public static class TestDataFixtures
     }
 
     /// <summary>
-    /// Creates wallet W2 for mainnet environment.
+    /// Creates wallet W2 for mainnet chain.
     /// </summary>
     public static Wallet CreateW2Main(WalletId? id = null)
     {
@@ -250,7 +248,7 @@ public static class TestDataFixtures
     #region Credential Factory Methods
 
     /// <summary>
-    /// Creates a Dynamic credential for the specified principal.
+    /// Creates a Dynamic credential for user A for the specified principal.
     /// </summary>
     public static IdentityCredential CreateDynACredential(AxonUserId principalId)
     {
@@ -259,6 +257,18 @@ public static class TestDataFixtures
             ProviderType.Create("dynamic").Value.Value,
             DynamicIssuer,
             DynA_Subject);
+    }
+
+    /// <summary>
+    /// Creates a Dynamic credential for user B for the specified principal.
+    /// </summary>
+    public static IdentityCredential CreateDynBCredential(AxonUserId principalId)
+    {
+        return IdentityCredential.Create(
+            principalId,
+            ProviderType.Create("dynamic").Value.Value,
+            DynamicIssuer,
+            "dyn_user_b_67890");
     }
 
     #endregion
