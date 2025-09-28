@@ -221,7 +221,7 @@ public class ConversationBuilder
         }
 
         // Complete if requested
-        if (_shouldComplete && conversation.MessageCount > 0)
+        if (_shouldComplete && conversation.GetMessageCount() > 0)
         {
             var completeResult = conversation.Complete(timeProvider);
             if (completeResult.IsFailure)

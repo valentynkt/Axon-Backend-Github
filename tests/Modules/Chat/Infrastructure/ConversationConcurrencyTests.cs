@@ -242,38 +242,57 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
     {
         // Arrange
         var conversation = await CreateAndSaveConversationAsync();
+        var conversationId = conversation.Id;
+
+        // Create a stale version BEFORE we do the rapid updates
+        var staleConversation = await CreateStaleConversationInstanceAsync(conversationId);
+        var staleVersion = staleConversation.Version;
 
         // Act - Simulate rapid-fire messages from same user (should succeed sequentially)
         using var context = CreateContext(CreateContextOptions());
         using var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
         using var repo = new ConversationRepository(context, unitOfWork);
 
-        var loaded = await repo.GetByIdAsync(conversation.Id);
+        var loaded = await repo.GetByIdAsync(conversationId);
         loaded.ShouldNotBeNull();
 
         for (int i = 1; i <= 5; i++)
         {
-            var content = MessageContent.From($"Rapid message {i}");
-            var result = loaded.AppendUserMessageToConversation(content, _timeProvider);
-            result.IsSuccess.ShouldBeTrue();
+            // Add user message
+            var userContent = MessageContent.From($"Rapid message {i}");
+            var userResult = loaded.AppendUserMessageToConversation(userContent, _timeProvider);
+            userResult.IsSuccess.ShouldBeTrue($"Failed to append user message {i}");
 
             await repo.UpdateAsync(loaded);
             await context.SaveChangesAsync();
 
-            // Advance time slightly for each message
-            _timeProvider.Advance(TimeSpan.FromMilliseconds(100));
+            // Advance time slightly
+            _timeProvider.Advance(TimeSpan.FromMilliseconds(50));
+
+            // Add assistant response to maintain alternating pattern
+            var assistantContent = MessageContent.From($"Rapid response {i}");
+            var responseId = new AiResponseId(Guid.NewGuid().ToString());
+            var assistantResult = loaded.AppendAssistantResponseToConversation(assistantContent, responseId, _timeProvider);
+            assistantResult.IsSuccess.ShouldBeTrue($"Failed to append assistant message {i}");
+
+            await repo.UpdateAsync(loaded);
+            await context.SaveChangesAsync();
+
+            // Advance time slightly for next iteration
+            _timeProvider.Advance(TimeSpan.FromMilliseconds(50));
         }
 
-        // Assert - All messages should be in correct sequence
-        loaded.MessageCount.ShouldBe(5);
-        var messages = loaded.MessagesOrdered.ToList();
+        // Assert - All messages should be in correct sequence (10 total: 5 user + 5 assistant)
+        loaded.GetMessageCount().ShouldBe(10);
+        var messages = loaded.GetAllMessages().ToList();
         for (int i = 0; i < messages.Count; i++)
         {
             messages[i].Sequence.ShouldBe(i + 1);
         }
 
-        // Now try concurrent update with stale version - should fail
-        var staleConversation = await CreateStaleConversationInstanceAsync(conversation.Id);
+        // Now try concurrent update with the stale version we created earlier - should fail
+        // staleConversation still has the original version from before all the updates
+        staleConversation.Version.ShouldBe(staleVersion);
 
         using var staleContext = CreateContext(CreateContextOptions());
         using var staleUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(staleContext);
@@ -281,8 +300,21 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
 
         await staleRepo.UpdateAsync(staleConversation);
 
-        AssertConcurrencyException(async () =>
-            await staleContext.SaveChangesAsync());
+        try
+        {
+            await staleContext.SaveChangesAsync();
+            Assert.Fail("Expected concurrency exception but save succeeded");
+        }
+        catch (global::BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException)
+        {
+            // Expected - test passes
+        }
+        catch (Exception ex)
+        {
+            TestContext.Out.WriteLine($"Unexpected exception in RapidMessageAppending: {ex.GetType().FullName}");
+            TestContext.Out.WriteLine($"Message: {ex.Message}");
+            throw;
+        }
     }
 
     #endregion
@@ -340,12 +372,23 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             await repository.UpdateAsync(conversation);
             await _setupContext.SaveChangesAsync();
 
-            // Add another user message to make it conversational
+            // Add another user/assistant pair to make it more conversational
             for (int i = 0; i < 2; i++)
             {
-                var content = MessageContent.From($"Message {i}");
-                var result = conversation.AppendUserMessageToConversation(content, _timeProvider);
-                result.IsSuccess.ShouldBeTrue();
+                // Add user message
+                var userContent = MessageContent.From($"Follow-up question {i}");
+                var userResult = conversation.AppendUserMessageToConversation(userContent, _timeProvider);
+                userResult.IsSuccess.ShouldBeTrue($"Failed to append user message {i} in CreateAndSaveConversationWithMessagesAsync");
+
+                await repository.UpdateAsync(conversation);
+                await _setupContext.SaveChangesAsync();
+
+                // Add assistant response to maintain alternating pattern
+                var assistantContent2 = MessageContent.From($"Follow-up response {i}");
+                var responseId2 = new AiResponseId(Guid.NewGuid().ToString());
+                var assistantResult2 = conversation.AppendAssistantResponseToConversation(
+                    assistantContent2, responseId2, _timeProvider);
+                assistantResult2.IsSuccess.ShouldBeTrue($"Failed to append assistant message {i} in CreateAndSaveConversationWithMessagesAsync");
 
                 await repository.UpdateAsync(conversation);
                 await _setupContext.SaveChangesAsync();

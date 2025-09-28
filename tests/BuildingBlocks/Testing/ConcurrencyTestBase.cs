@@ -4,6 +4,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
+using NUnit.Framework.Internal;
 using Shouldly;
 
 namespace BuildingBlocks.Testing;
@@ -54,6 +55,7 @@ public abstract class ConcurrencyTestBase<TContext> : PostgreSqlTestBase
         public bool SecondUpdateFailed { get; init; }
         public Exception? SecondUpdateException { get; init; }
         public bool WasConcurrencyException =>
+            SecondUpdateException is BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException ||
             SecondUpdateException is DbUpdateConcurrencyException;
     }
 
@@ -210,12 +212,24 @@ public abstract class ConcurrencyTestBase<TContext> : PostgreSqlTestBase
     }
 
     /// <summary>
-    /// Asserts that an action throws a DbUpdateConcurrencyException.
+    /// Asserts that an action throws a concurrency exception.
+    /// Note: The application wraps DbUpdateConcurrencyException in a custom ConcurrencyException.
     /// </summary>
     protected static void AssertConcurrencyException(Func<Task> action)
     {
-        Should.Throw<DbUpdateConcurrencyException>(action,
-            "Expected DbUpdateConcurrencyException for concurrent modification");
+        try
+        {
+            action().GetAwaiter().GetResult();
+            throw new AssertionException("Expected concurrency exception but none was thrown");
+        }
+        catch (BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException)
+        {
+            // Expected - test passes
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Also acceptable if EF Core exception is not wrapped
+        }
     }
 
     /// <summary>

@@ -448,6 +448,40 @@ public sealed partial class AxonPrincipal
     }
 
     /// <summary>
+    /// Revokes pending ownerships for a specific wallet.
+    /// Used when another principal is taking exclusive ownership.
+    /// </summary>
+    public Result<int, Error> RevokePendingOwnershipsForWallet(WalletId walletId, string reason = "Auto-revoked due to exclusivity constraint")
+    {
+        var pendingOwnerships = _walletOwnerships
+            .Where(wo => wo.WalletId == walletId &&
+                        wo.Status == OwnershipStatus.Pending &&
+                        !wo.IsDeleted)
+            .ToList();
+
+        int revokedCount = 0;
+        foreach (var ownership in pendingOwnerships)
+        {
+            var revokeResult = ownership.UpdateStatus(OwnershipStatus.Revoked, reason);
+            if (revokeResult.IsSuccess)
+            {
+                revokedCount++;
+
+                // Raise domain event for each revoked ownership
+                RaiseDomainEvent(new OwnershipChangedEvent(
+                    Id,
+                    walletId,
+                    "auto_revoked",
+                    ownership.AccessMode.ToString(),
+                    OwnershipStatus.Revoked.ToString()
+                ));
+            }
+        }
+
+        return Result.Success<int, Error>(revokedCount);
+    }
+
+    /// <summary>
     /// Removes a wallet ownership from the principal.
     /// </summary>
     public Result<Unit, Error> RemoveWalletOwnership(WalletId walletId)

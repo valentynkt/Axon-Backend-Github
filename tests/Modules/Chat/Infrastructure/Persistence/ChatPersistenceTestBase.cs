@@ -307,7 +307,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         var conversation = await ConversationRepository.GetByIdAsync(conversationId);
 
         conversation.ShouldNotBeNull();
-        conversation.Messages.ShouldNotBeNull();
+        conversation.GetAllMessages().ShouldNotBeNull();
         conversation.OwnerId.ShouldNotBe(default);
         conversation.Status.ShouldNotBe(default);
     }
@@ -315,10 +315,11 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
     /// <summary>
     /// Asserts that a concurrency exception should be thrown.
     /// PostgreSQL properly enforces concurrency control with optimistic concurrency.
+    /// Note: The application wraps DbUpdateConcurrencyException in a custom ConcurrencyException.
     /// </summary>
     protected static void AssertConcurrencyConflict(Func<Task> action)
     {
-        Should.Throw<DbUpdateConcurrencyException>(action);
+        Should.Throw<global::BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException>(action);
     }
 
     /// <summary>

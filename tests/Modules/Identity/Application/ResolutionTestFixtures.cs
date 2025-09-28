@@ -245,36 +245,6 @@ public static class ResolutionTestFixtures
 
     #region Environment Separation Test Data
 
-    /// <summary>
-    /// Test data for environment separation validation.
-    /// </summary>
-    public static class EnvironmentSeparation
-    {
-        /// <summary>
-        /// Creates cross-environment scenario (same address, different environments).
-        /// </summary>
-        public static (Wallet mainnetWallet, Wallet devnetWallet, ExchangeCredentialCommand mainnetCommand, ExchangeCredentialCommand devnetCommand)
-            CreateCrossEnvironmentScenario()
-        {
-            var mainnetWallet = TestDataFixtures.CreateW1Main();
-            var devnetWallet = TestDataFixtures.CreateW1Dev(); // Same address, different environment
-
-            var mainnetCommand = ExchangeCommandBuilder.CreateEnvironmentSpecificCommand();
-
-            var devnetCommand = ExchangeCommandBuilder.CreateEnvironmentSpecificCommand();
-
-            return (mainnetWallet, devnetWallet, mainnetCommand, devnetCommand);
-        }
-
-        /// <summary>
-        /// Creates mixed environment command (should be invalid).
-        /// </summary>
-        public static ExchangeCredentialCommand CreateMixedEnvironmentCommand()
-        {
-            // Invalid: mainnet environment with devnet wallet
-            return ExchangeCommandBuilder.CreateEnvironmentSpecificCommand();
-        }
-    }
 
     #endregion
 

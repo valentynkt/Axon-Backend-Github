@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,6 +64,9 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
     {
         ArgumentNullException.ThrowIfNull(aggregate);
 
+        // Validate concurrency token for better error messages
+        ValidateConcurrencyToken(aggregate);
+
         var entry = _context.Entry(aggregate);
 
         if (entry.State == EntityState.Detached)
@@ -100,6 +104,12 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
+
+        // Validate all aggregates have valid concurrency tokens
+        foreach (var aggregate in aggregates)
+        {
+            ValidateConcurrencyToken(aggregate);
+        }
 
         // Use the same Attach pattern as UpdateAsync to preserve concurrency tokens
         foreach (var aggregate in aggregates)
@@ -171,6 +181,59 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
     }
 
     // ——— H e l p e r  M e t h o d s ———
+
+    /// <summary>
+    /// Safely executes a save operation with proper concurrency exception handling.
+    /// Wraps EF Core's DbUpdateConcurrencyException in our custom ConcurrencyException.
+    /// </summary>
+    protected virtual async Task<T> ExecuteWithConcurrencyHandlingAsync<T>(Func<Task<T>> operation, string operationName = "Database operation")
+    {
+        try
+        {
+            return await operation();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Convert EF Core concurrency exception to our domain exception
+            throw new ConcurrencyException(
+                $"{operationName} failed due to a concurrency conflict. The entity may have been modified by another process. Original error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Safely executes a save operation with proper concurrency exception handling.
+    /// Wraps EF Core's DbUpdateConcurrencyException in our custom ConcurrencyException.
+    /// </summary>
+    protected virtual async Task ExecuteWithConcurrencyHandlingAsync(Func<Task> operation, string operationName = "Database operation")
+    {
+        try
+        {
+            await operation();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Convert EF Core concurrency exception to our domain exception
+            throw new ConcurrencyException(
+                $"{operationName} failed due to a concurrency conflict. The entity may have been modified by another process. Original error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Validates that an aggregate has the required concurrency token before update operations.
+    /// </summary>
+    protected virtual void ValidateConcurrencyToken(TAggregate aggregate)
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+
+        // For PostgreSQL xmin, the version should never be 0 for existing entities
+        // New entities will have Version = 0, but we don't update new entities
+        if (aggregate.Version == 0)
+        {
+            throw new InvalidOperationException(
+                $"Aggregate {typeof(TAggregate).Name} has an invalid concurrency token (Version = 0). " +
+                "This may indicate the entity was not properly loaded from the database or is a new entity being incorrectly updated.");
+        }
+    }
 
     /// <summary>
     /// Determines if an entity is new (not persisted to database yet).

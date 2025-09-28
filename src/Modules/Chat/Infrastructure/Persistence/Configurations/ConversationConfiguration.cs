@@ -52,21 +52,21 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .HasColumnType("xid")
             .IsRowVersion();
 
-        // Configure Messages navigation property using the public property that exposes the private field
-        builder.HasMany(c => c.Messages)
+        // Configure Messages collection via private backing field only
+        // This ensures complete encapsulation - no public navigation property
+        builder.HasMany<Message>("_messages")
             .WithOne()
             .HasForeignKey(m => m.ConversationId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Configure the navigation to use field access for the private backing field
-        builder.Navigation(c => c.Messages)
+        // Configure the private field navigation
+        builder.Navigation("_messages")
             .EnableLazyLoading(false)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         // Ignore domain events and calculated properties in persistence
         builder.Ignore(c => c.DomainEvents);
-        builder.Ignore(c => c.MessagesOrdered);
-        builder.Ignore(c => c.MessageCount);
         builder.Ignore(c => c.IsActive);
+        builder.Ignore(c => c.HasDefaultTitle);
     }
 }

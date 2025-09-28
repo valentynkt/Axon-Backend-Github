@@ -25,7 +25,7 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
     {
         // Arrange
         var scenario = await SetupConversationWithMessages();
-        var firstMessage = scenario.conversation.Messages.First();
+        var firstMessage = scenario.conversation.GetAllMessages().First();
 
         // Act
         var result = await MessageReadRepository.GetByIdAsync(firstMessage.Id);
@@ -182,7 +182,7 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
     {
         // Arrange
         var scenario = await SetupConversationWithMessages();
-        var assistantMessage = scenario.conversation.Messages
+        var assistantMessage = scenario.conversation.GetAllMessages()
             .First(m => m.Role.IsAssistant);
 
         // Act

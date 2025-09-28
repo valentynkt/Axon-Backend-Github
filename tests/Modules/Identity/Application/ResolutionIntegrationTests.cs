@@ -244,55 +244,7 @@ public class ResolutionIntegrationTests : IdentityResolutionTestBase
 
     #region Environment Separation Integration Tests
 
-    [Test]
-    public async Task Integration_CrossEnvironmentWallets_ShouldNotConflict()
-    {
-        // Arrange: Create scenario with same wallet address in different environments
-        var (mainnetWallet, devnetWallet, mainnetCommand, devnetCommand) =
-            ResolutionTestFixtures.EnvironmentSeparation.CreateCrossEnvironmentScenario();
-
-        // Create separate principals for each environment
-        _ = AxonPrincipal.CreateHuman();
-        _ = AxonPrincipal.CreateHuman();
-
-        // Mock first command (mainnet)
-        MockNoCredentialMatch();
-        MockNoWalletOwners();
-        MockCredentialUniqueness(false);
-
-        var mainnetAddress = Address.Create(TestDataFixtures.W1MainAddress).Value;
-        MockWalletLookup(new Dictionary<(string, Address), WalletId>
-        {
-            { (TestDataFixtures.SolanaMainnetChain, mainnetAddress), mainnetWallet.Id }
-        });
-
-        var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
-        mockUnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
-        MockPrincipalRepository.UnitOfWork.Returns(mockUnitOfWork);
-
-        // Act: Execute both commands
-        var mainnetResult = await ExchangeHandler.Handle(mainnetCommand, CancellationToken.None);
-
-        // Reset mocks for second command
-        MockNoCredentialMatch();
-        MockNoWalletOwners();
-        MockCredentialUniqueness(false);
-
-        var devnetAddress = Address.Create(TestDataFixtures.W1DevAddress).Value;
-        MockWalletLookup(new Dictionary<(string, Address), WalletId>
-        {
-            { (TestDataFixtures.SolanaDevnetChain, devnetAddress), devnetWallet.Id }
-        });
-
-        var devnetResult = await ExchangeHandler.Handle(devnetCommand, CancellationToken.None);
-
-        // Assert: Both should succeed (no cross-environment conflict)
-        mainnetResult.IsSuccess.ShouldBeTrue();
-        devnetResult.IsSuccess.ShouldBeTrue();
-
-        // NOTE: This test will FAIL initially if environment separation is not implemented
-        // The same wallet address should be allowed in different environments
-    }
+    // Cross-environment tests removed - no longer needed after removing environment property
 
     #endregion
 

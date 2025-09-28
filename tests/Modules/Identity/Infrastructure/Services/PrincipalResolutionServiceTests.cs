@@ -95,83 +95,6 @@ public class PrincipalResolutionServiceTests
     }
 
     [Test]
-    public async Task ResolveAsync_CredentialMatchWithCrossEnvConflict_ReturnsConflictError()
-    {
-        // Arrange
-        var issuer = "https://app.dynamic.xyz/mainnet";
-        var subject = "user123";
-
-        var principalA = CreateTestPrincipal("principal-a");
-        var principalB = CreateTestPrincipal("principal-b");
-        var walletId = WalletId.New();
-        var crossEnvOwnership = CreateTestWalletOwnership(principalB.Id, walletId, 
-            status: OwnershipStatus.Verified, accessMode: AccessMode.Signing);
-
-        // Manually set navigation property that EF Core would set
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(crossEnvOwnership, principalB);
-
-        // Set up the credential resolution to return principal A
-        _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
-            .Returns(principalA);
-
-        // Set up cross-environment ownership check to return principal B ownership
-        _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
-            .Returns(crossEnvOwnership);
-
-        // Add wallet write repository mock in case the service tries to create a wallet
-        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
-            .Returns(CreateTestWallet());
-
-        // Act
-        var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject,
-            _solanaChain, _testAddress, CancellationToken.None);
-
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Conflict);
-        result.Error.Message.Should().Contain("Cross-environment verified+signing conflict");
-    }
-
-    [Test]
-    public async Task ResolveAsync_CredentialMatchWithSamePrincipalCrossEnv_AutoLinksWallet()
-    {
-        // Arrange
-        var issuer = "https://app.dynamic.xyz/mainnet";
-        var subject = "user123";
-
-        var principalA = CreateTestPrincipal("principal-a");
-        var crossEnvOwnership = CreateTestWalletOwnership(principalA.Id, WalletId.New());
-
-        // Manually set navigation property that EF Core would set
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(crossEnvOwnership, principalA);
-
-        _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
-            .Returns(principalA);
-
-        _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
-            .Returns(crossEnvOwnership);
-
-        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
-            .Returns(CreateTestWallet());
-
-        // Act
-        var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject,
-            _solanaChain, _testAddress, CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Principal.Should().Be(principalA);
-        result.Value.Path.Should().Be(ResolutionPath.Credential);
-        result.Value.WasAutoLinked.Should().BeTrue();
-
-        await _walletWriteRepository.Received(1).UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>());
-    }
-
-    [Test]
     public async Task ResolveAsync_WalletMatch_ReturnsOwningPrincipal()
     {
         // Arrange
@@ -188,12 +111,10 @@ public class PrincipalResolutionServiceTests
         _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(existingWallet);
 
-        // Manually set navigation property that EF Core would set
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(ownership, existingPrincipal);
+        var ownershipWithPrincipal = new WalletOwnershipWithPrincipal(ownership, existingPrincipal);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
-            .Returns(new List<WalletOwnership> { ownership });
+            .Returns(new List<WalletOwnershipWithPrincipal> { ownershipWithPrincipal });
 
         // Act
         var result = await _service.ResolveAsync(
@@ -237,7 +158,7 @@ public class PrincipalResolutionServiceTests
             .Returns(existingWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
-            .Returns(new List<WalletOwnership> { ownershipA, ownershipB });
+            .Returns(new List<WalletOwnershipWithPrincipal> { ownershipA, ownershipB });
 
         // Act
         var result = await _service.ResolveAsync(
@@ -248,47 +169,6 @@ public class PrincipalResolutionServiceTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Principal.Should().Be(principalB); // DynamicAttested has higher authority
         result.Value.Path.Should().Be(ResolutionPath.Wallet);
-    }
-
-    [Test]
-    public async Task ResolveAsync_NoWalletButCrossEnvOwner_AttachesToExistingPrincipal()
-    {
-        // Arrange
-        var issuer = "https://app.dynamic.xyz/mainnet";
-        var subject = "user123";
-
-        var crossEnvPrincipal = CreateTestPrincipal("cross-env-principal");
-        var crossEnvOwnership = CreateTestWalletOwnership(crossEnvPrincipal.Id, WalletId.New());
-        var newWallet = CreateTestWallet();
-
-        _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
-            .Returns((AxonPrincipal?)null);
-
-        _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
-            .Returns((Wallet?)null);
-
-        // Manually set navigation property that EF Core would set
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(crossEnvOwnership, crossEnvPrincipal);
-
-        _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
-            .Returns(crossEnvOwnership);
-
-        _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
-            .Returns(newWallet);
-
-        // Act
-        var result = await _service.ResolveAsync(
-            _dynamicProvider, issuer, subject,
-            _solanaChain, _testAddress, CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Principal.Should().Be(crossEnvPrincipal);
-        result.Value.Path.Should().Be(ResolutionPath.Wallet);
-        result.Value.WasAutoLinked.Should().BeTrue();
-
-        await _walletWriteRepository.Received(1).UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -304,15 +184,12 @@ public class PrincipalResolutionServiceTests
         _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns((Wallet?)null);
 
-        _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
-            .Returns((WalletOwnership?)null);
-
         var newWallet = CreateTestWallet();
         _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(newWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(newWallet.Id, Arg.Any<CancellationToken>())
-            .Returns(new List<WalletOwnership>());
+            .Returns(new List<WalletOwnershipWithPrincipal>());
 
         // Mock wallet re-read after upsert
         _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
@@ -324,14 +201,6 @@ public class PrincipalResolutionServiceTests
 
         _principalWriteRepository.UnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(1));
-
-        // Mock ownership creation
-        _ownershipRepository.CreateOwnershipAsync(
-            Arg.Any<AxonUserId>(), Arg.Any<WalletId>(),
-            Arg.Any<AccessMode>(), Arg.Any<OwnershipStatus>(),
-            Arg.Any<VerificationSource>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => Task.FromResult(CreateTestWalletOwnership(
-                callInfo.ArgAt<AxonUserId>(0), callInfo.ArgAt<WalletId>(1))));
 
         // Act
         var result = await _service.ResolveAsync(
@@ -367,19 +236,14 @@ public class PrincipalResolutionServiceTests
         _walletReadRepository.FindWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns((Wallet?)null, newWallet);
 
-        _ownershipRepository.FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(_solanaChain.Value, _testAddress, Arg.Any<CancellationToken>())
-            .Returns((WalletOwnership?)null);
-
         _walletWriteRepository.UpsertWalletAsync(_solanaChain, _testAddress, Arg.Any<CancellationToken>())
             .Returns(newWallet);
 
-        // Manually set navigation property that EF Core would set
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(raceOwnership, racingPrincipal);
+        var raceOwnershipWithPrincipal = new WalletOwnershipWithPrincipal(raceOwnership, racingPrincipal);
 
         // Simulate race condition: another request already linked ownership
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(newWallet.Id, Arg.Any<CancellationToken>())
-            .Returns(new List<WalletOwnership> { raceOwnership });
+            .Returns(new List<WalletOwnershipWithPrincipal> { raceOwnershipWithPrincipal });
 
         // Act
         var result = await _service.ResolveAsync(
@@ -412,11 +276,8 @@ public class PrincipalResolutionServiceTests
         var watchOnlyOwnership = CreateTestWalletOwnership(watchOnlyPrincipal.Id, existingWallet.Id,
             status: OwnershipStatus.Verified, accessMode: AccessMode.WatchOnly);
 
-        // Manually set navigation properties that EF Core would set
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(verifiedOwnership, verifiedSigningPrincipal);
-        typeof(WalletOwnership).GetProperty("Principal")!
-            .SetValue(watchOnlyOwnership, watchOnlyPrincipal);
+        var verifiedOwnershipWithPrincipal = new WalletOwnershipWithPrincipal(verifiedOwnership, verifiedSigningPrincipal);
+        var watchOnlyOwnershipWithPrincipal = new WalletOwnershipWithPrincipal(watchOnlyOwnership, watchOnlyPrincipal);
 
         _principalReadRepository.FindByCredentialAsync(_dynamicProvider, issuer, subject, Arg.Any<CancellationToken>())
             .Returns((AxonPrincipal?)null);
@@ -425,7 +286,7 @@ public class PrincipalResolutionServiceTests
             .Returns(existingWallet);
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
-            .Returns(new List<WalletOwnership> { watchOnlyOwnership, verifiedOwnership });
+            .Returns(new List<WalletOwnershipWithPrincipal> { watchOnlyOwnershipWithPrincipal, verifiedOwnershipWithPrincipal });
 
         // Act
         var result = await _service.ResolveAsync(
@@ -489,7 +350,7 @@ public class PrincipalResolutionServiceTests
         return WalletOwnership.Create(principalId, walletId, accessMode, status, verificationSource);
     }
 
-    private static WalletOwnership CreateTestWalletOwnershipWithPrincipal(
+    private static WalletOwnershipWithPrincipal CreateTestWalletOwnershipWithPrincipal(
         AxonPrincipal principal,
         WalletId walletId,
         OwnershipStatus status = OwnershipStatus.Verified,
@@ -497,8 +358,6 @@ public class PrincipalResolutionServiceTests
         VerificationSource verificationSource = VerificationSource.DynamicAttested)
     {
         var ownership = WalletOwnership.Create(principal.Id, walletId, accessMode, status, verificationSource);
-        // Set navigation property manually for tests
-        typeof(WalletOwnership).GetProperty("Principal")!.SetValue(ownership, principal);
-        return ownership;
+        return new WalletOwnershipWithPrincipal(ownership, principal);
     }
 }

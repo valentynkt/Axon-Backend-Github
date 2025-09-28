@@ -298,8 +298,8 @@ public sealed class ConversationReadRepositoryTests : ChatPersistenceTestBase
         // Assert
         result.ShouldNotBeNull();
         result.Id.ShouldBe(scenario.Conversation.Id);
-        result.Messages.ShouldNotBeNull();
-        result.Messages.Count.ShouldBe(4); // 2 user + 2 assistant messages
+        result.GetAllMessages().ShouldNotBeNull();
+        result.GetMessageCount().ShouldBe(4); // 2 user + 2 assistant messages
     }
 
     [Test]

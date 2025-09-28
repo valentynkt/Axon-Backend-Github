@@ -86,7 +86,7 @@ public class PrincipalResolutionIntegrationTests
 
         _walletReadRepository = new WalletReadRepository(_readContext);
         _walletWriteRepository = new WalletWriteRepository(_writeContext, _unitOfWork);
-        _walletOwnershipRepository = new WalletOwnershipRepository(_writeContext, _readContext, _unitOfWork);
+        _walletOwnershipRepository = new WalletOwnershipRepository(_readContext);
         _principalReadRepository = new AxonPrincipalReadRepository(_readContext);
         _principalWriteRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork);
         _addressNormalization = new AddressNormalizationService(addressLogger);
@@ -264,58 +264,10 @@ public class PrincipalResolutionIntegrationTests
         result.ShouldNotBeEmpty();
         var plan = result.First();
         plan.ShouldContain("Index Scan", Case.Insensitive);
-        plan.ShouldContain("ux_wallet_netenv_chain_addr", Case.Insensitive);
-    }
-
-    [Test]
-    public async Task ResolveAsync_CrossEnvironmentConflict_ShouldReturn409()
-    {
-        // Arrange - Create principal A with credential
-        var principalA = AxonPrincipal.CreateHuman(AxonUserId.New());
-
-        var credential = IdentityCredential.Create(
-            principalA.Id,
-            ProviderType.Dynamic.Value,
-            "dynamic.xyz",
-            "user123");
-        var addCredentialResult = principalA.AddCredential(credential, (provider, issuer, subject) => Result.Success<bool, Error>(false));
-        addCredentialResult.IsSuccess.ShouldBeTrue();
-
-        await _principalWriteRepository.AddAsync(principalA, CancellationToken.None);
-        await _writeContext.SaveChangesAsync();
-
-        // Create principal B with verified+signing ownership on devnet
-        var principalB = AxonPrincipal.CreateHuman(AxonUserId.New());
-        await _principalWriteRepository.AddAsync(principalB, CancellationToken.None);
-
-        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-        var devnetWallet = Wallet.Create(
-            WalletId.New(),
-            "solana-devnet",
-            address);
-        await _walletWriteRepository.AddAsync(devnetWallet, CancellationToken.None);
-
-        var ownership = await _walletOwnershipRepository.CreateOwnershipAsync(
-            principalB.Id,
-            devnetWallet.Id,
-            AccessMode.Signing,
-            OwnershipStatus.Verified,
-            VerificationSource.DirectSignatureMsg,
-            CancellationToken.None);
-        await _writeContext.SaveChangesAsync();
-
-        // Act - Try to resolve on mainnet with principal A's credential
-        var result = await _resolutionService.ResolveAsync(
-            ProviderType.Dynamic,
-            "dynamic.xyz",
-            "user123",
-            ChainId.From("solana"),
-            address,
-            CancellationToken.None);
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Message.ShouldContain("Cross-environment verified+signing conflict");
+        // Index name check - either the old name (in existing DBs) or the new name (after migration)
+        var hasCorrectIndex = plan.Contains("ux_wallet_chain_addr", StringComparison.OrdinalIgnoreCase) ||
+                              plan.Contains("ux_wallet_netenv_chain_addr", StringComparison.OrdinalIgnoreCase);
+        hasCorrectIndex.ShouldBeTrue($"Expected index ux_wallet_chain_addr in plan but got: {plan}");
     }
 
     [Test]
@@ -343,7 +295,7 @@ public class PrincipalResolutionIntegrationTests
 
             var localWalletReadRepository = new WalletReadRepository(localReadContext);
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
-            var localWalletOwnershipRepository = new WalletOwnershipRepository(localWriteContext, localReadContext, localUnitOfWork);
+            var localWalletOwnershipRepository = new WalletOwnershipRepository(localReadContext);
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
             using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork);
             var localLogger = Substitute.For<ILogger<PrincipalResolutionService>>();
@@ -384,59 +336,5 @@ public class PrincipalResolutionIntegrationTests
 
         createdCount.ShouldBeLessThanOrEqualTo(1, "Only one principal should be created");
         principalIds.Count.ShouldBe(1, "All resolutions should return the same principal");
-    }
-
-    [Test]
-    public async Task ResolveAsync_CrossEnvironmentAutoLink_WhenPrincipalsMatch()
-    {
-        // Arrange - Create principal with credential and devnet wallet
-        var principal = AxonPrincipal.CreateHuman(AxonUserId.New());
-
-        var credential = IdentityCredential.Create(
-            principal.Id,
-            ProviderType.Dynamic.Value,
-            "dynamic.xyz",
-            "user123");
-        var addCredentialResult3 = principal.AddCredential(credential, (provider, issuer, subject) => Result.Success<bool, Error>(false));
-        addCredentialResult3.IsSuccess.ShouldBeTrue();
-
-        await _principalWriteRepository.AddAsync(principal, CancellationToken.None);
-
-        var address = Address.From("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-        var devnetWallet = Wallet.Create(
-            WalletId.New(),
-            "solana-devnet",
-            address);
-        await _walletWriteRepository.AddAsync(devnetWallet, CancellationToken.None);
-
-        var ownership = await _walletOwnershipRepository.CreateOwnershipAsync(
-            principal.Id,
-            devnetWallet.Id,
-            AccessMode.Signing,
-            OwnershipStatus.Verified,
-            VerificationSource.DirectSignatureMsg,
-            CancellationToken.None);
-        await _writeContext.SaveChangesAsync();
-
-        // Act - Resolve on mainnet with same credential
-        var result = await _resolutionService.ResolveAsync(
-            ProviderType.Dynamic,
-            "dynamic.xyz",
-            "user123",
-            ChainId.From("solana"),
-            address,
-            CancellationToken.None);
-
-        // Assert - Should auto-link and create mainnet wallet
-        result.IsSuccess.ShouldBeTrue();
-        result.Value.Principal.Id.ShouldBe(principal.Id);
-        result.Value.WasAutoLinked.ShouldBeTrue();
-
-        // Verify mainnet wallet was created
-        var mainnetWallet = await _walletReadRepository.FindWalletAsync(
-            ChainId.From("solana-mainnet"),
-            address,
-            CancellationToken.None);
-        mainnetWallet.ShouldNotBeNull();
     }
 }

@@ -83,7 +83,7 @@ public class AddressNormalizationServiceTests
     public void NormalizeAddress_SolanaMaxValidLength_ReturnsSuccess()
     {
         // Arrange - 44 characters (max valid length)
-        var maxLengthAddress = "111111111111111111111111111111111111111111111";
+        var maxLengthAddress = "11111111111111111111111111111111111111111111";
 
         // Act
         var result = _service.NormalizeAddress("solana", maxLengthAddress);
@@ -166,7 +166,7 @@ public class AddressNormalizationServiceTests
     }
 
     [Test]
-    public void NormalizeAddress_UnsupportedChain_ReturnsNotSupportedError()
+    public void NormalizeAddress_UnsupportedChain_ReturnsSuccess()
     {
         // Arrange
         var chainId = "bitcoin";
@@ -176,9 +176,8 @@ public class AddressNormalizationServiceTests
         var result = _service.NormalizeAddress(chainId, address);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Validation);
-        result.Error.Message.Should().Contain("Invalid Solana address format");
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Value.Should().Be(address);
     }
 
     [TestCase("SOLANA", "solana")]

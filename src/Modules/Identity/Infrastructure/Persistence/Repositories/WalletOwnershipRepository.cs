@@ -1,106 +1,44 @@
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
-using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
-using BuildingBlocks.Application;
-using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// Repository implementation for wallet ownership operations supporting deterministic principal resolution.
+/// Repository implementation for wallet ownership read-only operations supporting deterministic principal resolution.
+/// All ownership modifications must go through the AxonPrincipal aggregate root to maintain DDD boundaries.
 /// </summary>
 public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
 {
-    private readonly IdentityWriteDbContext _writeContext;
     private readonly IdentityReadDbContext _readContext;
-    private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
-    public WalletOwnershipRepository(
-        IdentityWriteDbContext writeContext,
-        IdentityReadDbContext readContext,
-        IWriteUnitOfWork<IdentityModule> unitOfWork)
+    public WalletOwnershipRepository(IdentityReadDbContext readContext)
     {
-        _writeContext = writeContext;
         _readContext = readContext;
-        _unitOfWork = unitOfWork;
     }
 
-    public async Task<IReadOnlyList<WalletOwnership>> FindActiveOwnershipsByWalletAsync(
+    public async Task<IReadOnlyList<WalletOwnershipWithPrincipal>> FindActiveOwnershipsByWalletAsync(
         WalletId walletId,
         CancellationToken cancellationToken = default)
     {
-        var ownerships = await _readContext.Set<WalletOwnership>()
-            .Include(o => o.Principal)
-            .Where(o => o.WalletId == walletId && o.Status != OwnershipStatus.Revoked)
+        // Join WalletOwnership with AxonPrincipal to get both entities
+        var result = await (from wo in _readContext.Set<WalletOwnership>()
+                           join p in _readContext.Set<AxonPrincipal>() on wo.PrincipalId equals p.Id
+                           where wo.WalletId == walletId && wo.Status != OwnershipStatus.Revoked
+                           select new { Ownership = wo, Principal = p })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        return ownerships.AsReadOnly();
+        return result.Select(r => new WalletOwnershipWithPrincipal(r.Ownership, r.Principal))
+                    .ToList()
+                    .AsReadOnly();
     }
 
-    public async Task<WalletOwnership?> FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(
-        string chainId,
-        Address address,
-        CancellationToken cancellationToken = default)
-    {
-        // First find wallets with matching chain and address across all network environments
-        // Since WalletOwnership doesn't have a Wallet navigation property, we need to join
-        var ownership = await (from wo in _readContext.Set<WalletOwnership>()
-                               join w in _readContext.Set<Wallet>() on wo.WalletId equals w.Id
-                               where w.ChainId == chainId &&
-                                     w.Address == address &&
-                                     wo.Status == OwnershipStatus.Verified &&
-                                     wo.AccessMode == AccessMode.Signing &&
-                                     !wo.IsDeleted
-                               select wo)
-            .Include(o => o.Principal)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return ownership;
-    }
-
-    public async Task<WalletOwnership> CreateOwnershipAsync(
-        AxonUserId principalId,
-        WalletId walletId,
-        AccessMode accessMode,
-        OwnershipStatus status,
-        VerificationSource verificationSource,
-        CancellationToken cancellationToken = default)
-    {
-        var ownership = WalletOwnership.Create(
-            principalId,
-            walletId,
-            accessMode,
-            status,
-            verificationSource);
-
-        await _writeContext.Set<WalletOwnership>().AddAsync(ownership, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return ownership;
-    }
-
-    public async Task RevokeOwnershipAsync(
-        WalletOwnershipId ownershipId,
-        string reason,
-        CancellationToken cancellationToken = default)
-    {
-        var ownership = await _writeContext.Set<WalletOwnership>()
-            .FirstOrDefaultAsync(o => o.Id == ownershipId, cancellationToken);
-
-        if (ownership == null)
-            return;
-
-        ownership.UpdateStatus(OwnershipStatus.Revoked);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-    }
 
     public async Task<IReadOnlyDictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(
         IEnumerable<WalletId> walletIds,
@@ -110,15 +48,16 @@ public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
         if (walletIdList.Count == 0)
             return new Dictionary<WalletId, AxonPrincipal>();
 
-        var ownerships = await _readContext.Set<WalletOwnership>()
-            .Include(o => o.Principal)
-                .ThenInclude(p => p.WalletOwnerships)
-            .Include(o => o.Principal)
-                .ThenInclude(p => p.Credentials)
-            .Where(o =>
-                walletIdList.Contains(o.WalletId) &&
-                o.Status == OwnershipStatus.Verified &&
-                o.AccessMode == AccessMode.Signing)
+        // Join WalletOwnership with AxonPrincipal and include related collections
+        var ownerships = await (from wo in _readContext.Set<WalletOwnership>()
+                               join p in _readContext.Set<AxonPrincipal>()
+                                   .Include(p => p.WalletOwnerships)
+                                   .Include(p => p.Credentials)
+                                   on wo.PrincipalId equals p.Id
+                               where walletIdList.Contains(wo.WalletId) &&
+                                     wo.Status == OwnershipStatus.Verified &&
+                                     wo.AccessMode == AccessMode.Signing
+                               select new { wo.WalletId, Principal = p })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

@@ -146,7 +146,7 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     public override async Task<Conversation?> GetByIdAsync<TId>(TId id, CancellationToken cancellationToken = default)
     {
         return await _chatDbContext.Set<Conversation>()
-            .Include(c => c.Messages)
+            .Include("_messages")
             .AsNoTracking()
             .FirstOrDefaultAsync(c => EF.Property<object>(c, "Id").Equals(id), cancellationToken);
     }

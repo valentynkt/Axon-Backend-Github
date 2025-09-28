@@ -52,10 +52,9 @@ public static class ChatDomainShouldlyExtensions
     /// </summary>
     public static void ShouldHaveMessageCount(this Conversation conversation, int expectedCount)
     {
-        conversation.MessageCount.ShouldBe(expectedCount, 
-            $"Conversation should have {expectedCount} messages but has {conversation.MessageCount}");
-        conversation.Messages.Count.ShouldBe(expectedCount, 
-            "Message collection count should match MessageCount property");
+        var actualCount = conversation.GetMessageCount();
+        actualCount.ShouldBe(expectedCount, 
+            $"Conversation should have {expectedCount} messages but has {actualCount}");
     }
 
     /// <summary>
@@ -64,7 +63,7 @@ public static class ChatDomainShouldlyExtensions
     public static void ShouldHaveNoMessages(this Conversation conversation)
     {
         conversation.ShouldHaveMessageCount(0);
-        conversation.Messages.ShouldBeEmpty("Conversation should have no messages");
+        conversation.HasMessages().ShouldBeFalse("Conversation should have no messages");
     }
 
     /// <summary>
@@ -183,7 +182,7 @@ public static class ChatDomainShouldlyExtensions
     /// </summary>
     public static void ShouldHaveMessagesInSequentialOrder(this Conversation conversation)
     {
-        var messages = conversation.MessagesOrdered.ToList();
+        var messages = conversation.GetAllMessages().ToList();
         
         for (int i = 0; i < messages.Count; i++)
         {
@@ -197,7 +196,7 @@ public static class ChatDomainShouldlyExtensions
     /// </summary>
     public static void ShouldFollowTurnTakingPattern(this Conversation conversation)
     {
-        var messages = conversation.MessagesOrdered.ToList();
+        var messages = conversation.GetAllMessages().ToList();
         
         for (int i = 0; i < messages.Count; i++)
         {

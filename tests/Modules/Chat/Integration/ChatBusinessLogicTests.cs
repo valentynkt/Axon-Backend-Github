@@ -61,9 +61,9 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         }
 
         // Assert: Verify sequence integrity
-        conversation.MessageCount.ShouldBe(messageSequence.Count);
+        conversation.GetMessageCount().ShouldBe(messageSequence.Count);
 
-        var orderedMessages = conversation.MessagesOrdered;
+        var orderedMessages = conversation.GetAllMessages();
         for (int i = 0; i < orderedMessages.Count; i++)
         {
             orderedMessages[i].Role.ShouldBe(messageSequence[i].Role);
@@ -94,7 +94,7 @@ public class ChatBusinessLogicTests : ApplicationTestBase
 
         result.ShouldBeFailure();
         result.Error.Type.ShouldBe(ErrorType.BusinessRule);
-        conversation.MessageCount.ShouldBe(1); // Should remain unchanged
+        conversation.GetMessageCount().ShouldBe(1); // Should remain unchanged
     }
 
     [Test]
@@ -112,7 +112,7 @@ public class ChatBusinessLogicTests : ApplicationTestBase
 
         result.ShouldBeFailure();
         result.Error.Type.ShouldBe(ErrorType.BusinessRule);
-        conversation.MessageCount.ShouldBe(0);
+        conversation.GetMessageCount().ShouldBe(0);
     }
 
     #endregion
@@ -133,13 +133,13 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         // 1. Initial state
         conversation.Status.ShouldBe(ConversationStatus.Active);
         conversation.IsActive.ShouldBeTrue();
-        conversation.MessageCount.ShouldBe(0);
+        conversation.GetMessageCount().ShouldBe(0);
 
         // 2. Add user message
         var userMessage = MessageContent.Create("User message for lifecycle test").Value;
         var userResult = conversation.AppendUserMessageToConversation(userMessage, TimeProvider);
         userResult.ShouldBeSuccess();
-        conversation.MessageCount.ShouldBe(1);
+        conversation.GetMessageCount().ShouldBe(1);
         conversation.IsActive.ShouldBeTrue();
 
         // 3. Add assistant response
@@ -147,7 +147,7 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         var aiResponseId = CreateAiResponseId();
         var assistantResult = conversation.AppendAssistantResponseToConversation(assistantMessage, aiResponseId, TimeProvider);
         assistantResult.ShouldBeSuccess();
-        conversation.MessageCount.ShouldBe(2);
+        conversation.GetMessageCount().ShouldBe(2);
         conversation.LastAiResponseId.ShouldBe(aiResponseId);
 
         // 4. Update title
@@ -242,9 +242,9 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         }
 
         // Final verification
-        conversation.MessageCount.ShouldBe(specialContents.Length);
+        conversation.GetMessageCount().ShouldBe(specialContents.Length);
 
-        var messages = conversation.MessagesOrdered;
+        var messages = conversation.GetAllMessages();
         for (int i = 0; i < messages.Count; i++)
         {
             messages[i].Content.Value.ShouldBe(specialContents[i]);
@@ -328,7 +328,7 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         // Assert: Should fail due to duplicate AI response ID
         result3.ShouldBeFailure();
         result3.Error.Type.ShouldBe(ErrorType.BusinessRule);
-        conversation.MessageCount.ShouldBe(3); // Should remain unchanged
+        conversation.GetMessageCount().ShouldBe(3); // Should remain unchanged
 
         // Verify original AI response ID is still tracked
         conversation.LastAiResponseId.ShouldBe(firstAiResponseId);
@@ -359,7 +359,7 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         result2.ShouldBeSuccess();
         result2.Value.Id.ShouldBe(originalMessage.Id);
         result2.Value.AiResponseId.ShouldBe(aiResponseId);
-        conversation.MessageCount.ShouldBe(2); // Should not increase
+        conversation.GetMessageCount().ShouldBe(2); // Should not increase
     }
 
     #endregion
@@ -588,13 +588,13 @@ public class ChatBusinessLogicTests : ApplicationTestBase
         }
 
         // Verify final state integrity
-        conversation.MessageCount.ShouldBe(4);
+        conversation.GetMessageCount().ShouldBe(4);
         conversation.Title.ShouldBe("Complex operation title");
         conversation.IsActive.ShouldBeTrue();
         conversation.LastAiResponseId.ShouldNotBeNull();
 
         // Verify message sequence integrity
-        var messages = conversation.MessagesOrdered;
+        var messages = conversation.GetAllMessages();
         for (int i = 0; i < messages.Count; i++)
         {
             messages[i].Sequence.ShouldBe(i + 1);

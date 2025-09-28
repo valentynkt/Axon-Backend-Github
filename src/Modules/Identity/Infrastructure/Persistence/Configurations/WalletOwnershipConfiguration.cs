@@ -99,12 +99,7 @@ public class WalletOwnershipConfiguration : IEntityTypeConfiguration<WalletOwner
             .HasMaxLength(500);
 
         // Version property was removed - relying on parent aggregate's concurrency control
-
-        // Navigation property configuration
-        builder.HasOne(o => o.Principal)
-            .WithMany()
-            .HasForeignKey(o => o.PrincipalId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Navigation property removed - child entities should not navigate to aggregate root
 
         // Override the global soft delete query filter
         // This entity is a navigation property of AxonPrincipal aggregate

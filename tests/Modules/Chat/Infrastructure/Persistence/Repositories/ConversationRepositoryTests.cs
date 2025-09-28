@@ -315,35 +315,41 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
     {
         // Arrange
         var conversation = await SaveConversationAsync(CreateTestConversation());
+        var conversationId = conversation.Id;
+        var initialVersion = conversation.Version;
 
-        // Simulate first client: Load in fresh context
+        // Simulate first client: Load entity
         ClearChangeTracker();
-        var conversation1 = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var conversation1 = await ConversationRepository.GetByIdAsync(conversationId);
         conversation1.ShouldNotBeNull();
+        conversation1.Version.ShouldBe(initialVersion);
 
-        // Simulate second client: Load in separate tracking (detached after load)
+        // Simulate second client: Load entity in a detached state
         ClearChangeTracker();
-        var conversation2 = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var conversation2 = await ConversationRepository.GetByIdAsync(conversationId);
         conversation2.ShouldNotBeNull();
 
-        // Detach conversation2 to simulate a separate context
+        // Detach conversation2 to simulate it being loaded in a separate context
         DbContext.Entry(conversation2).State = EntityState.Detached;
 
         // Both should have the same Version initially
-        conversation1.Version.ShouldBe(conversation2.Version);
+        conversation2.Version.ShouldBe(initialVersion);
 
-        // First client updates and saves successfully (with fresh tracking)
-        ClearChangeTracker();
-        var freshConversation1 = await ConversationRepository.GetByIdAsync(conversation.Id);
-        freshConversation1.ShouldNotBeNull();
-        var updateResult1 = freshConversation1.UpdateTitle("First Update", TimeProvider);
+        // First client updates and saves successfully
+        var updateResult1 = conversation1.UpdateTitle("First Update", TimeProvider);
         updateResult1.IsSuccess.ShouldBeTrue();
-        await ConversationRepository.UpdateAsync(freshConversation1);
+        await ConversationRepository.UpdateAsync(conversation1);
         await UnitOfWork.SaveChangesAsync();
+
+        // Clear the tracker to simulate conversation2 coming from a different context
+        ClearChangeTracker();
 
         // Second client tries to update with stale version - should fail
         var updateResult2 = conversation2.UpdateTitle("Second Update", TimeProvider);
         updateResult2.IsSuccess.ShouldBeTrue();
+
+        // The stale entity still has the original version
+        conversation2.Version.ShouldBe(initialVersion);
 
         AssertConcurrencyConflict(async () =>
         {

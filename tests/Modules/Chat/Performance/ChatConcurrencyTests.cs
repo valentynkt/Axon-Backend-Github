@@ -83,10 +83,10 @@ public class ChatConcurrencyTests : ApplicationTestBase
         }
 
         // Verify conversation state integrity
-        conversation.MessageCount.ShouldBe(messageContents.Count);
+        conversation.GetMessageCount().ShouldBe(messageContents.Count);
 
         // Check message sequence integrity
-        var messages = conversation.MessagesOrdered;
+        var messages = conversation.GetAllMessages();
         for (int i = 0; i < messages.Count; i++)
         {
             messages[i].Sequence.ShouldBe(i + 1, "Message sequence should be consecutive");
@@ -144,7 +144,7 @@ public class ChatConcurrencyTests : ApplicationTestBase
         // Verify each conversation has correct message count
         foreach (var conversation in userConversations.Values)
         {
-            conversation.MessageCount.ShouldBe(MessagesPerUser);
+            conversation.GetMessageCount().ShouldBe(MessagesPerUser);
         }
 
         // Verify no cross-contamination between users
@@ -230,7 +230,7 @@ public class ChatConcurrencyTests : ApplicationTestBase
         var averageTimePerMessage = stopwatch.ElapsedMilliseconds / (double)messageCount;
         averageTimePerMessage.ShouldBeLessThan(10, "Average time per message should be under 10ms");
 
-        conversation.MessageCount.ShouldBe(messageCount);
+        conversation.GetMessageCount().ShouldBe(messageCount);
         stopwatch.ElapsedMilliseconds.ShouldBeLessThan(MaxResponseTimeMs,
             $"Total time should be under {MaxResponseTimeMs}ms");
     }
@@ -342,7 +342,7 @@ public class ChatConcurrencyTests : ApplicationTestBase
             .WithMaximumMessages() // This should create a conversation at the limit
             .Build();
 
-        var initialMessageCount = conversation.MessageCount;
+        var initialMessageCount = conversation.GetMessageCount();
 
         // Act: Try to add one more message
         var content = MessageContent.Create("This should fail due to limit").Value;
@@ -351,7 +351,7 @@ public class ChatConcurrencyTests : ApplicationTestBase
         // Assert: Should fail due to message limit
         result.ShouldBeFailure();
         result.Error.Type.ShouldBe(ErrorType.BusinessRule);
-        conversation.MessageCount.ShouldBe(initialMessageCount, "Message count should not change");
+        conversation.GetMessageCount().ShouldBe(initialMessageCount, "Message count should not change");
     }
 
     [Test]
@@ -425,10 +425,10 @@ public class ChatConcurrencyTests : ApplicationTestBase
             result.ShouldBeSuccess();
         }
 
-        conversation.MessageCount.ShouldBe(10);
+        conversation.GetMessageCount().ShouldBe(10);
 
         // Verify content integrity
-        var messages = conversation.MessagesOrdered;
+        var messages = conversation.GetAllMessages();
         for (int i = 0; i < messages.Count; i++)
         {
             messages[i].Content.Value.ShouldContain($"message_{i}");
@@ -527,7 +527,7 @@ public class ChatConcurrencyTests : ApplicationTestBase
         // Verify data integrity
         foreach (var conversation in conversations)
         {
-            conversation.MessageCount.ShouldBe(2); // Initial + additional message
+            conversation.GetMessageCount().ShouldBe(2); // Initial + additional message
         }
     }
 

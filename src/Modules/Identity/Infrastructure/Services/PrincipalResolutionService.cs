@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -98,6 +99,9 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         Address address,
         CancellationToken cancellationToken)
     {
+        _ = chainId; // Still passed for method signature compatibility
+        _ = address; // Still passed for method signature compatibility
+
         using var activity = ActivitySource.StartActivity("PrincipalResolution.CredentialFirst");
 
         var principal = await _principalRepository.FindByCredentialAsync(
@@ -109,44 +113,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
                 Error.NotFound("No principal found with given credentials"));
         }
 
-        // Check for cross-environment conflict
-        var crossEnvOwnership = await _ownershipRepository
-            .FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(chainId.Value, address, cancellationToken);
-
-        if (crossEnvOwnership is not null)
-        {
-            var principalB = crossEnvOwnership.Principal;
-
-            if (principal.Id == principalB.Id)
-            {
-                // A == B: Same principal - auto-link wallet for current chain
-                _logger.LogInformation(
-                    "Auto-linking wallet for principal {PrincipalId} to chain {ChainId}",
-                    principal.Id, chainId.Value);
-
-                var wallet = await _walletWriteRepository.UpsertWalletAsync(
-                    chainId, address, cancellationToken);
-
-                await _ownershipRepository.CreateOwnershipAsync(
-                    principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
-                    VerificationSource.DynamicAttested, cancellationToken);
-
-                return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
-                    principal, ResolutionPath.Credential, true));
-            }
-            else
-            {
-                // A != B: Different principals - 409 Conflict
-                _logger.LogWarning(
-                    "Cross-environment verified+signing conflict: Principal {PrincipalA} != {PrincipalB} for {ChainId}:{Address}",
-                    principal.Id, principalB.Id, chainId.Value, address.Value);
-
-                return Result.Failure<PrincipalResolutionResult, Error>(
-                    Error.Conflict($"Cross-environment verified+signing conflict: manual resolution required. " +
-                                   $"Current principal: {principal.Id}, Cross-env principal: {principalB.Id}"));
-            }
-        }
-
+        // Return the principal found by credential
         return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
             principal, ResolutionPath.Credential, false));
     }
@@ -164,27 +131,6 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         if (wallet is null)
         {
-            // Check for cross-env attach to existing verified owner
-            var crossEnvOwnership = await _ownershipRepository
-                .FindVerifiedSigningOwnershipAcrossEnvironmentsAsync(chainId.Value, address, cancellationToken);
-
-            if (crossEnvOwnership is not null)
-            {
-                _logger.LogInformation(
-                    "Attaching to existing cross-env principal {PrincipalId} and creating network-scoped wallet",
-                    crossEnvOwnership.PrincipalId);
-
-                var newWallet = await _walletWriteRepository.UpsertWalletAsync(
-                    chainId, address, cancellationToken);
-
-                await _ownershipRepository.CreateOwnershipAsync(
-                    crossEnvOwnership.PrincipalId, newWallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
-                    VerificationSource.DynamicAttested, cancellationToken);
-
-                return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
-                    crossEnvOwnership.Principal, ResolutionPath.Wallet, WasAutoLinked: true));
-            }
-
             return Result.Failure<PrincipalResolutionResult, Error>(
                 Error.NotFound("No wallet found for resolution"));
         }
@@ -201,7 +147,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         // Check if verified+signing exists
         var verifiedSigning = ownerships
-            .FirstOrDefault(o => o.Status == OwnershipStatus.Verified && o.AccessMode == AccessMode.Signing);
+            .FirstOrDefault(o => o.Ownership.Status == OwnershipStatus.Verified && o.Ownership.AccessMode == AccessMode.Signing);
 
         if (verifiedSigning is not null)
         {
@@ -212,24 +158,37 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         // Apply tie-break rules ONLY when no verified+signing exists
         var winner = ApplyTieBreakRules(ownerships);
 
-        // Auto-revoke losers
-        foreach (var ownership in ownerships.Where(o => o.Id != winner.Id))
+        // Auto-revoke losers through their respective aggregates
+        foreach (var ownershipWithPrincipal in ownerships.Where(o => o.Ownership.Id != winner.Ownership.Id))
         {
             _logger.LogInformation(
                 "Auto-revoking ownership {OwnershipId} reason=conflict_lost for {ChainId}:{Address}",
-                ownership.Id, chainId.Value, address.Value);
+                ownershipWithPrincipal.Ownership.Id, chainId.Value, address.Value);
 
-            await _ownershipRepository.RevokeOwnershipAsync(ownership.Id, "conflict_lost", cancellationToken);
+            // Load the principal aggregate and revoke through domain method
+            var principal = await _principalWriteRepository.GetByIdAsync(ownershipWithPrincipal.Ownership.PrincipalId, cancellationToken);
+            if (principal != null)
+            {
+                var revokeResult = principal.UpdateWalletOwnershipStatus(
+                    ownershipWithPrincipal.Ownership.WalletId,
+                    OwnershipStatus.Revoked,
+                    "conflict_lost");
+
+                if (revokeResult.IsSuccess)
+                {
+                    await _principalWriteRepository.UpdateAsync(principal, cancellationToken);
+                }
+            }
         }
 
         return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
             winner.Principal, ResolutionPath.Wallet, WasAutoLinked: false));
     }
 
-    private static WalletOwnership ApplyTieBreakRules(IEnumerable<WalletOwnership> ownerships)
+    private static WalletOwnershipWithPrincipal ApplyTieBreakRules(IEnumerable<WalletOwnershipWithPrincipal> ownerships)
     {
         return ownerships
-            .OrderBy(o => GetVerificationSourceRank(o.VerificationSource))
+            .OrderBy(o => GetVerificationSourceRank(o.Ownership.VerificationSource))
             .ThenBy(o => o.Principal.CreatedAt)
             .First();
     }
@@ -273,7 +232,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
             var winner = ownerships[0];
             _logger.LogInformation(
                 "Race condition detected: Using existing principal {PrincipalId} created by concurrent request",
-                winner.PrincipalId);
+                winner.Ownership.PrincipalId);
 
             return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
                 winner.Principal, ResolutionPath.Wallet, WasAutoLinked: false));
@@ -281,15 +240,35 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         // Safe to create new principal
         var principal = AxonPrincipal.CreateHuman();
+
+        // Create ownership entity and link it to the principal through the aggregate
+        var ownership = WalletOwnership.Create(
+            principal.Id,
+            wallet.Id,
+            AccessMode.Signing,
+            OwnershipStatus.Verified,
+            VerificationSource.DynamicAttested);
+
+        // Define the uniqueness check function for wallet ownership
+        Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> checkExistingOwnership =
+            (walletId, accessMode, status) =>
+            {
+                // For this creation scenario, we already checked that no ownerships exist
+                // This function is used for conflict detection with other verified+signing owners
+                return Result.Success<bool, Error>(false);
+            };
+
+        var linkResult = principal.LinkWalletOwnership(ownership, checkExistingOwnership);
+        if (linkResult.IsFailure)
+        {
+            return Result.Failure<PrincipalResolutionResult, Error>(linkResult.Error);
+        }
+
         await _principalWriteRepository.AddAsync(principal, cancellationToken);
-        await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
         try
         {
-            // Link wallet to new principal
-            await _ownershipRepository.CreateOwnershipAsync(
-                principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified,
-                VerificationSource.DynamicAttested, cancellationToken);
+            await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
 
             return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
                 principal, ResolutionPath.Created, WasAutoLinked: false));

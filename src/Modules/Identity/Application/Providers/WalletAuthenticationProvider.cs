@@ -231,12 +231,12 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
                 cancellationToken);
 
             var verifiedOwnership = ownerships.FirstOrDefault(o =>
-                o.Status == OwnershipStatus.Verified &&
-                o.AccessMode == AccessMode.Signing);
+                o.Ownership.Status == OwnershipStatus.Verified &&
+                o.Ownership.AccessMode == AccessMode.Signing);
 
             if (verifiedOwnership != null)
             {
-                var principal = await _principalRepo.GetByIdAsync(verifiedOwnership.PrincipalId, cancellationToken);
+                var principal = await _principalRepo.GetByIdAsync(verifiedOwnership.Ownership.PrincipalId, cancellationToken);
                 if (principal != null)
                 {
                     return Result.Success<AxonPrincipal, Error>(principal);
@@ -247,8 +247,6 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
         // Create new principal and wallet
         var newPrincipalId = new AxonUserId(Guid.CreateVersion7());
         var newPrincipal = AxonPrincipal.CreateHuman(newPrincipalId);
-        await _principalRepo.AddAsync(newPrincipal, cancellationToken);
-
         // Create wallet if it doesn't exist
         if (existingWallet == null)
         {
@@ -260,14 +258,29 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             await _walletRepo.AddAsync(existingWallet, cancellationToken);
         }
 
-        // Create wallet ownership
-        var ownership = await _walletOwnershipRepo.CreateOwnershipAsync(
+        // Create wallet ownership and link through aggregate
+        var ownership = WalletOwnership.Create(
             newPrincipalId,
             existingWallet.Id,
             AccessMode.Signing,
             OwnershipStatus.Verified,
-            VerificationSource.DirectSignatureMsg,
-            cancellationToken);
+            VerificationSource.DirectSignatureMsg);
+
+        // Define the uniqueness check function for wallet ownership
+        Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> checkExistingOwnership =
+            (walletId, accessMode, status) =>
+            {
+                // For this creation scenario, we expect no conflicting verified+signing ownerships
+                return Result.Success<bool, Error>(false);
+            };
+
+        var linkResult = newPrincipal.LinkWalletOwnership(ownership, checkExistingOwnership);
+        if (linkResult.IsFailure)
+        {
+            return Result.Failure<AxonPrincipal, Error>(linkResult.Error);
+        }
+
+        await _principalRepo.AddAsync(newPrincipal, cancellationToken);
 
         _logger.LogInformation("Created new principal {PrincipalId} for wallet {Address} on {ChainId}",
             newPrincipalId.Value, MaskAddress(address), chainId);

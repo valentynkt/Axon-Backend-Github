@@ -120,20 +120,11 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
         foreach (var principal in principalsWithPendingOwnership)
         {
-            // Find the specific pending ownerships for this wallet
-            var pendingOwnerships = principal.WalletOwnerships
-                .Where(wo => wo.WalletId == walletId &&
-                           wo.Status == OwnershipStatus.Pending &&
-                           !wo.IsDeleted)
-                .ToList();
-
-            foreach (var ownership in pendingOwnerships)
+            // Use the aggregate method to revoke pending ownerships
+            var revokeResult = principal.RevokePendingOwnershipsForWallet(walletId, "Auto-revoked due to exclusivity constraint");
+            if (revokeResult.IsSuccess)
             {
-                var revokeResult = ownership.Revoke("Auto-revoked due to exclusivity constraint");
-                if (revokeResult.IsSuccess)
-                {
-                    revokedCount++;
-                }
+                revokedCount += revokeResult.Value;
             }
         }
 

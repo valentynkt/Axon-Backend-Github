@@ -1,4 +1,3 @@
-using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -21,9 +20,6 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
     public DateTime? VerifiedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
     public string? RevokeReason { get; private set; }
-
-    // Navigation property for resolution
-    public AxonPrincipal Principal { get; private set; } = null!;
 
     // EF Core constructor
     private WalletOwnership() { }

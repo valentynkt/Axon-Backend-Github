@@ -82,7 +82,7 @@ public class ConversationAggregateTests : DomainTestBase
         // Arrange
         var conversation = _builder.WithAlternatingMessages(2).Build();
         var newMessage = "New user message";
-        var originalCount = conversation.MessageCount;
+        var originalCount = conversation.GetMessageCount();
         conversation.ClearDomainEvents();
 
         // Act
@@ -92,8 +92,10 @@ public class ConversationAggregateTests : DomainTestBase
         // Assert
         result.ShouldBeSuccess();
         conversation.ShouldHaveMessageCount(originalCount + 1);
-        conversation.MessagesOrdered.Last().ShouldBeUserMessage();
-        conversation.MessagesOrdered.Last().Content.Value.ShouldBe(newMessage);
+        var latestMessage = conversation.GetLatestMessage();
+        latestMessage.ShouldNotBeNull();
+        latestMessage.ShouldBeUserMessage();
+        latestMessage.Content.Value.ShouldBe(newMessage);
         AssertDomainEventRaised<UserMessageAppendedEvent>(conversation);
     }
 
@@ -153,7 +155,9 @@ public class ConversationAggregateTests : DomainTestBase
         if (shouldSucceed)
         {
             result.ShouldBeSuccess();
-            conversation.MessagesOrdered.Last().Content.Value.ShouldBe(content);
+            var latestMsg = conversation.GetLatestMessage();
+            latestMsg.ShouldNotBeNull();
+            latestMsg.Content.Value.ShouldBe(content);
         }
         else
         {
@@ -172,7 +176,7 @@ public class ConversationAggregateTests : DomainTestBase
         var conversation = _builder.WithUserMessage().Build();
         var assistantResponse = TestConstants.Messages.DefaultAssistantMessage;
         var aiResponseId = CreateAiResponseId();
-        var originalCount = conversation.MessageCount;
+        var originalCount = conversation.GetMessageCount();
 
         // Act
         var messageContent = MessageContent.Create(assistantResponse).Value;
@@ -181,8 +185,10 @@ public class ConversationAggregateTests : DomainTestBase
         // Assert
         result.ShouldBeSuccess();
         conversation.ShouldHaveMessageCount(originalCount + 1);
-        conversation.MessagesOrdered.Last().ShouldBeAssistantMessage(aiResponseId);
-        conversation.MessagesOrdered.Last().Content.Value.ShouldBe(assistantResponse);
+        var latestMessage = conversation.GetLatestMessage();
+        latestMessage.ShouldNotBeNull();
+        latestMessage.ShouldBeAssistantMessage(aiResponseId);
+        latestMessage.Content.Value.ShouldBe(assistantResponse);
         conversation.LastAiResponseId.ShouldBe(aiResponseId);
         AssertDomainEventRaised<AssistantMessageAppendedEvent>(conversation);
     }
@@ -246,7 +252,9 @@ public class ConversationAggregateTests : DomainTestBase
         if (shouldSucceed)
         {
             result.ShouldBeSuccess();
-            conversation.MessagesOrdered.Last().Content.Value.ShouldBe(content);
+            var latestMsg = conversation.GetLatestMessage();
+            latestMsg.ShouldNotBeNull();
+            latestMsg.Content.Value.ShouldBe(content);
         }
         else
         {
@@ -460,7 +468,7 @@ public class ConversationAggregateTests : DomainTestBase
 
         // Assert
         conversation.ShouldHaveMessageCount(expectedCount);
-        var orderedMessages = conversation.MessagesOrdered.ToList();
+        var orderedMessages = conversation.GetAllMessages().ToList();
         for (int i = 0; i < messages.Length; i++)
         {
             orderedMessages[i].Content.Value.ShouldBe(messages[i]);
