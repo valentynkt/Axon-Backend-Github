@@ -53,22 +53,26 @@ project_paths:
 
 agents:
   count: 6
-  implemented: 0
-  progress: 0%
+  implemented: 2
+  progress: 33.3%
   details:
     - name: axon-story-orchestrator
       description: Master coordinator
       priority: 1
-      status: pending
+      status: complete
       file: bmad/axon/agents/axon-story-orchestrator.md
-      commands: 5
+      commands: 7
+      lines: 461
+      completion_date: 2025-09-30
 
     - name: axon-doc-oracle
       description: Documentation intelligence
       priority: 1
-      status: pending
+      status: complete
       file: bmad/axon/agents/axon-doc-oracle.md
-      commands: 5
+      commands: 7
+      lines: 903
+      completion_date: 2025-09-30
 
     - name: axon-archaeologist
       description: Codebase discovery

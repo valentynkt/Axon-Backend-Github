@@ -1,5 +1,7 @@
 # Axon Development Orchestrator
 
+![Version](https://img.shields.io/badge/version-1.0.0-blue) ![Status](https://img.shields.io/badge/status-Phase%201%20Complete-brightgreen) ![BMAD](https://img.shields.io/badge/BMAD-6.0.0-purple) ![Progress](https://img.shields.io/badge/progress-12.5%25-orange)
+
 **Brownfield-aware AI development with library-first implementation for .NET + Clean Architecture + DDD + CQRS**
 
 ---
@@ -314,6 +316,65 @@ To extend this module:
 
 Complete design specification:
 `Docs/PROCESS/bmad/axon-module-design-complete.md` (1,626 lines)
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Issue: "Agent not found"**
+- **Cause**: Agent files not yet created (Phase 2 pending)
+- **Solution**: Agents are planned but not implemented yet. See Phase 2 roadmap in design doc.
+
+**Issue: "Workflow not found"**
+- **Cause**: Workflow directories not yet created (Phases 3-5 pending)
+- **Solution**: Workflows are planned but not implemented yet. See Phases 3-5 roadmap.
+
+**Issue: "Documentation path not found"**
+- **Cause**: Referenced doc doesn't exist in your codebase
+- **Solution**: Verify paths in `config.yaml` match your actual documentation structure.
+
+**Issue: "Story template missing"**
+- **Cause**: Templates not yet created (Phase 6 pending)
+- **Solution**: Templates will be created in Phase 6. Refer to design doc for template structure.
+
+**Issue: "Pre-flight validation fails"**
+- **Cause**: Archaeologist/Library Sage not finding expected code/libraries
+- **Solution**: Ensure your codebase structure matches expectations in `config.yaml` paths.
+
+**Issue: "Checkpoint prompts not appearing"**
+- **Cause**: Interactive mode may be disabled
+- **Solution**: Verify `execution.checkpoints_enabled: true` in `config.yaml`
+
+**Issue: "Doc loading errors"**
+- **Cause**: Progressive doc loading can't find hub documents
+- **Solution**: Verify core docs exist:
+  - `Docs/ENGINEERING/00-START-HERE.md`
+  - `Docs/ENGINEERING/guides/patterns/00-QUICK-REFERENCE.md`
+  - `Docs/Libraries/00-INDEX.md`
+
+**Issue: "BMM integration not working"**
+- **Cause**: BMM module not installed or tech-spec path incorrect
+- **Solution**:
+  - BMM is optional - set `bmm_integration.enabled: false` if not using
+  - Verify `bmm_integration.tech_spec_default_path` points to correct location
+
+### Getting Help
+
+1. **Check the design document**: `Docs/PROCESS/bmad/axon-module-design-complete.md`
+2. **Review config.yaml**: Verify all paths and settings
+3. **Check implementation status**: See `config.yaml` → `implementation_progress`
+4. **Review agent/workflow README**: Each component has documentation
+
+### Debug Mode
+
+Enable verbose logging in workflows by setting:
+```yaml
+execution:
+  debug_mode: true
+  verbose_logging: true
+```
 
 ---
 
