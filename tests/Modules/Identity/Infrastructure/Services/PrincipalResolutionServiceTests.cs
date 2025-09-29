@@ -3,6 +3,7 @@ using System.Reflection;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -27,6 +28,7 @@ public class PrincipalResolutionServiceTests
     private IWalletReadRepository _walletReadRepository = null!;
     private IWalletWriteRepository _walletWriteRepository = null!;
     private IWalletOwnershipRepository _ownershipRepository = null!;
+    private IAutoRevocationService _autoRevocationService = null!;
     private ILogger<PrincipalResolutionService> _logger = null!;
 
     private ProviderType _dynamicProvider;
@@ -41,11 +43,19 @@ public class PrincipalResolutionServiceTests
         _walletReadRepository = Substitute.For<IWalletReadRepository>();
         _walletWriteRepository = Substitute.For<IWalletWriteRepository>();
         _ownershipRepository = Substitute.For<IWalletOwnershipRepository>();
+        _autoRevocationService = Substitute.For<IAutoRevocationService>();
         _logger = Substitute.For<ILogger<PrincipalResolutionService>>();
 
         // Mock UnitOfWork
         var unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         _principalWriteRepository.UnitOfWork.Returns(unitOfWork);
+
+        // Setup default auto-revocation behavior (successful with 0 revoked)
+        _autoRevocationService.ProcessAutoRevocationAsync(
+            Arg.Any<WalletId>(),
+            Arg.Any<AxonUserId>(),
+            Arg.Any<CancellationToken>())
+            .Returns(CSharpFunctionalExtensions.Result.Success<int, Error>(0));
 
         _service = new PrincipalResolutionService(
             _principalReadRepository,
@@ -53,6 +63,7 @@ public class PrincipalResolutionServiceTests
             _walletReadRepository,
             _walletWriteRepository,
             _ownershipRepository,
+            _autoRevocationService,
             _logger);
 
         // Test data setup

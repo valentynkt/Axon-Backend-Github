@@ -8,7 +8,7 @@
 ## Mandatory Architectural Patterns
 - **Clean Architecture**: Domain → Application → Infrastructure → API
 - **CQRS + MediatR**: Commands/Queries with handlers
-- **Result<T> Pattern**: Functional error handling, no exceptions
+- **Result<T, Erorr> Pattern**: Functional error handling, no exceptions
 - **Strong IDs**: Type-safe entity identifiers
 - **FastEndpoints**: Minimal API implementation
 

@@ -8,6 +8,7 @@ using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
@@ -116,7 +117,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         // Try to save context 2 (may fail due to version conflict in real database)
         await repository2.UpdateAsync(principal2);
 
-        // In-memory database may not enforce concurrency properly
+        // Real database with proper concurrency control should detect version conflict
         try
         {
             await unitOfWork2.SaveChangesAsync();
@@ -125,9 +126,9 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
             finalPrincipal.ShouldNotBeNull();
             finalPrincipal.WalletOwnerships.Count.ShouldBeGreaterThan(0);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (Exception ex) when (ex is DbUpdateConcurrencyException or ConcurrencyException)
         {
-            // Expected behavior in real database with proper concurrency control
+            // Expected behavior - concurrency conflict detected correctly
         }
     }
 

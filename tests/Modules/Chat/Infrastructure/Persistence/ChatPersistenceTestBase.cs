@@ -46,42 +46,16 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
     {
         TimeProvider = new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
 
-        // Create a comprehensive service provider for testing with MassTransit support
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-        services.AddLogging();
-        services.AddEntityFrameworkNpgsql(); // Add EF Core PostgreSQL services
+        // Use centralized service provider to eliminate duplication
+        var serviceProvider = ChatTestServiceProvider.GetOrCreate();
 
-        // Add MassTransit services with proper configuration for testing
-        services.AddMassTransit(x =>
-        {
-            x.SetKebabCaseEndpointNameFormatter();
-            x.UsingInMemory((context, cfg) =>
-            {
-                cfg.ConfigureEndpoints(context);
-            });
-        });
+        // Setup write DbContext using centralized configuration
+        var writeOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(
+            ConnectionString, serviceProvider);
 
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Setup write DbContext with service provider and Chat-specific configuration
-        var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
-            .UseNpgsql(ConnectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            })
-            .UseInternalServiceProvider(serviceProvider)
-            .Options;
-
-        // Setup read DbContext with service provider and Chat-specific configuration
-        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
-            .UseNpgsql(ConnectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            })
-            .UseInternalServiceProvider(serviceProvider)
-            .Options;
+        // Setup read DbContext using centralized configuration
+        var readOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatReadDbContext>(
+            ConnectionString, serviceProvider);
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatReadDbContext(readOptions);
@@ -419,23 +393,15 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         DbContext?.Dispose();
         ReadDbContext?.Dispose();
 
-        // Recreate write context with new TimeProvider and Chat-specific configuration
-        var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
-            .UseNpgsql(ConnectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            })
-            .Options;
+        // Use centralized service provider for consistency
+        var serviceProvider = ChatTestServiceProvider.GetOrCreate();
 
-        // Recreate read context with same database connection and Chat-specific configuration
-        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
-            .UseNpgsql(ConnectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            })
-            .Options;
+        // Recreate contexts using centralized configuration
+        var writeOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(
+            ConnectionString, serviceProvider);
+
+        var readOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatReadDbContext>(
+            ConnectionString, serviceProvider);
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatReadDbContext(readOptions);

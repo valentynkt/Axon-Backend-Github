@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
@@ -34,6 +35,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
     private WalletReadRepository _walletReadRepository = null!;
     private WalletOwnershipRepository _walletOwnershipRepository = null!;
     private AxonPrincipalReadRepository _principalReadRepository = null!;
+    private IAutoRevocationService _autoRevocationService = null!;
     private ILogger<PrincipalResolutionService> _logger = null!;
     private IdentityReadDbContext _readContext = null!;
 
@@ -53,7 +55,15 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
         _walletReadRepository = new WalletReadRepository(_readContext);
         _walletOwnershipRepository = new WalletOwnershipRepository(_readContext);
         _principalReadRepository = new AxonPrincipalReadRepository(_readContext);
+        _autoRevocationService = Substitute.For<IAutoRevocationService>();
         _logger = Substitute.For<ILogger<PrincipalResolutionService>>();
+
+        // Setup default auto-revocation behavior
+        _autoRevocationService.ProcessAutoRevocationAsync(
+            Arg.Any<WalletId>(),
+            Arg.Any<AxonUserId>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<int, Error>(0));
 
         _resolutionService = new PrincipalResolutionService(
             _principalReadRepository,
@@ -61,6 +71,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             _walletReadRepository,
             WalletRepository,
             _walletOwnershipRepository,
+            _autoRevocationService,
             _logger);
 
         await Task.CompletedTask;
@@ -275,6 +286,12 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             var localWalletOwnershipRepository = new WalletOwnershipRepository(localReadContext);
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
             using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork);
+            var localAutoRevocationService = Substitute.For<IAutoRevocationService>();
+            localAutoRevocationService.ProcessAutoRevocationAsync(
+                Arg.Any<WalletId>(),
+                Arg.Any<AxonUserId>(),
+                Arg.Any<CancellationToken>())
+                .Returns(Result.Success<int, Error>(0));
             var localLogger = Substitute.For<ILogger<PrincipalResolutionService>>();
 
             var localResolutionService = new PrincipalResolutionService(
@@ -283,6 +300,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
                 localWalletReadRepository,
                 localWalletWriteRepository,
                 localWalletOwnershipRepository,
+                localAutoRevocationService,
                 localLogger);
 
             return await localResolutionService.ResolveAsync(
@@ -353,12 +371,20 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
             using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork);
 
+            var localAutoRevocationService = Substitute.For<IAutoRevocationService>();
+            localAutoRevocationService.ProcessAutoRevocationAsync(
+                Arg.Any<WalletId>(),
+                Arg.Any<AxonUserId>(),
+                Arg.Any<CancellationToken>())
+                .Returns(Result.Success<int, Error>(0));
+
             var localResolutionService = new PrincipalResolutionService(
                 localPrincipalReadRepository,
                 localPrincipalWriteRepository,
                 localWalletReadRepository,
                 localWalletWriteRepository,
                 localWalletOwnershipRepository,
+                localAutoRevocationService,
                 Substitute.For<ILogger<PrincipalResolutionService>>());
 
             // Add small random delay to increase chance of race condition

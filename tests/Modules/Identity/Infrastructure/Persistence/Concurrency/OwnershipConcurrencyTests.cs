@@ -7,7 +7,10 @@ using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Tests.Persistence;
+using Axon.Modules.Identity.Application.Common.Models;
+using Axon.Modules.Identity.Application.Services;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
@@ -76,8 +79,20 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         verificationResult.IsSuccess.ShouldBeTrue("Winner should successfully verify ownership");
 
         await PrincipalRepository.UpdateAsync(principals[0], CancellationToken.None);
-        await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
+        // Use AutoRevocationService to handle exclusivity enforcement
+        if (winnerOwnership.Status == OwnershipStatus.Verified && winnerOwnership.AccessMode == AccessMode.Signing)
+        {
+            var revocationResult = await AutoRevocationService.ProcessAutoRevocationAsync(
+                contestedWallet.Id,
+                principals[0].Id,
+                CancellationToken.None);
+
+            revocationResult.IsSuccess.ShouldBeTrue("Auto-revocation should succeed");
+            revocationResult.Value.ShouldBe(2, "Should revoke 2 pending ownerships");
+        }
+
+        await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
         // Assert: Winner has verified ownership, others are revoked
         await VerifyAutoRevocationResults(contestedWallet.Id, principals[0].Id, principals.Skip(1).Select(p => p.Id));
@@ -127,6 +142,17 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
 
             await PrincipalRepository.UpdateAsync(winner, CancellationToken.None);
 
+            // Use AutoRevocationService for atomic revocation
+            if (winnerOwnership.Status == OwnershipStatus.Verified && winnerOwnership.AccessMode == AccessMode.Signing)
+            {
+                var revocationResult = await AutoRevocationService.ProcessAutoRevocationAsync(
+                    wallet.Id,
+                    winner.Id,
+                    CancellationToken.None);
+
+                revocationResult.IsSuccess.ShouldBeTrue("Auto-revocation should succeed");
+                revocationResult.Value.ShouldBe(competitorCount, $"Should revoke {competitorCount} pending ownerships");
+            }
 
             await UnitOfWork.SaveChangesAsync(CancellationToken.None);
             await transaction.CommitAsync();
@@ -181,6 +207,19 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
 
         verificationResult.IsSuccess.ShouldBeTrue("Principal A should verify wallet1");
         await PrincipalRepository.UpdateAsync(principalA, CancellationToken.None);
+
+        // Use AutoRevocationService to handle auto-revocation for wallet1 only
+        if (verifiedA1.Status == OwnershipStatus.Verified && verifiedA1.AccessMode == AccessMode.Signing)
+        {
+            var revocationResult = await AutoRevocationService.ProcessAutoRevocationAsync(
+                wallet1.Id,
+                principalA.Id,
+                CancellationToken.None);
+
+            revocationResult.IsSuccess.ShouldBeTrue("Auto-revocation should succeed");
+            revocationResult.Value.ShouldBe(1, "Should revoke 1 pending ownership on wallet1");
+        }
+
         await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
         // Assert: Only wallet1 ownerships affected, wallet2 ownerships unchanged
@@ -220,7 +259,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
                 await Task.Delay(Random.Shared.Next(0, 100)); // Random delay to increase contention
 
                 using var separateContext = CreateConcurrentDbContext();
-                using var repo = new AxonPrincipalWriteRepository(separateContext, UnitOfWork);
+                var separateUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(separateContext);
+                using var repo = new AxonPrincipalWriteRepository(separateContext, separateUnitOfWork);
 
                 var freshPrincipal = await repo.GetByIdAsync(principal.Id, CancellationToken.None);
                 var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, hotWallet.Id);
@@ -233,6 +273,18 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
                 if (linkResult.IsSuccess)
                 {
                     await repo.UpdateAsync(freshPrincipal, CancellationToken.None);
+
+                    // Process auto-revocation if needed
+                    if (ownership.Status == OwnershipStatus.Verified && ownership.AccessMode == AccessMode.Signing)
+                    {
+                        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<AutoRevocationService>.Instance;
+                        var autoRevocationService = new AutoRevocationService(separateContext, logger);
+                        await autoRevocationService.ProcessAutoRevocationAsync(
+                            hotWallet.Id,
+                            principal.Id,
+                            CancellationToken.None);
+                    }
+
                     await separateContext.SaveChangesAsync();
                     return (Success: true, PrincipalId: principal.Id, Error: (string?)null);
                 }
@@ -280,7 +332,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             async context1 =>
             {
                 // Transaction 1: A→wallet1, then A→wallet2
-                using var repo1 = new AxonPrincipalWriteRepository(context1, UnitOfWork);
+                var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
+                using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1);
                 var principal = await repo1.GetByIdAsync(principalA.Id, CancellationToken.None);
 
                 var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, wallet1.Id);
@@ -302,7 +355,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             async context2 =>
             {
                 // Transaction 2: B→wallet2, then B→wallet1 (reverse order)
-                using var repo2 = new AxonPrincipalWriteRepository(context2, UnitOfWork);
+                var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+                using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
                 var principal = await repo2.GetByIdAsync(principalB.Id, CancellationToken.None);
 
                 var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, wallet2.Id);
@@ -359,7 +413,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         OwnershipStatus status)
     {
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await context.Set<AxonPrincipal>()
+        var principals = await context.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();
@@ -383,7 +437,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await DbContext.Set<AxonPrincipal>()
+        var principals = await DbContext.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();
@@ -417,7 +471,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await DbContext.Set<AxonPrincipal>()
+        var principals = await DbContext.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();
@@ -449,7 +503,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await DbContext.Set<AxonPrincipal>()
+        var principals = await DbContext.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();
@@ -491,7 +545,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await DbContext.Set<AxonPrincipal>()
+        var principals = await DbContext.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();
@@ -508,11 +562,11 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         verifiedOwnerships[0].PrincipalId.ShouldBe(winnerId);
 
         // Verify referential integrity
-        var principalExists = await DbContext.Set<AxonPrincipal>()
+        var principalExists = await DbContext.Principals
             .AnyAsync(p => p.Id == winnerId && !p.IsDeleted);
         principalExists.ShouldBeTrue("Winner principal should exist");
 
-        var walletExists = await DbContext.Set<Wallet>()
+        var walletExists = await DbContext.Wallets
             .AnyAsync(w => w.Id == walletId && !w.IsDeleted);
         walletExists.ShouldBeTrue("Wallet should exist");
     }
@@ -522,7 +576,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await DbContext.Set<AxonPrincipal>()
+        var principals = await DbContext.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();
@@ -550,7 +604,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         ClearChangeTracker();
 
         // Query through AxonPrincipal since WalletOwnership is an owned entity
-        var principals = await DbContext.Set<AxonPrincipal>()
+        var principals = await DbContext.Principals
             .Include(p => p.WalletOwnerships)
             .Where(p => !p.IsDeleted)
             .ToListAsync();

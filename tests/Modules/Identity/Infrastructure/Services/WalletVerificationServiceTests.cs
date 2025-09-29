@@ -71,6 +71,11 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
         // Setup existing principal with verified signing ownership
         await SetupPrincipalWithOwnershipAsync(existingPrincipalId, walletId, AccessMode.Signing, OwnershipStatus.Verified);
 
+        // Create the second principal that will attempt to verify ownership
+        var principal = AxonPrincipal.CreateHuman(principalId);
+        await _principalRepository.AddAsync(principal, CancellationToken.None);
+        await DbContext.SaveChangesAsync();
+
         // Act
         var result = await _service.VerifyWalletOwnershipAsync(
             walletId, principalId, accessMode, verificationSource, CancellationToken.None);
@@ -94,6 +99,11 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
 
         // Setup wallet in database
         await DbContext.Wallets.AddAsync(wallet);
+        await DbContext.SaveChangesAsync();
+
+        // Create principal first - service requires principal to exist
+        var principal = AxonPrincipal.CreateHuman(principalId);
+        await _principalRepository.AddAsync(principal, CancellationToken.None);
         await DbContext.SaveChangesAsync();
 
         // Act
@@ -123,8 +133,8 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
         await DbContext.Wallets.AddAsync(wallet);
         await DbContext.SaveChangesAsync();
 
-        // Setup principal with existing watch-only pending ownership
-        await SetupPrincipalWithOwnershipAsync(principalId, walletId, AccessMode.WatchOnly, OwnershipStatus.Pending);
+        // Setup principal with existing signing pending ownership (same access mode)
+        await SetupPrincipalWithOwnershipAsync(principalId, walletId, AccessMode.Signing, OwnershipStatus.Pending);
 
         // Act
         var result = await _service.VerifyWalletOwnershipAsync(
@@ -291,13 +301,20 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
 
         var wallets = new List<Wallet>
         {
-            CreateTestWallet(walletId1),
-            CreateTestWallet(walletId2),
-            CreateTestWallet(walletId3)
+            Wallet.Create(walletId1, "ethereum", Address.From("0x1111111111111111111111111111111111111111")),
+            Wallet.Create(walletId2, "polygon", Address.From("0x2222222222222222222222222222222222222222")),
+            Wallet.Create(walletId3, "solana-mainnet", Address.From("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"))
         };
 
         // Setup wallets in database
         await DbContext.Wallets.AddRangeAsync(wallets);
+        await DbContext.SaveChangesAsync();
+
+        // Create principals first - service requires principals to exist
+        var principal1 = AxonPrincipal.CreateHuman(principalId1);
+        var principal2 = AxonPrincipal.CreateHuman(principalId2);
+        await _principalRepository.AddAsync(principal1, CancellationToken.None);
+        await _principalRepository.AddAsync(principal2, CancellationToken.None);
         await DbContext.SaveChangesAsync();
 
         // Act
@@ -340,8 +357,7 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
             principalId,
             walletId,
             accessMode,
-            status,
-            VerificationSource.DynamicAttested);
+            status);
 
         return ownership;
     }

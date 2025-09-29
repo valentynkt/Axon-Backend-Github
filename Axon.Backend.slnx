@@ -47,6 +47,15 @@
   <Folder Name="/tests/Modules/Chat/Infrastructure/">
     <Project Path="tests/Modules/Chat/Infrastructure/Axon.Modules.Chat.Infrastructure.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Modules/Chat/Integration/">
+    <Project Path="tests/Modules/Chat/Integration/Axon.Modules.Chat.Integration.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules/Chat/E2E/">
+    <Project Path="tests/Modules/Chat/E2E/Axon.Modules.Chat.E2E.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Modules/Chat/Performance/">
+    <Project Path="tests/Modules/Chat/Performance/Axon.Modules.Chat.Performance.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Modules/Identity/" />
   <Folder Name="/tests/Modules/Identity/Application/">
     <Project Path="tests/Modules/Identity/Application/Axon.Modules.Identity.Application.Tests.csproj" />

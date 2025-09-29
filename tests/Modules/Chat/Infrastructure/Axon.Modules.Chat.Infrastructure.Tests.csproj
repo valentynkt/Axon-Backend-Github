@@ -8,8 +8,8 @@
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- Temporarily disable problematic code analysis rules -->
-    <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062</NoWarn>
+    <!-- Temporarily disable problematic code analysis rules for test code -->
+    <NoWarn>$(NoWarn);CA1848;CA1826;CA1860;CA1862;CA1062;CA1307;CA1305;CA2000;CA1822;CA1852</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

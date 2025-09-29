@@ -375,7 +375,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principalId,
             walletId,
             AccessMode.Signing,
-            OwnershipStatus.Pending,
+            OwnershipStatus.Verified,  // Changed to Verified so SetChainDefault can work
             VerificationSource.DynamicAttested);
     }
 

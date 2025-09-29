@@ -6,6 +6,8 @@ using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Application.Common.Models;
+using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Services;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -31,6 +33,7 @@ public abstract class IdentityDbInvariantsTestBase
     protected AxonPrincipalWriteRepository PrincipalRepository { get; set; } = null!;
     protected WalletWriteRepository WalletRepository { get; set; } = null!;
     protected EfUnitOfWork<IdentityWriteDbContext, IdentityModule> UnitOfWork { get; set; } = null!;
+    protected AutoRevocationService AutoRevocationService { get; set; } = null!;
 
     private PostgreSqlContainer _postgreSqlContainer = null!;
     private string _connectionString = null!;
@@ -73,6 +76,10 @@ public abstract class IdentityDbInvariantsTestBase
         PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork);
         WalletRepository = new WalletWriteRepository(DbContext, UnitOfWork);
 
+        // Create AutoRevocationService with DbContext as IIdentityWriteDbContext
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<AutoRevocationService>.Instance;
+        AutoRevocationService = new AutoRevocationService(DbContext, logger);
+
         // Ensure database is created and migrated
         await DbContext.Database.EnsureCreatedAsync();
 
@@ -96,6 +103,7 @@ public abstract class IdentityDbInvariantsTestBase
             UnitOfWork?.Dispose();
             PrincipalRepository?.Dispose();
             WalletRepository?.Dispose();
+            AutoRevocationService = null!;
             await DbContext.DisposeAsync();
         }
     }
@@ -120,11 +128,11 @@ public abstract class IdentityDbInvariantsTestBase
         try
         {
             await DbContext.Database.ExecuteSqlRawAsync(@"
-                TRUNCATE TABLE identity.principal_chain_default CASCADE;
-                TRUNCATE TABLE identity.wallet_ownership CASCADE;
-                TRUNCATE TABLE identity.credential CASCADE;
-                TRUNCATE TABLE identity.wallet CASCADE;
-                TRUNCATE TABLE identity.axon_principal CASCADE;
+                TRUNCATE TABLE identity.""PrincipalChainDefault"" CASCADE;
+                TRUNCATE TABLE identity.""WalletOwnership"" CASCADE;
+                TRUNCATE TABLE identity.""Credential"" CASCADE;
+                TRUNCATE TABLE identity.""Wallet"" CASCADE;
+                TRUNCATE TABLE identity.""Principal"" CASCADE;
             ");
         }
         catch
