@@ -186,19 +186,31 @@ Tier 4: Support Workflows (2)
 ```yaml
 Always Loaded (Core Hub):
   - Docs/ENGINEERING/00-START-HERE.md
-  - Docs/ENGINEERING/guides/patterns/00-QUICK-REFERENCE.md
+  - Docs/ENGINEERING/guides/patterns/00-QUICK-REFERENCE.md  # Contains 80% of patterns, error handling, validation
   - Docs/Libraries/00-INDEX.md
+  - Docs/ENGINEERING/guides/architecture/adrs/00-INDEX.md  # ADR catalog
 
-Loaded on Module Context:
-  - Identity: modules/identity/*.md
-  - Chat: modules/chat/*.md
+Loaded on Module Context (ACTUAL FILES):
+  - Identity: 5 module docs (00-INDEX, 01-domain-model, 03-authentication, 05-api-contracts, 06-database-schema)
+  - Chat: 5 module docs (00-INDEX, 01-domain-model, 03-messaging-flows, 05-api-contracts, 06-database-schema)
+  # Note: Files 02,04,07,08,09 were deleted from modules - only 5 files exist per module
 
-Loaded on Pattern Need:
+Loaded on Pattern Need (ONLY 2 FILES):
   - CQRS: guides/patterns/cqrs.md
   - Domain Modeling: guides/patterns/domain-modeling.md
+  # Note: error-handling.md and validation.md are now in QUICK-REFERENCE
 
 Loaded on Library Need:
   - MediatR: Libraries/MediatR/IMPLEMENTATION_GUIDE.md
+  # Note: 15 library guides available in Libraries/ directory
+
+Loaded on ADR Need (6 ADRs):
+  - guides/architecture/adrs/001-modular-monolith.md
+  - guides/architecture/adrs/002-cqrs-mediatr.md
+  - guides/architecture/adrs/003-result-pattern.md
+  - guides/architecture/adrs/004-strong-ids.md
+  - guides/architecture/adrs/005-postgresql.md
+  - guides/architecture/adrs/006-fastendpoints.md
 ```
 
 ---
@@ -554,6 +566,31 @@ always_loaded:
 - Detect doc drift
 - Pattern compliance checking
 
+**Doc Loading Configuration**:
+```yaml
+core_hub:
+  - Docs/ENGINEERING/00-START-HERE.md
+  - Docs/ENGINEERING/guides/patterns/00-QUICK-REFERENCE.md  # Contains error handling, validation
+  - Docs/Libraries/00-INDEX.md
+
+pattern_spokes:
+  - Docs/ENGINEERING/guides/patterns/cqrs.md
+  - Docs/ENGINEERING/guides/patterns/domain-modeling.md
+
+architecture_spokes:
+  - Docs/ENGINEERING/guides/architecture/system-overview.md
+  - Docs/ENGINEERING/guides/architecture/tech-stack.md
+  - Docs/ENGINEERING/guides/architecture/adrs/00-INDEX.md
+
+adr_catalog:  # 6 ADRs available, load on demand
+  - Docs/ENGINEERING/guides/architecture/adrs/001-modular-monolith.md
+  - Docs/ENGINEERING/guides/architecture/adrs/002-cqrs-mediatr.md
+  - Docs/ENGINEERING/guides/architecture/adrs/003-result-pattern.md
+  - Docs/ENGINEERING/guides/architecture/adrs/004-strong-ids.md
+  - Docs/ENGINEERING/guides/architecture/adrs/005-postgresql.md
+  - Docs/ENGINEERING/guides/architecture/adrs/006-fastendpoints.md
+```
+
 **Commands**: `*load-context`, `*validate-against-docs`, `*detect-drift`, `*query-adr`, `*compliance-score`
 
 ---
@@ -767,14 +804,21 @@ Bugfix + Any → story-bugfix
 **Type**: Module-specific enhancement  
 **Complexity**: High
 
-**Module-Specific Doc Loading**:
+**Module-Specific Doc Loading** (5 module docs + 1 library):
 ```yaml
-- Docs/ENGINEERING/modules/identity/00-INDEX.md
-- Docs/ENGINEERING/modules/identity/01-domain-model.md
-- Docs/ENGINEERING/modules/identity/03-authentication.md
-- Docs/ENGINEERING/modules/identity/06-database-schema.md
-- Docs/Libraries/dynamic_auth/IMPLEMENTATION_GUIDE.md
-- Docs/ENGINEERING/integrations/dynamic-xyz/authentication-flow.md
+identity_module_docs:
+  - Docs/ENGINEERING/modules/identity/00-INDEX.md
+  - Docs/ENGINEERING/modules/identity/01-domain-model.md
+  - Docs/ENGINEERING/modules/identity/03-authentication.md
+  - Docs/ENGINEERING/modules/identity/05-api-contracts.md
+  - Docs/ENGINEERING/modules/identity/06-database-schema.md
+
+identity_library_docs:
+  - Docs/Libraries/dynamic_auth/IMPLEMENTATION_GUIDE.md
+
+identity_integration_docs:
+  - Docs/ENGINEERING/integrations/00-INDEX.md
+  # Note: dynamic-xyz/authentication-flow.md is scaffold only, no real content yet
 ```
 
 **Identity-Specific Challenges**:
@@ -796,14 +840,19 @@ Bugfix + Any → story-bugfix
 **Type**: Module-specific enhancement  
 **Complexity**: High
 
-**Module-Specific Doc Loading**:
+**Module-Specific Doc Loading** (5 module docs + 3 libraries):
 ```yaml
-- Docs/ENGINEERING/modules/chat/00-INDEX.md
-- Docs/ENGINEERING/modules/chat/01-domain-model.md
-- Docs/ENGINEERING/modules/chat/03-messaging-flows.md
-- Docs/ENGINEERING/modules/chat/05-api-contracts.md
-- Docs/Libraries/OpenAI/IMPLEMENTATION_GUIDE.md
-- Docs/Libraries/ModelContextProtocol/IMPLEMENTATION_GUIDE.md
+chat_module_docs:
+  - Docs/ENGINEERING/modules/chat/00-INDEX.md
+  - Docs/ENGINEERING/modules/chat/01-domain-model.md
+  - Docs/ENGINEERING/modules/chat/03-messaging-flows.md
+  - Docs/ENGINEERING/modules/chat/05-api-contracts.md
+  - Docs/ENGINEERING/modules/chat/06-database-schema.md
+
+chat_library_docs:
+  - Docs/Libraries/OpenAI/IMPLEMENTATION_GUIDE.md
+  - Docs/Libraries/ModelContextProtocol/IMPLEMENTATION_GUIDE.md
+  - Docs/Libraries/ModelContextProtocolAspNetCore/IMPLEMENTATION_GUIDE.md
 ```
 
 **Chat-Specific Challenges**:
@@ -826,12 +875,17 @@ Bugfix + Any → story-bugfix
 **Type**: Module-specific enhancement  
 **Complexity**: Medium
 
-**Module-Specific Doc Loading**:
+**Module-Specific Doc Loading** (1 API doc + 2 libraries):
 ```yaml
-- Docs/ENGINEERING/api/00-INDEX.md
-- Docs/ENGINEERING/api/rest-conventions.md
-- Docs/Libraries/FastEndpoints/IMPLEMENTATION_GUIDE.md
-- Docs/Libraries/FluentValidation/IMPLEMENTATION_GUIDE.md
+api_docs:
+  - Docs/ENGINEERING/api/00-INDEX.md  # Primary API documentation
+
+api_library_docs:
+  - Docs/Libraries/FastEndpoints/IMPLEMENTATION_GUIDE.md
+  - Docs/Libraries/FluentValidation/IMPLEMENTATION_GUIDE.md
+
+# Note: rest-conventions.md does not exist as separate file
+# API conventions are documented in 00-INDEX.md and QUICK-REFERENCE.md
 ```
 
 **API-Specific Challenges**:

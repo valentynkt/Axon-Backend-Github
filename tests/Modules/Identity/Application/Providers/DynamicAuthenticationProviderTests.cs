@@ -1,9 +1,14 @@
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Providers;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Tests.Providers._TestInfrastructure;
+using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
+using Axon.Modules.Identity.Domain.Aggregates.Wallet;
+using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using NSubstitute;
 using NUnit.Framework;
@@ -70,7 +75,7 @@ public class DynamicAuthenticationProviderTests : DynamicProviderTestBase
             Arg.Any<ChainId>(),
             Arg.Any<Address>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+            .Returns(Task.FromResult(Result.Success<PrincipalResolutionResult, Error>(resolutionResult)));
 
         var request = AuthenticationTestFixtures.ValidDynamicExchangeRequest(token);
 
@@ -179,7 +184,7 @@ public class DynamicAuthenticationProviderTests : DynamicProviderTestBase
             Arg.Any<ChainId>(),
             Arg.Any<Address>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+            .Returns(Task.FromResult(Result.Success<PrincipalResolutionResult, Error>(resolutionResult)));
 
         var request = new DynamicExchangeRequest(token);
 
@@ -247,7 +252,7 @@ public class DynamicAuthenticationProviderTests : DynamicProviderTestBase
             Arg.Any<ChainId>(),
             Arg.Any<Address>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+            .Returns(Task.FromResult(Result.Success<PrincipalResolutionResult, Error>(resolutionResult)));
 
         var request = new DynamicExchangeRequest(token);
 
@@ -313,7 +318,7 @@ public class DynamicAuthenticationProviderTests : DynamicProviderTestBase
             Arg.Any<ChainId>(),
             Arg.Any<Address>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+            .Returns(Task.FromResult(Result.Success<PrincipalResolutionResult, Error>(resolutionResult)));
 
         var request = new DynamicExchangeRequest(token);
 
@@ -377,6 +382,388 @@ public class DynamicAuthenticationProviderTests : DynamicProviderTestBase
             Arg.Any<ChainId>(),
             Arg.Any<Address>(),
             Arg.Any<CancellationToken>());
+    }
+
+    #endregion
+
+    #region Credential-First Resolution Tests (5 tests)
+
+    [Test]
+    public async Task ExistingCredential_Should_ResolveToExistingPrincipal()
+    {
+        // Arrange
+        var token = "valid-token-existing-user";
+        var userId = Guid.NewGuid().ToString();
+        var issuer = "https://app.dynamic.xyz/test-env";
+
+        var dynamicUserData = AuthenticationTestFixtures.ValidDynamicUserData(
+            userId: userId,
+            wallets: new List<WalletData>
+            {
+                AuthenticationTestFixtures.EthereumWalletData("0x1111111111111111111111111111111111111111")
+            });
+
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("iss", issuer),
+            new Claim("sub", userId)
+        }));
+
+        DynamicAuthService.ValidateTokenAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(dynamicUserData));
+
+        DynamicAuthService.GetRawClaimsAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(claimsPrincipal));
+
+        // Mock: Resolution finds existing principal via credential
+        var existingPrincipal = CreatePrincipalWithDynamicCredential(
+            issuer: issuer,
+            subject: userId);
+
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: existingPrincipal,
+            Path: ResolutionPath.Credential, // Credential-first path
+            WasAutoLinked: false);
+
+        AddressNormalizer.NormalizeAddress("evm-1", "0x1111111111111111111111111111111111111111")
+            .Returns(Address.Create("0x1111111111111111111111111111111111111111"));
+
+        ResolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            issuer,
+            userId,
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+
+        var request = new DynamicExchangeRequest(token);
+
+        // Act
+        var result = await Provider.AuthenticateAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.AdditionalClaims["created"].ShouldBe(false); // Existing principal
+
+        // Should update, not add
+        AssertPrincipalWasUpdated();
+        await PrincipalRepo.DidNotReceive().AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExistingCredentialWithNewWallets_Should_LinkWallets()
+    {
+        // Arrange
+        var token = "valid-token-existing-user-new-wallets";
+        var userId = Guid.NewGuid().ToString();
+        var issuer = "https://app.dynamic.xyz/test-env";
+
+        var wallets = new List<WalletData>
+        {
+            AuthenticationTestFixtures.EthereumWalletData("0x1111111111111111111111111111111111111111"),
+            AuthenticationTestFixtures.SolanaWalletData("DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK")
+        };
+
+        var dynamicUserData = AuthenticationTestFixtures.ValidDynamicUserData(
+            userId: userId,
+            wallets: wallets);
+
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("iss", issuer),
+            new Claim("sub", userId)
+        }));
+
+        DynamicAuthService.ValidateTokenAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(dynamicUserData));
+
+        DynamicAuthService.GetRawClaimsAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(claimsPrincipal));
+
+        // Mock: Resolution finds existing principal
+        var existingPrincipal = CreatePrincipalWithDynamicCredential(
+            issuer: issuer,
+            subject: userId);
+
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: existingPrincipal,
+            Path: ResolutionPath.Credential,
+            WasAutoLinked: false);
+
+        AddressNormalizer.NormalizeAddress("evm-1", "0x1111111111111111111111111111111111111111")
+            .Returns(Address.Create("0x1111111111111111111111111111111111111111"));
+
+        AddressNormalizer.NormalizeAddress("solana-mainnet", "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK")
+            .Returns(Address.Create("DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK"));
+
+        ResolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            issuer,
+            userId,
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+
+        // Mock: Wallet verification succeeds for both wallets
+        var wallet1Id = WalletId.Create();
+        var wallet2Id = WalletId.Create();
+
+        WalletRepo.EnsureManyByChainAndAddressAsync(
+            Arg.Any<List<(string chainId, Address address)>>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Dictionary<(string, Address), WalletId>
+            {
+                { ("evm-1", Address.Create("0x1111111111111111111111111111111111111111").Value), wallet1Id },
+                { ("solana-mainnet", Address.Create("DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK").Value), wallet2Id }
+            });
+
+        WalletVerificationService.VerifyWalletOwnershipAsync(
+            Arg.Any<WalletId>(),
+            Arg.Any<AxonUserId>(),
+            AccessMode.Signing,
+            VerificationSource.DynamicAttested,
+            Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var walletId = call.ArgAt<WalletId>(0);
+                var principalId = call.ArgAt<AxonUserId>(1);
+                var ownership = CreateWalletOwnership(walletId, principalId);
+                return Result.Success<WalletOwnership, Error>(ownership);
+            });
+
+        var request = new DynamicExchangeRequest(token);
+
+        // Act
+        var result = await Provider.AuthenticateAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.AdditionalClaims["wallets_processed"].ShouldBe(2);
+        result.Value.AdditionalClaims["wallets_linked"].ShouldBeGreaterThanOrEqualTo(0);
+    }
+
+    [Test]
+    public async Task NewCredential_Should_CreateNewPrincipal()
+    {
+        // Arrange
+        var token = "valid-token-new-user";
+        var userId = Guid.NewGuid().ToString();
+        var issuer = "https://app.dynamic.xyz/test-env";
+
+        var dynamicUserData = AuthenticationTestFixtures.ValidDynamicUserData(
+            userId: userId,
+            email: "newuser@example.com",
+            wallets: new List<WalletData>()); // No wallets
+
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("iss", issuer),
+            new Claim("sub", userId)
+        }));
+
+        DynamicAuthService.ValidateTokenAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(dynamicUserData));
+
+        DynamicAuthService.GetRawClaimsAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(claimsPrincipal));
+
+        // Mock: No existing principal found - will create new
+        PrincipalRepo.FindByCredentialAsync(
+            Arg.Any<ProviderType>(),
+            issuer,
+            userId,
+            Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<AxonPrincipal?>(null));
+
+        var request = new DynamicExchangeRequest(token);
+
+        // Act
+        var result = await Provider.AuthenticateAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.AdditionalClaims["created"].ShouldBe(true); // New principal
+        
+        // Should add new principal, not update
+        AssertPrincipalWasAdded();
+        await PrincipalRepo.DidNotReceive().UpdateAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task NewCredentialWithWallets_Should_CreatePrincipalAndLinkWallets()
+    {
+        // Arrange
+        var token = "valid-token-new-user-with-wallets";
+        var userId = Guid.NewGuid().ToString();
+        var issuer = "https://app.dynamic.xyz/test-env";
+
+        var wallets = new List<WalletData>
+        {
+            AuthenticationTestFixtures.EthereumWalletData("0x2222222222222222222222222222222222222222")
+        };
+
+        var dynamicUserData = AuthenticationTestFixtures.ValidDynamicUserData(
+            userId: userId,
+            email: "newuser@example.com",
+            wallets: wallets,
+            isNewUser: true);
+
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("iss", issuer),
+            new Claim("sub", userId)
+        }));
+
+        DynamicAuthService.ValidateTokenAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(dynamicUserData));
+
+        DynamicAuthService.GetRawClaimsAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(claimsPrincipal));
+
+        // Mock: Resolution creates new principal
+        var newPrincipal = CreatePrincipalWithDynamicCredential(
+            issuer: issuer,
+            subject: userId);
+
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: newPrincipal,
+            Path: ResolutionPath.Created, // New principal created
+            WasAutoLinked: false);
+
+        AddressNormalizer.NormalizeAddress("evm-1", "0x2222222222222222222222222222222222222222")
+            .Returns(Address.Create("0x2222222222222222222222222222222222222222"));
+
+        ResolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            issuer,
+            userId,
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+
+        // Mock: Wallet linking
+        var walletId = WalletId.Create();
+        WalletRepo.EnsureManyByChainAndAddressAsync(
+            Arg.Any<List<(string chainId, Address address)>>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Dictionary<(string, Address), WalletId>
+            {
+                { ("evm-1", Address.Create("0x2222222222222222222222222222222222222222").Value), walletId }
+            });
+
+        WalletVerificationService.VerifyWalletOwnershipAsync(
+            walletId,
+            Arg.Any<AxonUserId>(),
+            AccessMode.Signing,
+            VerificationSource.DynamicAttested,
+            Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var wId = call.ArgAt<WalletId>(0);
+                var principalId = call.ArgAt<AxonUserId>(1);
+                var ownership = CreateWalletOwnership(wId, principalId);
+                return Result.Success<WalletOwnership, Error>(ownership);
+            });
+
+        var request = new DynamicExchangeRequest(token);
+
+        // Act
+        var result = await Provider.AuthenticateAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.AdditionalClaims["created"].ShouldBe(true);
+        result.Value.AdditionalClaims["wallets_processed"].ShouldBe(1);
+    }
+
+    [Test]
+    public async Task CredentialResolution_Should_UpdateLastSeen()
+    {
+        // Arrange
+        var token = "valid-token-return-user";
+        var userId = Guid.NewGuid().ToString();
+        var issuer = "https://app.dynamic.xyz/test-env";
+
+        var dynamicUserData = AuthenticationTestFixtures.ValidDynamicUserData(
+            userId: userId,
+            wallets: new List<WalletData>
+            {
+                AuthenticationTestFixtures.EthereumWalletData("0x3333333333333333333333333333333333333333")
+            });
+
+        var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("iss", issuer),
+            new Claim("sub", userId)
+        }));
+
+        DynamicAuthService.ValidateTokenAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(dynamicUserData));
+
+        DynamicAuthService.GetRawClaimsAsync(token, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ClaimsPrincipal, Error>(claimsPrincipal));
+
+        // Mock: Resolution finds existing principal
+        var existingPrincipal = CreatePrincipalWithDynamicCredential(
+            issuer: issuer,
+            subject: userId);
+
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: existingPrincipal,
+            Path: ResolutionPath.Credential,
+            WasAutoLinked: false);
+
+        AddressNormalizer.NormalizeAddress("evm-1", "0x3333333333333333333333333333333333333333")
+            .Returns(Address.Create("0x3333333333333333333333333333333333333333"));
+
+        ResolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            issuer,
+            userId,
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
+
+        // Mock wallet operations
+        var walletId = WalletId.Create();
+        WalletRepo.EnsureManyByChainAndAddressAsync(
+            Arg.Any<List<(string chainId, Address address)>>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Dictionary<(string, Address), WalletId>
+            {
+                { ("evm-1", Address.Create("0x3333333333333333333333333333333333333333").Value), walletId }
+            });
+
+        WalletVerificationService.VerifyWalletOwnershipAsync(
+            Arg.Any<WalletId>(),
+            Arg.Any<AxonUserId>(),
+            AccessMode.Signing,
+            VerificationSource.DynamicAttested,
+            Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var wId = call.ArgAt<WalletId>(0);
+                var principalId = call.ArgAt<AxonUserId>(1);
+                var ownership = CreateWalletOwnership(wId, principalId);
+                return Result.Success<WalletOwnership, Error>(ownership);
+            });
+
+        var request = new DynamicExchangeRequest(token);
+
+        // Act
+        var result = await Provider.AuthenticateAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.AdditionalClaims["created"].ShouldBe(false); // Existing principal
+        
+        // Credential's LastSeen should be updated (verified by domain logic)
+        // Principal should be updated, not added
+        AssertPrincipalWasUpdated();
     }
 
     #endregion

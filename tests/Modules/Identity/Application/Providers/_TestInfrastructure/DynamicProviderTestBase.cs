@@ -28,19 +28,19 @@ namespace Axon.Modules.Identity.Application.Tests.Providers._TestInfrastructure;
 public abstract class DynamicProviderTestBase
 {
     // Core mocks
-    protected IDynamicAuthService DynamicAuthService = null!;
-    protected IAxonPrincipalWriteRepository PrincipalRepo = null!;
-    protected IWalletWriteRepository WalletRepo = null!;
-    protected IPrincipalResolutionService ResolutionService = null!;
-    protected IAddressNormalizationService AddressNormalizer = null!;
-    protected IWalletVerificationService WalletVerificationService = null!;
-    protected IMemoryCache MemoryCache = null!;
-    protected IHttpContextAccessor HttpContextAccessor = null!;
-    protected UserManager<AxonUserAuth> UserManager = null!;
-    protected ILogger<DynamicAuthenticationProvider> Logger = null!;
+    protected IDynamicAuthService DynamicAuthService { get; set; } = null!;
+    protected IAxonPrincipalWriteRepository PrincipalRepo { get; set; } = null!;
+    protected IWalletWriteRepository WalletRepo { get; set; } = null!;
+    protected IPrincipalResolutionService ResolutionService { get; set; } = null!;
+    protected IAddressNormalizationService AddressNormalizer { get; set; } = null!;
+    protected IWalletVerificationService WalletVerificationService { get; set; } = null!;
+    protected IMemoryCache MemoryCache { get; set; } = null!;
+    protected IHttpContextAccessor HttpContextAccessor { get; set; } = null!;
+    protected UserManager<AxonUserAuth> UserManager { get; set; } = null!;
+    protected ILogger<DynamicAuthenticationProvider> Logger { get; set; } = null!;
 
     // System under test
-    protected DynamicAuthenticationProvider Provider = null!;
+    protected DynamicAuthenticationProvider Provider { get; set; } = null!;
 
     [SetUp]
     public virtual void SetUp()
@@ -123,7 +123,7 @@ public abstract class DynamicProviderTestBase
             .Returns(false);
     }
 
-    protected UserManager<AxonUserAuth> MockUserManager()
+    protected static UserManager<AxonUserAuth> MockUserManager()
     {
         var store = Substitute.For<IUserStore<AxonUserAuth>>();
         var userManager = Substitute.For<UserManager<AxonUserAuth>>(
@@ -139,7 +139,7 @@ public abstract class DynamicProviderTestBase
     /// <summary>
     /// Creates a mock DynamicUserData for testing
     /// </summary>
-    protected DynamicUserData CreateDynamicUserData(
+    protected static DynamicUserData CreateDynamicUserData(
         string? axonUserId = null,
         string? email = null,
         string? environmentId = null,
@@ -159,7 +159,7 @@ public abstract class DynamicProviderTestBase
     /// <summary>
     /// Creates a mock WalletData for testing
     /// </summary>
-    protected WalletData CreateWalletData(
+    protected static WalletData CreateWalletData(
         string? address = null,
         string? chain = null,
         string? walletName = null,
@@ -177,7 +177,7 @@ public abstract class DynamicProviderTestBase
     /// <summary>
     /// Creates an AxonPrincipal with Dynamic credential
     /// </summary>
-    protected AxonPrincipal CreatePrincipalWithDynamicCredential(
+    protected static AxonPrincipal CreatePrincipalWithDynamicCredential(
         ProviderType? providerType = null,
         string? issuer = null,
         string? subject = null)
@@ -260,7 +260,7 @@ public abstract class DynamicProviderTestBase
     /// <summary>
     /// Asserts that a principal was created with the expected credential
     /// </summary>
-    protected void AssertPrincipalHasCredential(
+    protected static void AssertPrincipalHasCredential(
         AxonPrincipal principal,
         string provider,
         string issuer,
@@ -277,7 +277,7 @@ public abstract class DynamicProviderTestBase
     /// <summary>
     /// Asserts that a principal has wallet ownership linked
     /// </summary>
-    protected void AssertPrincipalHasWalletOwnership(
+    protected static void AssertPrincipalHasWalletOwnership(
         AxonPrincipal principal,
         WalletId walletId,
         AccessMode expectedMode = AccessMode.Signing)
