@@ -3,6 +3,7 @@ using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Chat.Infrastructure.Persistence.TestInfrastructure;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Common.Models;
@@ -36,6 +37,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
     protected IConversationRepository ConversationRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
+    protected ITestDataVerificationRepository VerificationRepository { get; set; } = null!;
     protected EfUnitOfWork<ChatDbContext, ChatModule> UnitOfWork { get; set; } = null!;
     protected FakeTimeProvider TimeProvider { get; set; } = null!;
 
@@ -87,6 +89,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
+        VerificationRepository = new TestDataVerificationRepository(ReadDbContext, DbContext);
 
         // Create schema using EF model configuration for tests
         await DbContext.Database.EnsureCreatedAsync();

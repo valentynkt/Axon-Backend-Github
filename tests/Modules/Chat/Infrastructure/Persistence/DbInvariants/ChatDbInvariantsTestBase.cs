@@ -3,7 +3,9 @@ using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Chat.Infrastructure.Persistence.TestInfrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Write;
+using BuildingBlocks.Primitives.Ids;
 using BuildingBlocks.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +30,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
     protected IConversationRepository ConversationRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
+    protected ITestDataVerificationRepository VerificationRepository { get; set; } = null!;
     protected EfUnitOfWork<ChatDbContext, ChatModule> UnitOfWork { get; set; } = null!;
     protected FakeTimeProvider TimeProvider { get; set; } = null!;
 
@@ -78,6 +81,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
+        VerificationRepository = new TestDataVerificationRepository(ReadDbContext, DbContext);
 
         // Create schema and apply migrations
         await DbContext.Database.MigrateAsync();
@@ -133,7 +137,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
     /// Asserts that a PostgreSQL constraint violation occurs with specific constraint name.
     /// Used to validate database-level invariants are properly enforced.
     /// </summary>
-    protected async Task AssertPostgreSQLConstraintViolation(
+    protected static async Task AssertPostgreSQLConstraintViolation(
         Func<Task> action,
         string expectedConstraintName)
     {
@@ -150,8 +154,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
 
         if (!string.IsNullOrEmpty(expectedConstraintName))
         {
-            pgException.ConstraintName?.ToLower().ShouldContain(expectedConstraintName.ToLower(),
-                $"Expected constraint '{expectedConstraintName}' to be violated but got '{pgException.ConstraintName}'");
+            pgException.ConstraintName?.ToLower().ShouldContain(expectedConstraintName.ToLower());
         }
     }
 
@@ -159,7 +162,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
     /// Asserts constraint violation for raw SQL operations.
     /// Used when testing invariants that can't be triggered through repository operations.
     /// </summary>
-    protected async Task AssertPostgreSQLConstraintViolationRaw(
+    protected static async Task AssertPostgreSQLConstraintViolationRaw(
         Func<Task> action,
         string expectedConstraintName)
     {
@@ -187,17 +190,9 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
     /// Asserts that message sequence numbers maintain integrity within a conversation.
     /// Validates that sequences are consecutive and start from 1.
     /// </summary>
-    protected async Task AssertMessageSequenceIntegrity(Guid conversationId)
+    protected async Task AssertMessageSequenceIntegrity(ConversationId conversationId)
     {
-#pragma warning disable EF1002 // Risk of SQL injection - conversationId is a Guid, not user input
-        var messages = await ReadDbContext.Database
-            .SqlQueryRaw<MessageSequenceInfo>(
-                $@"SELECT sequence, id
-                   FROM chat.""Messages""
-                   WHERE conversation_id = '{conversationId}'
-                   ORDER BY sequence")
-            .ToListAsync();
-#pragma warning restore EF1002
+        var messages = await VerificationRepository.GetMessageSequencesAsync(conversationId);
 
         for (int i = 0; i < messages.Count; i++)
         {
@@ -210,25 +205,12 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
     /// Verifies that aggregate version is properly updated when child entities change.
     /// This is critical for optimistic concurrency control.
     /// </summary>
-    protected async Task<uint> GetAggregateVersion(Guid conversationId)
+    protected async Task<uint> GetAggregateVersion(ConversationId conversationId)
     {
-        var result = await DbContext.Database
-            .SqlQueryRaw<VersionInfo>(
-                $@"SELECT xmin as Version
-                   FROM chat.""Conversations""
-                   WHERE id = '{conversationId}'")
-            .FirstOrDefaultAsync();
-
-        result.ShouldNotBeNull($"Conversation {conversationId} not found");
-        return result.Version;
+        var version = await VerificationRepository.GetConversationVersionAsync(conversationId);
+        version.ShouldNotBe(0u, $"Conversation {conversationId} not found");
+        return version;
     }
-
-    #endregion
-
-    #region Helper Classes
-
-    private sealed record MessageSequenceInfo(int Sequence, Guid Id);
-    private sealed record VersionInfo(uint Version);
 
     #endregion
 }

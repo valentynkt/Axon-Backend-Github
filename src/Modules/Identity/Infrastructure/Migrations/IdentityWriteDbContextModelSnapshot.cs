@@ -3,20 +3,17 @@ using System;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Identity.Infrastructure.Migrations
 {
     [DbContext(typeof(IdentityWriteDbContext))]
-    [Migration("20250929093134_FixExclusiveSigningIndex")]
-    partial class FixExclusiveSigningIndex
+    partial class IdentityWriteDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

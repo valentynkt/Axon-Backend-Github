@@ -137,9 +137,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Verify messages exist
-        var messageCountBefore = await ReadDbContext.Database
-            .SqlQueryRaw<int>($"SELECT COUNT(*) FROM chat.\"Messages\" WHERE conversation_id = '{conversation.Id.Value}'")
-            .FirstOrDefaultAsync();
+        var messageCountBefore = await VerificationRepository.GetMessageCountAsync(conversation.Id);
         messageCountBefore.ShouldBe(6); // 3 exchanges = 6 messages
 
         // Act: Delete conversation
@@ -148,9 +146,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
             new NpgsqlParameter("@id", conversation.Id.Value));
 
         // Assert: Messages should be cascade deleted
-        var messageCountAfter = await ReadDbContext.Database
-            .SqlQueryRaw<int>($"SELECT COUNT(*) FROM chat.\"Messages\" WHERE conversation_id = '{conversation.Id.Value}'")
-            .FirstOrDefaultAsync();
+        var messageCountAfter = await VerificationRepository.GetMessageCountAsync(conversation.Id);
         messageCountAfter.ShouldBe(0);
     }
 
@@ -196,7 +192,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Get initial version
-        var versionBefore = await GetAggregateVersion(conversation.Id.Value);
+        var versionBefore = await GetAggregateVersion(conversation.Id);
 
         // Act: Add a message to the conversation
         DbContext.ChangeTracker.Clear();
@@ -211,7 +207,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: Version should have changed
-        var versionAfter = await GetAggregateVersion(conversation.Id.Value);
+        var versionAfter = await GetAggregateVersion(conversation.Id);
         versionAfter.ShouldNotBe(versionBefore, "Aggregate version should update when child entity is added");
     }
 
@@ -224,7 +220,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Get initial version
-        var versionBefore = await GetAggregateVersion(conversation.Id.Value);
+        var versionBefore = await GetAggregateVersion(conversation.Id);
 
         // Act: Update title
         DbContext.ChangeTracker.Clear();
@@ -238,7 +234,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: Version should have changed
-        var versionAfter = await GetAggregateVersion(conversation.Id.Value);
+        var versionAfter = await GetAggregateVersion(conversation.Id);
         versionAfter.ShouldNotBe(versionBefore, "Aggregate version should update on property change");
     }
 
@@ -258,7 +254,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Act & Assert: Verify sequence integrity
-        await AssertMessageSequenceIntegrity(conversation.Id.Value);
+        await AssertMessageSequenceIntegrity(conversation.Id);
 
         // Verify we have correct number of messages
         var messages = conversation.GetAllMessages();

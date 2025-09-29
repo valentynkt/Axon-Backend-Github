@@ -9,10 +9,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Chat.Infrastructure.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
-    [Migration("20250925180110_InitialCreate")]
+    [Migration("20250929132632_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -69,53 +69,6 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Conversations", "chat");
-                });
-
-            modelBuilder.Entity("Axon.Modules.Chat.Domain.Entities.Message", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AiResponseId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ConversationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConversationId");
-
-                    b.HasIndex("ConversationId", "Sequence");
-
-                    b.ToTable("Messages", "chat");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
@@ -286,13 +239,59 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
                     b.ToTable("OutboxState", "chat");
                 });
 
-            modelBuilder.Entity("Axon.Modules.Chat.Domain.Entities.Message", b =>
+            modelBuilder.Entity("Axon.Modules.Chat.Domain.Aggregates.Conversation.Conversation", b =>
                 {
-                    b.HasOne("Axon.Modules.Chat.Domain.Aggregates.Conversation.Conversation", null)
-                        .WithMany("Messages")
-                        .HasForeignKey("ConversationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.OwnsMany("Axon.Modules.Chat.Domain.Entities.Message", "_messages", b1 =>
+                        {
+                            b1.Property<Guid>("ConversationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AiResponseId")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("Content")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<DateTimeOffset?>("DeletedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<bool>("IsDeleted")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false);
+
+                            b1.Property<string>("Role")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)");
+
+                            b1.Property<int>("Sequence")
+                                .HasColumnType("integer");
+
+                            b1.Property<DateTimeOffset?>("UpdatedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.HasKey("ConversationId", "Id");
+
+                            b1.HasIndex("ConversationId");
+
+                            b1.HasIndex("ConversationId", "Sequence");
+
+                            b1.ToTable("Messages", "chat");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ConversationId");
+                        });
+
+                    b.Navigation("_messages");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
@@ -305,11 +304,6 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
-                });
-
-            modelBuilder.Entity("Axon.Modules.Chat.Domain.Aggregates.Conversation.Conversation", b =>
-                {
-                    b.Navigation("Messages");
                 });
 #pragma warning restore 612, 618
         }

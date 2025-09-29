@@ -23,6 +23,8 @@ public class ChatDbContextTests : ChatPersistenceTestBase
     [Test]
     public async Task OwnedEntity_Messages_ConfiguredCorrectly()
     {
+        await Task.CompletedTask;
+
         // Arrange: Get entity type configuration
         var conversationType = DbContext.Model.FindEntityType(typeof(Conversation));
         conversationType.ShouldNotBeNull();
@@ -56,6 +58,8 @@ public class ChatDbContextTests : ChatPersistenceTestBase
     [Test]
     public async Task OwnedEntity_Messages_NotDirectlyAccessible()
     {
+        await Task.CompletedTask;
+
         // Assert: There should be no DbSet<Message> property
         var dbSetProperties = DbContext.GetType()
             .GetProperties()
@@ -144,6 +148,8 @@ public class ChatDbContextTests : ChatPersistenceTestBase
     [Test]
     public async Task Schema_TablesInChatSchema_Verified()
     {
+        await Task.CompletedTask;
+
         // Arrange: Get entity types
         var conversationType = DbContext.Model.FindEntityType(typeof(Conversation));
         var messageType = DbContext.Model.FindEntityType(typeof(Message));
@@ -170,6 +176,8 @@ public class ChatDbContextTests : ChatPersistenceTestBase
     [Test]
     public async Task Indexes_MessageSequence_ConversationId_Exist()
     {
+        await Task.CompletedTask;
+
         // Arrange: Get Message entity type
         var messageType = DbContext.Model.FindEntityType(typeof(Message));
         messageType.ShouldNotBeNull();
@@ -269,6 +277,8 @@ public class ChatDbContextTests : ChatPersistenceTestBase
     [Test]
     public async Task Version_Field_ConfiguredAsRowVersion()
     {
+        await Task.CompletedTask;
+
         // Arrange: Get Conversation entity type
         var conversationType = DbContext.Model.FindEntityType(typeof(Conversation));
         conversationType.ShouldNotBeNull();

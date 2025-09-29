@@ -334,7 +334,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         // Log results for debugging
         foreach (var (operation, success) in results)
         {
-            TestContext.WriteLine($"Operation {operation}: {(success ? "Succeeded" : "Failed")}");
+            TestContext.Out.WriteLine($"Operation {operation}: {(success ? "Succeeded" : "Failed")}");
         }
 
         // Verify final state integrity

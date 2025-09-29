@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Identity.Infrastructure.Migrations
 {
     [DbContext(typeof(IdentityWriteDbContext))]
-    [Migration("20250925193620_RemoveVersionFromChildEntities")]
-    partial class RemoveVersionFromChildEntities
+    [Migration("20250929132615_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -268,217 +268,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                     b.ToTable("AxonUserAuth", "identity");
                 });
 
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.IdentityCredential", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("Issuer")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("issuer");
-
-                    b.Property<DateTime>("LastSeenAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("last_seen_at");
-
-                    b.Property<Guid>("PrincipalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("principal_id");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("provider");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("subject");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PrincipalId")
-                        .HasDatabaseName("idx_credential_principal_id");
-
-                    b.HasIndex("Provider")
-                        .HasDatabaseName("idx_credential_provider");
-
-                    b.HasIndex("Provider", "Issuer", "Subject")
-                        .IsUnique()
-                        .HasDatabaseName("ux_credential_provider")
-                        .HasFilter("is_deleted = false");
-
-                    b.ToTable("Credential", "identity");
-                });
-
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("ChainId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("chain_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<Guid>("PrincipalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("principal_id");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("WalletId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("wallet_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PrincipalId")
-                        .HasDatabaseName("idx_default_principal_id");
-
-                    b.HasIndex("WalletId")
-                        .HasDatabaseName("idx_default_wallet_id");
-
-                    b.HasIndex("PrincipalId", "ChainId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_chain_default")
-                        .HasFilter("is_deleted = false");
-
-                    b.ToTable("PrincipalChainDefault", "identity");
-                });
-
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletOwnership", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AccessMode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("access_mode");
-
-                    b.Property<Guid?>("AxonPrincipalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<Guid>("PrincipalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("principal_id");
-
-                    b.Property<string>("RevokeReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("revoke_reason");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("updated_at");
-
-                    b.Property<string>("VerificationSource")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("verification_source");
-
-                    b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid>("WalletId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("wallet_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AxonPrincipalId");
-
-                    b.HasIndex("PrincipalId")
-                        .HasDatabaseName("idx_ownership_principal_active")
-                        .HasFilter("is_deleted = false");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("idx_ownership_status");
-
-                    b.HasIndex("WalletId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_exclusive_signing")
-                        .HasFilter("status = 'Verified' AND access_mode = 'Signing' AND is_deleted = false");
-
-                    b.HasIndex("PrincipalId", "WalletId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_ownership_pair")
-                        .HasFilter("is_deleted = false");
-
-                    b.ToTable("WalletOwnership", "identity");
-                });
-
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
                 {
                     b.Property<long>("Id")
@@ -647,43 +436,218 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                     b.ToTable("OutboxState", "identity");
                 });
 
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.IdentityCredential", b =>
+            modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>
                 {
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany("Credentials")
-                        .HasForeignKey("PrincipalId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+                    b.OwnsMany("Axon.Modules.Identity.Domain.Entities.IdentityCredential", "Credentials", b1 =>
+                        {
+                            b1.Property<Guid>("PrincipalId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("principal_id");
 
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", b =>
-                {
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany("PrincipalChainDefaults")
-                        .HasForeignKey("PrincipalId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
 
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Entities.WalletOwnership", b =>
-                {
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", null)
-                        .WithMany("WalletOwnerships")
-                        .HasForeignKey("AxonPrincipalId");
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("created_at");
 
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", "Principal")
-                        .WithMany()
-                        .HasForeignKey("PrincipalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                            b1.Property<DateTimeOffset?>("DeletedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("deleted_at");
 
-                    b.HasOne("Axon.Modules.Identity.Domain.Aggregates.Wallet.Wallet", null)
-                        .WithMany()
-                        .HasForeignKey("WalletId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                            b1.Property<bool>("IsDeleted")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("is_deleted");
 
-                    b.Navigation("Principal");
+                            b1.Property<string>("Issuer")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("issuer");
+
+                            b1.Property<DateTime>("LastSeenAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("last_seen_at");
+
+                            b1.Property<string>("Provider")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("provider");
+
+                            b1.Property<string>("Subject")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("subject");
+
+                            b1.Property<DateTimeOffset?>("UpdatedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("updated_at");
+
+                            b1.HasKey("PrincipalId", "Id");
+
+                            b1.HasIndex("Provider", "Issuer", "Subject")
+                                .IsUnique()
+                                .HasDatabaseName("ux_credential_provider")
+                                .HasFilter("is_deleted = false");
+
+                            b1.ToTable("Credential", "identity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PrincipalId");
+                        });
+
+                    b.OwnsMany("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", "PrincipalChainDefaults", b1 =>
+                        {
+                            b1.Property<Guid>("PrincipalId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("principal_id");
+
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<string>("ChainId")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("chain_id");
+
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("created_at");
+
+                            b1.Property<DateTimeOffset?>("DeletedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("deleted_at");
+
+                            b1.Property<bool>("IsDeleted")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("is_deleted");
+
+                            b1.Property<DateTimeOffset?>("UpdatedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("updated_at");
+
+                            b1.Property<Guid>("WalletId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("wallet_id");
+
+                            b1.HasKey("PrincipalId", "Id");
+
+                            b1.HasIndex("PrincipalId")
+                                .HasDatabaseName("idx_default_principal_id");
+
+                            b1.HasIndex("WalletId")
+                                .HasDatabaseName("idx_default_wallet_id");
+
+                            b1.HasIndex("PrincipalId", "ChainId")
+                                .IsUnique()
+                                .HasDatabaseName("ux_chain_default")
+                                .HasFilter("is_deleted = false");
+
+                            b1.ToTable("PrincipalChainDefault", "identity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PrincipalId");
+                        });
+
+                    b.OwnsMany("Axon.Modules.Identity.Domain.Entities.WalletOwnership", "WalletOwnerships", b1 =>
+                        {
+                            b1.Property<Guid>("PrincipalId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("principal_id");
+
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<string>("AccessMode")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("access_mode");
+
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("created_at");
+
+                            b1.Property<DateTimeOffset?>("DeletedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("deleted_at");
+
+                            b1.Property<bool>("IsDeleted")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("is_deleted");
+
+                            b1.Property<string>("RevokeReason")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("revoke_reason");
+
+                            b1.Property<DateTime?>("RevokedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("revoked_at");
+
+                            b1.Property<string>("Status")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("status");
+
+                            b1.Property<DateTimeOffset?>("UpdatedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("updated_at");
+
+                            b1.Property<string>("VerificationSource")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("verification_source");
+
+                            b1.Property<DateTime?>("VerifiedAt")
+                                .HasColumnType("timestamptz")
+                                .HasColumnName("verified_at");
+
+                            b1.Property<Guid>("WalletId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("wallet_id");
+
+                            b1.HasKey("PrincipalId", "Id");
+
+                            b1.HasIndex("WalletId")
+                                .HasDatabaseName("idx_ownership_wallet_id");
+
+                            b1.HasIndex("PrincipalId", "WalletId")
+                                .IsUnique()
+                                .HasDatabaseName("ux_ownership_pair")
+                                .HasFilter("is_deleted = false");
+
+                            b1.HasIndex("WalletId", "AccessMode", "Status")
+                                .IsUnique()
+                                .HasDatabaseName("ux_exclusive_signing")
+                                .HasFilter("access_mode = 'Signing' AND status = 'Verified' AND is_deleted = false");
+
+                            b1.ToTable("WalletOwnership", "identity");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PrincipalId");
+                        });
+
+                    b.Navigation("Credentials");
+
+                    b.Navigation("PrincipalChainDefaults");
+
+                    b.Navigation("WalletOwnerships");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
@@ -696,15 +660,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
-                });
-
-            modelBuilder.Entity("Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal.AxonPrincipal", b =>
-                {
-                    b.Navigation("Credentials");
-
-                    b.Navigation("PrincipalChainDefaults");
-
-                    b.Navigation("WalletOwnerships");
                 });
 #pragma warning restore 612, 618
         }

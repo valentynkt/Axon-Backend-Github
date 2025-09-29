@@ -4,7 +4,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
+namespace Axon.Modules.Identity.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -195,7 +195,7 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Credential", x => x.id);
+                    table.PrimaryKey("PK_Credential", x => new { x.principal_id, x.id });
                     table.ForeignKey(
                         name: "FK_Credential_Principal_principal_id",
                         column: x => x.principal_id,
@@ -214,7 +214,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                     principal_id = table.Column<Guid>(type: "uuid", nullable: false),
                     chain_id = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     wallet_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
@@ -222,7 +221,7 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PrincipalChainDefault", x => x.id);
+                    table.PrimaryKey("PK_PrincipalChainDefault", x => new { x.principal_id, x.id });
                     table.ForeignKey(
                         name: "FK_PrincipalChainDefault_Principal_principal_id",
                         column: x => x.principal_id,
@@ -246,8 +245,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                     verified_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
                     revoked_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
                     revoke_reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    AxonPrincipalId = table.Column<Guid>(type: "uuid", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
@@ -255,27 +252,14 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_WalletOwnership", x => x.id);
-                    table.ForeignKey(
-                        name: "FK_WalletOwnership_Principal_AxonPrincipalId",
-                        column: x => x.AxonPrincipalId,
-                        principalSchema: "identity",
-                        principalTable: "Principal",
-                        principalColumn: "Id");
+                    table.PrimaryKey("PK_WalletOwnership", x => new { x.principal_id, x.id });
                     table.ForeignKey(
                         name: "FK_WalletOwnership_Principal_principal_id",
                         column: x => x.principal_id,
                         principalSchema: "identity",
                         principalTable: "Principal",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_WalletOwnership_Wallet_wallet_id",
-                        column: x => x.wallet_id,
-                        principalSchema: "identity",
-                        principalTable: "Wallet",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
@@ -317,18 +301,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                 schema: "identity",
                 table: "AxonUserAuth",
                 columns: new[] { "ProviderType", "OriginalSubject" });
-
-            migrationBuilder.CreateIndex(
-                name: "idx_credential_principal_id",
-                schema: "identity",
-                table: "Credential",
-                column: "principal_id");
-
-            migrationBuilder.CreateIndex(
-                name: "idx_credential_provider",
-                schema: "identity",
-                table: "Credential",
-                column: "provider");
 
             migrationBuilder.CreateIndex(
                 name: "ux_credential_provider",
@@ -435,31 +407,18 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                 filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
-                name: "idx_ownership_principal_active",
+                name: "idx_ownership_wallet_id",
                 schema: "identity",
                 table: "WalletOwnership",
-                column: "principal_id",
-                filter: "is_deleted = false");
+                column: "wallet_id");
 
             migrationBuilder.CreateIndex(
-                name: "idx_ownership_status",
+                name: "ux_exclusive_signing",
                 schema: "identity",
                 table: "WalletOwnership",
-                column: "status");
-
-            migrationBuilder.CreateIndex(
-                name: "idx_ownership_wallet_active",
-                schema: "identity",
-                table: "WalletOwnership",
-                column: "wallet_id",
+                columns: new[] { "wallet_id", "access_mode", "status" },
                 unique: true,
-                filter: "is_deleted = false");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_WalletOwnership_AxonPrincipalId",
-                schema: "identity",
-                table: "WalletOwnership",
-                column: "AxonPrincipalId");
+                filter: "access_mode = 'Signing' AND status = 'Verified' AND is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ux_ownership_pair",
@@ -490,6 +449,10 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                 schema: "identity");
 
             migrationBuilder.DropTable(
+                name: "Wallet",
+                schema: "identity");
+
+            migrationBuilder.DropTable(
                 name: "WalletOwnership",
                 schema: "identity");
 
@@ -503,10 +466,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "Principal",
-                schema: "identity");
-
-            migrationBuilder.DropTable(
-                name: "Wallet",
                 schema: "identity");
         }
     }

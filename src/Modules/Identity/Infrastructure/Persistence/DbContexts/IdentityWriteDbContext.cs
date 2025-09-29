@@ -169,39 +169,6 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
         // Child entities are now configured as owned types in AxonPrincipalConfiguration
         // They automatically inherit concurrency control from the parent aggregate
 
-        // Remove query filters and concurrency tracking from owned entities
-        var ownedTypes = new[]
-        {
-            typeof(PrincipalChainDefault),
-            typeof(WalletOwnership),
-            typeof(IdentityCredential)
-        };
-
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            if (ownedTypes.Contains(entityType.ClrType) && entityType.IsOwned())
-            {
-                // Clear any query filter that was automatically applied
-                entityType.SetQueryFilter(null);
-
-                // Completely disable concurrency tracking for owned entities
-                // They should only be updated through the aggregate root
-                foreach (var property in entityType.GetProperties())
-                {
-                    if (property.IsConcurrencyToken)
-                    {
-                        property.IsConcurrencyToken = false;
-                    }
-                }
-
-                // Remove any xmin column that might be automatically added
-                var xminProperty = entityType.FindProperty("xmin");
-                if (xminProperty != null)
-                {
-                    entityType.RemoveProperty("xmin");
-                }
-            }
-        }
     }
 }
 

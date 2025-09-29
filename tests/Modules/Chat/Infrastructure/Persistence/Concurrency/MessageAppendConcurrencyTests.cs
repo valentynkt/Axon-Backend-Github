@@ -6,6 +6,7 @@ using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using BuildingBlocks.Testing;
@@ -261,7 +262,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
                     await context.SaveChangesAsync();
                     return true;
                 }
-                catch (BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException)
+                catch (ConcurrencyException)
                 {
                     return false; // Expected for some operations
                 }

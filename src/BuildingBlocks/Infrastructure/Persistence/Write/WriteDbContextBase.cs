@@ -173,13 +173,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
     private static void ThrowConcurrencyException(DbUpdateConcurrencyException ex)
     {
-        // Filter to only aggregate roots or entities with their own concurrency control
-        // Owned entities should not trigger concurrency exceptions independently
-        var nonOwnedEntries = ex.Entries
-            .Where(e => !e.Metadata.IsOwned())
-            .ToList();
-
-        var firstEntry = nonOwnedEntries.Count > 0 ? nonOwnedEntries[0] : (ex.Entries.Count > 0 ? ex.Entries[0] : null);
+        var firstEntry = ex.Entries.Count > 0 ? ex.Entries[0] : null;
         if (firstEntry == null)
         {
             throw ex; // Re-throw original if no entries
@@ -219,6 +213,10 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
+            // Skip owned entity types - they cannot have query filters
+            if (entityType.IsOwned())
+                continue;
+
             if (typeof(Core.Domain.Entities.Abstractions.ISoftDeletable).IsAssignableFrom(entityType.ClrType))
             {
                 var p = Expression.Parameter(entityType.ClrType, "e");
