@@ -28,11 +28,18 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatRead
         var conversationConfig = new Persistence.Configurations.ConversationConfiguration();
         conversationConfig.Configure(modelBuilder.Entity<Conversation>());
 
-        var messageConfig = new Persistence.Configurations.MessageConfiguration();
-        messageConfig.Configure(modelBuilder.Entity<Message>());
+        // Messages are now configured as owned entities within ConversationConfiguration
+        // They are accessed through the Conversation aggregate root, not directly
 
-        // Apply snake_case naming convention
-        modelBuilder.ToSnakeCaseTables();
+        // Remove query filters from owned entities (EF Core doesn't support filters on owned types)
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (entityType.IsOwned())
+            {
+                // Clear any query filter that was automatically applied
+                entityType.SetQueryFilter(null);
+            }
+        }
     }
 
     protected override void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)

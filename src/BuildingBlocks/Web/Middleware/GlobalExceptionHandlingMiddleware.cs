@@ -31,6 +31,8 @@ public sealed class GlobalExceptionHandlingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         try
         {
             await _next(context);

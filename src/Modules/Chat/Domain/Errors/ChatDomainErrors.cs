@@ -55,6 +55,15 @@ public static class ChatDomainErrors
         
         public const string InvalidResponseIdCode = "CHAT.AI.INVALID_RESPONSE_ID";
         public const string InvalidResponseIdMessage = "AI response ID cannot be empty.";
+
+        public const string NetworkErrorCode = "CHAT.AI.NETWORK_ERROR";
+        public const string NetworkErrorMessage = "Network error occurred during AI processing.";
+
+        public const string ServiceUnavailableCode = "CHAT.AI.SERVICE_UNAVAILABLE";
+        public const string ServiceUnavailableMessage = "AI service is temporarily unavailable.";
+
+        public const string TimeoutCode = "CHAT.AI.TIMEOUT";
+        public const string TimeoutMessage = "AI processing request timed out.";
     }
 
     /// <summary>
@@ -64,6 +73,18 @@ public static class ChatDomainErrors
     {
         public const string UnexpectedErrorCode = "CHAT.MESSAGE_PROCESSING.UNEXPECTED_ERROR";
         public const string UnexpectedErrorMessage = "An unexpected error occurred during message processing. Please retry.";
+
+        public const string PersistenceFailedCode = "CHAT.MESSAGE_PROCESSING.PERSISTENCE_FAILED";
+        public const string PersistenceFailedMessage = "Failed to persist conversation updates.";
+
+        public const string ConcurrencyConflictCode = "CHAT.MESSAGE_PROCESSING.CONCURRENCY_CONFLICT";
+        public const string ConcurrencyConflictMessage = "Conversation was modified by another process.";
+
+        public const string TimeoutCode = "CHAT.MESSAGE_PROCESSING.TIMEOUT";
+        public const string TimeoutMessage = "Operation timed out during message processing.";
+
+        public const string McpResolutionFailedCode = "CHAT.MESSAGE_PROCESSING.MCP_RESOLUTION_FAILED";
+        public const string McpResolutionFailedMessage = "Failed to resolve MCP server configuration.";
     }
 
     /// <summary>

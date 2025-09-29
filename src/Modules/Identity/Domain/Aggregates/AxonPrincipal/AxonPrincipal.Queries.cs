@@ -35,23 +35,6 @@ public sealed partial class AxonPrincipal
         return _walletOwnerships.Any(o => o.WalletId == walletId);
     }
 
-    /// <summary>
-    /// Checks if the principal has verified signing ownership of a wallet.
-    /// </summary>
-    public bool HasVerifiedSigningOwnership(WalletId walletId)
-    {
-        return _walletOwnerships.Any(o => 
-            o.WalletId == walletId && 
-            o.IsVerifiedSigning);
-    }
-
-    /// <summary>
-    /// Gets the wallet ownership for a specific wallet.
-    /// </summary>
-    public WalletOwnership? GetWalletOwnership(WalletId walletId)
-    {
-        return _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
-    }
 
     /// <summary>
     /// Gets the default wallet for a specific chain.

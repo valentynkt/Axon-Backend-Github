@@ -3,7 +3,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
@@ -32,7 +32,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
 
         // Act: Apply chain default for the first verified+signing wallet
-        var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
 
         // Assert: Should succeed and create default
         result.IsSuccess.ShouldBeTrue();
@@ -58,8 +58,8 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
 
         // Act: Apply defaults for both chains
-        var mainnetResult = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id);
-        var devnetResult = principal.ApplyChainDefault(NetworkEnvironment.Devnet, TestDataFixtures.SolanaDevnetChain, devnetWallet.Id);
+        var mainnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id);
+        var devnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, devnetWallet.Id);
 
         // Assert: Both should succeed
         mainnetResult.IsSuccess.ShouldBeTrue();
@@ -92,7 +92,7 @@ public class PrincipalDefaultsBehaviorTests
         linkResult.IsSuccess.ShouldBeTrue();
 
         // Act: Try to set pending wallet as default
-        var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
 
         // Assert: Should fail because wallet is not verified+signing
         result.IsFailure.ShouldBeTrue();
@@ -115,7 +115,7 @@ public class PrincipalDefaultsBehaviorTests
         linkResult.IsSuccess.ShouldBeTrue();
 
         // Act: Try to set watch-only wallet as default
-        var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
 
         // Assert: Should fail because wallet is watch-only
         result.IsFailure.ShouldBeTrue();
@@ -132,8 +132,8 @@ public class PrincipalDefaultsBehaviorTests
         var (principal, wallet) = TestDataFixtures.CreateAutoSeedDefaultScenario();
 
         // Act: Apply same default twice
-        var result1 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet.Id);
-        var result2 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result1 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result2 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
 
         // Assert: Both should succeed
         result1.IsSuccess.ShouldBeTrue();
@@ -160,7 +160,7 @@ public class PrincipalDefaultsBehaviorTests
         };
 
         // Act: Apply batch defaults
-        var result = principal.ApplyChainDefaultsBatch(NetworkEnvironment.Mainnet, walletChainMappings);
+        var result = principal.ApplyChainDefaultsBatch(walletChainMappings);
 
         // Assert: Should succeed and create 2 defaults
         result.IsSuccess.ShouldBeTrue();
@@ -224,7 +224,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.LinkWalletOwnership(nonDefaultedOwnership, (_, _, _) => Result.Success<bool, Error>(false));
 
         // Set only first wallet as default
-        var defaultResult = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, defaultedWallet.Id);
+        var defaultResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, defaultedWallet.Id);
         defaultResult.IsSuccess.ShouldBeTrue();
 
         // Verify setup
@@ -255,8 +255,8 @@ public class PrincipalDefaultsBehaviorTests
         var (principal, mainnetWallet, devnetWallet) = TestDataFixtures.CreateMultiChainDefaultScenario();
 
         // Set defaults for both chains
-        var mainnetResult = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id);
-        var devnetResult = principal.ApplyChainDefault(NetworkEnvironment.Devnet, TestDataFixtures.SolanaDevnetChain, devnetWallet.Id);
+        var mainnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id);
+        var devnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, devnetWallet.Id);
 
         mainnetResult.IsSuccess.ShouldBeTrue();
         devnetResult.IsSuccess.ShouldBeTrue();
@@ -293,22 +293,19 @@ public class PrincipalDefaultsBehaviorTests
         // Verify default exists
         principal.PrincipalChainDefaults.Count.ShouldBe(1);
 
-        // Get the ownership for status change
-        var ownership = principal.WalletOwnerships.First(wo => wo.WalletId == wallet.Id);
-
-        // Act: Change ownership status to revoked (instead of removing)
-        var statusResult = ownership.UpdateStatus(OwnershipStatus.Revoked);
+        // Act: Change ownership status to revoked using principal method
+        var statusResult = principal.UpdateWalletOwnershipStatus(wallet.Id, OwnershipStatus.Revoked);
 
         // Assert: Status change should succeed
         statusResult.IsSuccess.ShouldBeTrue();
 
         // Verify ownership still exists but is revoked
         principal.WalletOwnerships.Count.ShouldBe(1);
+        var ownership = principal.WalletOwnerships.First(wo => wo.WalletId == wallet.Id);
         ownership.Status.ShouldBe(OwnershipStatus.Revoked);
 
-        // NOTE: This test will FAIL initially if status-based clearing is not implemented
         // The system should detect revoked status and clear defaults even without removal
-        principal.PrincipalChainDefaults.Count.ShouldBe(0);
+        principal.GetActivePrincipalChainDefaults().Count().ShouldBe(0);
     }
 
     #endregion
@@ -328,7 +325,7 @@ public class PrincipalDefaultsBehaviorTests
         var linkResult1 = principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
         linkResult1.IsSuccess.ShouldBeTrue();
 
-        var defaultResult1 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet1.Id);
+        var defaultResult1 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id);
         defaultResult1.IsSuccess.ShouldBeTrue();
 
         // Verify first default
@@ -339,7 +336,7 @@ public class PrincipalDefaultsBehaviorTests
         var linkResult2 = principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
         linkResult2.IsSuccess.ShouldBeTrue();
 
-        var defaultResult2 = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet2.Id);
+        var defaultResult2 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet2.Id);
         defaultResult2.IsSuccess.ShouldBeTrue();
 
         // Verify default was updated (not duplicated)
@@ -355,7 +352,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
 
         // Step 4: Re-apply default with remaining wallet
-        var reapplyResult = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestDataFixtures.SolanaMainnetChain, wallet1.Id);
+        var reapplyResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id);
         reapplyResult.IsSuccess.ShouldBeTrue();
 
         // Verify new default was created
@@ -389,7 +386,7 @@ public class PrincipalDefaultsBehaviorTests
         };
 
         // Act: Try to apply batch defaults
-        var result = principal.ApplyChainDefaultsBatch(NetworkEnvironment.Mainnet, walletChainMappings);
+        var result = principal.ApplyChainDefaultsBatch(walletChainMappings);
 
         // Assert: Should fail due to invalid wallet in batch
         result.IsFailure.ShouldBeTrue();

@@ -170,6 +170,10 @@ public sealed record Error
         IReadOnlyDictionary<string, object>? metadata = null) =>
         new(code, message ?? "Operation was cancelled", ErrorType.Cancelled, metadata: metadata);
 
+    public static Error NotSupported(string message, string code = "NOT_SUPPORTED",
+        IReadOnlyDictionary<string, object>? metadata = null) =>
+        new(code, message, ErrorType.NotFound, metadata: metadata);
+
     #endregion
 
     #region Factory: Security

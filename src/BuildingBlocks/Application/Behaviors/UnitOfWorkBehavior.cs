@@ -1,4 +1,5 @@
 // /BuildingBlocks/Application/Behaviors/UnitOfWorkBehavior.cs
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -33,9 +34,11 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         // Only apply to commands (not queries)
         var isCommand = request is ICommand
-                        || request.GetType().GetInterfaces()
+                        || GetTypeInterfaces(request.GetType())
                              .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICommand<>));
         if (!isCommand)
             return await next();
@@ -87,7 +90,7 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
         try
         {
             // Chat module commands
-            if (namespaceName.Contains("Axon.Modules.Chat"))
+            if (namespaceName.Contains("Axon.Modules.Chat", StringComparison.Ordinal))
             {
                 var chatModuleType = Type.GetType("Axon.Modules.Chat.Application.Common.Models.ChatModule, Axon.Modules.Chat.Application");
                 if (chatModuleType != null)
@@ -97,7 +100,7 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
                 }
             }
             // Identity module commands
-            else if (namespaceName.Contains("Axon.Modules.Identity"))
+            else if (namespaceName.Contains("Axon.Modules.Identity", StringComparison.Ordinal))
             {
                 var identityModuleType = Type.GetType("Axon.Modules.Identity.Application.Common.Models.IdentityModule, Axon.Modules.Identity.Application");
                 if (identityModuleType != null)
@@ -118,9 +121,13 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
         }
     }
 
+    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2075:UnrecognizedReflectionPattern",
+        Justification = "Type interface checking for command detection is safe in this context")]
+    private static Type[] GetTypeInterfaces(Type type) => type.GetInterfaces();
+
     /// <summary>
     /// Per-closed-TResponse compiled accessors for CFE results.
-    /// Supports: Result, Result<T>, Result<T, Error>, UnitResult<Error>.
+    /// Supports: Result, Result&lt;T&gt;, Result&lt;T, Error&gt;, UnitResult&lt;Error&gt;.
     /// If the shape is unrecognized, we treat as success (commit).
     /// </summary>
     private static class ResultShape<T>
@@ -140,6 +147,8 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
             return _getError(value);
         }
 
+        [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2090:UnrecognizedReflectionPattern",
+            Justification = "Property access for Result<T> pattern is safe and intentional")]
         private static Func<T, bool>? CompileIsSuccess()
         {
             var t = typeof(T);
@@ -151,6 +160,8 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse> : IPipelineBehavior<
             return Expression.Lambda<Func<T, bool>>(body, p).Compile();
         }
 
+        [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2090:UnrecognizedReflectionPattern",
+            Justification = "Property access for Result<T> error handling is safe and intentional")]
         private static Func<T, Error?>? CompileGetError()
         {
             var t = typeof(T);

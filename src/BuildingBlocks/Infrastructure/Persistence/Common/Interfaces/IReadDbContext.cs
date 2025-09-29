@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
@@ -12,7 +13,7 @@ public interface IReadDbContext<TModule> : IDbContext where TModule : class
 
     /// <summary>No-tracking queryable for read models (advanced).</summary>
     [EditorBrowsable(EditorBrowsableState.Advanced)]
-    IQueryable<TReadModel> Query<TReadModel>() where TReadModel : class;
+    IQueryable<TReadModel> Query<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.NonPublicFields | DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties | DynamicallyAccessedMemberTypes.Interfaces)] TReadModel>() where TReadModel : class;
 
     /// <summary>Execute a compiled query (advanced/perf-sensitive paths).</summary>
     [EditorBrowsable(EditorBrowsableState.Advanced)]

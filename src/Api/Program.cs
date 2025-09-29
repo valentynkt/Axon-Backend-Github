@@ -189,9 +189,14 @@ app.UseMiddleware<RateLimitObservabilityMiddleware>();
 // Configure routing
 app.UseRouting();
 
-// Authentication and authorization
-app.UseAuthentication();
-app.UseAuthorization();
+// Authentication and authorization (skip JWT validation for exchange endpoint)
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api/v1/auth/exchange"),
+    appBuilder =>
+    {
+        appBuilder.UseAuthentication();
+        appBuilder.UseAuthorization();
+    });
 
 // Configure FastEndpoints (before MVC controllers)
 app.UseFastEndpoints();

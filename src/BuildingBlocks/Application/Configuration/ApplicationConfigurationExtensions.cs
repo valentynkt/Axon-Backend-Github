@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BuildingBlocks.Application.Configuration;
 
 /// <summary>
-/// Central place to wire Application-layer services & behaviors.
+/// Central place to wire Application-layer services and behaviors.
 /// </summary>
 public static class ApplicationConfigurationExtensions
 {

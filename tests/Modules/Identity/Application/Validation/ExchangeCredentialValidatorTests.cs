@@ -35,8 +35,8 @@ public class ExchangeCredentialValidatorTests
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor(x => x.UserData)
-                .WithErrorMessage("User data is required");
+            result.ShouldHaveValidationErrorFor(x => x.BearerToken)
+                .WithErrorMessage("Bearer token cannot be null or empty");
         }
 
         [Test]
@@ -44,7 +44,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData();
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -69,7 +69,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData() with { AxonUserId = userId! };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -85,7 +85,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var longAxonUserId = new string('a', 257); // Exceeds 256 character limit
             var userData = CreateValidExchangeUserData() with { AxonUserId = longAxonUserId };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -101,7 +101,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var maxLengthAxonUserId = new string('a', 256);
             var userData = CreateValidExchangeUserData() with { AxonUserId = maxLengthAxonUserId };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -118,7 +118,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData() with { Email = email! };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -136,7 +136,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData() with { Email = email };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -152,7 +152,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var longEmail = $"{new string('a', 310)}@example.com"; // Exceeds 320 character limit
             var userData = CreateValidExchangeUserData() with { Email = longEmail };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -171,7 +171,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData() with { Email = email };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -187,14 +187,14 @@ public class ExchangeCredentialValidatorTests
         public void Validate_WithInvalidEnvironmentId_Should_HaveValidationError(string? environmentId)
         {
             // Arrange
-            var userData = CreateValidExchangeUserData() with { EnvironmentId = environmentId! };
-            var command = new ExchangeCredentialCommand(userData);
+            var userData = CreateValidExchangeUserData() with { DynamicEnvironmentId = environmentId! };
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor("UserData.EnvironmentId")
+            result.ShouldHaveValidationErrorFor("UserData.DynamicEnvironmentId")
                 .WithErrorMessage("Environment ID is required");
         }
 
@@ -203,14 +203,14 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var longEnvironmentId = new string('a', 257); // Exceeds 256 character limit
-            var userData = CreateValidExchangeUserData() with { EnvironmentId = longEnvironmentId };
-            var command = new ExchangeCredentialCommand(userData);
+            var userData = CreateValidExchangeUserData() with { DynamicEnvironmentId = longEnvironmentId };
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
-            result.ShouldHaveValidationErrorFor("UserData.EnvironmentId")
+            result.ShouldHaveValidationErrorFor("UserData.DynamicEnvironmentId")
                 .WithErrorMessage("Environment ID must not exceed 256 characters");
         }
 
@@ -219,7 +219,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData() with { Wallets = null! };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -234,7 +234,7 @@ public class ExchangeCredentialValidatorTests
         {
             // Arrange
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData>() };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -260,7 +260,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Address = address! };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -277,7 +277,7 @@ public class ExchangeCredentialValidatorTests
             var longAddress = new string('a', 257); // Exceeds 256 character limit
             var walletData = CreateValidExchangeWalletData() with { Address = longAddress };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -296,7 +296,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Address = address };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -316,7 +316,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Address = address };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -334,7 +334,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Chain = chain! };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -351,7 +351,7 @@ public class ExchangeCredentialValidatorTests
             var longChain = new string('a', 51); // Exceeds 50 character limit
             var walletData = CreateValidExchangeWalletData() with { Chain = longChain };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -370,7 +370,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Chain = chain };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -392,7 +392,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Chain = chain };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -408,7 +408,7 @@ public class ExchangeCredentialValidatorTests
             var longWalletName = new string('a', 101); // Exceeds 100 character limit
             var walletData = CreateValidExchangeWalletData() with { WalletName = longWalletName };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -424,7 +424,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { WalletName = "" };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -440,7 +440,7 @@ public class ExchangeCredentialValidatorTests
             var longProvider = new string('a', 51); // Exceeds 50 character limit
             var walletData = CreateValidExchangeWalletData() with { Provider = longProvider };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -456,7 +456,7 @@ public class ExchangeCredentialValidatorTests
             // Arrange
             var walletData = CreateValidExchangeWalletData() with { Provider = "" };
             var userData = CreateValidExchangeUserData() with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -487,7 +487,7 @@ public class ExchangeCredentialValidatorTests
                 }
             };
             var userData = CreateValidExchangeUserData() with { Wallets = wallets };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -507,7 +507,7 @@ public class ExchangeCredentialValidatorTests
                 CreateValidExchangeWalletData() with { Chain = "" } // Invalid chain
             };
             var userData = CreateValidExchangeUserData() with { Wallets = wallets };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -533,7 +533,7 @@ public class ExchangeCredentialValidatorTests
                 });
             }
             var userData = CreateValidExchangeUserData() with { Wallets = wallets };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -558,9 +558,9 @@ public class ExchangeCredentialValidatorTests
             {
                 AxonUserId = "user-123_test.special+chars",
                 Email = "user.name+tag@example-domain.com",
-                EnvironmentId = "env-123_test-special"
+                DynamicEnvironmentId = "env-123_test-special"
             };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -577,16 +577,16 @@ public class ExchangeCredentialValidatorTests
             {
                 AxonUserId = "用户123",
                 Email = "test@example.com", // Keep email ASCII for validity
-                EnvironmentId = "环境123"
+                DynamicEnvironmentId = "环境123"
             };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
 
             // Assert
             result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
-            result.ShouldNotHaveValidationErrorFor("UserData.EnvironmentId");
+            result.ShouldNotHaveValidationErrorFor("UserData.DynamicEnvironmentId");
         }
 
         [Test]
@@ -597,7 +597,7 @@ public class ExchangeCredentialValidatorTests
             {
                 AxonUserId = new string('a', 256), // Exactly at limit
                 Email = $"{new string('a', 307)}@example.com", // Exactly at 320 limit (307 + 13 = 320)
-                EnvironmentId = new string('a', 256) // Exactly at limit
+                DynamicEnvironmentId = new string('a', 256) // Exactly at limit
             };
 
             var walletData = CreateValidExchangeWalletData() with
@@ -609,7 +609,7 @@ public class ExchangeCredentialValidatorTests
             };
 
             userData = userData with { Wallets = new List<ExchangeWalletData> { walletData } };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -625,9 +625,9 @@ public class ExchangeCredentialValidatorTests
             var userData = CreateValidExchangeUserData() with
             {
                 AxonUserId = "<script>alert('xss')</script>",
-                EnvironmentId = "'; DROP TABLE users; --"
+                DynamicEnvironmentId = "'; DROP TABLE users; --"
             };
-            var command = new ExchangeCredentialCommand(userData);
+            var command = new ExchangeCredentialCommand("valid-bearer-token");
 
             // Act
             var result = _validator.TestValidate(command);
@@ -636,7 +636,7 @@ public class ExchangeCredentialValidatorTests
             // Should pass validation since these are just strings being validated for length/format
             // The actual security protection happens at other layers
             result.ShouldNotHaveValidationErrorFor("UserData.AxonUserId");
-            result.ShouldNotHaveValidationErrorFor("UserData.EnvironmentId");
+            result.ShouldNotHaveValidationErrorFor("UserData.DynamicEnvironmentId");
         }
     }
 
@@ -649,7 +649,7 @@ public class ExchangeCredentialValidatorTests
         return new ExchangeUserData(
             AxonUserId: "test-user-123",
             Email: "test@example.com",
-            EnvironmentId: "test-env-456",
+            DynamicEnvironmentId: "test-env-456",
             Wallets: new List<ExchangeWalletData>
             {
                 CreateValidExchangeWalletData()

@@ -183,7 +183,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         principal.LinkWalletOwnership(ownership, NoConflictResolver);
 
         // Act
-        var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestConstants.SolanaChain, walletId);
+        var result = principal.ApplyChainDefault( TestConstants.SolanaChain, walletId);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -197,7 +197,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var walletId = WalletId.New();
 
         // Act
-        var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, TestConstants.SolanaChain, walletId);
+        var result = principal.ApplyChainDefault( TestConstants.SolanaChain, walletId);
 
         // Assert
         result.IsFailure.ShouldBeTrue();

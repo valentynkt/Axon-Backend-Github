@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -97,7 +98,7 @@ public static class CacheKeyBuilder
     /// <summary>
     /// Creates a filtered object excluding volatile properties and [CacheKeyIgnore] marked properties
     /// </summary>
-    private static Dictionary<string, object?> CreateFilteredObject<TRequest>(TRequest request)
+    private static Dictionary<string, object?> CreateFilteredObject<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest>(TRequest request)
     {
         var requestType = typeof(TRequest);
         var properties = requestType.GetProperties(BindingFlags.Public | BindingFlags.Instance);

@@ -25,7 +25,7 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
     {
         // Arrange
         var scenario = await SetupConversationWithMessages();
-        var firstMessage = scenario.conversation.Messages.First();
+        var firstMessage = scenario.conversation.GetAllMessages().First();
 
         // Act
         var result = await MessageReadRepository.GetByIdAsync(firstMessage.Id);
@@ -83,9 +83,11 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var scenario2 = await SetupConversationWithMessages();
 
         // Act
-        var conversation1Messages = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var conversation1Messages = allMessages
             .Where(m => m.ConversationId == scenario1.conversation.Id)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         conversation1Messages.ShouldNotBeNull();
@@ -104,13 +106,15 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var scenario = await SetupConversationWithMessages();
 
         // Act
-        var userMessages = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var userMessages = allMessages
             .Where(m => m.Role == MessageRole.User)
-            .ToListAsync();
+            .ToList();
 
-        var assistantMessages = await ReadDbContext.Set<Message>()
+        var assistantMessages = allMessages
             .Where(m => m.Role == MessageRole.Assistant)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         userMessages.ShouldNotBeNull();
@@ -131,10 +135,12 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var scenario = await SetupConversationWithMessages();
 
         // Act
-        var orderedMessages = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var orderedMessages = allMessages
             .Where(m => m.ConversationId == scenario.conversation.Id)
             .OrderBy(m => m.Sequence)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         orderedMessages.ShouldNotBeNull();
@@ -163,9 +169,8 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         // Arrange
         var scenario = await SetupConversationWithSpecificContent();
 
-        // Act - Use client evaluation for SQLite compatibility
-        var helpMessages = await ReadDbContext.Set<Message>()
-            .ToListAsync();
+        // Act - Access messages through repository
+        var helpMessages = await MessageReadRepository.ListAsync();
 
         var filteredMessages = helpMessages
             .Where(m => m.Content.Value.Contains("help", StringComparison.OrdinalIgnoreCase))
@@ -182,13 +187,15 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
     {
         // Arrange
         var scenario = await SetupConversationWithMessages();
-        var assistantMessage = scenario.conversation.Messages
+        var assistantMessage = scenario.conversation.GetAllMessages()
             .First(m => m.Role.IsAssistant);
 
         // Act
-        var result = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var result = allMessages
             .Where(m => m.AiResponseId == assistantMessage.AiResponseId)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         result.ShouldNotBeNull();
@@ -204,11 +211,13 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var scenario = await SetupLargeConversation();
 
         // Act
-        var middleMessages = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var middleMessages = allMessages
             .Where(m => m.ConversationId == scenario.conversation.Id &&
                        m.Sequence >= 3 && m.Sequence <= 7)
             .OrderBy(m => m.Sequence)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         middleMessages.ShouldNotBeNull();
@@ -229,9 +238,11 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
 
         // Act
         var startTime = DateTime.UtcNow;
-        var messages = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var messages = allMessages
             .Where(m => m.ConversationId == scenario.conversation.Id)
-            .ToListAsync();
+            .ToList();
         var endTime = DateTime.UtcNow;
 
         var duration = endTime - startTime;
@@ -248,19 +259,22 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var scenario = await SetupLargeConversation(20);
 
         // Act
-        var firstPage = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var conversationMessages = allMessages
             .Where(m => m.ConversationId == scenario.conversation.Id)
             .OrderBy(m => m.Sequence)
+            .ToList();
+
+        var firstPage = conversationMessages
             .Skip(0)
             .Take(5)
-            .ToListAsync();
+            .ToList();
 
-        var secondPage = await ReadDbContext.Set<Message>()
-            .Where(m => m.ConversationId == scenario.conversation.Id)
-            .OrderBy(m => m.Sequence)
+        var secondPage = conversationMessages
             .Skip(5)
             .Take(5)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         firstPage.Count.ShouldBe(5);
@@ -282,10 +296,11 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         // Arrange
         var scenario = await SetupConversationWithMessages();
 
-        // Act - Remove invalid Include since Message doesn't have navigation back to Conversation
-        var messagesWithConversation = await ReadDbContext.Set<Message>()
+        // Act - Access messages through repository
+        var allMessages = await MessageReadRepository.ListAsync();
+        var messagesWithConversation = allMessages
             .Where(m => m.ConversationId == scenario.conversation.Id)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         messagesWithConversation.ShouldNotBeNull();
@@ -300,11 +315,13 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var scenario = await SetupConversationWithMessages();
 
         // Act
-        var messagesByRole = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var messagesByRole = allMessages
             .Where(m => m.ConversationId == scenario.conversation.Id)
             .GroupBy(m => m.Role)
             .Select(g => new { Role = g.Key, Count = g.Count() })
-            .ToListAsync();
+            .ToList();
 
         // Assert
         messagesByRole.ShouldNotBeNull();
@@ -353,9 +370,11 @@ public sealed class MessageReadRepositoryTests : ChatPersistenceTestBase
         var nonExistentConversationId = ConversationId.New();
 
         // Act
-        var result = await ReadDbContext.Set<Message>()
+        // Access messages through the repository which queries via aggregate root
+        var allMessages = await MessageReadRepository.ListAsync();
+        var result = allMessages
             .Where(m => m.ConversationId == nonExistentConversationId)
-            .ToListAsync();
+            .ToList();
 
         // Assert
         result.ShouldNotBeNull();

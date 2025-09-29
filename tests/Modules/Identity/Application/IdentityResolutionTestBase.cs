@@ -1,13 +1,12 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
-using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using Microsoft.Extensions.Time.Testing;
 using BuildingBlocks.Core.Diagnostics.Errors;
@@ -27,13 +26,12 @@ namespace Axon.Modules.Identity.Application;
 /// Provides mock infrastructure for testing resolution algorithm without external dependencies.
 /// </summary>
 [TestFixture]
-public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
+public abstract class IdentityResolutionTestBase : ApplicationTestBase
 {
     #region Test Infrastructure
 
     protected IAxonPrincipalWriteRepository MockPrincipalRepository { get; private set; } = null!;
     protected IWalletWriteRepository MockWalletRepository { get; private set; } = null!;
-    protected IExchangeMetricsService MockMetricsService { get; private set; } = null!;
     protected ICurrentUserService MockCurrentUserService { get; private set; } = null!;
     protected IMemoryCache MockMemoryCache { get; private set; } = null!;
     protected IHttpContextAccessor MockHttpContextAccessor { get; private set; } = null!;
@@ -47,21 +45,21 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     #region Test Setup
 
     [SetUp]
-    public async Task SetUpAsync()
+    public override void SetUp()
     {
-        await base.SetUpBase();
+        base.SetUp();
 
         // Initialize mocks for Domain-level tests
         InitializeMocks();
 
-        // Create handler with mocked dependencies
+        // Create handler with mocked dependencies for new simplified constructor
+        var mockOrchestrator = Substitute.For<IAuthenticationOrchestrator>();
+        var mockJwtTokenService = Substitute.For<IJwtTokenService>();
+
         ExchangeHandler = new ExchangeCredentialHandler(
             MockCurrentUserService,
-            MockPrincipalRepository,
-            MockWalletRepository,
-            MockMetricsService,
-            MockMemoryCache,
-            MockHttpContextAccessor,
+            mockOrchestrator,
+            mockJwtTokenService,
             MockLogger);
     }
 
@@ -69,7 +67,6 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     {
         MockPrincipalRepository = Substitute.For<IAxonPrincipalWriteRepository>();
         MockWalletRepository = Substitute.For<IWalletWriteRepository>();
-        MockMetricsService = Substitute.For<IExchangeMetricsService>();
         MockCurrentUserService = Substitute.For<ICurrentUserService>();
         MockMemoryCache = Substitute.For<IMemoryCache>();
         MockHttpContextAccessor = Substitute.For<IHttpContextAccessor>();
@@ -86,7 +83,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
         // MockTimeProvider is already set in InitializeMocks
 
         // Configure memory cache to behave normally
-        MockMemoryCache.TryGetValue(Arg.Any<object>(), out Arg.Any<object>()).Returns(false);
+        MockMemoryCache.TryGetValue(Arg.Any<object>(), out Arg.Any<object?>()).Returns(false);
 
         // Configure HTTP context
         var mockHttpContext = Substitute.For<HttpContext>();
@@ -102,16 +99,9 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// Creates an ExchangeCredentialCommand for Dynamic JWT resolution testing.
     /// </summary>
     protected static ExchangeCredentialCommand CreateDynamicExchangeCommand(
-        string axonUserId = "test_user_123",
-        string environmentId = TestDataFixtures.MainnetEnvironment,
-        List<ExchangeWalletData>? wallets = null)
+        string axonUserId = "test_user_123")
     {
-        return new ExchangeCredentialCommand(
-            new ExchangeUserData(
-                AxonUserId: axonUserId,
-                Email: "test@example.com",
-                EnvironmentId: environmentId,
-                Wallets: wallets ?? new List<ExchangeWalletData>()));
+        return new ExchangeCredentialCommand($"bearer-token-{axonUserId}");
     }
 
     /// <summary>
@@ -211,9 +201,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
         var principal = TestDataFixtures.CreatePrincipalA();
 
         // Create command that should resolve to this principal via credential
-        var command = CreateDynamicExchangeCommand(
-            TestDataFixtures.DynA_Subject,
-            TestDataFixtures.MainnetEnvironment);
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock repository to return this principal for credential lookup
         MockCredentialResolution(principal);
@@ -236,8 +224,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand("test_user_123");
 
         // Mock no credential match (force wallet resolution)
         MockNoCredentialMatch();
@@ -290,8 +277,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand("test_user_123");
 
         // Mock no credential and no verified owners (will need domain logic for tie-breaking)
         MockNoCredentialMatch();
@@ -314,10 +300,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     protected ExchangeCredentialCommand SetupNewPrincipalScenario()
     {
         // Create command with unknown credential and wallet
-        var walletData = CreateWalletExchangeData("UnknownWalletAddress123");
-        var command = CreateDynamicExchangeCommand(
-            "unknown_user_789",
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand("unknown_user_789");
 
         // Mock no matches anywhere
         MockNoCredentialMatch();
@@ -337,6 +320,17 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
 
     #endregion
 
+    #region Cleanup
+
+    [TearDown]
+    public override void TearDown()
+    {
+        MockMemoryCache?.Dispose();
+        base.TearDown();
+    }
+
+    #endregion
+
     #region Assertion Helpers
 
     /// <summary>
@@ -344,6 +338,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// </summary>
     protected static void AssertCredentialResolution(ExchangeOutcome outcome, AxonUserId expectedPrincipalId)
     {
+        ArgumentNullException.ThrowIfNull(outcome);
         outcome.AxonUserId.ShouldBe(expectedPrincipalId);
         outcome.Created.ShouldBeFalse(); // Existing principal
     }
@@ -353,6 +348,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// </summary>
     protected static void AssertWalletResolution(ExchangeOutcome outcome, AxonUserId expectedPrincipalId)
     {
+        ArgumentNullException.ThrowIfNull(outcome);
         outcome.AxonUserId.ShouldBe(expectedPrincipalId);
         outcome.Created.ShouldBeFalse(); // Existing principal
         outcome.WalletsLinked.ShouldBeGreaterThan(0); // Wallet was processed
@@ -363,6 +359,7 @@ public abstract class IdentityResolutionTestBase : IdentityDbInvariantsTestBase
     /// </summary>
     protected static void AssertNewPrincipalCreation(ExchangeOutcome outcome)
     {
+        ArgumentNullException.ThrowIfNull(outcome);
         outcome.Created.ShouldBeTrue(); // New principal
         outcome.AxonUserId.ShouldNotBe(default(AxonUserId)); // Principal was created
     }

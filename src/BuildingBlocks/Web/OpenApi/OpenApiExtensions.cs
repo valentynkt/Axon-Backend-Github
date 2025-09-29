@@ -37,6 +37,8 @@ namespace BuildingBlocks.Web.OpenApi
 
         public static IApplicationBuilder UseAspnetOpenApi(this WebApplication app)
         {
+            ArgumentNullException.ThrowIfNull(app);
+
             var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
             var logger = loggerFactory.CreateLogger("OpenApi");
             
@@ -71,7 +73,7 @@ namespace BuildingBlocks.Web.OpenApi
 
             // Log API documentation URLs
             var urls = app.Urls.FirstOrDefault() ?? "https://localhost:7204";
-            if (urls.Contains(';'))
+            if (urls.Contains(';', StringComparison.Ordinal))
             {
                 // If multiple URLs, prefer HTTPS
                 var urlList = urls.Split(';');

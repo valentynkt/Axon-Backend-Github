@@ -42,16 +42,19 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
             .Map(dest => dest.Conflicts, src => src.Conflicts);
 
         // CurrentUserResult -> GetCurrentUserResponseDto
-        // Map from new CurrentUserResult structure to existing API contract
+        // Map from new CurrentUserResult structure to simplified API contract per architecture
         config.NewConfig<CurrentUserResult, GetCurrentUserResponseDto>()
-            .Map(dest => dest.AxonUserId, src => src.Profile.AxonUserId)
-            .Map(dest => dest.Subject, src => src.Profile.Subject) // Use actual subject from JWT
-            .Map(dest => dest.IsAuthenticated, src => true) // Always true if we have a result
-            .Map(dest => dest.Claims, src => new Dictionary<string, object>
-            {
-                { "risk_tier", src.Profile.RiskTier },
-                { "wallet_count", src.Wallets.Count },
-                { "chain_defaults", src.ChainDefaults }
-            });
+            .Map(dest => dest.Profile, src => new UserProfileDto(
+                src.Profile.AxonId,
+                src.Profile.RiskTier
+            ))
+            .Map(dest => dest.Wallets, src => src.Wallets.Select(w => new WalletInfoDto(
+                w.Chain,
+                w.Address,
+                w.State,
+                w.Access,
+                w.IsDefault
+            )).ToArray())
+            .Map(dest => dest.ETag, src => $"{src.Profile.AxonId}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}");
     }
 }

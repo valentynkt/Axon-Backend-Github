@@ -22,6 +22,7 @@ namespace BuildingBlocks.Application.Behaviors;
 public sealed class QueryCachingBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>
     where TRequest : IQuery<TValue>, ICacheableQuery
+    where TValue : notnull
 {
 
     private readonly IMemoryCache _memory;
@@ -46,6 +47,8 @@ public sealed class QueryCachingBehavior<TRequest, TValue>
         RequestHandlerDelegate<Result<TValue, Error>> next,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         if (!request.UseCache) return await next();
         var ttl = request.CacheDuration ?? TimeSpan.FromMinutes(5);
         if (ttl <= TimeSpan.Zero) return await next();

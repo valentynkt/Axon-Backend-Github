@@ -1,5 +1,7 @@
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence.Context;
+using BuildingBlocks.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -11,20 +13,18 @@ using Microsoft.Extensions.Logging;
 namespace Axon.Api.Tests.Common;
 
 /// <summary>
-/// Test-specific WebApplicationFactory that configures SQLite databases for testing.
-/// Replaces PostgreSQL with SQLite to avoid external dependencies and ensure test isolation.
+/// Test-specific WebApplicationFactory that configures PostgreSQL databases for testing.
+/// Uses Testcontainers for consistent PostgreSQL testing across all environments.
 /// </summary>
 public class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string _databaseName;
-
+    private PostgreSqlTestBase _testBase = null!;
     private Action<IServiceCollection>? _additionalServices;
     private string _environment = "Test";
 
     public TestWebApplicationFactory()
     {
-        // Create unique database name for each test instance to ensure isolation
-        _databaseName = $"TestDb_{Guid.NewGuid():N}";
+        _testBase = new TestPostgreSqlTestBase();
     }
 
     public TestWebApplicationFactory WithServices(Action<IServiceCollection> configureServices)
@@ -39,23 +39,43 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
         return this;
     }
 
+    public async Task InitializeAsync()
+    {
+        // Initialize the PostgreSQL container
+        await _testBase.OneTimeSetUpPostgreSql();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        // Clean up the PostgreSQL container
+        await _testBase.OneTimeTearDownPostgreSql();
+        await base.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration(configBuilder =>
+        builder.ConfigureAppConfiguration((context, configBuilder) =>
         {
-            // Override configuration to disable automatic migrations
+            // Build configuration to get existing settings first
+            var existingConfig = configBuilder.Build();
+
+            // Override configuration to disable automatic migrations and use test connection
+            // Add these settings with higher priority to ensure they override appsettings files
             var testConfig = new Dictionary<string, string>
             {
-                {"DatabaseOptions:EnableAutomaticMigrations", "false"}
+                {"DatabaseOptions:EnableAutomaticMigrations", "false"},
+                {"ConnectionStrings:DefaultConnection", _testBase.GetConnectionString()}
             };
 
+            // Add as the last configuration source to ensure highest priority
             configBuilder.AddInMemoryCollection(testConfig!);
         });
 
         builder.ConfigureServices((context, services) =>
         {
             // Replace database configuration by removing all DbContext related services
-            // and re-registering them with SQLite
+            // and re-registering them with PostgreSQL
 
             // Find and remove all existing database context registrations
             var contextsToRemove = new[]
@@ -64,10 +84,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 typeof(ChatReadDbContext),
                 typeof(IdentityWriteDbContext),
                 typeof(IdentityReadDbContext),
+                typeof(IdentityContext),
                 typeof(DbContextOptions<ChatDbContext>),
                 typeof(DbContextOptions<ChatReadDbContext>),
                 typeof(DbContextOptions<IdentityWriteDbContext>),
-                typeof(DbContextOptions<IdentityReadDbContext>)
+                typeof(DbContextOptions<IdentityReadDbContext>),
+                typeof(DbContextOptions<IdentityContext>)
             };
 
             foreach (var contextType in contextsToRemove)
@@ -88,34 +110,37 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(service);
             }
 
-            // Re-register with SQLite
+            // Re-register with PostgreSQL using the shared connection string
             services.AddDbContext<ChatDbContext>(options =>
             {
-                options.UseSqlite($"Data Source={_databaseName}_Chat.db");
-                options.UseSnakeCaseNamingConvention();
+                options.UseNpgsql(_testBase.GetConnectionString());
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
             services.AddDbContext<ChatReadDbContext>(options =>
             {
-                options.UseSqlite($"Data Source={_databaseName}_Chat.db");
-                options.UseSnakeCaseNamingConvention();
+                options.UseNpgsql(_testBase.GetConnectionString());
                 options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
             services.AddDbContext<IdentityWriteDbContext>(options =>
             {
-                options.UseSqlite($"Data Source={_databaseName}_Identity.db");
-                options.UseSnakeCaseNamingConvention();
+                options.UseNpgsql(_testBase.GetConnectionString());
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
             services.AddDbContext<IdentityReadDbContext>(options =>
             {
-                options.UseSqlite($"Data Source={_databaseName}_Identity.db");
-                options.UseSnakeCaseNamingConvention();
+                options.UseNpgsql(_testBase.GetConnectionString());
                 options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+                options.EnableSensitiveDataLogging();
+            }, ServiceLifetime.Scoped);
+
+            // Add IdentityContext for ASP.NET Identity Framework
+            services.AddDbContext<IdentityContext>(options =>
+            {
+                options.UseNpgsql(_testBase.GetConnectionString());
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
@@ -128,6 +153,9 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
+        // Initialize PostgreSQL container first
+        _testBase.OneTimeSetUpPostgreSql().GetAwaiter().GetResult();
+
         var host = base.CreateHost(builder);
 
         // Create databases after the host is built and service provider is available
@@ -135,13 +163,17 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
         {
             try
             {
-                // Create Chat database
+                // Create Chat database using migrations
                 var chatContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
-                chatContext.Database.EnsureCreated();
+                chatContext.Database.Migrate();
 
-                // Create Identity database
+                // Create Identity database using migrations
                 var identityContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
-                identityContext.Database.EnsureCreated();
+                identityContext.Database.Migrate();
+
+                // Create IdentityContext database using migrations
+                var mainIdentityContext = scope.ServiceProvider.GetRequiredService<IdentityContext>();
+                mainIdentityContext.Database.Migrate();
             }
             catch (Exception ex)
             {
@@ -154,53 +186,21 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
         return host;
     }
 
-    private static void RemoveDbContextServices(IServiceCollection services)
-    {
-        // Remove DbContextOptions for all contexts
-        RemoveService<DbContextOptions<ChatDbContext>>(services);
-        RemoveService<DbContextOptions<ChatReadDbContext>>(services);
-        RemoveService<DbContextOptions<IdentityWriteDbContext>>(services);
-        RemoveService<DbContextOptions<IdentityReadDbContext>>(services);
-
-        // Remove the actual DbContext services
-        RemoveService<ChatDbContext>(services);
-        RemoveService<ChatReadDbContext>(services);
-        RemoveService<IdentityWriteDbContext>(services);
-        RemoveService<IdentityReadDbContext>(services);
-    }
-
-    private static void RemoveService<TService>(IServiceCollection services)
-    {
-        var descriptors = services.Where(d => d.ServiceType == typeof(TService)).ToList();
-        foreach (var descriptor in descriptors)
-        {
-            services.Remove(descriptor);
-        }
-    }
-
-
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            // Clean up test database files
-            try
-            {
-                var chatDbFile = $"{_databaseName}_Chat.db";
-                var identityDbFile = $"{_databaseName}_Identity.db";
-
-                if (File.Exists(chatDbFile))
-                    File.Delete(chatDbFile);
-
-                if (File.Exists(identityDbFile))
-                    File.Delete(identityDbFile);
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
+            // Clean up test resources - no dispose needed for PostgreSqlTestBase
         }
 
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Private implementation of PostgreSqlTestBase for container management
+    /// </summary>
+    private class TestPostgreSqlTestBase : PostgreSqlTestBase
+    {
+        // This class is just to access the protected PostgreSqlTestBase functionality
     }
 }

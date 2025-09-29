@@ -149,6 +149,147 @@ public class ExchangeTokenEndpointTests
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Test]
+    public async Task HandleAsync_WhenMissingAuthorizationHeader_Returns401()
+    {
+        // Arrange - Remove authorization header
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenInvalidAuthorizationHeader_Returns401()
+    {
+        // Arrange - Set invalid authorization header format
+        _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", "invalid-format");
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenDynamicServiceUnavailable_Returns500()
+    {
+        // Arrange - Mock Dynamic service to return internal error
+        _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<DynamicUserData, Error>(Error.Internal("Dynamic service unavailable", "DYNAMIC.SERVICE_ERROR")));
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenWalletConflict_Returns409()
+    {
+        // Arrange - Mock scenario where wallet is owned by another principal
+        var conflictError = Error.Conflict("Wallet is already owned by another principal", "WALLET.OWNERSHIP_CONFLICT");
+        _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<DynamicUserData, Error>(conflictError));
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenValidRequest_SetsNoCacheHeaders()
+    {
+        // Arrange
+        _mockCurrentUserService.AxonUserId.Returns("test-user-id");
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.CacheControl?.NoStore.ShouldBeTrue();
+        response.Headers.Pragma?.FirstOrDefault()?.Name.ShouldBe("no-cache");
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenMultipleWallets_ProcessesAllWallets()
+    {
+        // Arrange - Mock validation result with multiple wallets
+        var multiWalletResult = new DynamicUserData(
+            AxonUserId: "test-user-id",
+            Email: "test@example.com",
+            EnvironmentId: "test-env",
+            Wallets: new List<WalletData>
+            {
+                new(
+                    Id: "wallet-1",
+                    Address: "0x742d35Cc6634C0532925a3b8D2aE39e7ec5B8e41",
+                    Chain: "ethereum",
+                    WalletName: "MetaMask",
+                    Provider: "metamask",
+                    ConnectedAtUtc: DateTimeOffset.UtcNow
+                ),
+                new(
+                    Id: "wallet-2",
+                    Address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWS",
+                    Chain: "solana",
+                    WalletName: "Phantom",
+                    Provider: "phantom",
+                    ConnectedAtUtc: DateTimeOffset.UtcNow
+                )
+            },
+            FirstVisitUtc: DateTimeOffset.UtcNow,
+            LastVisitUtc: DateTimeOffset.UtcNow,
+            IsNewUser: false
+        );
+
+        _mockDynamicAuthService.ValidateTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<DynamicUserData, Error>(multiWalletResult));
+
+        _mockCurrentUserService.AxonUserId.Returns("test-user-id");
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var exchangeResponse = JsonSerializer.Deserialize<ExchangeTokenResponse>(content, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        exchangeResponse.ShouldNotBeNull();
+        exchangeResponse.WalletsProcessed.ShouldBe(2);
+        exchangeResponse.WalletsLinked.ShouldBe(2);
+        exchangeResponse.DefaultsApplied.ShouldBe(2); // One default per chain
+    }
+
+    [Test]
+    public async Task HandleAsync_WhenTokenGenerationFails_Returns500()
+    {
+        // Arrange - Mock GetRawClaimsAsync to fail
+        _mockDynamicAuthService.GetRawClaimsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<ClaimsPrincipal, Error>(Error.Internal("Token generation failed", "TOKEN.GENERATION_ERROR")));
+
+        _mockCurrentUserService.AxonUserId.Returns("test-user-id");
+
+        // Act
+        var response = await _client.PostAsync("/api/v1/auth/exchange", new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+    }
+
     private record ExchangeTokenResponse(
         string AxonUserId,
         bool Created,

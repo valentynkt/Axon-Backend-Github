@@ -56,21 +56,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         // Assert
         await AssertConversationCompletelyLoadedAsync(conversation.Id);
 
+        // Load the conversation with its messages through the aggregate root
         var savedConversation = await QueryFreshAsync(
-            () => DbContext.Conversations
-                .FirstOrDefaultAsync(c => c.Id == conversation.Id));
+            () => ConversationRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
 
-        // Verify messages were saved separately since Messages property is ignored in read context
-        var savedMessages = await QueryFreshAsync(async () =>
-        {
-            var result = await DbContext.Set<Message>()
-                .Where(m => m.ConversationId == conversation.Id)
-                .OrderBy(m => m.Sequence)
-                .ToListAsync();
-            return result;
-        });
+        // Access messages through the aggregate root's methods
+        var savedMessages = savedConversation.GetAllMessages();
 
         savedMessages.ShouldNotBeNull();
         savedMessages.Count.ShouldBe(4); // 2 user + 2 assistant messages
@@ -122,7 +115,8 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var freshConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
         freshConversation.ShouldNotBeNull();
 
-        // Act
+        // Act - advance time to ensure UpdatedAt will be greater
+        AdvanceTime(TimeSpan.FromMinutes(1));
         var updateResult = freshConversation.UpdateTitle(newTitle, TimeProvider);
         updateResult.IsSuccess.ShouldBeTrue();
 
@@ -171,21 +165,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
+        // Load the conversation with its messages through the aggregate root
         var savedConversation = await QueryFreshAsync(
-            () => DbContext.Conversations
-                .FirstOrDefaultAsync(c => c.Id == conversation.Id));
+            () => ConversationRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
 
-        // Verify messages were saved separately since Messages property is ignored in read context
-        var savedMessages = await QueryFreshAsync(async () =>
-        {
-            var result = await DbContext.Set<Message>()
-                .Where(m => m.ConversationId == conversation.Id)
-                .OrderBy(m => m.Sequence)
-                .ToListAsync();
-            return result;
-        });
+        // Access messages through the aggregate root's methods
+        var savedMessages = savedConversation.GetAllMessages();
 
         savedMessages.ShouldNotBeNull();
         savedMessages.Count.ShouldBe(10);
@@ -232,21 +219,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
+        // Load the updated conversation with its messages through the aggregate root
         var updatedConversation = await QueryFreshAsync(
-            () => DbContext.Conversations
-                .FirstOrDefaultAsync(c => c.Id == conversation.Id));
+            () => ConversationRepository.GetByIdAsync(conversation.Id));
 
         updatedConversation.ShouldNotBeNull();
 
-        // Verify messages were saved separately since Messages property is ignored in read context
-        var updatedMessages = await QueryFreshAsync(async () =>
-        {
-            var result = await DbContext.Set<Message>()
-                .Where(m => m.ConversationId == conversation.Id)
-                .OrderBy(m => m.Sequence)
-                .ToListAsync();
-            return result;
-        });
+        // Access messages through the aggregate root's methods
+        var updatedMessages = updatedConversation.GetAllMessages();
 
         updatedMessages.ShouldNotBeNull();
         updatedMessages.Count.ShouldBe(2);
@@ -314,25 +294,41 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
     {
         // Arrange
         var conversation = await SaveConversationAsync(CreateTestConversation());
+        var conversationId = conversation.Id;
+        var initialVersion = conversation.Version;
 
-        // Get two instances of the same conversation
+        // Simulate first client: Load entity
         ClearChangeTracker();
-        var conversation1 = await ConversationRepository.GetByIdAsync(conversation.Id);
-        var conversation2 = await ConversationRepository.GetByIdAsync(conversation.Id);
-
+        var conversation1 = await ConversationRepository.GetByIdAsync(conversationId);
         conversation1.ShouldNotBeNull();
+        conversation1.Version.ShouldBe(initialVersion);
+
+        // Simulate second client: Load entity in a detached state
+        ClearChangeTracker();
+        var conversation2 = await ConversationRepository.GetByIdAsync(conversationId);
         conversation2.ShouldNotBeNull();
 
-        // Act & Assert
-        // First update should succeed
+        // Detach conversation2 to simulate it being loaded in a separate context
+        DbContext.Entry(conversation2).State = EntityState.Detached;
+
+        // Both should have the same Version initially
+        conversation2.Version.ShouldBe(initialVersion);
+
+        // First client updates and saves successfully
         var updateResult1 = conversation1.UpdateTitle("First Update", TimeProvider);
         updateResult1.IsSuccess.ShouldBeTrue();
         await ConversationRepository.UpdateAsync(conversation1);
         await UnitOfWork.SaveChangesAsync();
 
-        // Second update might fail due to concurrency (depends on SQLite behavior)
+        // Clear the tracker to simulate conversation2 coming from a different context
+        ClearChangeTracker();
+
+        // Second client tries to update with stale version - should fail
         var updateResult2 = conversation2.UpdateTitle("Second Update", TimeProvider);
         updateResult2.IsSuccess.ShouldBeTrue();
+
+        // The stale entity still has the original version
+        conversation2.Version.ShouldBe(initialVersion);
 
         AssertConcurrencyConflict(async () =>
         {
@@ -437,20 +433,34 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
     public async Task UpdateAsync_WithDetachedEntity_ShouldHandleGracefully()
     {
         // Arrange
-        var conversation = CreateTestConversation();
+        // First save a conversation
+        var conversation = await SaveConversationAsync(CreateTestConversation());
+        var originalTitle = conversation.Title;
 
-        // Act & Assert - This should either work or throw a specific exception
-        // The exact behavior depends on EF Core configuration
-        try
-        {
-            await ConversationRepository.UpdateAsync(conversation);
-            await UnitOfWork.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            // Expected for detached entities
-            ex.ShouldBeOfType<InvalidOperationException>();
-        }
+        // Clear the change tracker to detach all entities
+        ClearChangeTracker();
+
+        // Load the conversation again to get a detached copy
+        var detachedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        detachedConversation.ShouldNotBeNull();
+
+        // Detach it from the context
+        DbContext.Entry(detachedConversation).State = EntityState.Detached;
+
+        // Modify the detached entity
+        var updateResult = detachedConversation.UpdateTitle("Updated Title", TimeProvider);
+        updateResult.IsSuccess.ShouldBeTrue();
+
+        // Act - Update the detached entity
+        await ConversationRepository.UpdateAsync(detachedConversation);
+        await UnitOfWork.SaveChangesAsync();
+
+        // Assert - Verify it was saved
+        ClearChangeTracker();
+        var saved = await ConversationRepository.GetByIdAsync(conversation.Id);
+        saved.ShouldNotBeNull();
+        saved.Title.ShouldBe("Updated Title");
+        saved.Title.ShouldNotBe(originalTitle);
     }
 
     #endregion

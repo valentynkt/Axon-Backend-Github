@@ -244,8 +244,12 @@ public class AxonPrincipalTests : IdentityTestBase
             result.IsSuccess.ShouldBeTrue();
             principal.WalletOwnerships.ShouldHaveSingleItem().ShouldBe(ownership);
 
-            principal.DomainEvents.ShouldHaveSingleItem()
-                .ShouldBeOfType<OwnershipChangedEvent>()
+            // When linking a verified signing ownership, we expect 2 events
+            principal.DomainEvents.Count.ShouldBe(2);
+
+            // Verify the "linked" event
+            var linkedEvent = principal.DomainEvents.First(e => ((OwnershipChangedEvent)e).ChangeType == "linked");
+            linkedEvent.ShouldBeOfType<OwnershipChangedEvent>()
                 .ShouldSatisfyAllConditions(
                     e => e.PrincipalId.ShouldBe(principal.Id),
                     e => e.WalletId.ShouldBe(ownership.WalletId),
@@ -253,6 +257,10 @@ public class AxonPrincipalTests : IdentityTestBase
                     e => e.AccessMode.ShouldBe("Signing"),
                     e => e.Status.ShouldBe("Verified")
                 );
+
+            // Verify the "verified_signing_added" event for auto-revocation tracking
+            var verifiedSigningEvent = principal.DomainEvents.First(e => ((OwnershipChangedEvent)e).ChangeType == "verified_signing_added");
+            verifiedSigningEvent.ShouldNotBeNull();
         }
 
         [Test]
@@ -405,7 +413,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var walletId = ownership.WalletId;
 
             principal.LinkWalletOwnership(ownership, NoConflictResolver);
-            principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", walletId);
+            principal.ApplyChainDefault("ethereum-mainnet", walletId);
             principal.ClearDomainEvents();
 
             // Act
@@ -533,7 +541,7 @@ public class AxonPrincipalTests : IdentityTestBase
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", ownership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -561,11 +569,11 @@ public class AxonPrincipalTests : IdentityTestBase
             var principal = AxonPrincipal.CreateHuman();
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
             principal.LinkWalletOwnership(ownership, NoConflictResolver);
-            principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", ownership.WalletId);
+            principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", ownership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -581,7 +589,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var nonOwnedWalletId = WalletId.New();
 
             // Act
-            var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", nonOwnedWalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", nonOwnedWalletId);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -597,7 +605,7 @@ public class AxonPrincipalTests : IdentityTestBase
             principal.LinkWalletOwnership(watchOnlyOwnership, NoConflictResolver);
 
             // Act
-            var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", watchOnlyOwnership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", watchOnlyOwnership.WalletId);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -613,7 +621,7 @@ public class AxonPrincipalTests : IdentityTestBase
             principal.LinkWalletOwnership(pendingOwnership, NoConflictResolver);
 
             // Act
-            var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", pendingOwnership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", pendingOwnership.WalletId);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -629,7 +637,7 @@ public class AxonPrincipalTests : IdentityTestBase
 
             // Act & Assert
             Should.Throw<ArgumentNullException>(() =>
-                principal.ApplyChainDefault(NetworkEnvironment.Mainnet, null!, walletId));
+                principal.ApplyChainDefault(null!, walletId));
         }
 
         [Test]
@@ -642,11 +650,11 @@ public class AxonPrincipalTests : IdentityTestBase
 
             principal.LinkWalletOwnership(firstOwnership, NoConflictResolver);
             principal.LinkWalletOwnership(secondOwnership, NoConflictResolver);
-            principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", firstOwnership.WalletId);
+            principal.ApplyChainDefault("ethereum-mainnet", firstOwnership.WalletId);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.ApplyChainDefault(NetworkEnvironment.Mainnet, "ethereum-mainnet", secondOwnership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", secondOwnership.WalletId);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();

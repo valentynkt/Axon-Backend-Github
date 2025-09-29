@@ -20,6 +20,7 @@
     <ProjectReference Include="..\Domain\Axon.Modules.Chat.Domain.Tests.csproj" />
     <!-- BuildingBlocks for shared testing utilities -->
     <ProjectReference Include="..\..\..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Testing\BuildingBlocks.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,14 +46,13 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
 
     <!-- Time Provider for Testing -->
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.1.0" />
 
     <!-- Entity Framework for Integration Tests -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.8" />
+    <!-- Removed InMemory and SQLite - using PostgreSQL with Testcontainers -->
 
     <!-- Testcontainers for Integration Tests -->
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.6.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.7.0" />
 
     <!-- Coverage Collection -->
     <PackageReference Include="coverlet.collector" Version="6.0.2">

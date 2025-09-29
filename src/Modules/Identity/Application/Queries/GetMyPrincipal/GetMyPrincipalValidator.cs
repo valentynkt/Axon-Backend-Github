@@ -3,27 +3,16 @@ using FluentValidation;
 namespace Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 
 /// <summary>
-/// Validator for GetMyPrincipalQuery to ensure credential parameters are valid.
+/// Validator for the refactored GetMyPrincipalQuery that uses AxonPrincipalId directly.
+/// Simplified validation for the SOLID-compliant architecture.
 /// </summary>
 public sealed class GetMyPrincipalValidator : AbstractValidator<GetMyPrincipalQuery>
 {
     public GetMyPrincipalValidator()
     {
-        RuleFor(x => x.ProviderType)
-            .NotNull()
-            .WithMessage("Provider type is required");
-
-        RuleFor(x => x.Issuer)
-            .NotEmpty()
-            .WithMessage("Issuer is required")
-            .MaximumLength(255)
-            .WithMessage("Issuer cannot exceed 255 characters");
-
-        RuleFor(x => x.Subject)
-            .NotEmpty()
-            .WithMessage("Subject is required")
-            .MaximumLength(255)
-            .WithMessage("Subject cannot exceed 255 characters");
+        RuleFor(x => x.PrincipalId)
+            .Must(id => id.Value != Guid.Empty)
+            .WithMessage("Principal ID cannot be empty");
 
         RuleFor(x => x.IfNoneMatch)
             .MaximumLength(64)

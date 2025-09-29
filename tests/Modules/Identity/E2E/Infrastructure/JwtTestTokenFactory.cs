@@ -1,9 +1,10 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Axon.Modules.Identity.E2E.Infrastructure;
@@ -56,8 +57,8 @@ public static class JwtTestTokenFactory
             new("sub", subject),
             new("iss", issuer),
             new("aud", audience),
-            new("iat", new DateTimeOffset(iat).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
-            new("exp", new DateTimeOffset(exp).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new("iat", new DateTimeOffset(iat).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+            new("exp", new DateTimeOffset(exp).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
             new("jti", Guid.NewGuid().ToString())
         };
 

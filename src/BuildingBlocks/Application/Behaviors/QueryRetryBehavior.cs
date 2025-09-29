@@ -23,6 +23,7 @@ namespace BuildingBlocks.Application.Behaviors;
 public sealed class QueryRetryBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>
     where TRequest : IQuery<TValue>
+    where TValue : notnull
 {
     private readonly ILogger<QueryRetryBehavior<TRequest, TValue>> _logger;
 

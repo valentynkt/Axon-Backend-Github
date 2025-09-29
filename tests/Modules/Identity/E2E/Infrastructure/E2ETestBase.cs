@@ -1,6 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
 using System.Text;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Axon.Modules.Identity.Infrastructure.Persistence;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
@@ -309,7 +310,9 @@ public abstract class E2ETestBase : IAsyncDisposable
 
     #endregion
 
+#pragma warning disable NUnit1028 // Only test methods should be public
     public async ValueTask DisposeAsync()
+#pragma warning restore NUnit1028
     {
         await TearDownAsync();
         GC.SuppressFinalize(this);

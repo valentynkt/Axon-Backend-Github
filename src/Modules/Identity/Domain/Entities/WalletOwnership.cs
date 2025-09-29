@@ -8,50 +8,57 @@ namespace Axon.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Links a principal to a wallet with ownership details.
+/// This is a child entity that relies on the parent aggregate's concurrency control.
 /// </summary>
-public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipId>
+public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>
 {
     public AxonUserId PrincipalId { get; private set; }
     public WalletId WalletId { get; private set; }
     public AccessMode AccessMode { get; private set; }
     public OwnershipStatus Status { get; private set; }
+    public VerificationSource VerificationSource { get; private set; }
     public DateTime? VerifiedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
+    public string? RevokeReason { get; private set; }
 
     // EF Core constructor
     private WalletOwnership() { }
 
     private WalletOwnership(
-        WalletOwnershipId id, 
-        AxonUserId principalId, 
-        WalletId walletId, 
-        AccessMode accessMode, 
-        OwnershipStatus status) : base(id)
+        WalletOwnershipId id,
+        AxonUserId principalId,
+        WalletId walletId,
+        AccessMode accessMode,
+        OwnershipStatus status,
+        VerificationSource verificationSource) : base(id)
     {
         PrincipalId = principalId;
         WalletId = walletId;
         AccessMode = accessMode;
         Status = status;
+        VerificationSource = verificationSource;
     }
 
     public static WalletOwnership Create(
-        AxonUserId principalId, 
-        WalletId walletId, 
-        AccessMode accessMode = AccessMode.Signing, 
-        OwnershipStatus status = OwnershipStatus.Pending)
+        AxonUserId principalId,
+        WalletId walletId,
+        AccessMode accessMode = AccessMode.Signing,
+        OwnershipStatus status = OwnershipStatus.Pending,
+        VerificationSource verificationSource = VerificationSource.DynamicAttested)
     {
         return new WalletOwnership(
-            WalletOwnershipId.New(), 
-            principalId, 
-            walletId, 
-            accessMode, 
-            status);
+            WalletOwnershipId.New(),
+            principalId,
+            walletId,
+            accessMode,
+            status,
+            verificationSource);
     }
 
     /// <summary>
     /// Updates the ownership status with validation for valid transitions.
     /// </summary>
-    public Result<Unit, Error> UpdateStatus(OwnershipStatus newStatus)
+    public Result<Unit, Error> UpdateStatus(OwnershipStatus newStatus, string? revokeReason = null)
     {
         // Validate status transition
         var transitionResult = ValidateStatusTransition(Status, newStatus);
@@ -63,16 +70,18 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
             return Result.Success<Unit, Error>(Unit.Value);
 
         Status = newStatus;
-        
+
         // Update timestamps based on status
         switch (newStatus)
         {
             case OwnershipStatus.Verified:
                 VerifiedAt = DateTime.UtcNow;
                 RevokedAt = null;
+                RevokeReason = null;
                 break;
             case OwnershipStatus.Revoked:
                 RevokedAt = DateTime.UtcNow;
+                RevokeReason = revokeReason;
                 break;
         }
 
@@ -137,4 +146,12 @@ public sealed class WalletOwnership :  AuditableDeletableEntity<WalletOwnershipI
     /// Checks if this ownership is active (not revoked).
     /// </summary>
     public bool IsActive => Status != OwnershipStatus.Revoked;
+
+    /// <summary>
+    /// Revokes this ownership with the specified reason.
+    /// </summary>
+    public Result<Unit, Error> Revoke(string reason = "Auto-revoked due to exclusivity constraint")
+    {
+        return UpdateStatus(OwnershipStatus.Revoked, reason);
+    }
 }

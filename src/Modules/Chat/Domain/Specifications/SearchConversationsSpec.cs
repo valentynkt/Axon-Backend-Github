@@ -2,8 +2,10 @@
 #nullable enable
 using Ardalis.Specification;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using BuildingBlocks.Primitives.Ids;
+using Microsoft.EntityFrameworkCore;
 
 namespace Axon.Modules.Chat.Domain.Specifications;
 
@@ -53,8 +55,8 @@ public sealed class SearchConversationsSpec : Specification<Conversation>
         if (minMessages.HasValue)
         {
             var min = Math.Max(0, minMessages.Value);
-            // Uses EF-visible navigation (Conversation.Messages)
-            Query.Where(c => c.Messages.Count >= min);
+            // Use EF.Property to access the private backing field
+            Query.Where(c => EF.Property<List<Message>>(c, "_messages").Count >= min);
         }
     }
 }

@@ -16,6 +16,7 @@
     <!-- Main API project under test -->
     <ProjectReference Include="..\..\src\Api\Axon.Api.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\Testing\BuildingBlocks.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,7 +35,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.8" />
 
     <!-- Database Testing -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.8" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.7.0" />
+    <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
 
     <!-- Coverage Collection -->
     <PackageReference Include="coverlet.collector" Version="6.0.2">

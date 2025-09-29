@@ -27,6 +27,7 @@ namespace BuildingBlocks.Application.Behaviors;
 public sealed class ObservabilityBehavior<TRequest, TValue>
     : IPipelineBehavior<TRequest, Result<TValue, Error>>
     where TRequest : IRequest<Result<TValue, Error>>
+    where TValue : notnull
 {
 
     private readonly ILogger<ObservabilityBehavior<TRequest, TValue>> _logger;
@@ -35,6 +36,7 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
     public ObservabilityBehavior(ILogger<ObservabilityBehavior<TRequest, TValue>> logger, IOptions<ObservabilityOptions> options)
     {
         _logger = logger;
+        ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
     }
 
@@ -43,6 +45,8 @@ public sealed class ObservabilityBehavior<TRequest, TValue>
         RequestHandlerDelegate<Result<TValue, Error>> next,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         var name = typeof(TRequest).Name;
         var category = request switch
         {

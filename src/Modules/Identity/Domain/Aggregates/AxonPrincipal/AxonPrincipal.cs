@@ -1,3 +1,4 @@
+using System.Linq;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
@@ -16,9 +17,13 @@ public sealed partial class AxonPrincipal : AggregateRoot<AxonUserId>
     private readonly List<WalletOwnership> _walletOwnerships = [];
     private readonly List<PrincipalChainDefault> _principalChainDefaults = [];
 
-    public IReadOnlyCollection<IdentityCredential> Credentials => _credentials;
-    public IReadOnlyCollection<WalletOwnership> WalletOwnerships => _walletOwnerships;
-    public IReadOnlyCollection<PrincipalChainDefault> PrincipalChainDefaults => _principalChainDefaults;
+    public IReadOnlyCollection<IdentityCredential> Credentials => _credentials.AsReadOnly();
+    public IReadOnlyCollection<WalletOwnership> WalletOwnerships => _walletOwnerships.AsReadOnly();
+    public IReadOnlyCollection<PrincipalChainDefault> PrincipalChainDefaults => _principalChainDefaults.AsReadOnly();
+
+    // Helper methods to get active (non-deleted) items
+    public IEnumerable<WalletOwnership> GetActiveWalletOwnerships() => _walletOwnerships.Where(wo => !wo.IsDeleted);
+    public IEnumerable<PrincipalChainDefault> GetActivePrincipalChainDefaults() => _principalChainDefaults.Where(pcd => !pcd.IsDeleted);
 
     public PrincipalType Type { get; private set; }
     public RiskTier RiskTier { get; private set; } = RiskTier.Low;

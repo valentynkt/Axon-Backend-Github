@@ -17,10 +17,8 @@ public sealed class ConversationsCreatedBetweenSpec : Specification<Conversation
         FromUtc = fromUtc;
         ToUtc = toUtc;
 
-        // Use client-side evaluation due to SQLite DateTimeOffset limitations
+        // Direct filtering works with PostgreSQL
         Query.AsNoTracking();
-        Query.PostProcessingAction(conversations =>
-            conversations.Where(c => c.CreatedAt.UtcDateTime >= fromUtc.UtcDateTime &&
-                                   c.CreatedAt.UtcDateTime <= toUtc.UtcDateTime));
+        Query.Where(c => c.CreatedAt >= fromUtc && c.CreatedAt <= toUtc);
     }
 }

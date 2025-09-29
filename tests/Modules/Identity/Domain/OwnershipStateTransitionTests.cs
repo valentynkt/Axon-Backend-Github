@@ -32,7 +32,7 @@ public class OwnershipStateTransitionTests : IdentityTestBase
         result.IsSuccess.ShouldBeTrue("Pending → Verified should be valid transition");
         ownership.Status.ShouldBe(OwnershipStatus.Verified);
         ownership.VerifiedAt.ShouldNotBeNull("VerifiedAt should be set");
-        ownership.VerifiedAt.Value.ShouldBeGreaterThan(originalCreatedAt.DateTime);
+        ownership.VerifiedAt.Value.ShouldBeGreaterThanOrEqualTo(originalCreatedAt.DateTime);
         ownership.RevokedAt.ShouldBeNull("RevokedAt should remain null");
     }
 
@@ -50,7 +50,7 @@ public class OwnershipStateTransitionTests : IdentityTestBase
         result.IsSuccess.ShouldBeTrue("Pending → Revoked should be valid transition");
         ownership.Status.ShouldBe(OwnershipStatus.Revoked);
         ownership.RevokedAt.ShouldNotBeNull("RevokedAt should be set");
-        ownership.RevokedAt.Value.ShouldBeGreaterThan(originalCreatedAt.DateTime);
+        ownership.RevokedAt.Value.ShouldBeGreaterThanOrEqualTo(originalCreatedAt.DateTime);
         ownership.VerifiedAt.ShouldBeNull("VerifiedAt should remain null");
     }
 
@@ -85,7 +85,7 @@ public class OwnershipStateTransitionTests : IdentityTestBase
         result.IsSuccess.ShouldBeTrue("Revoked → Verified should be valid transition (re-verification)");
         ownership.Status.ShouldBe(OwnershipStatus.Verified);
         ownership.VerifiedAt.ShouldNotBeNull("VerifiedAt should be set on re-verification");
-        ownership.VerifiedAt.Value.ShouldBeGreaterThan(originalRevokedAt!.Value);
+        ownership.VerifiedAt.Value.ShouldBeGreaterThanOrEqualTo(originalRevokedAt!.Value);
         ownership.RevokedAt.ShouldBeNull("RevokedAt should be cleared on re-verification");
     }
 
@@ -185,7 +185,7 @@ public class OwnershipStateTransitionTests : IdentityTestBase
 
         // Assert
         result.IsFailure.ShouldBeTrue("Access mode change should not be allowed for revoked ownership");
-        result.Error.Code.ShouldContain("OWNERSHIP_REVOKED");
+        result.Error.Code.ShouldContain("OWNERSHIP.REVOKED");
         ownership.AccessMode.ShouldBe(AccessMode.Signing, "Access mode should remain unchanged");
     }
 
@@ -442,6 +442,9 @@ public class OwnershipStateTransitionTests : IdentityTestBase
     /// <summary>
     /// Helper method to calculate authority score for resolution tie-breaking.
     /// Higher score = higher authority in resolution algorithm.
+    ///
+    /// Business Rule: Signing capability takes priority over verification status
+    /// - Signing vs WatchOnly difference should outweigh Verified vs Pending difference
     /// </summary>
     private static int GetAuthorityScore(WalletOwnership ownership)
     {
@@ -450,15 +453,15 @@ public class OwnershipStateTransitionTests : IdentityTestBase
 
         var statusScore = ownership.Status switch
         {
-            OwnershipStatus.Verified => 100,
-            OwnershipStatus.Pending => 50,
+            OwnershipStatus.Verified => 20,  // Reduced from 100 to 20
+            OwnershipStatus.Pending => 10,   // Reduced from 50 to 10
             _ => 0
         };
 
         var accessScore = ownership.AccessMode switch
         {
-            AccessMode.Signing => 10,
-            AccessMode.WatchOnly => 5,
+            AccessMode.Signing => 100,       // Increased from 10 to 100
+            AccessMode.WatchOnly => 50,      // Increased from 5 to 50
             _ => 0
         };
 

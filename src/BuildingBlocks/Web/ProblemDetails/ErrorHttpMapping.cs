@@ -13,7 +13,10 @@ public static class ErrorHttpMapping
     /// </summary>
     /// <param name="error">The error to map</param>
     /// <returns>HTTP status code that best represents the error type</returns>
-    public static int ToHttpStatusCode(this Error error) => error.Type switch
+    public static int ToHttpStatusCode(this Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return error.Type switch
     {
         ErrorType.Validation => StatusCodes.Status400BadRequest,
         ErrorType.Serialization => StatusCodes.Status400BadRequest,
@@ -33,10 +36,11 @@ public static class ErrorHttpMapping
         ErrorType.Unavailable => StatusCodes.Status503ServiceUnavailable,
         ErrorType.Timeout => StatusCodes.Status504GatewayTimeout,
         ErrorType.Persistence => StatusCodes.Status507InsufficientStorage,
-        ErrorType.Security => StatusCodes.Status403Forbidden,
+        ErrorType.Security => StatusCodes.Status401Unauthorized,
         ErrorType.Cancelled => 499, // Client Closed Request (non-standard but widely supported)
         _ => StatusCodes.Status500InternalServerError
-    };
+        };
+    }
 
     /// <summary>
     /// Gets the RFC 7807 problem type URI for an error.

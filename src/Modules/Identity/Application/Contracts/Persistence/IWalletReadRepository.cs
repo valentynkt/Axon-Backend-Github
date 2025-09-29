@@ -91,4 +91,15 @@ public interface IWalletReadRepository : ISpecificationReadRepository<Wallet>
         IEnumerable<WalletId> walletIds,
         bool includeDeleted = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds a wallet using the dual-key lookup (chain ID, address).
+    /// This is the primary lookup method for deterministic principal resolution.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// Uses the ux_wallet_chain_addr index for optimal performance.
+    /// </summary>
+    Task<Wallet?> FindWalletAsync(
+        ChainId chainId,
+        Address address,
+        CancellationToken cancellationToken = default);
 }

@@ -6,7 +6,7 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -66,10 +66,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
         var (principal, _) = SetupCredentialFirstScenario();
 
         // Create command with wallet data that could also resolve
-        var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            TestDataFixtures.DynA_Subject,
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock credential resolution (should be checked first)
         MockCredentialResolution(principal);
@@ -138,10 +135,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
         var unownedWallet = TestDataFixtures.CreateW2Main();
 
         // Create command with both wallets
-        var walletData1 = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var walletData2 = CreateWalletExchangeData(TestDataFixtures.W2MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData1, walletData2 });
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock no credential match
         MockNoCredentialMatch();
@@ -188,9 +182,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
         var (principal, wallet) = TestDataFixtures.CreateSingleActiveOwnerScenario();
 
         // Create command with wallet data
-        var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock no credential match and no verified signing owners
         MockNoCredentialMatch();
@@ -236,8 +228,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock resolution path
         MockNoCredentialMatch();
@@ -315,8 +306,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock resolution path
         MockNoCredentialMatch();
@@ -408,10 +398,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
         // Arrange: Setup scenario with unknown credential AND unknown wallet
         var (unknownSubject, unknownWalletAddress) = TestDataFixtures.CreateNoMatchScenario();
 
-        var walletData = CreateWalletExchangeData(unknownWalletAddress);
-        var command = CreateDynamicExchangeCommand(
-            unknownSubject,
-            wallets: new List<ExchangeWalletData> { walletData });
+        var command = CreateDynamicExchangeCommand(unknownSubject);
 
         // Mock no matches anywhere
         MockNoCredentialMatch();
@@ -460,9 +447,7 @@ public class IdentityResolutionAlgorithmTests : IdentityResolutionTestBase
 
         // Create command that could resolve to either principal
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
-        var command = CreateDynamicExchangeCommand(
-            TestDataFixtures.DynA_Subject, // Matches credential principal
-            wallets: new List<ExchangeWalletData> { walletData }); // Matches wallet principal
+        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
 
         // Mock credential resolution to return first principal
         MockCredentialResolution(principalWithCredential);

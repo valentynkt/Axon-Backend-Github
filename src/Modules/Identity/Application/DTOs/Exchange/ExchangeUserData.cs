@@ -7,7 +7,7 @@ namespace Axon.Modules.Identity.Application.DTOs.Exchange;
 /// </summary>
 /// <param name="AxonUserId">The Dynamic user's unique identifier (subject claim)</param>
 /// <param name="Email">The user's email address, if provided in the JWT</param>
-/// <param name="EnvironmentId">The Dynamic environment ID for issuer validation</param>
+/// <param name="DynamicEnvironmentId">The Dynamic.xyz tenant environment ID (NOT blockchain network environment)</param>
 /// <param name="Wallets">List of connected wallets from the JWT claims</param>
 /// <param name="FirstVisitUtc">Optional timestamp of user's first visit to the application</param>
 /// <param name="LastVisitUtc">Optional timestamp of user's most recent visit</param>
@@ -16,7 +16,7 @@ namespace Axon.Modules.Identity.Application.DTOs.Exchange;
 public sealed record ExchangeUserData(
     string AxonUserId,
     string Email,
-    string EnvironmentId,
+    string DynamicEnvironmentId,
     List<ExchangeWalletData> Wallets,
     DateTimeOffset? FirstVisitUtc = null,
     DateTimeOffset? LastVisitUtc = null,

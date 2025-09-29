@@ -18,7 +18,7 @@ using Shouldly;
 using Testcontainers.PostgreSql;
 using Npgsql;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 
 /// <summary>
 /// Enhanced test base for DB Invariant tests using real PostgreSQL via Testcontainers.
@@ -65,7 +65,6 @@ public abstract class IdentityDbInvariantsTestBase
     {
         var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
             .UseNpgsql(_connectionString)
-            .UseSnakeCaseNamingConvention()
             .EnableSensitiveDataLogging()
             .Options;
 
@@ -162,6 +161,24 @@ public abstract class IdentityDbInvariantsTestBase
     }
 
     /// <summary>
+    /// Asserts that a PostgreSQL constraint violation occurs from raw SQL operations.
+    /// Used when bypassing EF Core with ExecuteSqlRawAsync.
+    /// </summary>
+    protected static async Task AssertPostgreSQLConstraintViolationRaw(
+        Func<Task> action,
+        string expectedConstraintName)
+    {
+        var exception = await Should.ThrowAsync<PostgresException>(action);
+
+        // PostgreSQL unique violation error code
+        exception.SqlState.ShouldBe("23505", "Expected unique constraint violation");
+
+        // Validate specific constraint name
+        exception.ConstraintName.ShouldBe(expectedConstraintName,
+            $"Expected constraint '{expectedConstraintName}' to be violated");
+    }
+
+    /// <summary>
     /// Asserts that a PostgreSQL check constraint violation occurs.
     /// </summary>
     protected static async Task AssertPostgreSQLCheckConstraintViolation(
@@ -202,6 +219,24 @@ public abstract class IdentityDbInvariantsTestBase
             $"Expected partial index '{expectedIndexName}' to be violated, but got constraint: '{constraintName}'");
     }
 
+    /// <summary>
+    /// Asserts that a PostgreSQL partial unique index violation occurs from raw SQL operations.
+    /// Used when bypassing EF Core with ExecuteSqlRawAsync.
+    /// </summary>
+    protected static async Task AssertPartialUniqueIndexViolationRaw(
+        Func<Task> action,
+        string expectedIndexName)
+    {
+        var exception = await Should.ThrowAsync<PostgresException>(action);
+
+        exception.SqlState.ShouldBe("23505", "Expected unique constraint violation");
+
+        // For partial indexes, the constraint name might be the index name
+        var constraintName = exception.ConstraintName ?? exception.Detail ?? "";
+        constraintName.Contains(expectedIndexName, StringComparison.OrdinalIgnoreCase).ShouldBeTrue(
+            $"Expected partial index '{expectedIndexName}' to be violated, but got constraint: '{constraintName}'");
+    }
+
     #endregion
 
     #region Concurrent Transaction Helpers
@@ -213,7 +248,6 @@ public abstract class IdentityDbInvariantsTestBase
     {
         var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
             .UseNpgsql(_connectionString)
-            .UseSnakeCaseNamingConvention()
             .EnableSensitiveDataLogging()
             .Options;
 
@@ -279,6 +313,8 @@ public abstract class IdentityDbInvariantsTestBase
     /// </summary>
     protected async Task<T?> QueryFreshAsync<T>(Func<Task<T?>> query) where T : class
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         ClearChangeTracker();
         return await query();
     }

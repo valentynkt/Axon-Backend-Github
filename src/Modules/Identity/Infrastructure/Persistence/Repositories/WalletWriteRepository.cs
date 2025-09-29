@@ -6,6 +6,7 @@ using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using BuildingBlocks.Application;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
@@ -66,45 +67,61 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 
         var result = new Dictionary<(string chainId, Address address), WalletId>();
 
-        // Strategy: Query for existing wallets efficiently
-        var existingWallets = new Dictionary<(string chainId, Address address), WalletId>();
-
+        // First check tracked wallets in the change tracker
+        var trackedWallets = new Dictionary<(string chainId, Address address), WalletId>();
         foreach (var spec in specs)
         {
-            // First check if the wallet is already being tracked by EF (in change tracker)
             var trackedWallet = DbSet.Local
                 .FirstOrDefault(w => w.ChainId == spec.chainId && w.Address.Value == spec.address.Value);
 
             if (trackedWallet != null)
             {
-                existingWallets[spec] = trackedWallet.Id;
+                trackedWallets[spec] = trackedWallet.Id;
                 result[spec] = trackedWallet.Id;
-                continue;
-            }
-
-            // If not in change tracker, check the database
-            var existingWallet = await DbSet
-                .Where(w => w.ChainId == spec.chainId && w.Address == spec.address)
-                .Select(w => new { w.Id })
-                .FirstOrDefaultAsync(ct);
-
-            if (existingWallet != null)
-            {
-                existingWallets[spec] = existingWallet.Id;
-                result[spec] = existingWallet.Id;
             }
         }
 
-        // Collect specs for wallets that don't exist yet (neither in change tracker nor database)
-        var missingSpecs = specs.Where(spec => !existingWallets.ContainsKey(spec)).ToList();
+        // Get specs that are not already tracked
+        var specsToQuery = specs.Where(spec => !trackedWallets.ContainsKey(spec)).ToList();
+
+        if (specsToQuery.Count == 0)
+        {
+            return result;
+        }
+
+        // Use individual queries for each spec to avoid complex LINQ translation issues
+        // This is more straightforward and avoids EF Core translation problems
+        var existingWallets = new List<dynamic>();
+
+        foreach (var spec in specsToQuery)
+        {
+            var wallet = await DbSet
+                .Where(w => w.ChainId == spec.chainId && w.Address == spec.address)
+                .Select(w => new { w.Id, w.ChainId, w.Address })
+                .FirstOrDefaultAsync(ct);
+
+            if (wallet != null)
+            {
+                existingWallets.Add(wallet);
+            }
+        }
+
+        // Map existing wallets to their specs
+        var existingWalletMap = new Dictionary<(string chainId, Address address), WalletId>();
+        foreach (var wallet in existingWallets)
+        {
+            var spec = ((string)wallet.ChainId, (Address)wallet.Address);
+            existingWalletMap[spec] = wallet.Id;
+            result[spec] = wallet.Id;
+        }
+
+        // Identify missing wallets that need to be created
+        var missingSpecs = specsToQuery.Where(spec => !existingWalletMap.ContainsKey(spec)).ToList();
 
         // Create missing wallets - EF retry strategy will handle any race conditions
         foreach (var spec in missingSpecs)
         {
-            // TODO: Update walletSpecs to include network environment information
-            // For now, default to mainnet for production safety
-            var networkEnvironment = Axon.Modules.Identity.Domain.ValueObjects.NetworkEnvironment.Mainnet;
-            var wallet = Wallet.Create(null, networkEnvironment, spec.chainId, spec.address);
+            var wallet = Wallet.Create(null, spec.chainId, spec.address);
             await DbSet.AddAsync(wallet, ct);
             result[spec] = wallet.Id;
         }
@@ -116,5 +133,49 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
         }
 
         return result;
+    }
+
+    public async Task<Wallet> UpsertWalletAsync(
+        ChainId chainId,
+        Address address,
+        CancellationToken cancellationToken = default)
+    {
+        // First try to find existing wallet by dual-key lookup
+        var existingWallet = await DbSet
+            .FirstOrDefaultAsync(w =>
+                w.ChainId == chainId.Value &&
+                w.Address == address,
+                cancellationToken);
+
+        if (existingWallet != null)
+        {
+            return existingWallet;
+        }
+
+        // Create new wallet if not found
+        var newWallet = Wallet.Create(null, chainId.Value, address);
+        await DbSet.AddAsync(newWallet, cancellationToken);
+
+        try
+        {
+            // Save changes to persist the new wallet
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return newWallet;
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            // Handle race condition - another thread already created the wallet
+            // Clear the tracked entity and re-query for the existing wallet
+            DbSet.Entry(newWallet).State = EntityState.Detached;
+
+            var raceSafeWallet = await DbSet
+                .FirstOrDefaultAsync(w =>
+                    w.ChainId == chainId.Value &&
+                    w.Address == address,
+                    cancellationToken);
+
+            return raceSafeWallet ?? throw new InvalidOperationException(
+                $"Failed to retrieve wallet after race condition for {chainId.Value}:{address}");
+        }
     }
 }

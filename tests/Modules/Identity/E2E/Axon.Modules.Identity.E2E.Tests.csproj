@@ -16,9 +16,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Shouldly" Version="4.3.0" />
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.8" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.7.0" />
     <PackageReference Include="NUnit" Version="4.3.1" />
@@ -27,7 +26,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
-    <PackageReference Include="WireMock.Net" Version="1.6.9" />
+    <PackageReference Include="WireMock.Net" Version="1.12.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.1" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.6.1" />
   </ItemGroup>
@@ -37,6 +36,7 @@
     <ProjectReference Include="../../../../src/Modules/Identity/Application/Axon.Modules.Identity.Application.csproj" />
     <ProjectReference Include="../../../../src/Modules/Identity/Infrastructure/Axon.Modules.Identity.Infrastructure.csproj" />
     <ProjectReference Include="../../../../src/BuildingBlocks/BuildingBlocks.csproj" />
+    <ProjectReference Include="../../../Api/Axon.Api.Tests.csproj" />
     <ProjectReference Include="../Domain/Axon.Modules.Identity.Domain.Tests.csproj" />
     <ProjectReference Include="../Infrastructure/Axon.Modules.Identity.Infrastructure.Tests.csproj" />
   </ItemGroup>

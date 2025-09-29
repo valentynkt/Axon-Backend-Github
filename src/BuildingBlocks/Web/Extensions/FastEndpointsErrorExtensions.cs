@@ -22,6 +22,8 @@ public static class FastEndpointsErrorExtensions
         Error error,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
         var problemDetails = error.ToProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
@@ -46,6 +48,8 @@ public static class FastEndpointsErrorExtensions
         IEnumerable<Error> errors,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
         var validationDetails = errors.ToValidationProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
@@ -73,6 +77,8 @@ public static class FastEndpointsErrorExtensions
         int successStatusCode = StatusCodes.Status200OK,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
         if (result.IsSuccess)
         {
             httpContext.Response.StatusCode = successStatusCode;
@@ -98,6 +104,8 @@ public static class FastEndpointsErrorExtensions
         int successStatusCode = StatusCodes.Status200OK,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
         if (result.IsSuccess)
         {
             httpContext.Response.StatusCode = successStatusCode;

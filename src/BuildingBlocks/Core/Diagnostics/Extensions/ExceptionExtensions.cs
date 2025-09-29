@@ -14,5 +14,8 @@ public static class ExceptionExtensions
            ?? ex is TimeoutException or TaskCanceledException or HttpRequestException;
 
     public static Exception GetInnermost(this Exception ex)
-    { while (ex.InnerException != null) ex = ex.InnerException; return ex; }
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        while (ex.InnerException != null) ex = ex.InnerException; return ex;
+    }
 }

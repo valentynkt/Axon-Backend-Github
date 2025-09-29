@@ -84,6 +84,19 @@ public sealed partial class AxonPrincipal
                     ownership.Status.ToString()
                 ));
 
+                // If we just updated to verified+signing, trigger auto-revocation
+                if (ownership.IsVerifiedSigning)
+                {
+                    RaiseDomainEvent(new OwnershipChangedEvent(
+                        Id,
+                        ownership.WalletId,
+                        "verified_signing_added",
+                        ownership.AccessMode.ToString(),
+                        ownership.Status.ToString(),
+                        new Dictionary<string, string> { { "RequiresAutoRevocation", "true" } }
+                    ));
+                }
+
                 return Result.Success<Unit, Error>(Unit.Value);
             }
 
@@ -92,9 +105,10 @@ public sealed partial class AxonPrincipal
             return Result.Success<Unit, Error>(Unit.Value);
         }
 
-        // Check for conflicting ownership (only one verified+signing owner per wallet)
-        if (ownership.IsVerifiedSigning)
+        // Check for conflicting ownership
+        if (ownership.AccessMode == AccessMode.Signing)
         {
+            // Check if another principal already has verified+signing ownership
             var conflictCheck = checkExistingOwnershipFunc(
                 ownership.WalletId,
                 AccessMode.Signing,
@@ -104,8 +118,12 @@ public sealed partial class AxonPrincipal
             if (conflictCheck.IsFailure)
                 return Result.Failure<Unit, Error>(conflictCheck.Error);
 
-            if (conflictCheck.Value) // Another principal owns this wallet as verified+signing
+            if (conflictCheck.Value)
+            {
+                // Another principal owns this wallet as verified+signing
+                // No new signing ownership (pending or verified) should be allowed
                 return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.AlreadyOwned());
+            }
         }
 
         // Check max wallets constraint
@@ -122,6 +140,19 @@ public sealed partial class AxonPrincipal
             ownership.AccessMode.ToString(),
             ownership.Status.ToString()
         ));
+
+        // If this is a verified signing ownership, raise additional event for auto-revocation
+        if (ownership.IsVerifiedSigning)
+        {
+            RaiseDomainEvent(new OwnershipChangedEvent(
+                Id,
+                ownership.WalletId,
+                "verified_signing_added",
+                ownership.AccessMode.ToString(),
+                ownership.Status.ToString(),
+                new Dictionary<string, string> { { "RequiresAutoRevocation", "true" } }
+            ));
+        }
 
         return Result.Success<Unit, Error>(Unit.Value);
     }
@@ -175,8 +206,8 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Applies chain defaults for multiple wallet-to-chain mappings in a single optimized operation.
     /// This method is significantly more efficient than calling ApplyChainDefault individually.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    /// <param name="networkEnvironment">The network environment for the chain defaults</param>
     /// <param name="walletChainMappings">Collection of tuples containing (chainId, walletId) pairs to set as defaults</param>
     /// <returns>Number of actual defaults applied (excluding no-ops and failures)</returns>
     /// <remarks>
@@ -186,7 +217,7 @@ public sealed partial class AxonPrincipal
     /// - Reduced IsDeleted checks and LINQ operations
     /// Only processes chains that don't already have the target wallet as default.
     /// </remarks>
-    public Result<int, Error> ApplyChainDefaultsBatch(NetworkEnvironment networkEnvironment, IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
+    public Result<int, Error> ApplyChainDefaultsBatch(IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
     {
         var mappings = walletChainMappings.ToList();
         if (mappings.Count == 0)
@@ -238,7 +269,7 @@ public sealed partial class AxonPrincipal
             }
             else
             {
-                var newDefault = PrincipalChainDefault.Create(Id, networkEnvironment, chainId, walletId);
+                var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
                 _principalChainDefaults.Add(newDefault);
                 activeDefaults[chainId] = newDefault; // Update our local cache
             }
@@ -263,18 +294,209 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Applies a chain default with verified-first enforcement.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    public Result<Unit, Error> ApplyChainDefault(NetworkEnvironment networkEnvironment, string chainId, WalletId walletId)
+    public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
         // Use the optimized batch method for consistent logic and reduced complexity
-        var batchResult = ApplyChainDefaultsBatch(networkEnvironment, new[] { (chainId, walletId) });
+        var batchResult = ApplyChainDefaultsBatch(new[] { (chainId, walletId) });
 
         if (batchResult.IsFailure)
             return Result.Failure<Unit, Error>(batchResult.Error);
 
         return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Sets a wallet as the chain default with verified+signing validation.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// </summary>
+    /// <param name="chainId">The chain ID in compound format.</param>
+    /// <param name="walletId">The wallet ID to set as default.</param>
+    /// <returns>Result indicating success or failure.</returns>
+    public Result<Unit, Error> SetChainDefault(string chainId, WalletId walletId)
+    {
+        ArgumentNullException.ThrowIfNull(chainId);
+
+        // Find the ownership for this wallet
+        var ownership = _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId && !o.IsDeleted);
+
+        if (ownership == null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
+
+        // Validate it's verified+signing (watch-only not allowed as default)
+        if (!ownership.IsVerifiedSigning)
+            return Result.Failure<Unit, Error>(
+                Error.Validation(
+                    "Cannot set watch-only wallet as default. Only verified signing wallets can be defaults.",
+                    "WALLET.DEFAULT.WATCH_ONLY_NOT_ALLOWED"));
+
+        // Find existing default for this chain
+        var existingDefault = _principalChainDefaults
+            .FirstOrDefault(d => d.ChainId == chainId &&
+                               !d.IsDeleted);
+
+        // If already set to this wallet, no-op
+        if (existingDefault?.WalletId == walletId)
+            return Result.Success<Unit, Error>(Unit.Value);
+
+        var oldDefault = existingDefault?.WalletId;
+
+        // Update or create the default
+        if (existingDefault != null)
+        {
+            existingDefault.UpdateWallet(walletId);
+        }
+        else
+        {
+            var newDefault = PrincipalChainDefault.Create(Id, chainId, walletId);
+            _principalChainDefaults.Add(newDefault);
+        }
+
+        // Raise domain event
+        RaiseDomainEvent(new PrincipalChangedEvent(
+            Id,
+            $"ChainDefault.{chainId}",
+            oldDefault?.ToString() ?? "none",
+            walletId.ToString()
+        ));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Clears the chain default for a specific chain.
+    /// Used when ownership is revoked or wallet is removed.
+    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// </summary>
+    /// <param name="chainId">The chain ID in compound format.</param>
+    /// <returns>Result indicating success or failure.</returns>
+    public Result<Unit, Error> ClearChainDefault(string chainId)
+    {
+        ArgumentNullException.ThrowIfNull(chainId);
+
+        var defaultEntry = _principalChainDefaults
+            .FirstOrDefault(d => d.ChainId == chainId &&
+                               !d.IsDeleted);
+
+        if (defaultEntry == null)
+            return Result.Success<Unit, Error>(Unit.Value); // No-op if no default set
+
+        var oldDefault = defaultEntry.WalletId;
+
+        // Soft delete the default
+        defaultEntry.SoftDelete();
+
+        // Raise domain event
+        RaiseDomainEvent(new PrincipalChangedEvent(
+            Id,
+            $"ChainDefault.{chainId}",
+            oldDefault.ToString(),
+            "none"
+        ));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Clears all chain defaults for a specific wallet.
+    /// Used when wallet ownership is revoked.
+    /// </summary>
+    /// <param name="walletId">The wallet ID to clear from defaults.</param>
+    /// <returns>Number of defaults cleared.</returns>
+    public Result<int, Error> ClearChainDefaultsForWallet(WalletId walletId)
+    {
+        var defaultsToRemove = _principalChainDefaults
+            .Where(d => d.WalletId == walletId && !d.IsDeleted)
+            .ToList();
+
+        if (defaultsToRemove.Count == 0)
+            return Result.Success<int, Error>(0);
+
+        foreach (var defaultEntry in defaultsToRemove)
+        {
+            defaultEntry.SoftDelete();
+
+            // Raise domain event for each cleared default
+            RaiseDomainEvent(new PrincipalChangedEvent(
+                Id,
+                $"ChainDefault.{defaultEntry.ChainId}",
+                walletId.ToString(),
+                "none"
+            ));
+        }
+
+        return Result.Success<int, Error>(defaultsToRemove.Count);
+    }
+
+    /// <summary>
+    /// Updates the status of a wallet ownership and clears defaults if revoked.
+    /// </summary>
+    public Result<Unit, Error> UpdateWalletOwnershipStatus(WalletId walletId, OwnershipStatus newStatus, string? revokeReason = null)
+    {
+        var ownership = _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
+        if (ownership == null)
+            return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.NotOwnedByPrincipal());
+
+        var oldStatus = ownership.Status;
+        var updateResult = ownership.UpdateStatus(newStatus, revokeReason);
+        if (updateResult.IsFailure)
+            return updateResult;
+
+        // Clear defaults if status becomes Revoked (strict clear-on-revoke policy)
+        if (newStatus == OwnershipStatus.Revoked && oldStatus != OwnershipStatus.Revoked)
+        {
+            var clearResult = ClearChainDefaultsForWallet(walletId);
+            if (clearResult.IsFailure)
+                return Result.Failure<Unit, Error>(clearResult.Error);
+        }
+
+        // Raise domain event
+        RaiseDomainEvent(new OwnershipChangedEvent(
+            Id,
+            walletId,
+            "status_updated",
+            ownership.AccessMode.ToString(),
+            newStatus.ToString()
+        ));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Revokes pending ownerships for a specific wallet.
+    /// Used when another principal is taking exclusive ownership.
+    /// </summary>
+    public Result<int, Error> RevokePendingOwnershipsForWallet(WalletId walletId, string reason = "Auto-revoked due to exclusivity constraint")
+    {
+        var pendingOwnerships = _walletOwnerships
+            .Where(wo => wo.WalletId == walletId &&
+                        wo.Status == OwnershipStatus.Pending &&
+                        !wo.IsDeleted)
+            .ToList();
+
+        int revokedCount = 0;
+        foreach (var ownership in pendingOwnerships)
+        {
+            var revokeResult = ownership.UpdateStatus(OwnershipStatus.Revoked, reason);
+            if (revokeResult.IsSuccess)
+            {
+                revokedCount++;
+
+                // Raise domain event for each revoked ownership
+                RaiseDomainEvent(new OwnershipChangedEvent(
+                    Id,
+                    walletId,
+                    "auto_revoked",
+                    ownership.AccessMode.ToString(),
+                    OwnershipStatus.Revoked.ToString()
+                ));
+            }
+        }
+
+        return Result.Success<int, Error>(revokedCount);
     }
 
     /// <summary>
@@ -305,6 +527,86 @@ public sealed partial class AxonPrincipal
         ));
 
         return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Verifies wallet ownership by creating or updating an ownership record.
+    /// </summary>
+    public Result<WalletOwnership, Error> VerifyWalletOwnership(
+        WalletId walletId,
+        AccessMode accessMode,
+        VerificationSource verificationSource)
+    {
+        // Check for existing ownership
+        var existingOwnership = _walletOwnerships.FirstOrDefault(wo =>
+            wo.WalletId == walletId && !wo.IsDeleted);
+
+        if (existingOwnership != null)
+        {
+            // Check access mode
+            if (existingOwnership.AccessMode != accessMode)
+            {
+                return Result.Failure<WalletOwnership, Error>(
+                    IdentityDomainErrors.Wallet.OwnershipAlreadyExists());
+            }
+
+            // Update to verified status
+            var updateResult = existingOwnership.UpdateStatus(OwnershipStatus.Verified);
+            if (updateResult.IsFailure)
+            {
+                return Result.Failure<WalletOwnership, Error>(updateResult.Error);
+            }
+
+            // Raise domain event
+            RaiseDomainEvent(new OwnershipChangedEvent(
+                Id,
+                walletId,
+                "verified",
+                accessMode.ToString(),
+                OwnershipStatus.Verified.ToString()
+            ));
+
+            return Result.Success<WalletOwnership, Error>(existingOwnership);
+        }
+
+        // Create new ownership
+        var newOwnership = WalletOwnership.Create(
+            Id,
+            walletId,
+            accessMode,
+            OwnershipStatus.Verified,
+            verificationSource);
+
+        _walletOwnerships.Add(newOwnership);
+
+        // Raise domain event
+        RaiseDomainEvent(new OwnershipChangedEvent(
+            Id,
+            walletId,
+            "created_verified",
+            accessMode.ToString(),
+            OwnershipStatus.Verified.ToString()
+        ));
+
+        return Result.Success<WalletOwnership, Error>(newOwnership);
+    }
+
+    /// <summary>
+    /// Gets ownership for a specific wallet.
+    /// </summary>
+    public WalletOwnership? GetWalletOwnership(WalletId walletId)
+    {
+        return _walletOwnerships.FirstOrDefault(wo =>
+            wo.WalletId == walletId && !wo.IsDeleted);
+    }
+
+    /// <summary>
+    /// Checks if principal has verified signing ownership of a wallet.
+    /// </summary>
+    public bool HasVerifiedSigningOwnership(WalletId walletId)
+    {
+        var ownership = GetWalletOwnership(walletId);
+        return ownership?.IsVerifiedSigning ?? false;
     }
 
     /// <summary>

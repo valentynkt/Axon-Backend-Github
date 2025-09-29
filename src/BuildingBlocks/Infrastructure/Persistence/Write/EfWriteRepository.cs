@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using BuildingBlocks.Application;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Core.Domain.Entities.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +11,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Write;
 /// Generic Entity Framework write repository implementation
 /// Handles aggregates with domain events and transactional consistency
 /// </summary>
-public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, TId>
+public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TAggregate, TId> : IWriteRepository<TAggregate, TId>
     where TAggregate : class, IAggregateRoot<TId>
     where TId : notnull
 {
@@ -46,65 +48,89 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 
     // ——— U P D A T E ———
+    /// <summary>
+    /// Updates an aggregate in the database with optimistic concurrency control.
+    ///
+    /// How PostgreSQL xmin concurrency works:
+    /// 1. The Version property (mapped to xmin) contains the row's transaction ID when last updated
+    /// 2. For detached entities: Attach preserves the original Version value from when entity was loaded
+    /// 3. When SaveChanges executes, EF Core includes "WHERE xmin = @originalVersion" in the UPDATE
+    /// 4. PostgreSQL automatically updates xmin to a new value on successful update
+    /// 5. If another transaction modified the row, the WHERE clause won't match and DbUpdateConcurrencyException is thrown
+    ///
+    /// This provides automatic optimistic concurrency without manual version management.
+    /// </summary>
     public virtual Task<TAggregate> UpdateAsync(TAggregate aggregate, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregate);
+
+        // Validate concurrency token for better error messages
+        ValidateConcurrencyToken(aggregate);
 
         var entry = _context.Entry(aggregate);
 
         if (entry.State == EntityState.Detached)
         {
-            // For detached entities, Update() handles the entire graph correctly
-            _dbSet.Update(aggregate);
-        }
-        else
-        {
-            // For tracked entities, ensure the aggregate is marked as modified
+            // For detached entities: Attach first, then set to Modified
+            // This preserves the original Version value for the WHERE clause
+            // EF Core + Npgsql will automatically handle xmin concurrency
+            _dbSet.Attach(aggregate);
             entry.State = EntityState.Modified;
 
-            // Explicitly detect and track new entities in navigation collections
-            // This is critical for navigation properties with private backing fields
-            foreach (var navigation in entry.Navigations)
+            // CRITICAL: Set the original Version value for concurrency check
+            // Without this, EF won't include "WHERE ... AND xmin = @originalVersion"
+            entry.Property(e => e.Version).IsModified = false;
+            entry.Property(e => e.Version).OriginalValue = aggregate.Version;
+        }
+        else if (entry.State == EntityState.Unchanged || entry.State == EntityState.Modified)
+        {
+            // For tracked entities, only mark as Modified if currently Unchanged
+            // This preserves the change tracking from domain modifications
+            if (entry.State == EntityState.Unchanged)
             {
-                if (navigation.CurrentValue is not null)
-                {
-                    // Handle collection navigations
-                    if (navigation.Metadata.IsCollection)
-                    {
-                        foreach (var item in (System.Collections.IEnumerable)navigation.CurrentValue)
-                        {
-                            var itemEntry = _context.Entry(item);
-                            if (itemEntry.State == EntityState.Detached)
-                            {
-                                itemEntry.State = EntityState.Added;
-                            }
-                        }
-                    }
-                    // Handle reference navigations
-                    else
-                    {
-                        var itemEntry = _context.Entry(navigation.CurrentValue);
-                        if (itemEntry.State == EntityState.Detached)
-                        {
-                            itemEntry.State = EntityState.Added;
-                        }
-                    }
-                }
+                entry.State = EntityState.Modified;
             }
+
+            // CRITICAL: Ensure Version property is not modified and preserves its original value
+            // This ensures EF Core includes the concurrency check in the WHERE clause
+            entry.Property(e => e.Version).IsModified = false;
         }
 
         return Task.FromResult(aggregate);
     }
 
     public virtual Task<IReadOnlyList<TAggregate>> UpdateRangeAsync(
-        IReadOnlyList<TAggregate> aggregates, 
+        IReadOnlyList<TAggregate> aggregates,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(aggregates);
-        
-        var aggregatesList = aggregates.ToList();
-        _dbSet.UpdateRange(aggregatesList);
-        return Task.FromResult<IReadOnlyList<TAggregate>>(aggregatesList.AsReadOnly());
+
+        // Validate all aggregates have valid concurrency tokens
+        foreach (var aggregate in aggregates)
+        {
+            ValidateConcurrencyToken(aggregate);
+        }
+
+        // Use the same Attach pattern as UpdateAsync to preserve concurrency tokens
+        foreach (var aggregate in aggregates)
+        {
+            var entry = _context.Entry(aggregate);
+
+            if (entry.State == EntityState.Detached)
+            {
+                // For detached entities: Attach first, then set to Modified
+                // This preserves the original Version value for the WHERE clause
+                _dbSet.Attach(aggregate);
+                entry.State = EntityState.Modified;
+
+                // CRITICAL: Preserve original Version for concurrency
+                entry.Property(e => e.Version).IsModified = false;
+                entry.Property(e => e.Version).OriginalValue = aggregate.Version;
+            }
+            // For already tracked entities, EF Core's change tracking handles everything
+        }
+
+        return Task.FromResult(aggregates);
     }
 
     // ——— R E A D (for modification) ———
@@ -155,6 +181,106 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 
     // ——— H e l p e r  M e t h o d s ———
+
+    /// <summary>
+    /// Safely executes a save operation with proper concurrency exception handling.
+    /// Wraps EF Core's DbUpdateConcurrencyException in our custom ConcurrencyException.
+    /// </summary>
+    protected virtual async Task<T> ExecuteWithConcurrencyHandlingAsync<T>(Func<Task<T>> operation, string operationName = "Database operation")
+    {
+        try
+        {
+            return await operation();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Convert EF Core concurrency exception to our domain exception
+            throw new ConcurrencyException(
+                $"{operationName} failed due to a concurrency conflict. The entity may have been modified by another process. Original error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Safely executes a save operation with proper concurrency exception handling.
+    /// Wraps EF Core's DbUpdateConcurrencyException in our custom ConcurrencyException.
+    /// </summary>
+    protected virtual async Task ExecuteWithConcurrencyHandlingAsync(Func<Task> operation, string operationName = "Database operation")
+    {
+        try
+        {
+            await operation();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Convert EF Core concurrency exception to our domain exception
+            throw new ConcurrencyException(
+                $"{operationName} failed due to a concurrency conflict. The entity may have been modified by another process. Original error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Validates that an aggregate has the required concurrency token before update operations.
+    /// </summary>
+    protected virtual void ValidateConcurrencyToken(TAggregate aggregate)
+    {
+        ArgumentNullException.ThrowIfNull(aggregate);
+
+        // For PostgreSQL xmin, the version should never be 0 for existing entities
+        // New entities will have Version = 0, but we don't update new entities
+        if (aggregate.Version == 0)
+        {
+            throw new InvalidOperationException(
+                $"Aggregate {typeof(TAggregate).Name} has an invalid concurrency token (Version = 0). " +
+                "This may indicate the entity was not properly loaded from the database or is a new entity being incorrectly updated.");
+        }
+    }
+
+    /// <summary>
+    /// Determines if an entity is new (not persisted to database yet).
+    /// Checks if the entity has a default ID value or if it's been explicitly marked as new.
+    /// </summary>
+    private static bool IsNewEntity(object entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+
+        // Use reflection to get the Id property
+        var entityType = entity.GetType();
+        var idProperty = entityType.GetProperty("Id");
+
+        if (idProperty == null)
+            return false;
+
+        var idValue = idProperty.GetValue(entity);
+
+        // Check if the ID is default/empty (indicates new entity)
+        if (idValue == null)
+            return true;
+
+        // Handle Guid IDs (most common case)
+        if (idValue is Guid guidId)
+            return guidId == Guid.Empty;
+
+        // Handle integer IDs
+        if (idValue is int intId)
+            return intId == 0;
+
+        // Handle long IDs
+        if (idValue is long longId)
+            return longId == 0;
+
+        // Handle StrongId types that might have a Value property
+        var valueProperty = idValue.GetType().GetProperty("Value");
+        if (valueProperty != null)
+        {
+            var actualValue = valueProperty.GetValue(idValue);
+            if (actualValue is Guid strongGuidId)
+                return strongGuidId == Guid.Empty;
+        }
+
+        // If we can't determine, assume it's not new
+        return false;
+    }
+
     protected virtual Expression<Func<TAggregate, bool>> CreateIdPredicate(TId id)
     {
         var parameter = Expression.Parameter(typeof(TAggregate), "x");
@@ -200,7 +326,9 @@ public class EfWriteRepository<TAggregate, TId> : IWriteRepository<TAggregate, T
     }
 }
 
-public class EfWriteRepository<TAggregate> : EfWriteRepository<TAggregate, Guid>, IWriteRepository<TAggregate>
+[UnconditionalSuppressMessage("ReflectionAnalysis", "IL2091",
+    Justification = "Entity Framework repository pattern requires reflection for entity operations")]
+public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TAggregate> : EfWriteRepository<TAggregate, Guid>, IWriteRepository<TAggregate>
     where TAggregate : class, IAggregateRoot<Guid>
 {
     public EfWriteRepository(DbContext context) : base(context) { }

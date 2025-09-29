@@ -33,7 +33,7 @@ public class WalletTests : IdentityTestBase
             var timestamp = DateTime.UtcNow;
 
             // Act
-            var wallet = Wallet.Create(walletId, NetworkEnvironment.Mainnet, chainId, address, timestamp);
+            var wallet = Wallet.Create(walletId, chainId, address, timestamp);
 
             // Assert
             wallet.ShouldSatisfyAllConditions(
@@ -53,7 +53,7 @@ public class WalletTests : IdentityTestBase
             var address = Builders.EthereumAddress;
 
             // Act
-            var wallet = Wallet.Create(null, NetworkEnvironment.Mainnet, chainId, address);
+            var wallet = Wallet.Create(null, chainId, address);
 
             // Assert
             wallet.Id.Value.ShouldNotBe(Guid.Empty);
@@ -68,7 +68,7 @@ public class WalletTests : IdentityTestBase
             var address = Builders.EthereumAddress;
 
             // Act
-            var wallet = Wallet.Create(null, NetworkEnvironment.Mainnet, chainId, address);
+            var wallet = Wallet.Create(null, chainId, address);
 
             // Assert
             var afterCreation = DateTime.UtcNow;
@@ -91,7 +91,7 @@ public class WalletTests : IdentityTestBase
             foreach (var (chainId, address) in testCases)
             {
                 // Act
-                var wallet = Wallet.Create(null, NetworkEnvironment.Mainnet, chainId, address);
+                var wallet = Wallet.Create(null, chainId, address);
 
                 // Assert
                 wallet.ChainId.ShouldBe(chainId);
@@ -112,7 +112,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-10);
-            var wallet = CreateWallet(timestamp: initialTimestamp);
+            var wallet = CreateWallet(null, TestConstants.SolanaChain, null, initialTimestamp);
             var newerTimestamp = DateTime.UtcNow;
 
             // Act
@@ -128,7 +128,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var recentTimestamp = DateTime.UtcNow;
-            var wallet = CreateWallet(timestamp: recentTimestamp);
+            var wallet = CreateWallet(null, TestConstants.SolanaChain, null, recentTimestamp);
             var olderTimestamp = recentTimestamp.AddMinutes(-5);
 
             // Act
@@ -143,7 +143,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var timestamp = DateTime.UtcNow;
-            var wallet = CreateWallet(timestamp: timestamp);
+            var wallet = CreateWallet(null, TestConstants.SolanaChain, null, timestamp);
 
             // Act
             wallet.UpdateLastSeen(timestamp);
@@ -298,7 +298,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-5);
-            var wallet = CreateWallet(timestamp: initialTimestamp);
+            var wallet = CreateWallet();
             var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =
@@ -391,7 +391,7 @@ public class WalletTests : IdentityTestBase
         {
             // Arrange
             var initialTimestamp = DateTime.UtcNow.AddMinutes(-5);
-            var wallet = CreateWallet(timestamp: initialTimestamp);
+            var wallet = CreateWallet();
             var ownerId = AxonUserId.New();
 
             Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> noConflict =

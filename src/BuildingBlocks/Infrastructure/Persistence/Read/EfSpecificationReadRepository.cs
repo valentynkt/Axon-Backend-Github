@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Diagnostics.CodeAnalysis;
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
 using BuildingBlocks.Application;
@@ -13,7 +14,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 /// Optimized for read-only operations with AsNoTracking by default.
 /// </summary>
 /// <typeparam name="T">The entity type to query</typeparam>
-public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificationReadRepository<T>
+public class EfSpecificationReadRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T> : RepositoryBase<T>, ISpecificationReadRepository<T>
     where T : class
 {
     private readonly DbContext _context;
@@ -70,7 +71,7 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Asynchronous enumerable for streaming results
     /// </summary>
-    public virtual IAsyncEnumerable<T> AsAsyncEnumerable(ISpecification<T> specification)
+    public override IAsyncEnumerable<T> AsAsyncEnumerable(ISpecification<T> specification)
     {
         return ApplySpecification(specification).AsAsyncEnumerable();
     }
@@ -78,7 +79,7 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Gets the first entity or default value that satisfies the specification
     /// </summary>
-    public virtual async Task<T?> FirstOrDefaultAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
+    public override async Task<T?> FirstOrDefaultAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
     {
         return await ApplySpecification(specification).FirstOrDefaultAsync(cancellationToken);
     }
@@ -86,15 +87,20 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Gets the first projected result or default value that satisfies the specification
     /// </summary>
-    public virtual async Task<TResult?> FirstOrDefaultAsync<TResult>(ISpecification<T, TResult> specification, CancellationToken cancellationToken = default)
+#pragma warning disable CS8609 // Nullability conflicts between base class and interface are intentional
+#pragma warning disable CS8613 // Nullability of reference types in return type doesn't match implicitly implemented member
+    public override async Task<TResult> FirstOrDefaultAsync<TResult>(ISpecification<T, TResult> specification, CancellationToken cancellationToken = default)
     {
-        return await ApplySpecification(specification).FirstOrDefaultAsync(cancellationToken);
+        var result = await ApplySpecification(specification).FirstOrDefaultAsync(cancellationToken);
+        return result!;
     }
+#pragma warning restore CS8613
+#pragma warning restore CS8609
 
     /// <summary>
     /// Gets a single entity or default value that satisfies the specification
     /// </summary>
-    public virtual async Task<T?> SingleOrDefaultAsync(ISingleResultSpecification<T> specification, CancellationToken cancellationToken = default)
+    public override async Task<T?> SingleOrDefaultAsync(ISingleResultSpecification<T> specification, CancellationToken cancellationToken = default)
     {
         return await ApplySpecification(specification).SingleOrDefaultAsync(cancellationToken);
     }
@@ -102,42 +108,44 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Gets a single projected result or default value that satisfies the specification
     /// </summary>
-    public virtual async Task<TResult?> SingleOrDefaultAsync<TResult>(ISingleResultSpecification<T, TResult> specification, CancellationToken cancellationToken = default)
+#pragma warning disable CS8609 // Nullability conflicts between base class and interface are intentional
+#pragma warning disable CS8613 // Nullability of reference types in return type doesn't match implicitly implemented member
+    public override async Task<TResult> SingleOrDefaultAsync<TResult>(ISingleResultSpecification<T, TResult> specification, CancellationToken cancellationToken = default)
     {
-        return await ApplySpecification(specification).SingleOrDefaultAsync(cancellationToken);
+        var result = await ApplySpecification(specification).SingleOrDefaultAsync(cancellationToken);
+        return result!;
     }
+#pragma warning restore CS8613
+#pragma warning restore CS8609
 
     /// <summary>
     /// Gets all entities as a list
     /// </summary>
-    public virtual async Task<IReadOnlyList<T>> ListAsync(CancellationToken cancellationToken = default)
+    public override async Task<List<T>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var result = await _context.Set<T>().AsNoTracking().ToListAsync(cancellationToken);
-        return result.AsReadOnly();
+        return await _context.Set<T>().AsNoTracking().ToListAsync(cancellationToken);
     }
 
     /// <summary>
     /// Gets entities that satisfy the specification as a list
     /// </summary>
-    public virtual async Task<IReadOnlyList<T>> ListAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
+    public override async Task<List<T>> ListAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
     {
-        var result = await ApplySpecification(specification).ToListAsync(cancellationToken);
-        return result.AsReadOnly();
+        return await ApplySpecification(specification).ToListAsync(cancellationToken);
     }
 
     /// <summary>
     /// Gets projected results that satisfy the specification as a list
     /// </summary>
-    public virtual async Task<IReadOnlyList<TResult>> ListAsync<TResult>(ISpecification<T, TResult> specification, CancellationToken cancellationToken = default)
+    public override async Task<List<TResult>> ListAsync<TResult>(ISpecification<T, TResult> specification, CancellationToken cancellationToken = default)
     {
-        var result = await ApplySpecification(specification).ToListAsync(cancellationToken);
-        return result.AsReadOnly();
+        return await ApplySpecification(specification).ToListAsync(cancellationToken);
     }
 
     /// <summary>
     /// Gets the count of all entities
     /// </summary>
-    public virtual async Task<int> CountAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> CountAsync(CancellationToken cancellationToken = default)
     {
         return await _context.Set<T>().CountAsync(cancellationToken);
     }
@@ -145,7 +153,7 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Gets the count of entities that satisfy the specification
     /// </summary>
-    public virtual async Task<int> CountAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
+    public override async Task<int> CountAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
     {
         return await ApplySpecification(specification, evaluateCriteriaOnly: true).CountAsync(cancellationToken);
     }
@@ -153,7 +161,7 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Checks if any entities exist
     /// </summary>
-    public virtual async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    public override async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
     {
         return await _context.Set<T>().AnyAsync(cancellationToken);
     }
@@ -161,7 +169,7 @@ public class EfSpecificationReadRepository<T> : RepositoryBase<T>, ISpecificatio
     /// <summary>
     /// Checks if any entities satisfy the specification
     /// </summary>
-    public virtual async Task<bool> AnyAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
+    public override async Task<bool> AnyAsync(ISpecification<T> specification, CancellationToken cancellationToken = default)
     {
         return await ApplySpecification(specification, evaluateCriteriaOnly: true).AnyAsync(cancellationToken);
     }

@@ -1,30 +1,28 @@
 namespace Axon.Modules.Identity.Application.DTOs.Responses;
 
 /// <summary>
-/// Response DTO for GET /auth/me endpoint containing user profile and wallet information.
-/// Designed for efficient client-side caching with ETag support.
+/// Response DTO for GET /auth/me endpoint per High-Level Flow Architecture.
+/// Contains canonical merged view of current user with ETag support.
 /// </summary>
 public sealed record CurrentUserResult(
     UserProfile Profile,
     IReadOnlyList<WalletInfo> Wallets,
-    IReadOnlyDictionary<string, string> ChainDefaults,
     string ETag);
 
 /// <summary>
-/// User profile information for the current authenticated user.
+/// User profile information aligned with architecture specification.
 /// </summary>
 public sealed record UserProfile(
-    string AxonUserId,
-    string Subject,
+    string AxonId,
     string RiskTier);
 
 /// <summary>
-/// Wallet information for wallets owned by the current user.
-/// Only includes verified wallets for security.
+/// Wallet information per architecture specification.
+/// Includes default wallet information and simplified state model.
 /// </summary>
 public sealed record WalletInfo(
-    string WalletId,
-    string ChainId,
+    string Chain,
     string Address,
-    string AccessMode,
-    bool IsVerified);
+    string State,               // "verified", "pending", "revoked"
+    string Access,              // "signing", "watch_only"
+    bool IsDefault);

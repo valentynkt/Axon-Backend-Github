@@ -21,6 +21,8 @@ public static class ErrorProblemDetailsExtensions
         string? instance = null,
         string? traceId = null)
     {
+        ArgumentNullException.ThrowIfNull(error);
+
         var statusCode = error.ToHttpStatusCode();
         
         var problemDetails = new Microsoft.AspNetCore.Mvc.ProblemDetails
@@ -72,6 +74,8 @@ public static class ErrorProblemDetailsExtensions
         string? instance = null,
         string? traceId = null)
     {
+        ArgumentNullException.ThrowIfNull(errors);
+
         var validationDetails = new ValidationProblemDetails
         {
             Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",

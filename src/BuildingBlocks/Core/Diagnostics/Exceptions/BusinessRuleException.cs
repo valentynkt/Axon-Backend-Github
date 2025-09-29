@@ -35,6 +35,7 @@ public sealed class BusinessRuleException : DomainException
         RuleCode = info.GetString(nameof(RuleCode)) ?? string.Empty;
     }
 
+    [Obsolete("This API supports obsolete formatter-based serialization. It should not be called or extended by application code.", DiagnosticId = "SYSLIB0051", UrlFormat = "https://aka.ms/dotnet-warnings/{0}")]
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
         base.GetObjectData(info, context);

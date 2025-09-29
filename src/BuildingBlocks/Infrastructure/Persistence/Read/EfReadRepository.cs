@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 using BuildingBlocks.Application;
@@ -9,7 +10,7 @@ namespace BuildingBlocks.Infrastructure.Persistence.Read;
 /// Generic Entity Framework read repository implementation
 /// Optimized for OData queries with no tracking
 /// </summary>
-public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId>
+public class EfReadRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TReadModel, TId> : IReadRepository<TReadModel, TId>
     where TReadModel : class
     where TId : notnull
 {
@@ -56,6 +57,8 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     /// <summary>
     /// Apply stable ordering for consistent pagination
     /// </summary>
+    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2060:MakeGenericMethod",
+        Justification = "Reflection used for dynamic ordering is safe for known Queryable methods")]
     protected virtual IQueryable<TReadModel> ApplyStableOrdering(IQueryable<TReadModel> query)
     {
         // Try to find UpdatedAt property
@@ -123,6 +126,8 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
         return result.AsReadOnly();
     }
 
+    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2060:MakeGenericMethod",
+        Justification = "Reflection used for Contains method is safe for known types")]
     public virtual async Task<IReadOnlyList<TReadModel>> GetByIdsAsync(
         IReadOnlyList<TId> ids,
         CancellationToken ct = default)
@@ -230,7 +235,9 @@ public class EfReadRepository<TReadModel, TId> : IReadRepository<TReadModel, TId
     }
 }
 
-public class EfReadRepository<TReadModel> : EfReadRepository<TReadModel, Guid>, IReadRepository<TReadModel>
+[UnconditionalSuppressMessage("ReflectionAnalysis", "IL2091",
+    Justification = "Entity Framework repository pattern requires reflection for entity operations")]
+public class EfReadRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TReadModel> : EfReadRepository<TReadModel, Guid>, IReadRepository<TReadModel>
     where TReadModel : class
 {
     public EfReadRepository(DbContext context) : base(context) { }

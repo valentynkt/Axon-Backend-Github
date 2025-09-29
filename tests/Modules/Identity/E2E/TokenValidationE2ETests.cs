@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Axon.Modules.Identity.E2E.Infrastructure;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using NUnit.Framework;
 using Shouldly;
 

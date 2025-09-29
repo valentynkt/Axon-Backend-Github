@@ -25,7 +25,6 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
-    <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
   </ItemGroup>
@@ -48,10 +47,6 @@
     <Compile Remove="Migrations\ChatDbContextModelSnapshot.cs" />
     <Compile Remove="Persistence\Migrations\20250804205008_InitDB.Designer.cs" />
     <Compile Remove="Persistence\Migrations\20250804212744_InitDB.Designer.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Persistence\Migrations\" />
   </ItemGroup>
 
 </Project>

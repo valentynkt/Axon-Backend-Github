@@ -1,34 +1,17 @@
-# Build outputs
+###################
+# Build Outputs
+###################
 **/bin/
 **/obj/
-output/
+**/out/
+build/
 dist/
 publish/
+artifacts/
 
-# User-specific files
-*.rsuser
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-
-# Visual Studio / Rider
-.vs/
-.idea/
-*.swp
-*.swo
-*.DotSettings.user
-
-# macOS
-**/.DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
+###################
+# Package Management
+###################
 # NuGet
 *.nupkg
 *.snupkg
@@ -36,112 +19,180 @@ Desktop.ini
 packages/
 project.lock.json
 project.fragment.lock.json
-artifacts/
 
-# MSTest test Results
-[Tt]est[Rr]esult*/
-[Bb]uild[Ll]og.*
+# npm/yarn
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# NUnit
-*.VisualState.xml
-TestResult.xml
-nunit-*.xml
-
-# Logs
-logs/
-*.log
-
-# Environment files
-.env
-.env.local
-.env.development
-.env.production
-.env.docker
-
-# Tools and caches
-.serena/
-.cache/
-.vscode/
-*.tmp
-*.temp
-
-# Coverage reports
-coverage/
-*.coverage
-*.coveragexml
-
-# Git hooks (local)
-.githooks/
-
-# Editor configs (if local)
-# .editorconfig - keeping this tracked
-
-# Local development scripts
-scripts/local/
-
-# Docker data
-postgres-data/
-
-# JetBrains Rider
-.idea/**/workspace.xml
-.idea/**/tasks.xml
-.idea/**/usage.statistics.xml
-.idea/**/dictionaries
-.idea/**/shelf
+###################
+# .NET Specific
+###################
+*.user
+*.rsuser
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
 
 # ASP.NET Scaffolding
 ScaffoldingReadme.txt
 
+# DNX
+project.lock.json
+artifacts/
 
+###################
+# Testing & Coverage
+###################
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+*.coverage
+*.coveragexml
+coverage/
+*.trx
+*.tmp
+nunit_random_seed.tmp
 
-
-
-
-
-
-# Claude Flow generated files
-.claude/settings.local.json
-.mcp.json
-claude-flow.config.json
-.swarm/
-.hive-mind/
-memory/claude-flow-data.json
-memory/sessions/*
-!memory/sessions/README.md
-memory/agents/*
-!memory/agents/README.md
-coordination/memory_bank/*
-coordination/subtasks/*
-coordination/orchestration/*
-*.db
-*.db-journal
-*.db-wal
-*.sqlite
-*.sqlite-journal
-*.sqlite-wal
-claude-flow
-claude-flow.bat
-claude-flow.ps1
-hive-mind-prompt-*.txt
-
-logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-dev-debug.log
-# Dependency directories
-node_modules/
-# Environment variables
-# Editor directories and files
-.idea
-.vscode
+###################
+# IDE & Editors
+###################
+# Visual Studio
+.vs/
+*.suo
 *.ntvs*
 *.njsproj
-*.sln
-*.sw?
-# OS specific
-.DS_Store
+*.sln.local
 
-# Task files
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# JetBrains Rider / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+###################
+# Operating System
+###################
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+Icon\r
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+.nfs*
+
+###################
+# Environment & Config
+###################
+.env
+.env.*
+!.env.example
+*.local
+appsettings.Development.json
+appsettings.Local.json
+
+###################
+# Logs & Databases
+###################
+*.log
+logs/
+dev-debug.log
+*.db
+*.sqlite
+*.mdf
+*.ldf
+*.db-journal
+*.db-wal
+*.sqlite-journal
+*.sqlite-wal
+
+###################
+# Docker
+###################
+postgres-data/
+docker-data/
+*.dockerignore.local
+
+###################
+# AI Tools & Assistants
+###################
+.claude/
+.cursor/
+.github/copilot/
+.bmad-core/
+.taskmaster/
+.serena/
+.swarm/
+.hive-mind/
+claude-flow*
+*.mcp.json
+.mcp.json
+memory/
+coordination/
+
+###################
+# Git Hooks
+###################
+.githooks/
+.husky/_
+
+###################
+# Temporary Files
+###################
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*_old*
+*.orig
+*.rej
+*.cache
+
+###################
+# Local Scripts
+###################
+scripts/local/
+local-scripts/
+*.local.sh
+*.local.ps1
+
+###################
+# Project Specific
+###################
+CONCURRENCY_FIX_SUMMARY.md
+POLICY_CONTROL.json
+
+# Optional task tracking (uncomment if needed)
 # tasks.json
-# tasks/ 
+# tasks/

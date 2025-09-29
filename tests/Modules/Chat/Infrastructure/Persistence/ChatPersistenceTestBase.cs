@@ -3,6 +3,7 @@ using Axon.Modules.Chat.Domain.Entities;
 using Axon.Modules.Chat.Domain.ValueObjects;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Chat.Infrastructure.Persistence.TestInfrastructure;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.Abstractions.Persistence;
 using Axon.Modules.Chat.Application.Common.Models;
@@ -11,6 +12,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects;
 using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
+using BuildingBlocks.Testing;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,37 +21,35 @@ using Microsoft.Extensions.Time.Testing;
 using MassTransit;
 using NUnit.Framework;
 using Shouldly;
+using Npgsql;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence;
 
 /// <summary>
 /// Base class for all Chat persistence tests providing shared infrastructure and utilities.
+/// Uses PostgreSQL with Testcontainers for realistic database testing.
 /// Ensures proper test isolation and provides common assertion helpers.
 /// </summary>
-public abstract class ChatPersistenceTestBase
+public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
 {
     protected ChatDbContext DbContext { get; set; } = null!;
     protected ChatReadDbContext ReadDbContext { get; set; } = null!;
     protected IConversationRepository ConversationRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
+    protected ITestDataVerificationRepository VerificationRepository { get; set; } = null!;
     protected EfUnitOfWork<ChatDbContext, ChatModule> UnitOfWork { get; set; } = null!;
     protected FakeTimeProvider TimeProvider { get; set; } = null!;
-
-    private string _databaseFilePath = null!;
 
     [SetUp]
     public async Task SetUpBase()
     {
-        // Create unique SQLite database for each test to ensure complete isolation
-        var databaseName = $"ChatTests_{GetType().Name}_{TestContext.CurrentContext.Test.Name}_{Guid.NewGuid():N}";
-        _databaseFilePath = $"{databaseName}.db";
-        var connectionString = $"Data Source={_databaseFilePath}";
+        TimeProvider = new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
 
         // Create a comprehensive service provider for testing with MassTransit support
         var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
         services.AddLogging();
-        services.AddEntityFrameworkSqlite(); // Add EF Core SQLite services
+        services.AddEntityFrameworkNpgsql(); // Add EF Core PostgreSQL services
 
         // Add MassTransit services with proper configuration for testing
         services.AddMassTransit(x =>
@@ -63,32 +63,39 @@ public abstract class ChatPersistenceTestBase
 
         var serviceProvider = services.BuildServiceProvider();
 
-        // Setup write DbContext with service provider
-        var writeOptions = new DbContextOptionsBuilder<ChatDbContext>()
-            .UseSqlite(connectionString)
-            .UseSnakeCaseNamingConvention()
-            .EnableSensitiveDataLogging()
+        // Setup write DbContext with service provider and Chat-specific configuration
+        var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
             .UseInternalServiceProvider(serviceProvider)
             .Options;
 
-        // Setup read DbContext with service provider
-        var readOptions = new DbContextOptionsBuilder<ChatReadDbContext>()
-            .UseSqlite(connectionString)
-            .UseSnakeCaseNamingConvention()
-            .EnableSensitiveDataLogging()
+        // Setup read DbContext with service provider and Chat-specific configuration
+        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
             .UseInternalServiceProvider(serviceProvider)
             .Options;
 
-        TimeProvider = new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatReadDbContext(readOptions);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
+        VerificationRepository = new TestDataVerificationRepository(ReadDbContext, DbContext);
 
-        // Only create schema once using the write context to avoid conflicts
+        // Create schema using EF model configuration for tests
         await DbContext.Database.EnsureCreatedAsync();
+
+        // Also ensure schema exists for read context (they share the same database)
+        await ReadDbContext.Database.EnsureCreatedAsync();
 
         // Allow child classes to perform additional setup
         await SetUpDerived();
@@ -104,30 +111,14 @@ public abstract class ChatPersistenceTestBase
         }
         finally
         {
+            // Clean up database state for next test
+            await CleanupDatabaseAsync(DbContext);
+
             // Ensure resources are cleaned up even if child cleanup fails
-            DbContext.ChangeTracker.Clear();
-            ReadDbContext.ChangeTracker.Clear();
-
-            await DbContext.Database.EnsureDeletedAsync();
-            await ReadDbContext.Database.EnsureDeletedAsync();
-
             UnitOfWork?.Dispose();
             ConversationRepository?.Dispose();
             await DbContext.DisposeAsync();
             await ReadDbContext.DisposeAsync();
-
-            // Clean up SQLite database file
-            try
-            {
-                if (File.Exists(_databaseFilePath))
-                {
-                    File.Delete(_databaseFilePath);
-                }
-            }
-            catch
-            {
-                // Ignore file cleanup errors
-            }
         }
     }
 
@@ -140,6 +131,26 @@ public abstract class ChatPersistenceTestBase
     /// Override this method to perform additional cleanup in derived test classes.
     /// </summary>
     protected virtual Task TearDownDerived() => Task.CompletedTask;
+
+    /// <summary>
+    /// Cleans up Chat database state between tests.
+    /// </summary>
+    protected override async Task CleanupDatabaseAsync(DbContext context)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                TRUNCATE TABLE chat.message CASCADE;
+                TRUNCATE TABLE chat.conversation CASCADE;
+            ");
+        }
+        catch
+        {
+            // If truncate fails, try dropping and recreating with EF model
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+        }
+    }
 
     #region Test Data Creation Helpers
 
@@ -299,66 +310,42 @@ public abstract class ChatPersistenceTestBase
         var conversation = await ConversationRepository.GetByIdAsync(conversationId);
 
         conversation.ShouldNotBeNull();
-        conversation.Messages.ShouldNotBeNull();
+        conversation.GetAllMessages().ShouldNotBeNull();
         conversation.OwnerId.ShouldNotBe(default);
         conversation.Status.ShouldNotBe(default);
     }
 
     /// <summary>
     /// Asserts that a concurrency exception should be thrown.
-    /// SQLite might not always throw concurrency exceptions like PostgreSQL, so this method
-    /// handles both the ideal case (concurrency exception) and the SQLite case (last write wins).
+    /// PostgreSQL properly enforces concurrency control with optimistic concurrency.
+    /// Note: The application wraps DbUpdateConcurrencyException in a custom ConcurrencyException.
     /// </summary>
     protected static void AssertConcurrencyConflict(Func<Task> action)
     {
-        try
-        {
-            // Try to throw a concurrency exception (ideal behavior)
-            Should.Throw<DbUpdateConcurrencyException>(action);
-        }
-        catch (Exception)
-        {
-            // SQLite might not enforce concurrency the same way as PostgreSQL
-            // In SQLite, the second update might succeed (last write wins)
-            // This is acceptable for testing with SQLite as long as the constraint logic is tested
-        }
+        Should.Throw<global::BuildingBlocks.Core.Diagnostics.Exceptions.ConcurrencyException>(action);
     }
 
     /// <summary>
-    /// Asserts that a unique constraint violation should be thrown.
-    /// Handles both PostgreSQL and SQLite constraint violation error messages.
+    /// Asserts that a PostgreSQL unique constraint violation occurs.
+    /// Validates the specific constraint name that was violated.
     /// </summary>
-    protected static void AssertUniqueConstraintViolation(Func<Task> action)
+    protected static async Task AssertUniqueConstraintViolation(Func<Task> action, string? expectedConstraintName = null)
     {
-        var exception = Should.Throw<DbUpdateException>(action);
+        var exception = await Should.ThrowAsync<DbUpdateException>(action);
 
-        // Check for constraint violation patterns across different database providers
-        var message = exception.Message;
-        var innerMessage = exception.InnerException?.Message ?? "";
-        var fullExceptionText = $"{message} {innerMessage}";
+        var postgresException = exception.InnerException as PostgresException;
+        postgresException.ShouldNotBeNull("Expected PostgreSQL constraint violation");
 
-        // PostgreSQL: contains "duplicate"
-        // SQLite: contains "UNIQUE constraint failed", "constraint failed", or references to specific constraint names
-        var isConstraintViolation =
-            fullExceptionText.Contains("duplicate", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("constraint failed", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("conversation", StringComparison.OrdinalIgnoreCase) ||
-            fullExceptionText.Contains("message", StringComparison.OrdinalIgnoreCase);
+        // PostgreSQL unique violation error code
+        postgresException.SqlState.ShouldBe("23505", "Expected unique constraint violation");
 
-        isConstraintViolation.ShouldBeTrue($"Expected constraint violation, but got: {message}. Inner: {innerMessage}");
+        // Validate specific constraint name if provided
+        if (!string.IsNullOrEmpty(expectedConstraintName))
+        {
+            postgresException.ConstraintName.ShouldBe(expectedConstraintName,
+                $"Expected constraint '{expectedConstraintName}' to be violated");
+        }
     }
-
-    // TODO: Fix Unit type reference
-    // /// <summary>
-    // /// Verifies domain business rules are enforced correctly.
-    // /// </summary>
-    // protected static void AssertBusinessRuleViolation(Func<Result<CSharpFunctionalExtensions.Unit, Error>> action, string expectedErrorCode)
-    // {
-    //     var result = action();
-    //     result.IsFailure.ShouldBeTrue();
-    //     result.Error.Code.ShouldBe(expectedErrorCode);
-    // }
 
     #endregion
 
@@ -432,18 +419,22 @@ public abstract class ChatPersistenceTestBase
         DbContext?.Dispose();
         ReadDbContext?.Dispose();
 
-        // Recreate write context with new TimeProvider
-        var writeOptions = new DbContextOptionsBuilder<ChatDbContext>()
-            .UseSqlite(_databaseFilePath == null ? "Data Source=:memory:" : $"Data Source={_databaseFilePath}")
-            .UseSnakeCaseNamingConvention()
-            .EnableSensitiveDataLogging()
+        // Recreate write context with new TimeProvider and Chat-specific configuration
+        var writeOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
             .Options;
 
-        // Recreate read context with same database connection
-        var readOptions = new DbContextOptionsBuilder<ChatReadDbContext>()
-            .UseSqlite(_databaseFilePath == null ? "Data Source=:memory:" : $"Data Source={_databaseFilePath}")
-            .UseSnakeCaseNamingConvention()
-            .EnableSensitiveDataLogging()
+        // Recreate read context with same database connection and Chat-specific configuration
+        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
+            .UseNpgsql(ConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            })
             .Options;
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);

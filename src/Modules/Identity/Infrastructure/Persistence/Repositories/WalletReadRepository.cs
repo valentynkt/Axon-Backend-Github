@@ -192,4 +192,16 @@ public sealed class WalletReadRepository : EfSpecificationReadRepository<Wallet>
 
         return wallets.AsReadOnly();
     }
+
+    public async Task<Wallet?> FindWalletAsync(
+        ChainId chainId,
+        Address address,
+        CancellationToken cancellationToken = default)
+    {
+        return await _identityDbContext.Set<Wallet>()
+            .FirstOrDefaultAsync(w =>
+                w.ChainId == chainId.Value &&
+                w.Address == address,
+                cancellationToken);
+    }
 }

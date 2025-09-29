@@ -12,7 +12,7 @@ public sealed class ConversationsWithMinimumMessagesSpec : Specification<Convers
     public ConversationsWithMinimumMessagesSpec(int minCount)
     {
         var min = Math.Max(0, minCount);
-        // Use public Messages navigation property that EF Core can translate to SQL
-        Query.Where(c => c.Messages.Count >= min);
+        // Use EF.Property to access the private backing field
+        Query.Where(c => EF.Property<List<Message>>(c, "_messages").Count >= min);
     }
 }

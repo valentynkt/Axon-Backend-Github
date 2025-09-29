@@ -1,3 +1,5 @@
+using System;
+using System.Diagnostics.CodeAnalysis;
 using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
@@ -37,13 +39,16 @@ public abstract class ReadDbContextBase<TModule> : DbContext, IReadDbContext<TMo
 
     public IExecutionStrategy CreateExecutionStrategy() => Database.CreateExecutionStrategy();
 
-    public IQueryable<TReadModel> Query<TReadModel>() where TReadModel : class
+    public IQueryable<TReadModel> Query<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.NonPublicFields | DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties | DynamicallyAccessedMemberTypes.Interfaces)] TReadModel>() where TReadModel : class
         => Set<TReadModel>().AsNoTracking();
 
     public Task<TResult> ExecuteCompiledQueryAsync<TResult>(
         Func<IReadDbContext<TModule>, Task<TResult>> compiledQuery,
         CancellationToken cancellationToken = default)
-        => compiledQuery(this);
+    {
+        ArgumentNullException.ThrowIfNull(compiledQuery);
+        return compiledQuery(this);
+    }
 
     public virtual IReadOnlyList<IDomainEvent> GetDomainEvents()
     {
@@ -53,6 +58,8 @@ public abstract class ReadDbContextBase<TModule> : DbContext, IReadDbContext<TMo
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
         // Default schema per module (if provider supports it)
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
 
@@ -65,15 +72,33 @@ public abstract class ReadDbContextBase<TModule> : DbContext, IReadDbContext<TMo
     /// <summary>Optional: index conventions commonly used by read models.</summary>
     protected virtual void ConfigureReadModelOptimizations(ModelBuilder modelBuilder)
     {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            var builder = modelBuilder.Entity(entityType.ClrType);
+            // Skip owned entity types as they should be configured through their owners
+            if (entityType.IsOwned())
+                continue;
 
-            if (entityType.FindProperty("CreatedAt") is not null)
-                builder.HasIndex("CreatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_created_at");
+            // Skip if entity type doesn't have a table (e.g., query types)
+            if (entityType.GetTableName() == null)
+                continue;
 
-            if (entityType.FindProperty("UpdatedAt") is not null)
-                builder.HasIndex("UpdatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_updated_at");
+            try
+            {
+                var builder = modelBuilder.Entity(entityType.ClrType);
+
+                if (entityType.FindProperty("CreatedAt") is not null)
+                    builder.HasIndex("CreatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_created_at");
+
+                if (entityType.FindProperty("UpdatedAt") is not null)
+                    builder.HasIndex("UpdatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_updated_at");
+            }
+            catch (InvalidOperationException)
+            {
+                // Ignore if entity configuration fails (e.g., for owned types)
+                // This can happen when owned types are being configured separately
+            }
         }
     }
 
