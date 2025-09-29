@@ -19,11 +19,9 @@
 ### 🏛️ Architecture (System Design)
 High-level system design, architectural styles, and technology decisions.
 
-- [System Overview](./architecture/system-overview.md) - Architecture vision, C4 diagrams
-- [Modular Monolith](./architecture/modular-monolith.md) - Module boundaries & communication
-- [Clean Architecture](./architecture/clean-architecture.md) - Layer structure & dependency rules
-- [Tech Stack](./architecture/tech-stack.md) - Technology choices & rationale
-- [ADRs](./architecture/adrs/README.md) - Architecture Decision Records
+- [System Overview](./architecture/system-overview.md) - Architecture vision, C4 diagrams ⭐
+- [Tech Stack](./architecture/tech-stack.md) - Libraries by layer with docs links
+- [ADRs](./architecture/adrs/00-INDEX.md) - Architecture Decision Records ⭐
 
 **When to use**: Understanding system structure, making architectural decisions
 
@@ -32,11 +30,9 @@ High-level system design, architectural styles, and technology decisions.
 ### 🎨 Patterns (Implementation)
 Concrete implementation patterns with code examples.
 
-- [**Quick Reference**](./patterns/00-QUICK-REFERENCE.md) 🔥 **HOT PATH** - Pattern cheatsheet
-- [CQRS](./patterns/cqrs.md) - Command/Query patterns with MediatR
-- [Domain Modeling](./patterns/domain-modeling.md) - DDD, aggregates, Result<T>, StrongId<T>
-- [Error Handling](./patterns/error-handling.md) - Error types, Result pattern, HTTP mapping
-- [Validation](./patterns/validation.md) - FluentValidation patterns
+- [**Quick Reference**](./patterns/00-QUICK-REFERENCE.md) 🔥 **HOT PATH** - 80% of patterns
+- [CQRS](./patterns/cqrs.md) - Command/Query patterns with MediatR ⭐
+- [Domain Modeling](./patterns/domain-modeling.md) - DDD, Result<T>, StrongId<T> ⭐
 
 **When to use**: Implementing features, writing application code
 
@@ -45,8 +41,9 @@ Concrete implementation patterns with code examples.
 ### 💻 Codebase (Code Organization)
 Code conventions, file structure, and C# standards.
 
-- [Source Tree](./codebase/source-tree.md) - Project structure & navigation
+- [Source Tree](./codebase/source-tree.md) - Project structure & navigation ⭐
 - [Coding Standards](./codebase/coding-standards.md) - C# conventions, naming, style
+- [Project Conventions](./codebase/project-conventions.md) - File naming, namespaces, project structure ⭐
 
 **When to use**: Writing code, organizing files, code reviews
 
@@ -55,10 +52,11 @@ Code conventions, file structure, and C# standards.
 ### 🔧 Workflows (Developer Processes)
 Day-to-day developer workflows and tooling.
 
-- [Getting Started](./workflows/getting-started.md) - Clone, build, run, verify
-- [Git Workflow](./workflows/git-workflow.md) - Branch naming, commits, PRs
-- [Debugging Guide](./workflows/debugging-guide.md) - Common issues, debugging tools
-- [IDE Setup](./workflows/ide-setup/) - JetBrains Rider, VS Code configuration
+- [**Getting Started**](./workflows/getting-started.md) ⭐ - Clone, build, run, verify (NEW DEVELOPERS START HERE)
+- [Development Workflow](./workflows/development-workflow.md) - Daily dev cycle, migrations, testing ⭐
+- [Git Workflow](./workflows/git-workflow.md) - Branch naming, commits, PRs ⭐
+- [Debugging Guide](./workflows/debugging.md) - Common issues, troubleshooting ⭐
+- [Testing Workflow](./workflows/testing-workflow.md) - Running tests, coverage, debugging tests ⭐
 
 **When to use**: Onboarding, daily development, troubleshooting
 
@@ -72,25 +70,28 @@ Day-to-day developer workflows and tooling.
 | **Learn implementation patterns** | [Quick Reference](./patterns/00-QUICK-REFERENCE.md) 🔥 |
 | **Write a command** | [CQRS](./patterns/cqrs.md) |
 | **Model a domain** | [Domain Modeling](./patterns/domain-modeling.md) |
-| **Handle errors** | [Error Handling](./patterns/error-handling.md) |
-| **Validate input** | [Validation](./patterns/validation.md) |
+| **Handle errors** | [Quick Reference](./patterns/00-QUICK-REFERENCE.md) (Error section) |
+| **Validate input** | [CQRS](./patterns/cqrs.md) (ValidationBehavior) |
 | **Find a file** | [Source Tree](./codebase/source-tree.md) |
 | **Follow code style** | [Coding Standards](./codebase/coding-standards.md) |
+| **Follow naming conventions** | [Project Conventions](./codebase/project-conventions.md) |
 | **Set up locally** | [Getting Started](./workflows/getting-started.md) |
+| **Daily development** | [Development Workflow](./workflows/development-workflow.md) |
 | **Create a PR** | [Git Workflow](./workflows/git-workflow.md) |
-| **Debug an issue** | [Debugging Guide](./workflows/debugging-guide.md) |
+| **Debug an issue** | [Debugging Guide](./workflows/debugging.md) |
+| **Run tests** | [Testing Workflow](./workflows/testing-workflow.md) |
+| **Understand ADR** | [Architecture Decisions](./architecture/adrs/00-INDEX.md) |
 
 ---
 
 ## 🧭 Related Documentation
 
 **Not in guides/**:
-- **Infrastructure** → [../infrastructure/README.md](../infrastructure/README.md) - Technical implementation (persistence, caching, observability)
+- **Infrastructure** → [../infrastructure/00-INDEX.md](../infrastructure/00-INDEX.md) - Technical implementation (persistence, caching, observability)
 - **Modules** → [../modules/](../modules/) - Business domain documentation (Identity, Chat)
-- **Testing** → [../testing/README.md](../testing/README.md) - Testing strategies & practices
-- **Deployment** → [../deployment/README.md](../deployment/README.md) - Operations & environments
-- **API** → [../api/README.md](../api/README.md) - REST API conventions
-- **Integrations** → [../integrations/README.md](../integrations/README.md) - External services (Dynamic, Helius)
+- **Testing** → [../testing/00-INDEX.md](../testing/00-INDEX.md) - Testing strategies & practices
+- **API** → [../api/00-INDEX.md](../api/00-INDEX.md) - REST API conventions
+- **Integrations** → [../integrations/00-INDEX.md](../integrations/00-INDEX.md) - External services (Dynamic, Helius)
 
 ---
 
@@ -103,10 +104,10 @@ Day-to-day developer workflows and tooling.
 4. For setup questions → `guides/workflows/getting-started.md`
 
 **Hot Paths**:
-- `patterns/00-QUICK-REFERENCE.md` - Always load first
+- `patterns/00-QUICK-REFERENCE.md` - Always load first (80% coverage)
 - `patterns/cqrs.md` - Command/query implementation
 - `patterns/domain-modeling.md` - Result<T>, StrongId<T>, aggregates
-- `patterns/error-handling.md` - Error pattern usage
+- `architecture/system-overview.md` - C4 diagrams, module boundaries
 
 ---
 
@@ -125,5 +126,23 @@ Day-to-day developer workflows and tooling.
 
 ---
 
-**Last Updated**: 2025-01-29
+**Last Updated**: 2025-09-29
 **Maintained By**: Axon Engineering Team
+
+---
+
+## 🆕 What's New (2025-09-29)
+
+**Phase 2 Complete - Token-Efficient Documentation**:
+- ✅ **Quick Reference**: 384 lines covering 80% of patterns
+- ✅ **Domain Modeling**: 316 lines of DDD templates
+- ✅ **CQRS**: 328 lines of MediatR patterns
+- ✅ **System Overview**: 224 lines with C4 diagrams
+- ✅ **Tech Stack**: 141 lines library reference with docs links
+
+**Phase 1 Complete**:
+- ✅ **Workflows**: 5 guides (2,583 lines)
+- ✅ **ADRs**: 6 decision records (1,001 lines)
+- ✅ **Codebase**: Source tree, conventions, standards (1,002 lines)
+
+**Total**: 23 files, ~5,600 lines of AI-optimized documentation

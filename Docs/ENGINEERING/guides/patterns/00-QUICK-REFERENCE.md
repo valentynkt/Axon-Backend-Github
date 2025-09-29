@@ -1,222 +1,279 @@
-# 🔥 Architecture Quick Reference
+# 🔥 Quick Reference
 
-**Most frequently accessed patterns and conventions. 80% of queries start here.**
+**Most-used patterns. Copy-paste templates for 80% of daily work.**
 
 ---
 
-## Result<T, Error> Pattern
+## Result<T, Error>
 
-### Basic Usage
 ```csharp
-// Success case
-public Result<User, Error> CreateUser(string email)
-{
-    var user = new User(email);
-    return Result.Success<User, Error>(user);
-}
+// Basic usage
+Result.Success<User, Error>(user)
+Result.Failure<User, Error>(Error.NotFound("Not found", "USER.NOT_FOUND"))
 
-// Failure case
-public Result<User, Error> FindUser(UserId id)
-{
-    if (user not found)
-        return Result.Failure<User, Error>(Error.NotFound("User", id.ToString()));
-        
-    return Result.Success<User, Error>(user);
-}
-```
-
-### Chaining Results
-```csharp
-return await ValidateInput(request)
+// Chaining
+return ValidateInput(request)
     .Bind(validated => CreateEntity(validated))
-    .Bind(entity => repository.SaveAsync(entity))
+    .Bind(entity => _repo.SaveAsync(entity))
     .Map(entity => entity.Id);
-```
 
-**Full Details**: [Domain Primitives](../shared/domain-primitives.md)
+// Pattern matching
+return await result.Match(
+    onSuccess: value => SendOkAsync(value, ct),
+    onFailure: error => SendResultAsync(Results.Problem(error.ToProblem())));
+```
 
 ---
 
-## CQRS Pattern
+## StrongId<T>
 
-### Command (Modifies State)
 ```csharp
-// Command definition
-public sealed record CreateUserCommand(string Email) : ICommand<Result<UserId, Error>>;
+// Definition
+[StronglyTypedId(Template.Guid)]
+public readonly partial struct AxonUserId { }
+
+// Usage
+AxonUserId.New()              // Create
+AxonUserId.From(Guid value)   // From existing
+userId.Value                   // Get Guid
+
+// Prevents bugs
+void Process(AxonUserId id) { }
+void Process(WalletId id) { }
+Process(walletId); // ❌ Compile error - type safety!
+```
+
+---
+
+## Error Factories
+
+```csharp
+// 4xx
+Error.Validation("Required", "FIELD.REQUIRED")
+Error.NotFound("Not found", "RESOURCE.NOT_FOUND")
+Error.Conflict("Duplicate", "RESOURCE.CONFLICT")
+Error.BusinessRule("Invalid", "BUSINESS.RULE")
+Error.Unauthorized("Auth required", "AUTH.REQUIRED")
+
+// 5xx
+Error.Internal("Failed", "INTERNAL.ERROR", ex)
+Error.External("Service down", "EXTERNAL.DOWN", ex)
+Error.Persistence("DB error", "DB.ERROR", ex)
+
+// HTTP mapping (automatic)
+Error.Validation    → 400
+Error.NotFound      → 404
+Error.Conflict      → 409
+Error.BusinessRule  → 422
+Error.Internal      → 500
+```
+
+---
+
+## CQRS
+
+### Command
+
+```csharp
+// Definition
+public sealed record ExchangeCredentialCommand(string BearerToken)
+    : ICommand<ExchangeOutcome>;
 
 // Handler
-public sealed class CreateUserCommandHandler
-    : ICommandHandler<CreateUserCommand, Result<UserId, Error>>
+public sealed class ExchangeCredentialHandler
+    : IRequestHandler<ExchangeCredentialCommand, Result<ExchangeOutcome, Error>>
 {
-    public async Task<Result<UserId, Error>> Handle(
-        CreateUserCommand command, 
-        CancellationToken ct)
+    public async Task<Result<ExchangeOutcome, Error>> Handle(
+        ExchangeCredentialCommand cmd, CancellationToken ct)
     {
-        // Business logic here
+        // Business logic
+        return await _orchestrator.ExchangeAsync(cmd.BearerToken, ct);
     }
 }
 ```
 
-### Query (Reads Data)
+### Query
+
 ```csharp
-// Query definition
-public sealed record GetUserByIdQuery(UserId Id) : IQuery<Result<UserDto, Error>>;
+// Definition
+public sealed record GetMyPrincipalQuery(AxonUserId Id)
+    : IQuery<CurrentUserResult>;
 
 // Handler
-public sealed class GetUserByIdQueryHandler
-    : IQueryHandler<GetUserByIdQuery, Result<UserDto, Error>>
+public sealed class GetMyPrincipalHandler
+    : IRequestHandler<GetMyPrincipalQuery, Result<CurrentUserResult, Error>>
 {
-    public async Task<Result<UserDto, Error>> Handle(
-        GetUserByIdQuery query,
-        CancellationToken ct)
+    public async Task<Result<CurrentUserResult, Error>> Handle(
+        GetMyPrincipalQuery query, CancellationToken ct)
     {
-        // Data retrieval logic
+        var principal = await _repo.GetByIdAsync(query.Id, ct);
+        return principal is null
+            ? Error.NotFound("Not found", "PRINCIPAL.NOT_FOUND")
+            : Result.Success<CurrentUserResult, Error>(MapToDto(principal));
     }
 }
 ```
 
-**Full Details**: [CQRS Patterns](./cqrs-patterns.md)
+---
+
+## Aggregate Root Template
+
+```csharp
+public sealed class AxonPrincipal : AggregateRoot<AxonUserId>
+{
+    // Private state
+    private readonly List<WalletOwnership> _wallets = [];
+
+    // Read-only
+    public IReadOnlyCollection<WalletOwnership> Wallets => _wallets.AsReadOnly();
+
+    // Properties
+    public PrincipalType Type { get; private set; }
+
+    // Factory
+    public static AxonPrincipal CreateHuman() => new(AxonUserId.New(), PrincipalType.Human);
+
+    // Command (enforce invariants)
+    public Result<Unit, Error> LinkWallet(WalletOwnership ownership)
+    {
+        // 1. Idempotency
+        if (_wallets.Any(w => w.WalletId == ownership.WalletId))
+            return Result.Success<Unit, Error>(Unit.Value);
+
+        // 2. Invariant
+        if (_wallets.Count >= 10)
+            return Error.BusinessRule("Max 10 wallets", "WALLET.MAX");
+
+        // 3. Apply
+        _wallets.Add(ownership);
+
+        // 4. Event
+        RaiseDomainEvent(new WalletLinkedEvent(Id, ownership.WalletId));
+
+        return Result.Success<Unit, Error>(Unit.Value);
+    }
+}
+```
 
 ---
 
-## StrongId<T> Pattern
-
-### Definition
-```csharp
-public sealed record UserId(Guid Value) : StrongId<Guid>(Value);
-public sealed record ConversationId(Guid Value) : StrongId<Guid>(Value);
-```
-
-### Usage
-```csharp
-// Compile-time safety
-void ProcessUser(UserId id) { }
-
-UserId userId = new(Guid.NewGuid());
-ConversationId convId = new(Guid.NewGuid());
-
-ProcessUser(userId);   // ✅ Compiles
-ProcessUser(convId);   // ❌ Compile error - type safety!
-```
-
-**Full Details**: [Domain Primitives](../shared/domain-primitives.md)
-
----
-
-## FastEndpoints Pattern
+## FastEndpoints
 
 ### Command Endpoint
+
 ```csharp
-public sealed class CreateUserEndpoint
-    : Endpoint<CreateUserRequest, CreateUserResponse>
+public sealed class ExchangeEndpoint
+    : BaseIdentityCommandEndpoint<ExchangeRequest, ExchangeResponse, ExchangeCommand, ExchangeOutcome>
 {
-    private readonly IMediator _mediator;
+    protected override string GetRoute() => "/api/v1/auth/exchange";
 
     public override void Configure()
     {
-        Post("/api/v1/users");
-        AllowAnonymous();
+        base.Configure();
+        Options(x => x.RequireRateLimiting("AuthExchange"));
     }
 
-    public override async Task HandleAsync(
-        CreateUserRequest req,
-        CancellationToken ct)
+    protected override Task<Result<ExchangeCommand, Error>> ExecuteCommand(
+        ExchangeRequest req, CancellationToken ct)
     {
-        var command = new CreateUserCommand(req.Email);
-        var result = await _mediator.Send(command, ct);
-        
-        await result.Match(
-            onSuccess: userId => SendOkAsync(new CreateUserResponse(userId), ct),
-            onFailure: error => SendResultAsync(Results.Problem(error.ToProblemDetails()))
-        );
+        var token = HttpContext.Request.Headers.Authorization.FirstOrDefault()?["Bearer ".Length..];
+        if (string.IsNullOrEmpty(token))
+            return Task.FromResult(Result.Failure<ExchangeCommand, Error>(
+                Error.Unauthorized("Missing token", "AUTH.MISSING_TOKEN")));
+
+        return Task.FromResult(Result.Success<ExchangeCommand, Error>(new ExchangeCommand(token)));
+    }
+
+    protected override Task<Result<ExchangeResponse, Error>> MapDomainToResponseAsync(
+        ExchangeOutcome outcome, CancellationToken ct)
+    {
+        var response = new ExchangeResponse(outcome.AccessToken, outcome.ExpiresIn);
+        return Task.FromResult(Result.Success<ExchangeResponse, Error>(response));
     }
 }
 ```
 
-**Full Details**: [Libraries/FastEndpoints](../libraries/FastEndpoints/IMPLEMENTATION_GUIDE.md)
+### Query Endpoint
+
+```csharp
+public sealed class GetMyPrincipalEndpoint : BaseIdentityQueryEndpoint<CurrentUserResult>
+{
+    public override void Configure()
+    {
+        Get("/api/v1/auth/me");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+    }
+
+    protected override async Task<Result<CurrentUserResult, Error>> ExecuteQueryAsync(CancellationToken ct)
+    {
+        var principalId = User.GetPrincipalId();
+        if (principalId is null)
+            return Error.Unauthorized("Invalid token", "AUTH.INVALID_TOKEN");
+
+        return await _mediator.Send(new GetMyPrincipalQuery(principalId.Value), ct);
+    }
+}
+```
 
 ---
 
-## Error Types Quick Reference
+## EF Core Configuration
 
 ```csharp
-// Validation error
-Error.Validation("Email is required")
+// Entity configuration
+public sealed class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal>
+{
+    public void Configure(EntityTypeBuilder<AxonPrincipal> builder)
+    {
+        builder.ToTable("axon_principals");
 
-// Not found
-Error.NotFound("User", userId.ToString())
+        // StrongId
+        builder.Property(p => p.Id)
+            .HasConversion(
+                id => id.Value,
+                value => AxonUserId.From(value))
+            .ValueGeneratedNever();
 
-// Business rule violation
-Error.BusinessRule("Cannot delete active user")
+        // Enum as string
+        builder.Property(p => p.Type)
+            .HasConversion<string>()
+            .HasMaxLength(20);
 
-// Conflict (concurrency/duplicates)
-Error.Conflict("Email already exists")
+        // Owned collection
+        builder.OwnsMany(p => p.WalletOwnerships, wb =>
+        {
+            wb.ToTable("wallet_ownerships");
+            wb.WithOwner().HasForeignKey("PrincipalId");
+            wb.Property(w => w.Id).HasConversion(id => id.Value, v => WalletOwnershipId.From(v));
+        });
 
-// Internal system error
-Error.Internal("Database connection failed")
-
-// External service error
-Error.External("Dynamic.xyz API unavailable")
+        // Concurrency
+        builder.Property<byte[]>("RowVersion").IsRowVersion();
+    }
+}
 ```
-
-**Full Details**: [Error Handling Strategy](../shared/error-handling-strategy.md)
 
 ---
 
-## FluentValidation Pattern
+## Domain Events
 
 ```csharp
-public sealed class CreateUserCommandValidator
-    : AbstractValidator<CreateUserCommand>
+// Definition
+public sealed record WalletLinkedEvent(AxonUserId PrincipalId, WalletId WalletId) : DomainEvent;
+
+// Raising
+RaiseDomainEvent(new WalletLinkedEvent(Id, walletId));
+
+// Handling
+public sealed class WalletLinkedHandler
+    : INotificationHandler<DomainEventNotification<WalletLinkedEvent>>
 {
-    public CreateUserCommandValidator()
+    public async Task Handle(DomainEventNotification<WalletLinkedEvent> n, CancellationToken ct)
     {
-        RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required")
-            .EmailAddress().WithMessage("Invalid email format");
+        await _publisher.PublishAsync(new WalletLinkedIntegrationEvent(n.DomainEvent.WalletId), ct);
     }
 }
 ```
-
-**Full Details**: [Validation Framework](../shared/validation-framework.md)
-
----
-
-## Domain Event Pattern
-
-### Event Definition
-```csharp
-public sealed record UserCreated(UserId UserId, string Email) : IDomainEvent;
-```
-
-### Publishing
-```csharp
-public sealed class User : AggregateRoot<UserId>
-{
-    public Result<User, Error> Create(string email)
-    {
-        // ... validation ...
-        
-        var user = new User(email);
-        user.RaiseDomainEvent(new UserCreated(user.Id, email));
-        
-        return Result.Success<User, Error>(user);
-    }
-}
-```
-
-### Handling
-```csharp
-public sealed class UserCreatedHandler : IDomainEventHandler<UserCreated>
-{
-    public async Task Handle(UserCreated @event, CancellationToken ct)
-    {
-        // Side effects (send welcome email, create cache entry, etc.)
-    }
-}
-```
-
-**Full Details**: [DDD Tactical Patterns](./ddd-tactical-patterns.md)
 
 ---
 
@@ -224,142 +281,105 @@ public sealed class UserCreatedHandler : IDomainEventHandler<UserCreated>
 
 ```
 ✅ ALLOWED:
-- Within module: Commands → Queries → Domain
-- Cross-module: Async via Domain Events
+- Commands/Queries within module
+- Domain events for cross-module communication
 
 ❌ FORBIDDEN:
-- Direct references between modules
-- Cross-module command/query calls
+- Direct cross-module service calls
 - Shared database tables between modules
+- Cross-module command/query calls
 ```
-
-**Full Details**: [Modular Monolith](./modular-monolith.md)
 
 ---
 
-## File Organization Conventions
+## Common Patterns
+
+### No-op Guard (Idempotency)
 
 ```csharp
-// ✅ Correct: File-scoped namespace
-namespace Axon.Modules.Identity.Domain;
-
-public sealed class User : AggregateRoot<UserId>
+public Result<Unit, Error> UpdateRiskTier(RiskTier tier)
 {
-    // ...
-}
-
-// ❌ Incorrect: Block-scoped namespace
-namespace Axon.Modules.Identity.Domain
-{
-    public sealed class User { }
-}
-
-// ✅ Correct: Target-typed new
-List<string> items = new();
-
-// ❌ Incorrect: Redundant type
-List<string> items = new List<string>();
-
-// ✅ Correct: Records for DTOs
-public sealed record UserDto(UserId Id, string Email);
-
-// ❌ Incorrect: Classes for DTOs
-public sealed class UserDto
-{
-    public UserId Id { get; set; }
-    public string Email { get; set; }
+    if (RiskTier == tier) return Result.Success<Unit, Error>(Unit.Value);
+    // ... apply change
 }
 ```
 
-**Full Details**: [Coding Standards](./coding-standards.md)
+### Cross-Aggregate Validation (Function Injection)
 
----
-
-## Common Mistakes to Avoid
-
-### ❌ Throwing Exceptions for Business Logic
 ```csharp
-// BAD
-public User CreateUser(string email)
+public Result<Unit, Error> LinkWallet(
+    WalletOwnership ownership,
+    Func<WalletId, Result<bool, Error>> checkConflict)
 {
-    if (string.IsNullOrEmpty(email))
-        throw new ArgumentException("Email required");
-}
-
-// GOOD
-public Result<User, Error> CreateUser(string email)
-{
-    if (string.IsNullOrEmpty(email))
-        return Result.Failure<User, Error>(Error.Validation("Email required"));
+    var conflict = checkConflict(ownership.WalletId);
+    if (conflict.IsFailure || conflict.Value)
+        return Error.Conflict("Conflict", "WALLET.EXISTS");
+    // ... proceed
 }
 ```
 
-### ❌ Primitive Obsession
+### Command Handler
+
 ```csharp
-// BAD
-void ProcessUser(Guid userId) { }
-void ProcessConversation(Guid conversationId) { }
-ProcessUser(conversationId); // Oops! No compile error
-
-// GOOD
-void ProcessUser(UserId userId) { }
-void ProcessConversation(ConversationId conversationId) { }
-ProcessUser(conversationId); // ✅ Compile error!
-```
-
-### ❌ Anemic Domain Models
-```csharp
-// BAD
-public class User
+public async Task<Result<Unit, Error>> Handle(LinkWalletCommand cmd, CancellationToken ct)
 {
-    public string Email { get; set; }
-    public List<WalletAddress> Wallets { get; set; }
-}
-// Business logic in services instead of domain
+    // 1. Load
+    var principal = await _repo.GetByIdAsync(cmd.PrincipalId, ct);
+    if (principal is null) return Error.NotFound("Not found", "PRINCIPAL.NOT_FOUND");
 
-// GOOD
-public sealed class User : AggregateRoot<UserId>
-{
-    private readonly List<WalletOwnership> _wallets = new();
-    
-    public Result<WalletOwnership, Error> LinkWallet(WalletAddress address)
-    {
-        // Invariant enforcement in domain
-        if (_wallets.Any(w => w.Address == address))
-            return Result.Failure<WalletOwnership, Error>(
-                Error.BusinessRule("Wallet already linked"));
-                
-        var ownership = new WalletOwnership(Id, address);
-        _wallets.Add(ownership);
-        return Result.Success<WalletOwnership, Error>(ownership);
-    }
+    // 2. Execute
+    var result = principal.LinkWallet(ownership, (wId) => _repo.ExistsAsync(wId, ct));
+    if (result.IsFailure) return result.Error;
+
+    // 3. Persist
+    await _uow.SaveChangesAsync(ct);
+    return Result.Success<Unit, Error>(Unit.Value);
 }
 ```
 
 ---
 
-## Quick Command Reference
+## Key Rules
+
+### ✅ DO
+- `Result<T, Error>` for all business logic
+- StrongId for type safety
+- Private setters on aggregates
+- No-op guards for idempotency
+- `RaiseDomainEvent()` after changes
+
+### ❌ DON'T
+- Exceptions for business logic
+- Public setters on aggregates
+- Primitive IDs (Guid, int)
+- Direct cross-module calls
+- Anemic domain models
+
+---
+
+## Commands
 
 ```bash
 # Build
 dotnet build
 
-# Run tests
-dotnet test
-
-# Run API
+# Run
 dotnet run --project src/Api
 
-# Add migration
-dotnet ef migrations add <MigrationName> --project src/Modules/Identity/Infrastructure
+# Tests
+dotnet test
 
-# Update database
+# Migration
+dotnet ef migrations add <Name> --project src/Modules/Identity/Infrastructure
 dotnet ef database update --project src/Modules/Identity/Infrastructure
 ```
 
 ---
 
-**For More Details**:
-- Complete architecture → [System Overview](./system-overview.md)
-- Module documentation → [Identity](../modules/identity/00-MODULE-README.md) | [Chat](../modules/chat/00-MODULE-README.md)
-- Shared patterns → [BuildingBlocks](../shared/README.md)
+**For Details**:
+- [Domain Modeling](./domain-modeling.md)
+- [CQRS](./cqrs.md)
+- [System Overview](../architecture/system-overview.md)
+- [Identity Module](../../modules/identity/00-INDEX.md)
+
+**Lines**: ~400 (60% reduction from 1025)

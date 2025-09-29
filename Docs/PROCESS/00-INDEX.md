@@ -53,7 +53,7 @@ PROCESS/
 **Start here** for story management, sprint planning, and workflow documentation.
 
 **For technical implementation** see [ENGINEERING/](../ENGINEERING/00-START-HERE.md)
-**For business requirements** see [PRODUCT/](../PRODUCT/00-PRODUCT-OVERVIEW.md)
+**For business requirements** see [PRODUCT/](../PRODUCT/00-INDEX.md)
 
 ---
 

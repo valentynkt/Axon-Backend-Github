@@ -10,9 +10,9 @@
 
 | What You Need | Documentation Domain |
 |---------------|---------------------|
-| **Business vision, strategy, MVP scope** | [PRODUCT/](./PRODUCT/00-PRODUCT-OVERVIEW.md) |
+| **Business vision, strategy, MVP scope** | [PRODUCT/](./PRODUCT/00-INDEX.md) |
 | **Technical architecture, code patterns, APIs** | [ENGINEERING/](./ENGINEERING/00-START-HERE.md) |
-| **Project workflow, stories, sprint artifacts** | [PROCESS/](./PROCESS/00-PROCESS-README.md) |
+| **Project workflow, stories, sprint artifacts** | [PROCESS/](./PROCESS/00-INDEX.md) |
 
 ---
 
@@ -21,7 +21,7 @@
 ### 1. PRODUCT/ - Business & Strategy
 **WHO**: Leadership, product managers, investors, business stakeholders
 **WHAT**: WHY we build what we build
-**START HERE**: [`PRODUCT/00-PRODUCT-OVERVIEW.md`](./PRODUCT/00-PRODUCT-OVERVIEW.md)
+**START HERE**: [`PRODUCT/00-INDEX.md`](./PRODUCT/00-INDEX.md)
 
 **Contains**:
 - Vision & manifesto
@@ -53,7 +53,7 @@
 ### 3. PROCESS/ - Workflow & Project Management
 **WHO**: Project managers, scrum masters, team leads
 **WHAT**: WHEN/WHO builds features
-**START HERE**: [`PROCESS/00-PROCESS-README.md`](./PROCESS/00-PROCESS-README.md)
+**START HERE**: [`PROCESS/00-INDEX.md`](./PROCESS/00-INDEX.md)
 
 **Contains**:
 - BMAD methodology
@@ -113,9 +113,9 @@ Clarity Score: 9/10
 3. Read [ENGINEERING/architecture/system-overview.md](./ENGINEERING/architecture/system-overview.md)
 
 **Day 3**: Module Deep-Dive
-1. Read [ENGINEERING/modules/identity/](./ENGINEERING/modules/identity/00-MODULE-README.md)
-2. Read [ENGINEERING/modules/chat/](./ENGINEERING/modules/chat/00-MODULE-README.md)
-3. Set up local environment using [ENGINEERING/development/](./ENGINEERING/development/00-DEVELOPMENT-OVERVIEW.md)
+1. Read [ENGINEERING/modules/identity/](./ENGINEERING/modules/identity/00-INDEX.md)
+2. Read [ENGINEERING/modules/chat/](./ENGINEERING/modules/chat/00-INDEX.md)
+3. Set up local environment using [ENGINEERING/guides/](./ENGINEERING/guides/00-INDEX.md)
 
 ---
 
@@ -185,6 +185,6 @@ For task routing, load:
 ---
 
 **Start Your Journey**:
-- Business → [PRODUCT/00-PRODUCT-OVERVIEW.md](./PRODUCT/00-PRODUCT-OVERVIEW.md)
+- Business → [PRODUCT/00-INDEX.md](./PRODUCT/00-INDEX.md)
 - Technical → [ENGINEERING/00-START-HERE.md](./ENGINEERING/00-START-HERE.md)
-- Process → [PROCESS/00-PROCESS-README.md](./PROCESS/00-PROCESS-README.md)
+- Process → [PROCESS/00-INDEX.md](./PROCESS/00-INDEX.md)

@@ -38,7 +38,7 @@
 - [Health Checks](./observability/health-checks.md) - Health check registration, custom checks
 
 ### Resilience
-- [Resilience Patterns](./resilience/README.md) - Overview of fault tolerance strategies
+- [Resilience Patterns](./resilience/00-INDEX.md) - Overview of fault tolerance strategies
 - [Retry Policies](./resilience/retry-policies.md) - Polly retry, exponential backoff
 - [Circuit Breakers](./resilience/circuit-breakers.md) - Break conditions, fallback
 - [Timeout Handling](./resilience/timeout-handling.md) - HTTP/DB timeouts, CancellationToken
