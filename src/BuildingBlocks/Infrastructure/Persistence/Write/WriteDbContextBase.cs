@@ -173,7 +173,13 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
     private static void ThrowConcurrencyException(DbUpdateConcurrencyException ex)
     {
-        var firstEntry = ex.Entries.Count > 0 ? ex.Entries[0] : null;
+        // Filter to only aggregate roots or entities with their own concurrency control
+        // Owned entities should not trigger concurrency exceptions independently
+        var nonOwnedEntries = ex.Entries
+            .Where(e => !e.Metadata.IsOwned())
+            .ToList();
+
+        var firstEntry = nonOwnedEntries.Count > 0 ? nonOwnedEntries[0] : (ex.Entries.Count > 0 ? ex.Entries[0] : null);
         if (firstEntry == null)
         {
             throw ex; // Re-throw original if no entries

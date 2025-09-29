@@ -144,4 +144,30 @@ node_modules/
 
 # Task files
 # tasks.json
-# tasks/ 
+# tasks/
+
+# Tool-specific configurations
+.bmad-core/
+.taskmaster/
+
+# Temporary development files
+CONCURRENCY_FIX_SUMMARY.md
+POLICY_CONTROL.json
+
+# Backup files
+*.bak
+*.old
+*_old*
+
+# Database files
+*.db
+*.sqlite
+*.mdf
+*.ldf
+
+# Swarm/AI tool files
+.swarm/
+.hive-mind/
+
+# Test result files
+**/*.trx 

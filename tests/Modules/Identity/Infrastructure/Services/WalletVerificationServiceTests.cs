@@ -352,16 +352,29 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
         AccessMode accessMode,
         OwnershipStatus status)
     {
-        // Create or get principal
-        var principal = await _principalRepository.GetByIdAsync(principalId, CancellationToken.None)
-                        ?? AxonPrincipal.CreateHuman(principalId);
+        // Check if principal already exists
+        var existingPrincipal = await _principalRepository.GetByIdAsync(principalId, CancellationToken.None);
+
+        AxonPrincipal principal;
+        bool isNew = false;
+
+        if (existingPrincipal == null)
+        {
+            // Create new principal
+            principal = AxonPrincipal.CreateHuman(principalId);
+            isNew = true;
+        }
+        else
+        {
+            principal = existingPrincipal;
+        }
 
         // Create and link ownership
         var ownership = CreateTestWalletOwnership(principalId, walletId, accessMode, status);
         principal.LinkWalletOwnership(ownership, (_, _, _) => CSharpFunctionalExtensions.Result.Success<bool, Error>(false));
 
         // Save principal with ownership
-        if (await _principalRepository.GetByIdAsync(principalId, CancellationToken.None) == null)
+        if (isNew)
         {
             await _principalRepository.AddAsync(principal, CancellationToken.None);
         }

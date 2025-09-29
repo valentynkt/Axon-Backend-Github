@@ -11,7 +11,10 @@ using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Services;
 using BuildingBlocks.Application;
+using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
+using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -63,7 +66,8 @@ public class WalletVerificationIntegrationTests
         await CreateDatabaseSchema();
 
         _logger = Substitute.For<ILogger<WalletVerificationService>>();
-        _unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
+        // Use a real unit of work implementation instead of a mock
+        _unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(_writeContext);
         _principalRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork);
         _verificationService = new WalletVerificationService(_principalRepository, _unitOfWork, _logger);
     }
@@ -71,10 +75,9 @@ public class WalletVerificationIntegrationTests
     [TearDown]
     public async Task TearDown()
     {
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.principal CASCADE");
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet CASCADE");
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownership CASCADE");
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.principal_chain_default CASCADE");
+        // TRUNCATE principal CASCADE will automatically clear owned entities (wallet_ownership, principal_chain_default)
+        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.\"Principal\" CASCADE");
+        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.\"Wallet\" CASCADE");
         await _writeContext.DisposeAsync();
     }
 
@@ -111,11 +114,25 @@ public class WalletVerificationIntegrationTests
         conflictCount.ShouldBe(1);
 
         // Verify only one verified ownership exists in database
-        var verifiedOwnerships = await _writeContext.WalletOwnerships
+        // WalletOwnership is an owned entity, so we must query through the principal
+        var principalsWithOwnership = await _writeContext.Principals
+            .Include(p => p.WalletOwnerships)
+            .Where(p => p.WalletOwnerships.Any(o =>
+                o.WalletId == walletId &&
+                o.Status == OwnershipStatus.Verified &&
+                o.AccessMode == AccessMode.Signing))
+            .ToListAsync();
+
+        // Should have exactly one principal with verified signing ownership
+        principalsWithOwnership.Count.ShouldBe(1);
+
+        // And that principal should have exactly one matching ownership
+        var verifiedOwnerships = principalsWithOwnership
+            .SelectMany(p => p.WalletOwnerships)
             .Where(o => o.WalletId == walletId &&
                        o.Status == OwnershipStatus.Verified &&
                        o.AccessMode == AccessMode.Signing)
-            .ToListAsync();
+            .ToList();
 
         verifiedOwnerships.Count.ShouldBe(1);
     }
@@ -194,9 +211,16 @@ public class WalletVerificationIntegrationTests
         successCount.ShouldBeGreaterThan(0);
 
         // Verify database state is consistent
-        var allOwnerships = await _writeContext.WalletOwnerships
-            .Where(o => o.Status == OwnershipStatus.Verified)
+        // Query through principals since WalletOwnership is an owned entity
+        var principalsWithVerifiedOwnerships = await _writeContext.Principals
+            .Include(p => p.WalletOwnerships)
+            .Where(p => p.WalletOwnerships.Any(o => o.Status == OwnershipStatus.Verified))
             .ToListAsync();
+
+        var allOwnerships = principalsWithVerifiedOwnerships
+            .SelectMany(p => p.WalletOwnerships)
+            .Where(o => o.Status == OwnershipStatus.Verified)
+            .ToList();
 
         allOwnerships.Count.ShouldBeGreaterThan(0);
     }
@@ -218,8 +242,16 @@ public class WalletVerificationIntegrationTests
         await _verificationService.VerifyWalletOwnershipAsync(
             walletId, principalId, accessMode, verificationSource, CancellationToken.None);
 
-        // Reset for actual test
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.wallet_ownership CASCADE");
+        // Reset for actual test - remove the ownership from the principal
+        var principal = await _writeContext.Principals
+            .Include(p => p.WalletOwnerships)
+            .FirstOrDefaultAsync(p => p.Id == principalId);
+
+        if (principal != null)
+        {
+            principal.RemoveWalletOwnership(walletId);
+            await _writeContext.SaveChangesAsync();
+        }
 
         // Act
         var stopwatch = Stopwatch.StartNew();
@@ -245,6 +277,10 @@ public class WalletVerificationIntegrationTests
         await CreateTestPrincipal(principalId);
 
         // Create a pending ownership to simulate constraint violation scenario
+        // Must add ownership through the principal since it's an owned entity
+        var principal = await _writeContext.Principals.FindAsync(principalId);
+        principal.ShouldNotBeNull();
+
         var existingOwnership = WalletOwnership.Create(
             principalId,
             walletId,
@@ -252,7 +288,9 @@ public class WalletVerificationIntegrationTests
             OwnershipStatus.Pending,
             VerificationSource.WatchOnly);
 
-        await _writeContext.WalletOwnerships.AddAsync(existingOwnership);
+        principal.LinkWalletOwnership(existingOwnership, (_, _, _) =>
+            Result.Success<bool, Error>(false));
+
         await _writeContext.SaveChangesAsync();
 
         var accessMode = AccessMode.Signing;
