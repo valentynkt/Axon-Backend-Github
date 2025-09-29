@@ -26,7 +26,6 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
     public override string ModuleName => "chat";
 
     public DbSet<Conversation> Conversations => Set<Conversation>();
-    public DbSet<Message> Messages => Set<Message>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,8 +40,18 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
         var conversationConfig = new Persistence.Configurations.ConversationConfiguration();
         conversationConfig.Configure(modelBuilder.Entity<Conversation>());
 
-        var messageConfig = new Persistence.Configurations.MessageConfiguration();
-        messageConfig.Configure(modelBuilder.Entity<Message>());
+        // Messages are now configured as owned entities within ConversationConfiguration
+        // They are accessed through the Conversation aggregate root, not directly
+
+        // Remove query filters from owned entities (EF Core doesn't support filters on owned types)
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (entityType.IsOwned())
+            {
+                // Clear any query filter that was automatically applied
+                entityType.SetQueryFilter(null);
+            }
+        }
     }
 
     protected override void ApplyAuditInformation()

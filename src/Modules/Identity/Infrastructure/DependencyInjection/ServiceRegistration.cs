@@ -259,7 +259,7 @@ public static class ServiceRegistration
         // Register Principal Resolution Service for Story 5.3
         services.AddScoped<IPrincipalResolutionService, PrincipalResolutionService>();
 
-        // Register Wallet Verification Service for Story 5.4 - Transaction guards
+        // Register Wallet Verification Service - Using V1 until V2 is fixed
         services.AddScoped<IWalletVerificationService, WalletVerificationService>();
 
 

@@ -84,6 +84,19 @@ public sealed partial class AxonPrincipal
                     ownership.Status.ToString()
                 ));
 
+                // If we just updated to verified+signing, trigger auto-revocation
+                if (ownership.IsVerifiedSigning)
+                {
+                    RaiseDomainEvent(new OwnershipChangedEvent(
+                        Id,
+                        ownership.WalletId,
+                        "verified_signing_added",
+                        ownership.AccessMode.ToString(),
+                        ownership.Status.ToString(),
+                        new Dictionary<string, string> { { "RequiresAutoRevocation", "true" } }
+                    ));
+                }
+
                 return Result.Success<Unit, Error>(Unit.Value);
             }
 
@@ -92,9 +105,10 @@ public sealed partial class AxonPrincipal
             return Result.Success<Unit, Error>(Unit.Value);
         }
 
-        // Check for conflicting ownership (only one verified+signing owner per wallet)
-        if (ownership.IsVerifiedSigning)
+        // Check for conflicting ownership
+        if (ownership.AccessMode == AccessMode.Signing)
         {
+            // Check if another principal already has verified+signing ownership
             var conflictCheck = checkExistingOwnershipFunc(
                 ownership.WalletId,
                 AccessMode.Signing,
@@ -104,8 +118,12 @@ public sealed partial class AxonPrincipal
             if (conflictCheck.IsFailure)
                 return Result.Failure<Unit, Error>(conflictCheck.Error);
 
-            if (conflictCheck.Value) // Another principal owns this wallet as verified+signing
+            if (conflictCheck.Value)
+            {
+                // Another principal owns this wallet as verified+signing
+                // No new signing ownership (pending or verified) should be allowed
                 return Result.Failure<Unit, Error>(IdentityDomainErrors.Wallet.AlreadyOwned());
+            }
         }
 
         // Check max wallets constraint
@@ -509,6 +527,86 @@ public sealed partial class AxonPrincipal
         ));
 
         return Result.Success<Unit, Error>(Unit.Value);
+    }
+
+    /// <summary>
+    /// Verifies wallet ownership by creating or updating an ownership record.
+    /// </summary>
+    public Result<WalletOwnership, Error> VerifyWalletOwnership(
+        WalletId walletId,
+        AccessMode accessMode,
+        VerificationSource verificationSource)
+    {
+        // Check for existing ownership
+        var existingOwnership = _walletOwnerships.FirstOrDefault(wo =>
+            wo.WalletId == walletId && !wo.IsDeleted);
+
+        if (existingOwnership != null)
+        {
+            // Check access mode
+            if (existingOwnership.AccessMode != accessMode)
+            {
+                return Result.Failure<WalletOwnership, Error>(
+                    IdentityDomainErrors.Wallet.OwnershipAlreadyExists());
+            }
+
+            // Update to verified status
+            var updateResult = existingOwnership.UpdateStatus(OwnershipStatus.Verified);
+            if (updateResult.IsFailure)
+            {
+                return Result.Failure<WalletOwnership, Error>(updateResult.Error);
+            }
+
+            // Raise domain event
+            RaiseDomainEvent(new OwnershipChangedEvent(
+                Id,
+                walletId,
+                "verified",
+                accessMode.ToString(),
+                OwnershipStatus.Verified.ToString()
+            ));
+
+            return Result.Success<WalletOwnership, Error>(existingOwnership);
+        }
+
+        // Create new ownership
+        var newOwnership = WalletOwnership.Create(
+            Id,
+            walletId,
+            accessMode,
+            OwnershipStatus.Verified,
+            verificationSource);
+
+        _walletOwnerships.Add(newOwnership);
+
+        // Raise domain event
+        RaiseDomainEvent(new OwnershipChangedEvent(
+            Id,
+            walletId,
+            "created_verified",
+            accessMode.ToString(),
+            OwnershipStatus.Verified.ToString()
+        ));
+
+        return Result.Success<WalletOwnership, Error>(newOwnership);
+    }
+
+    /// <summary>
+    /// Gets ownership for a specific wallet.
+    /// </summary>
+    public WalletOwnership? GetWalletOwnership(WalletId walletId)
+    {
+        return _walletOwnerships.FirstOrDefault(wo =>
+            wo.WalletId == walletId && !wo.IsDeleted);
+    }
+
+    /// <summary>
+    /// Checks if principal has verified signing ownership of a wallet.
+    /// </summary>
+    public bool HasVerifiedSigningOwnership(WalletId walletId)
+    {
+        var ownership = GetWalletOwnership(walletId);
+        return ownership?.IsVerifiedSigning ?? false;
     }
 
     /// <summary>

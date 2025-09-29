@@ -19,7 +19,7 @@ using NUnit.Framework;
 using Shouldly;
 using Npgsql;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// Base class for all Identity persistence tests providing shared infrastructure and utilities.

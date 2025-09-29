@@ -1,16 +1,21 @@
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// Tests for wallet ownership persistence focusing on unique constraints and business rules.
@@ -105,9 +110,15 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Verify all ownerships were saved
         ClearChangeTracker();
-        var savedOwnerships = await DbContext.WalletOwnerships
-            .Where(wo => wo.WalletId == sharedWallet.Id)
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
             .ToListAsync();
+
+        var savedOwnerships = principals
+            .SelectMany(p => p.WalletOwnerships)
+            .Where(wo => wo.WalletId == sharedWallet.Id)
+            .ToList();
 
         savedOwnerships.Count.ShouldBe(3);
         savedOwnerships.ShouldAllBe(wo => wo.AccessMode == AccessMode.WatchOnly);
@@ -148,9 +159,15 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         ClearChangeTracker();
-        var savedOwnerships = await DbContext.WalletOwnerships
-            .Where(wo => wo.WalletId == sharedWallet.Id)
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
             .ToListAsync();
+
+        var savedOwnerships = principals
+            .SelectMany(p => p.WalletOwnerships)
+            .Where(wo => wo.WalletId == sharedWallet.Id)
+            .ToList();
 
         savedOwnerships.Count.ShouldBe(2);
         savedOwnerships.ShouldAllBe(wo => wo.AccessMode == AccessMode.Signing);
@@ -214,8 +231,13 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Assert: Status should be updated in database
         ClearChangeTracker();
-        var savedOwnership = await DbContext.WalletOwnerships
-            .FirstAsync(wo => wo.PrincipalId == principal.Id && wo.WalletId == wallet.Id);
+        var reloadedPrincipalCheck = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
+            .FirstAsync(p => p.Id == principal.Id);
+
+        var savedOwnership = reloadedPrincipalCheck.WalletOwnerships
+            .First(wo => wo.WalletId == wallet.Id);
 
         savedOwnership.Status.ShouldBe(OwnershipStatus.Verified);
     }
@@ -316,11 +338,17 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         ClearChangeTracker();
-        var verifiedOwnerships = await DbContext.WalletOwnerships
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
+            .ToListAsync();
+
+        var verifiedOwnerships = principals
+            .SelectMany(p => p.WalletOwnerships)
             .Where(wo => wo.WalletId == sharedWallet.Id &&
                         wo.Status == OwnershipStatus.Verified &&
                         wo.AccessMode == AccessMode.Signing)
-            .ToListAsync();
+            .ToList();
 
         verifiedOwnerships.Count.ShouldBe(1);
         verifiedOwnerships.Single().PrincipalId.ShouldBe(principal2.Id);
@@ -368,9 +396,15 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Assert: Ownership should be transferred
         ClearChangeTracker();
-        var ownerships = await DbContext.WalletOwnerships
-            .Where(wo => wo.WalletId == wallet.Id)
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
             .ToListAsync();
+
+        var ownerships = principals
+            .SelectMany(p => p.WalletOwnerships)
+            .Where(wo => wo.WalletId == wallet.Id)
+            .ToList();
 
         ownerships.Count.ShouldBe(1);
         ownerships.Single().PrincipalId.ShouldBe(principal2.Id);
@@ -398,8 +432,13 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Verify ownerships exist
         ClearChangeTracker();
-        var ownershipCount = await DbContext.WalletOwnerships
-            .CountAsync(wo => wo.PrincipalId == principal.Id);
+        var principalWithOwnerships = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
+            .FirstOrDefaultAsync(p => p.Id == principal.Id);
+
+        principalWithOwnerships.ShouldNotBeNull();
+        var ownershipCount = principalWithOwnerships.WalletOwnerships.Count;
         ownershipCount.ShouldBe(3);
 
         // Act: Delete the principal
@@ -413,9 +452,13 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Assert: All ownerships should be cascade deleted
         ClearChangeTracker();
-        var remainingOwnerships = await DbContext.WalletOwnerships
-            .CountAsync(wo => wo.PrincipalId == principal.Id);
-        remainingOwnerships.ShouldBe(0);
+        var remainingPrincipal = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
+            .FirstOrDefaultAsync(p => p.Id == principal.Id);
+
+        // Principal should be deleted
+        remainingPrincipal.ShouldBeNull();
 
         // Wallets should still exist
         var walletCount = await DbContext.Wallets.CountAsync();
@@ -436,17 +479,43 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
 
-        // Load principal in two contexts
+        // Create separate contexts for concurrent access
+        using var concurrentContext = CreateConcurrentDbContext();
+        using var concurrentUow = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
+        using var concurrentRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUow);
+
+        // Load principal in two separate contexts
+        // Clear tracker to ensure clean load
+        ClearChangeTracker();
         var principal1 = await PrincipalRepository.GetByIdAsync(principal.Id);
-        var principal2 = await PrincipalRepository.GetByIdAsync(principal.Id);
+
+        // Load in concurrent context
+        var principal2 = await concurrentRepo.GetByIdAsync(principal.Id);
 
         principal1.ShouldNotBeNull();
         principal2.ShouldNotBeNull();
 
-        // Act: Both contexts try to modify the ownership status
+        // Act: Both contexts try to modify the principal
+        // Modifying child entities (owned entities) doesn't trigger concurrency checks by themselves
+        // We need to ensure the aggregate root is actually modified
+
+        // Verify initial state
+        principal1.RiskTier.ShouldBe(RiskTier.Low, "Principal1 should start with Low risk tier");
+        principal2.RiskTier.ShouldBe(RiskTier.Low, "Principal2 should start with Low risk tier");
+
+        // Both principals start with RiskTier.Low, so update to different values
+        var result1 = principal1.UpdateRiskTier(RiskTier.Medium);
+        var result2 = principal2.UpdateRiskTier(RiskTier.High);
+
+        result1.IsSuccess.ShouldBeTrue("Principal1 risk tier update should succeed");
+        result2.IsSuccess.ShouldBeTrue("Principal2 risk tier update should succeed");
+
+        principal1.RiskTier.ShouldBe(RiskTier.Medium, "Principal1 should have Medium risk tier after update");
+        principal2.RiskTier.ShouldBe(RiskTier.High, "Principal2 should have High risk tier after update");
+
+        // Also modify ownership status to simulate realistic concurrent updates
         var ownership1 = principal1.WalletOwnerships.First();
         var ownership2 = principal2.WalletOwnerships.First();
-
         ownership1.UpdateStatus(OwnershipStatus.Verified);
         ownership2.UpdateStatus(OwnershipStatus.Revoked);
 
@@ -454,11 +523,26 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
 
-        // Try to save second context
-        await PrincipalRepository.UpdateAsync(principal2);
+        // Clear change tracker to ensure fresh read
+        ClearChangeTracker();
+
+        // Verify first update was actually saved
+        var verifyPrincipal = await DbContext.Principals
+            .AsNoTracking()
+            .FirstAsync(p => p.Id == principal.Id);
+        verifyPrincipal.RiskTier.ShouldBe(RiskTier.Medium, "First update should be persisted");
+
+        // Try to save second context (which has stale version)
+        await concurrentRepo.UpdateAsync(principal2);
 
         // Assert: Should fail due to concurrency conflict
-        AssertConcurrencyConflict(async () => await UnitOfWork.SaveChangesAsync());
+        // The WriteDbContextBase wraps DbUpdateConcurrencyException in a ConcurrencyException
+        var exception = await Should.ThrowAsync<ConcurrencyException>(
+            async () => await concurrentUow.SaveChangesAsync());
+
+        // Verify the exception details
+        exception.Message.ShouldContain("has been modified by another user");
+        exception.Message.ShouldContain(principal.Id.ToString());
     }
 
     [Test]

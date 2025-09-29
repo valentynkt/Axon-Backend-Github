@@ -7,7 +7,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 
 /// <summary>
 /// Canonical test data fixtures from TDD document.

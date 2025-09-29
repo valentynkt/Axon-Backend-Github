@@ -7,7 +7,7 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -21,12 +21,12 @@ using Shouldly;
 namespace Axon.Modules.Identity.Application;
 
 /// <summary>
-/// Integration tests combining Resolution Algorithm and Defaults Behavior.
+/// Unit tests for Resolution Algorithm and Defaults Behavior using mocked dependencies.
 /// These tests validate the complete flow from exchange command to final state
-/// including both domain logic and database interactions.
+/// focusing on domain logic and handler behavior.
 /// </summary>
 [TestFixture]
-public class ResolutionIntegrationTests : IdentityResolutionTestBase
+public class ResolutionHandlerTests : IdentityResolutionTestBase
 {
     #region Complete Flow Integration Tests
 

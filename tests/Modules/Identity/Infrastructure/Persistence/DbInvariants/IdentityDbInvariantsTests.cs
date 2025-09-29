@@ -7,10 +7,11 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 
 /// <summary>
 /// DB Invariant tests for Identity Module as specified in TDD document section A.
@@ -67,17 +68,20 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
     {
         // Arrange: Create plain principal (no credentials)
         var principal = TestDataFixtures.CreatePlainPrincipal();
+
+        // Add first credential through aggregate
+        var firstCredential = TestDataFixtures.CreateDynACredential(principal.Id);
+        principal.AddCredential(firstCredential, (_, _, _) => Result.Success<bool, Error>(false));
+
         await PrincipalRepository.AddAsync(principal);
         await UnitOfWork.SaveChangesAsync();
 
-        // Add first credential
-        var firstCredential = TestDataFixtures.CreateDynACredential(principal.Id);
-        await DbContext.Credentials.AddAsync(firstCredential);
-        await UnitOfWork.SaveChangesAsync();
+        // Act: Try to create duplicate credential tuple for another principal
+        var principal2 = TestDataFixtures.CreatePlainPrincipal();
+        var duplicateCredential = TestDataFixtures.CreateDynACredential(principal2.Id);
+        principal2.AddCredential(duplicateCredential, (_, _, _) => Result.Success<bool, Error>(false));
 
-        // Act: Try to create duplicate credential tuple
-        var duplicateCredential = TestDataFixtures.CreateDynACredential(principal.Id);
-        await DbContext.Credentials.AddAsync(duplicateCredential);
+        await PrincipalRepository.AddAsync(principal2);
 
         // Assert: Should violate unique constraint
         await AssertPostgreSQLConstraintViolation(
@@ -91,15 +95,15 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
     {
         // Arrange: Create plain principal (no credentials)
         var principal = TestDataFixtures.CreatePlainPrincipal();
-        await PrincipalRepository.AddAsync(principal);
-        await UnitOfWork.SaveChangesAsync();
 
         // Act: Create credentials for same provider/issuer but different subjects
         var credentialA = TestDataFixtures.CreateDynACredential(principal.Id);
         var credentialB = TestDataFixtures.CreateDynBCredential(principal.Id); // Different subject
 
-        await DbContext.Credentials.AddAsync(credentialA);
-        await DbContext.Credentials.AddAsync(credentialB);
+        principal.AddCredential(credentialA, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.AddCredential(credentialB, (_, _, _) => Result.Success<bool, Error>(false));
+
+        await PrincipalRepository.AddAsync(principal);
 
         // Assert: Should succeed (different subjects allowed)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -116,24 +120,27 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var principal = TestDataFixtures.CreatePrincipalA();
         var wallet = TestDataFixtures.CreateW1Main();
 
-        await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(wallet);
-        await UnitOfWork.SaveChangesAsync();
-
-        // Act: Create first ownership
+        // Add first ownership to principal before saving
         var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
         principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        await PrincipalRepository.UpdateAsync(principal);
+
+        await PrincipalRepository.AddAsync(principal);
+        await WalletRepository.AddAsync(wallet);
         await UnitOfWork.SaveChangesAsync();
 
-        // Try to create duplicate ownership pair
-        var ownership2 = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
+        // Act: Try to directly manipulate data to create duplicate ownership pair
+        // This simulates a data integrity violation scenario
+        var duplicateInsert = @"INSERT INTO identity.""WalletOwnership""
+                                 (principal_id, id, wallet_id, access_mode, status, verification_source, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @walletId, 'Signing', 'Pending', 'Manual', NOW(), NOW(), false)";
 
-        await DbContext.WalletOwnerships.AddAsync(ownership2);
-
-        // Assert: Should violate unique constraint for (principal_id, wallet_id)
-        await AssertPostgreSQLConstraintViolation(
-            async () => await UnitOfWork.SaveChangesAsync(),
+        // Assert: Should violate unique constraint for (principal_id, wallet_id) (using Raw assertion for direct SQL)
+        await AssertPostgreSQLConstraintViolationRaw(
+            async () => await DbContext.Database.ExecuteSqlRawAsync(
+                duplicateInsert,
+                new NpgsqlParameter("@principalId", principal.Id.Value),
+                new NpgsqlParameter("@id", Guid.NewGuid()),
+                new NpgsqlParameter("@walletId", wallet.Id.Value)),
             "ux_ownership_pair"
         );
     }
@@ -145,20 +152,19 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var (principalA, principalB, wallet) = TestDataFixtures.CreateExclusivityScenario();
         var wallet2 = TestDataFixtures.CreateW2Main();
 
-        await PrincipalRepository.AddAsync(principalA);
-        await PrincipalRepository.AddAsync(principalB);
-        await DbContext.Wallets.AddAsync(wallet);
-        await DbContext.Wallets.AddAsync(wallet2);
-        await UnitOfWork.SaveChangesAsync();
-
-        // Act: Create different ownership pairs
+        // Act: Create different ownership pairs through aggregates
         var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, wallet.Id);
         var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, wallet2.Id);
         var ownership3 = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principalA.Id, wallet2.Id);
 
-        await DbContext.WalletOwnerships.AddAsync(ownership1);
-        await DbContext.WalletOwnerships.AddAsync(ownership2);
-        await DbContext.WalletOwnerships.AddAsync(ownership3);
+        principalA.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
+        principalB.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+
+        await PrincipalRepository.AddAsync(principalA);
+        await PrincipalRepository.AddAsync(principalB);
+        await WalletRepository.AddAsync(wallet);
+        await WalletRepository.AddAsync(wallet2);
 
         // Assert: Should succeed (different pairs)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -174,23 +180,28 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         // Arrange: Create two principals and one shared wallet
         var (principalA, principalB, sharedWallet) = TestDataFixtures.CreateExclusivityScenario();
 
+        // Give first principal verified signing ownership
+        var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
+        principalA.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+
         await PrincipalRepository.AddAsync(principalA);
         await PrincipalRepository.AddAsync(principalB);
-        await DbContext.Wallets.AddAsync(sharedWallet);
+        await WalletRepository.AddAsync(sharedWallet);
         await UnitOfWork.SaveChangesAsync();
 
-        // Act: Give first principal verified signing ownership
-        var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
-        await DbContext.WalletOwnerships.AddAsync(ownership1);
-        await UnitOfWork.SaveChangesAsync();
+        // Act: Try to give second principal also verified signing ownership via direct SQL
+        // This simulates a scenario where constraint must be enforced at database level
+        var duplicateInsert = @"INSERT INTO identity.""WalletOwnership""
+                                 (principal_id, id, wallet_id, access_mode, status, verification_source, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @walletId, 'Signing', 'Verified', 'Manual', NOW(), NOW(), false)";
 
-        // Try to give second principal also verified signing ownership
-        var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, sharedWallet.Id);
-        await DbContext.WalletOwnerships.AddAsync(ownership2);
-
-        // Assert: Should fail due to partial unique index constraint
-        await AssertPartialUniqueIndexViolation(
-            async () => await UnitOfWork.SaveChangesAsync(),
+        // Assert: Should fail due to partial unique index constraint (using Raw assertion for direct SQL)
+        await AssertPartialUniqueIndexViolationRaw(
+            async () => await DbContext.Database.ExecuteSqlRawAsync(
+                duplicateInsert,
+                new NpgsqlParameter("@principalId", principalB.Id.Value),
+                new NpgsqlParameter("@id", Guid.NewGuid()),
+                new NpgsqlParameter("@walletId", sharedWallet.Id.Value)),
             "ux_exclusive_signing"
         );
     }
@@ -201,17 +212,16 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         // Arrange: Create two principals and one shared wallet
         var (principalA, principalB, sharedWallet) = TestDataFixtures.CreateExclusivityScenario();
 
-        await PrincipalRepository.AddAsync(principalA);
-        await PrincipalRepository.AddAsync(principalB);
-        await DbContext.Wallets.AddAsync(sharedWallet);
-        await UnitOfWork.SaveChangesAsync();
-
         // Act: Give first principal verified signing, second principal verified watch-only
         var ownershipSigning = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
         var ownershipWatchOnly = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principalB.Id, sharedWallet.Id);
 
-        await DbContext.WalletOwnerships.AddAsync(ownershipSigning);
-        await DbContext.WalletOwnerships.AddAsync(ownershipWatchOnly);
+        principalA.LinkWalletOwnership(ownershipSigning, (_, _, _) => Result.Success<bool, Error>(false));
+        principalB.LinkWalletOwnership(ownershipWatchOnly, (_, _, _) => Result.Success<bool, Error>(false));
+
+        await PrincipalRepository.AddAsync(principalA);
+        await PrincipalRepository.AddAsync(principalB);
+        await WalletRepository.AddAsync(sharedWallet);
 
         // Assert: Should succeed (partial index only applies to verified+signing)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -225,22 +235,32 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         await PrincipalRepository.AddAsync(principalA);
         await PrincipalRepository.AddAsync(principalB);
-        await DbContext.Wallets.AddAsync(sharedWallet);
+        await WalletRepository.AddAsync(sharedWallet);
         await UnitOfWork.SaveChangesAsync();
 
-        // Act: Try to verify same wallet for two principals concurrently
+        // Act: Try to verify same wallet for two principals concurrently via direct SQL
         var (exception1, exception2) = await ExecuteConcurrentOperations(
             async context1 =>
             {
-                var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
-                await context1.WalletOwnerships.AddAsync(ownership1);
-                await context1.SaveChangesAsync();
+                var insertSql = @"INSERT INTO identity.""WalletOwnership""
+                                 (principal_id, id, wallet_id, access_mode, status, verification_source, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @walletId, 'Signing', 'Verified', 'Manual', NOW(), NOW(), false)";
+                await context1.Database.ExecuteSqlRawAsync(
+                    insertSql,
+                    new NpgsqlParameter("@principalId", principalA.Id.Value),
+                    new NpgsqlParameter("@id", Guid.NewGuid()),
+                    new NpgsqlParameter("@walletId", sharedWallet.Id.Value));
             },
             async context2 =>
             {
-                var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, sharedWallet.Id);
-                await context2.WalletOwnerships.AddAsync(ownership2);
-                await context2.SaveChangesAsync();
+                var insertSql = @"INSERT INTO identity.""WalletOwnership""
+                                 (principal_id, id, wallet_id, access_mode, status, verification_source, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @walletId, 'Signing', 'Verified', 'Manual', NOW(), NOW(), false)";
+                await context2.Database.ExecuteSqlRawAsync(
+                    insertSql,
+                    new NpgsqlParameter("@principalId", principalB.Id.Value),
+                    new NpgsqlParameter("@id", Guid.NewGuid()),
+                    new NpgsqlParameter("@walletId", sharedWallet.Id.Value));
             });
 
         // Assert: Exactly one should succeed, the other should fail
@@ -248,7 +268,10 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         exceptions.Length.ShouldBe(1, "Exactly one concurrent operation should fail");
 
         var failedException = exceptions.First();
-        failedException.ShouldBeOfType<DbUpdateException>();
+        // Raw SQL operations throw PostgresException directly
+        failedException.ShouldBeOfType<PostgresException>();
+        var postgresException = (PostgresException)failedException;
+        postgresException.SqlState.ShouldBe("23505", "Expected unique constraint violation");
     }
 
     #endregion
@@ -263,23 +286,34 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var wallet1 = TestDataFixtures.CreateW1Main();
         var wallet2 = TestDataFixtures.CreateW2Main();
 
+        // Create verified signing ownerships for both wallets
+        var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet1.Id);
+        var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet2.Id);
+
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+
+        // Set first wallet as default for mainnet
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id);
+
         await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(wallet1);
-        await DbContext.Wallets.AddAsync(wallet2);
+        await WalletRepository.AddAsync(wallet1);
+        await WalletRepository.AddAsync(wallet2);
         await UnitOfWork.SaveChangesAsync();
 
-        // Act: Set first default
-        var default1 = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, wallet1.Id);
-        await DbContext.PrincipalChainDefaults.AddAsync(default1);
-        await UnitOfWork.SaveChangesAsync();
+        // Act: Try to set second default for same principal/chain via direct SQL
+        var duplicateInsert = @"INSERT INTO identity.""PrincipalChainDefault""
+                                 (principal_id, id, chain_id, wallet_id, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @chainId, @walletId, NOW(), NOW(), false)";
 
-        // Try to set second default for same principal/chain
-        var default2 = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, wallet2.Id);
-        await DbContext.PrincipalChainDefaults.AddAsync(default2);
-
-        // Assert: Should fail due to unique constraint
-        await AssertPostgreSQLConstraintViolation(
-            async () => await UnitOfWork.SaveChangesAsync(),
+        // Assert: Should fail due to unique constraint (using Raw assertion for direct SQL)
+        await AssertPostgreSQLConstraintViolationRaw(
+            async () => await DbContext.Database.ExecuteSqlRawAsync(
+                duplicateInsert,
+                new NpgsqlParameter("@principalId", principal.Id.Value),
+                new NpgsqlParameter("@id", Guid.NewGuid()),
+                new NpgsqlParameter("@chainId", TestDataFixtures.SolanaMainnetChain),
+                new NpgsqlParameter("@walletId", wallet2.Id.Value)),
             "ux_chain_default"
         );
     }
@@ -292,17 +326,20 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var walletMainnet = TestDataFixtures.CreateW1Main();
         var walletDevnet = TestDataFixtures.CreateW1Dev();
 
-        await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(walletMainnet);
-        await DbContext.Wallets.AddAsync(walletDevnet);
-        await UnitOfWork.SaveChangesAsync();
+        // Create verified signing ownerships
+        var ownershipMainnet = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, walletMainnet.Id);
+        var ownershipDevnet = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, walletDevnet.Id);
+
+        principal.LinkWalletOwnership(ownershipMainnet, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownershipDevnet, (_, _, _) => Result.Success<bool, Error>(false));
 
         // Act: Set defaults for different chains
-        var defaultMainnet = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, walletMainnet.Id);
-        var defaultDevnet = TestDataFixtures.CreateDevnetSolanaDefault(principal.Id, walletDevnet.Id);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, walletMainnet.Id);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, walletDevnet.Id);
 
-        await DbContext.PrincipalChainDefaults.AddAsync(defaultMainnet);
-        await DbContext.PrincipalChainDefaults.AddAsync(defaultDevnet);
+        await PrincipalRepository.AddAsync(principal);
+        await WalletRepository.AddAsync(walletMainnet);
+        await WalletRepository.AddAsync(walletDevnet);
 
         // Assert: Should succeed (different chains)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -319,18 +356,26 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var principal = TestDataFixtures.CreatePrincipalA();
         var wallet = TestDataFixtures.CreateW1Main();
 
-        await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(wallet);
-        await UnitOfWork.SaveChangesAsync();
-
         // Create watch-only ownership
         var ownership = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principal.Id, wallet.Id);
-        await DbContext.WalletOwnerships.AddAsync(ownership);
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+
+        await PrincipalRepository.AddAsync(principal);
+        await WalletRepository.AddAsync(wallet);
         await UnitOfWork.SaveChangesAsync();
 
-        // Act: Try to set watch-only wallet as default
-        var defaultWallet = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        await DbContext.PrincipalChainDefaults.AddAsync(defaultWallet);
+        // Act: Try to set watch-only wallet as default via direct SQL
+        // This bypasses domain validation to test database constraints
+        var insertSql = @"INSERT INTO identity.""PrincipalChainDefault""
+                         (principal_id, id, chain_id, wallet_id, created_at, updated_at, is_deleted)
+                         VALUES (@principalId, @id, @chainId, @walletId, NOW(), NOW(), false)";
+
+        await DbContext.Database.ExecuteSqlRawAsync(
+            insertSql,
+            new NpgsqlParameter("@principalId", principal.Id.Value),
+            new NpgsqlParameter("@id", Guid.NewGuid()),
+            new NpgsqlParameter("@chainId", TestDataFixtures.SolanaMainnetChain),
+            new NpgsqlParameter("@walletId", wallet.Id.Value));
 
         // Assert: Should succeed (check constraint enforcement moved to domain layer)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -343,18 +388,26 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var principal = TestDataFixtures.CreatePrincipalA();
         var wallet = TestDataFixtures.CreateW1Main();
 
-        await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(wallet);
-        await UnitOfWork.SaveChangesAsync();
-
         // Create pending ownership
         var ownership = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
-        await DbContext.WalletOwnerships.AddAsync(ownership);
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+
+        await PrincipalRepository.AddAsync(principal);
+        await WalletRepository.AddAsync(wallet);
         await UnitOfWork.SaveChangesAsync();
 
-        // Act: Try to set pending wallet as default
-        var defaultWallet = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        await DbContext.PrincipalChainDefaults.AddAsync(defaultWallet);
+        // Act: Try to set pending wallet as default via direct SQL
+        // This bypasses domain validation to test database constraints
+        var insertSql = @"INSERT INTO identity.""PrincipalChainDefault""
+                         (principal_id, id, chain_id, wallet_id, created_at, updated_at, is_deleted)
+                         VALUES (@principalId, @id, @chainId, @walletId, NOW(), NOW(), false)";
+
+        await DbContext.Database.ExecuteSqlRawAsync(
+            insertSql,
+            new NpgsqlParameter("@principalId", principal.Id.Value),
+            new NpgsqlParameter("@id", Guid.NewGuid()),
+            new NpgsqlParameter("@chainId", TestDataFixtures.SolanaMainnetChain),
+            new NpgsqlParameter("@walletId", wallet.Id.Value));
 
         // Assert: Should succeed (check constraint enforcement moved to domain layer)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -367,18 +420,15 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var principal = TestDataFixtures.CreatePrincipalA();
         var wallet = TestDataFixtures.CreateW1Main();
 
-        await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(wallet);
-        await UnitOfWork.SaveChangesAsync();
-
         // Create verified signing ownership
         var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        await DbContext.WalletOwnerships.AddAsync(ownership);
-        await UnitOfWork.SaveChangesAsync();
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
 
-        // Act: Set verified signing wallet as default
-        var defaultWallet = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        await DbContext.PrincipalChainDefaults.AddAsync(defaultWallet);
+        // Set as default through domain (this validates at domain layer)
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+
+        await PrincipalRepository.AddAsync(principal);
+        await WalletRepository.AddAsync(wallet);
 
         // Assert: Should succeed
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -392,22 +442,21 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
     public async Task Integration_CompleteWalletLifecycle_ShouldRespectAllConstraints()
     {
         // Arrange: Create complete scenario
-        var (principal, wallet, ownership) = TestDataFixtures.CreateMainnetScenario();
+        var principal = TestDataFixtures.CreatePrincipalA();
+        var wallet = TestDataFixtures.CreateW1Main();
+        var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
 
         // Act & Assert: Step-by-step validation of all constraints
 
-        // 1. Save principal and wallet
+        // 1. Link ownership to principal
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+
+        // 2. Set as default (should succeed - verified signing)
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+
+        // 3. Save principal and wallet
         await PrincipalRepository.AddAsync(principal);
-        await DbContext.Wallets.AddAsync(wallet);
-        await UnitOfWork.SaveChangesAsync();
-
-        // 2. Add ownership
-        await DbContext.WalletOwnerships.AddAsync(ownership);
-        await UnitOfWork.SaveChangesAsync();
-
-        // 3. Set as default (should succeed - verified signing)
-        var defaultWallet = TestDataFixtures.CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        await DbContext.PrincipalChainDefaults.AddAsync(defaultWallet);
+        await WalletRepository.AddAsync(wallet);
         await UnitOfWork.SaveChangesAsync();
 
         // 4. Verify all constraints are enforced in complete scenario
@@ -415,12 +464,12 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var loadedPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
         loadedPrincipal.ShouldNotBeNull();
 
-        // Check database state directly
-        var ownershipCount = await DbContext.WalletOwnerships.CountAsync(wo => wo.PrincipalId == principal.Id);
-        var defaultCount = await DbContext.PrincipalChainDefaults.CountAsync(pcd => pcd.PrincipalId == principal.Id);
+        // Check aggregate state
+        var activeOwnerships = loadedPrincipal.GetActiveWalletOwnerships().ToList();
+        var activeDefaults = loadedPrincipal.GetActivePrincipalChainDefaults().ToList();
 
-        ownershipCount.ShouldBe(1);
-        defaultCount.ShouldBe(1);
+        activeOwnerships.Count.ShouldBe(1);
+        activeDefaults.Count.ShouldBe(1);
     }
 
     #endregion

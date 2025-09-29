@@ -30,17 +30,20 @@ public sealed class AxonUserStore :
 {
     private readonly IAxonPrincipalWriteRepository _principalRepo;
     private readonly IdentityContext _dbContext;
+    private readonly IIdentityReadDbContext _readDbContext;
     private readonly ILogger<AxonUserStore> _logger;
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
     public AxonUserStore(
         IAxonPrincipalWriteRepository principalRepo,
         IdentityContext dbContext,
+        IIdentityReadDbContext readDbContext,
         ILogger<AxonUserStore> logger,
         IWriteUnitOfWork<IdentityModule> unitOfWork)
     {
         _principalRepo = principalRepo;
         _dbContext = dbContext;
+        _readDbContext = readDbContext;
         _logger = logger;
         _unitOfWork = unitOfWork;
     }
@@ -433,14 +436,14 @@ public sealed class AxonUserStore :
         CancellationToken ct = default)
     {
         // Query through Wallet → WalletOwnership → AxonPrincipal → AxonUserAuth
-        var wallet = await _dbContext.Set<Wallet>()
+        var wallet = await _readDbContext.Wallets
             .Where(w => w.ChainId == chainId)
             .FirstOrDefaultAsync(w => EF.Functions.ILike(w.Address.Value, address), ct);
 
         if (wallet == null)
             return null;
 
-        var walletOwnership = await _dbContext.Set<WalletOwnership>()
+        var walletOwnership = await _readDbContext.WalletOwnerships
             .Where(wo => wo.WalletId == wallet.Id)
             .Where(wo => wo.Status == OwnershipStatus.Verified)
             .FirstOrDefaultAsync(ct);

@@ -56,21 +56,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         // Assert
         await AssertConversationCompletelyLoadedAsync(conversation.Id);
 
+        // Load the conversation with its messages through the aggregate root
         var savedConversation = await QueryFreshAsync(
-            () => DbContext.Conversations
-                .FirstOrDefaultAsync(c => c.Id == conversation.Id));
+            () => ConversationRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
 
-        // Verify messages were saved separately since Messages property is ignored in read context
-        var savedMessages = await QueryFreshAsync(async () =>
-        {
-            var result = await DbContext.Set<Message>()
-                .Where(m => m.ConversationId == conversation.Id)
-                .OrderBy(m => m.Sequence)
-                .ToListAsync();
-            return result;
-        });
+        // Access messages through the aggregate root's methods
+        var savedMessages = savedConversation.GetAllMessages();
 
         savedMessages.ShouldNotBeNull();
         savedMessages.Count.ShouldBe(4); // 2 user + 2 assistant messages
@@ -172,21 +165,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
+        // Load the conversation with its messages through the aggregate root
         var savedConversation = await QueryFreshAsync(
-            () => DbContext.Conversations
-                .FirstOrDefaultAsync(c => c.Id == conversation.Id));
+            () => ConversationRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
 
-        // Verify messages were saved separately since Messages property is ignored in read context
-        var savedMessages = await QueryFreshAsync(async () =>
-        {
-            var result = await DbContext.Set<Message>()
-                .Where(m => m.ConversationId == conversation.Id)
-                .OrderBy(m => m.Sequence)
-                .ToListAsync();
-            return result;
-        });
+        // Access messages through the aggregate root's methods
+        var savedMessages = savedConversation.GetAllMessages();
 
         savedMessages.ShouldNotBeNull();
         savedMessages.Count.ShouldBe(10);
@@ -233,21 +219,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
+        // Load the updated conversation with its messages through the aggregate root
         var updatedConversation = await QueryFreshAsync(
-            () => DbContext.Conversations
-                .FirstOrDefaultAsync(c => c.Id == conversation.Id));
+            () => ConversationRepository.GetByIdAsync(conversation.Id));
 
         updatedConversation.ShouldNotBeNull();
 
-        // Verify messages were saved separately since Messages property is ignored in read context
-        var updatedMessages = await QueryFreshAsync(async () =>
-        {
-            var result = await DbContext.Set<Message>()
-                .Where(m => m.ConversationId == conversation.Id)
-                .OrderBy(m => m.Sequence)
-                .ToListAsync();
-            return result;
-        });
+        // Access messages through the aggregate root's methods
+        var updatedMessages = updatedConversation.GetAllMessages();
 
         updatedMessages.ShouldNotBeNull();
         updatedMessages.Count.ShouldBe(2);

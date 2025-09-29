@@ -23,6 +23,13 @@ namespace Axon.Modules.Chat.Domain.Aggregates.Conversation;
 /// <summary>
 /// Conversation aggregate root representing a chat conversation.
 /// Enforces business rules and maintains conversation integrity.
+///
+/// DDD Pattern: Messages are configured as owned entities (EF Core OwnsMany)
+/// following the same pattern as Identity module. This ensures:
+/// - Messages can only exist within their parent Conversation
+/// - Concurrency control is handled at aggregate root level only
+/// - No separate DbSet for Messages - access only through aggregate
+/// - Composite key (ConversationId, Id) enforces aggregate boundaries
 /// </summary>
 public sealed class Conversation : AggregateRoot<ConversationId>
 {

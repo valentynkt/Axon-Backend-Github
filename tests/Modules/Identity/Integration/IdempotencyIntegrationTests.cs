@@ -8,7 +8,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
@@ -635,9 +635,14 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// </summary>
     private async Task VerifyOnlyOneWalletOwnership(WalletId walletId)
     {
-        var ownershipCount = await DbContext.WalletOwnerships
-            .Where(o => o.WalletId == walletId)
-            .CountAsync();
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
+            .ToListAsync();
+
+        var ownershipCount = principals
+            .SelectMany(p => p.WalletOwnerships)
+            .Count(wo => wo.WalletId == walletId);
 
         ownershipCount.ShouldBeLessThanOrEqualTo(1, "Should have at most one ownership per wallet per principal");
     }
@@ -647,10 +652,16 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// </summary>
     private async Task VerifyNoDuplicateCredentials()
     {
-        var credentialGroups = await DbContext.Credentials
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.Credentials)
+            .ToListAsync();
+
+        var credentialGroups = principals
+            .SelectMany(p => p.Credentials)
             .GroupBy(c => new { c.Provider, c.Issuer, c.Subject })
             .Where(g => g.Count() > 1)
-            .CountAsync();
+            .Count();
 
         credentialGroups.ShouldBe(0, "Should have no duplicate credentials");
     }
@@ -660,10 +671,16 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// </summary>
     private async Task VerifyNoDuplicateWalletOwnerships()
     {
-        var ownershipGroups = await DbContext.WalletOwnerships
+        var principals = await DbContext.Principals
+            .AsNoTracking()
+            .Include(p => p.WalletOwnerships)
+            .ToListAsync();
+
+        var ownershipGroups = principals
+            .SelectMany(p => p.WalletOwnerships)
             .GroupBy(o => new { o.PrincipalId, o.WalletId })
             .Where(g => g.Count() > 1)
-            .CountAsync();
+            .Count();
 
         ownershipGroups.ShouldBe(0, "Should have no duplicate wallet ownerships");
     }

@@ -3,6 +3,7 @@ using System;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(IdentityWriteDbContext))]
-    partial class IdentityWriteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250928234727_AddMissingWalletOwnershipFields")]
+    partial class AddMissingWalletOwnershipFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -485,17 +488,26 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                                 .HasColumnType("timestamptz")
                                 .HasColumnName("updated_at");
 
+                            b1.Property<Guid>("principal_id")
+                                .HasColumnType("uuid");
+
                             b1.HasKey("PrincipalId", "Id");
+
+                            b1.HasIndex("principal_id");
 
                             b1.HasIndex("Provider", "Issuer", "Subject")
                                 .IsUnique()
                                 .HasDatabaseName("ux_credential_provider")
                                 .HasFilter("is_deleted = false");
 
-                            b1.ToTable("Credential", "identity");
+                            b1.ToTable("Credential", "identity", t =>
+                                {
+                                    t.Property("principal_id")
+                                        .HasColumnName("principal_id1");
+                                });
 
                             b1.WithOwner()
-                                .HasForeignKey("PrincipalId");
+                                .HasForeignKey("principal_id");
                         });
 
                     b.OwnsMany("Axon.Modules.Identity.Domain.Entities.PrincipalChainDefault", "PrincipalChainDefaults", b1 =>
@@ -505,7 +517,6 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                                 .HasColumnName("principal_id");
 
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid")
                                 .HasColumnName("id");
 
@@ -537,6 +548,9 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                                 .HasColumnType("uuid")
                                 .HasColumnName("wallet_id");
 
+                            b1.Property<Guid>("principal_id")
+                                .HasColumnType("uuid");
+
                             b1.HasKey("PrincipalId", "Id");
 
                             b1.HasIndex("PrincipalId")
@@ -545,15 +559,21 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                             b1.HasIndex("WalletId")
                                 .HasDatabaseName("idx_default_wallet_id");
 
+                            b1.HasIndex("principal_id");
+
                             b1.HasIndex("PrincipalId", "ChainId")
                                 .IsUnique()
                                 .HasDatabaseName("ux_chain_default")
                                 .HasFilter("is_deleted = false");
 
-                            b1.ToTable("PrincipalChainDefault", "identity");
+                            b1.ToTable("PrincipalChainDefault", "identity", t =>
+                                {
+                                    t.Property("principal_id")
+                                        .HasColumnName("principal_id1");
+                                });
 
                             b1.WithOwner()
-                                .HasForeignKey("PrincipalId");
+                                .HasForeignKey("principal_id");
                         });
 
                     b.OwnsMany("Axon.Modules.Identity.Domain.Entities.WalletOwnership", "WalletOwnerships", b1 =>
@@ -619,10 +639,15 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                                 .HasColumnType("uuid")
                                 .HasColumnName("wallet_id");
 
+                            b1.Property<Guid>("principal_id")
+                                .HasColumnType("uuid");
+
                             b1.HasKey("PrincipalId", "Id");
 
                             b1.HasIndex("WalletId")
                                 .HasDatabaseName("idx_ownership_wallet_id");
+
+                            b1.HasIndex("principal_id");
 
                             b1.HasIndex("PrincipalId", "WalletId")
                                 .IsUnique()
@@ -634,10 +659,14 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Migrations
                                 .HasDatabaseName("ux_exclusive_signing")
                                 .HasFilter("access_mode = 'Signing' AND status = 'Verified' AND is_deleted = false");
 
-                            b1.ToTable("WalletOwnership", "identity");
+                            b1.ToTable("WalletOwnership", "identity", t =>
+                                {
+                                    t.Property("principal_id")
+                                        .HasColumnName("principal_id1");
+                                });
 
                             b1.WithOwner()
-                                .HasForeignKey("PrincipalId");
+                                .HasForeignKey("principal_id");
                         });
 
                     b.Navigation("Credentials");

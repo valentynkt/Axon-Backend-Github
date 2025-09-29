@@ -11,6 +11,8 @@ public interface IIdentityWriteDbContext : IWriteDbContext<IdentityModule>
 {
     DbSet<AxonPrincipal> Principals { get; }
     DbSet<Wallet> Wallets { get; }
+
+    // Owned entities - exposed temporarily until services are properly refactored
     DbSet<IdentityCredential> Credentials { get; }
     DbSet<WalletOwnership> WalletOwnerships { get; }
     DbSet<PrincipalChainDefault> PrincipalChainDefaults { get; }

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using FluentAssertions;
 
-namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Services;
 
 [TestFixture]
 public class DynamicClaimNormalizerTests

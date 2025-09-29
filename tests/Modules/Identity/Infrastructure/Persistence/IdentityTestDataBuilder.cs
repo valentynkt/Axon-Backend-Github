@@ -8,7 +8,7 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// Fluent builder for creating consistent test data across Identity persistence tests.

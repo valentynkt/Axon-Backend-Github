@@ -1,5 +1,4 @@
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
-using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -76,10 +75,7 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
         builder.HasIndex(w => w.ChainId).HasDatabaseName("idx_wallet_chain_id");
         builder.HasIndex(w => w.LastSeenAt).HasDatabaseName("idx_wallet_last_seen_at");
 
-        // Foreign key relationship - WalletOwnerships reference this Wallet
-        builder.HasMany<WalletOwnership>()
-            .WithOne()
-            .HasForeignKey(wo => wo.WalletId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Note: WalletOwnership is now configured as an owned type of AxonPrincipal
+        // The relationship to Wallet is managed through the owned entity configuration
     }
 }

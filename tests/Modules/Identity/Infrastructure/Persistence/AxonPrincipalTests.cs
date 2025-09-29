@@ -3,14 +3,19 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Application.Common.Models;
+using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// Comprehensive tests for AxonPrincipal persistence operations.
@@ -82,11 +87,18 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
 
-        // Load in two contexts
-        var principal1 = await PrincipalRepository.GetByIdAsync(principal.Id);
-        var principal2 = await PrincipalRepository.GetByIdAsync(principal.Id);
+        // Clear tracker and load fresh
+        ClearChangeTracker();
 
+        var principal1 = await PrincipalRepository.GetByIdAsync(principal.Id);
         principal1.ShouldNotBeNull();
+
+        // Create a second context for concurrent update simulation
+        using var context2 = CreateConcurrentDbContext();
+        using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+        using var repository2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
+
+        var principal2 = await repository2.GetByIdAsync(principal.Id);
         principal2.ShouldNotBeNull();
 
         // Context 1: Add BSC ownership and chain default
@@ -102,12 +114,12 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         await UnitOfWork.SaveChangesAsync();
 
         // Try to save context 2 (may fail due to version conflict in real database)
-        await PrincipalRepository.UpdateAsync(principal2);
+        await repository2.UpdateAsync(principal2);
 
         // In-memory database may not enforce concurrency properly
         try
         {
-            await UnitOfWork.SaveChangesAsync();
+            await unitOfWork2.SaveChangesAsync();
             // If successful, verify the state is as expected
             var finalPrincipal = await PrincipalRepository.GetByIdAsync(principal1.Id);
             finalPrincipal.ShouldNotBeNull();
@@ -211,11 +223,12 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 
-        // Assert: Verify all chain defaults were persisted
+        // Assert: Verify all chain defaults were persisted through aggregate
         ClearChangeTracker();
-        var savedDefaults = await DbContext.PrincipalChainDefaults
-            .Where(pcd => pcd.PrincipalId == principal.Id)
-            .ToListAsync();
+        var verifiedPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
+        verifiedPrincipal.ShouldNotBeNull();
+
+        var savedDefaults = verifiedPrincipal.PrincipalChainDefaults;
 
         savedDefaults.Count.ShouldBe(2);
         savedDefaults.ShouldContain(pcd => pcd.ChainId == "1" && pcd.WalletId == eth.Id);
@@ -310,11 +323,11 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         freshPrincipal.WalletOwnerships.Count.ShouldBe(initialOwnershipCount);
         freshPrincipal.PrincipalChainDefaults.Count.ShouldBe(initialChainDefaultCount);
 
-        // Verify database state
+        // Verify database state through aggregate
         ClearChangeTracker();
-        var savedChainDefaults = await DbContext.PrincipalChainDefaults
-            .Where(pcd => pcd.PrincipalId == principal.Id)
-            .CountAsync();
+        var finalPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
+        finalPrincipal.ShouldNotBeNull();
+        var savedChainDefaults = finalPrincipal.PrincipalChainDefaults.Count;
         savedChainDefaults.ShouldBe(2);
     }
 
@@ -335,11 +348,14 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 
-        // Verify data exists
+        // Verify data exists through aggregate
         ClearChangeTracker();
-        var ownershipCount = await DbContext.WalletOwnerships.CountAsync(wo => wo.PrincipalId == principal.Id);
-        var chainDefaultCount = await DbContext.PrincipalChainDefaults.CountAsync(pcd => pcd.PrincipalId == principal.Id);
-        var credentialCount = await DbContext.Credentials.CountAsync(ic => ic.PrincipalId == principal.Id);
+        var verifyPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
+        verifyPrincipal.ShouldNotBeNull();
+
+        var ownershipCount = verifyPrincipal.WalletOwnerships.Count;
+        var chainDefaultCount = verifyPrincipal.PrincipalChainDefaults.Count;
+        var credentialCount = verifyPrincipal.Credentials.Count;
 
         ownershipCount.ShouldBeGreaterThan(0);
         chainDefaultCount.ShouldBeGreaterThan(0);
@@ -359,21 +375,9 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         var deletedPrincipal = await DbContext.Principals.FindAsync(principal.Id);
         deletedPrincipal.ShouldBeNull();
 
-        var remainingOwnerships = await DbContext.WalletOwnerships.CountAsync(wo => wo.PrincipalId == principal.Id);
-        var remainingChainDefaults = await DbContext.PrincipalChainDefaults.CountAsync(pcd => pcd.PrincipalId == principal.Id);
-        var remainingCredentials = await DbContext.Credentials.CountAsync(ic => ic.PrincipalId == principal.Id);
-
-        // Note: In-memory database may not cascade delete properly, so we accept either behavior
-        // In real database with proper FK constraints, these should be 0
-        if (remainingOwnerships == 0 && remainingChainDefaults == 0 && remainingCredentials == 0)
-        {
-            // Proper cascade delete behavior
-        }
-        else
-        {
-            // In-memory database behavior - principal deleted but related entities may remain
-            // This is acceptable for testing purposes as the real database would handle cascades
-        }
+        // Since owned entities are part of the aggregate, they are deleted with the principal
+        // No need to check separately - if principal is deleted, owned entities are gone too
+        // This is enforced by EF Core's owned entity configuration
     }
 
     #endregion
@@ -387,6 +391,9 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         var (principal, wallets) = await CreateCompleteTestScenario();
         var eth = wallets[0];
         var polygon = wallets[1];
+
+        // Clear change tracker before reloading to avoid tracking issues
+        ClearChangeTracker();
 
         var reloadedPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
         reloadedPrincipal.ShouldNotBeNull();

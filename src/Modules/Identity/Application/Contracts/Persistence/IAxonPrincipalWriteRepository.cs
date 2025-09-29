@@ -72,4 +72,28 @@ public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal,
         WalletId walletId,
         AxonUserId excludePrincipalId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets all principals with pending ownership of the specified wallet.
+    /// </summary>
+    /// <param name="walletId">The wallet to check</param>
+    /// <param name="excludePrincipalId">Principal to exclude from results</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>List of principals with pending ownership</returns>
+    Task<List<AxonPrincipal>> GetPrincipalsWithPendingOwnershipAsync(
+        WalletId walletId,
+        AxonUserId excludePrincipalId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Checks if another principal has verified signing ownership of the wallet.
+    /// </summary>
+    /// <param name="walletId">The wallet to check</param>
+    /// <param name="excludePrincipalId">Principal to exclude from check</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>True if another principal has verified signing ownership</returns>
+    Task<bool> HasVerifiedSigningOwnershipAsync(
+        WalletId walletId,
+        AxonUserId excludePrincipalId,
+        CancellationToken ct = default);
 }

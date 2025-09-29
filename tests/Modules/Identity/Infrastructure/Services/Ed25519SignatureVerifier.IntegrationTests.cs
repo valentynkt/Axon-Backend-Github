@@ -2,7 +2,7 @@ using System.Text;
 using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Infrastructure.DependencyInjection;
-using Axon.Modules.Identity.Infrastructure.Persistence;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 using Microsoft.Extensions.Configuration;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Services;
@@ -17,7 +17,7 @@ using NUnit.Framework;
 using Shouldly;
 using SimpleBase;
 
-namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Services;
 
 /// <summary>
 /// Integration tests for Ed25519SignatureVerifier focusing on:

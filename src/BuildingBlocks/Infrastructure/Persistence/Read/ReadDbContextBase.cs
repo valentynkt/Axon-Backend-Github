@@ -76,13 +76,29 @@ public abstract class ReadDbContextBase<TModule> : DbContext, IReadDbContext<TMo
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            var builder = modelBuilder.Entity(entityType.ClrType);
+            // Skip owned entity types as they should be configured through their owners
+            if (entityType.IsOwned())
+                continue;
 
-            if (entityType.FindProperty("CreatedAt") is not null)
-                builder.HasIndex("CreatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_created_at");
+            // Skip if entity type doesn't have a table (e.g., query types)
+            if (entityType.GetTableName() == null)
+                continue;
 
-            if (entityType.FindProperty("UpdatedAt") is not null)
-                builder.HasIndex("UpdatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_updated_at");
+            try
+            {
+                var builder = modelBuilder.Entity(entityType.ClrType);
+
+                if (entityType.FindProperty("CreatedAt") is not null)
+                    builder.HasIndex("CreatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_created_at");
+
+                if (entityType.FindProperty("UpdatedAt") is not null)
+                    builder.HasIndex("UpdatedAt").HasDatabaseName($"ix_{entityType.GetTableName()}_updated_at");
+            }
+            catch (InvalidOperationException)
+            {
+                // Ignore if entity configuration fails (e.g., for owned types)
+                // This can happen when owned types are being configured separately
+            }
         }
     }
 

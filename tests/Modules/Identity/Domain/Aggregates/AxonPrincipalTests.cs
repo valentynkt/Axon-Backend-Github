@@ -244,8 +244,12 @@ public class AxonPrincipalTests : IdentityTestBase
             result.IsSuccess.ShouldBeTrue();
             principal.WalletOwnerships.ShouldHaveSingleItem().ShouldBe(ownership);
 
-            principal.DomainEvents.ShouldHaveSingleItem()
-                .ShouldBeOfType<OwnershipChangedEvent>()
+            // When linking a verified signing ownership, we expect 2 events
+            principal.DomainEvents.Count.ShouldBe(2);
+
+            // Verify the "linked" event
+            var linkedEvent = principal.DomainEvents.First(e => ((OwnershipChangedEvent)e).ChangeType == "linked");
+            linkedEvent.ShouldBeOfType<OwnershipChangedEvent>()
                 .ShouldSatisfyAllConditions(
                     e => e.PrincipalId.ShouldBe(principal.Id),
                     e => e.WalletId.ShouldBe(ownership.WalletId),
@@ -253,6 +257,10 @@ public class AxonPrincipalTests : IdentityTestBase
                     e => e.AccessMode.ShouldBe("Signing"),
                     e => e.Status.ShouldBe("Verified")
                 );
+
+            // Verify the "verified_signing_added" event for auto-revocation tracking
+            var verifiedSigningEvent = principal.DomainEvents.First(e => ((OwnershipChangedEvent)e).ChangeType == "verified_signing_added");
+            verifiedSigningEvent.ShouldNotBeNull();
         }
 
         [Test]

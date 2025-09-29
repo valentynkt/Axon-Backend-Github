@@ -3,7 +3,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Errors;
 using Axon.Modules.Identity.Domain.ValueObjects;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
@@ -305,7 +305,7 @@ public class PrincipalDefaultsBehaviorTests
         ownership.Status.ShouldBe(OwnershipStatus.Revoked);
 
         // The system should detect revoked status and clear defaults even without removal
-        principal.PrincipalChainDefaults.Count.ShouldBe(0);
+        principal.GetActivePrincipalChainDefaults().Count().ShouldBe(0);
     }
 
     #endregion

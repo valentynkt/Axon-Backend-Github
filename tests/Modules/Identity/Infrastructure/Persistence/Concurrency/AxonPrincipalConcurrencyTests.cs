@@ -18,7 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Tests;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.Concurrency;
 
 /// <summary>
 /// Concurrency tests for AxonPrincipal aggregate.

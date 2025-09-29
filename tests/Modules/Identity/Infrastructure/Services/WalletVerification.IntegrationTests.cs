@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Axon.Modules.Identity.Application.Common.Models;
+using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
@@ -6,7 +8,9 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 using Axon.Modules.Identity.Infrastructure.Services;
+using BuildingBlocks.Application;
 using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -15,7 +19,7 @@ using NUnit.Framework;
 using Shouldly;
 using Testcontainers.PostgreSql;
 
-namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Services;
 
 [TestFixture]
 public class WalletVerificationIntegrationTests
@@ -24,6 +28,8 @@ public class WalletVerificationIntegrationTests
     private IdentityWriteDbContext _writeContext = null!;
     private WalletVerificationService _verificationService = null!;
     private ILogger<WalletVerificationService> _logger = null!;
+    private IAxonPrincipalWriteRepository _principalRepository = null!;
+    private IWriteUnitOfWork<IdentityModule> _unitOfWork = null!;
 
     [OneTimeSetUp]
     public async Task OneTimeSetUp()
@@ -57,7 +63,9 @@ public class WalletVerificationIntegrationTests
         await CreateDatabaseSchema();
 
         _logger = Substitute.For<ILogger<WalletVerificationService>>();
-        _verificationService = new WalletVerificationService(_writeContext, _logger);
+        _unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
+        _principalRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork);
+        _verificationService = new WalletVerificationService(_principalRepository, _unitOfWork, _logger);
     }
 
     [TearDown]

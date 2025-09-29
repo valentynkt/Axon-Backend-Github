@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Axon.Api.Contracts.V1.Chat;
 using Axon.Modules.Identity.E2E.Infrastructure;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shouldly;

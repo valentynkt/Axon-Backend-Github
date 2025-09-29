@@ -35,7 +35,7 @@ public interface IWalletVerificationService
     /// <param name="reason">The reason for revocation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Result indicating success or failure.</returns>
-    Task<Result<Unit, Error>> RevokeOwnershipAsync(
+    Task<UnitResult<Error>> RevokeOwnershipAsync(
         WalletOwnershipId ownershipId,
         string reason,
         CancellationToken cancellationToken = default);

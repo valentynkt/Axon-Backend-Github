@@ -9,7 +9,7 @@ using NUnit.Framework;
 using Shouldly;
 using SimpleBase;
 
-namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Services;
 
 [TestFixture]
 public class Ed25519SignatureVerifierTests

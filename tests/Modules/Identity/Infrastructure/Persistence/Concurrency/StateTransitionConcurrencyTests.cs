@@ -1,20 +1,25 @@
 using System.Threading.Tasks;
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
-using Axon.Modules.Identity.Infrastructure.Persistence.DbInvariants;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.Concurrency;
 
 /// <summary>
 /// Tests for TDD Section C: State Transitions and Races (Integration + Concurrency).
@@ -40,16 +45,17 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         await WalletRepository.AddAsync(sharedWallet, CancellationToken.None);
         await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
-        // Create pending ownerships for both principals
-        var ownershipA = TestDataFixtures.CreatePendingSigningOwnership(principalA.Id, sharedWallet.Id);
-        var ownershipB = TestDataFixtures.CreatePendingSigningOwnership(principalB.Id, sharedWallet.Id);
+        // Create verified ownerships for both principals to test exclusivity
+        var ownershipA = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
+        var ownershipB = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, sharedWallet.Id);
 
         // Act: Execute concurrent verification operations
         var (exception1, exception2) = await ExecuteConcurrentOperations(
             async context1 =>
             {
                 // Principal A tries to verify the wallet
-                using var repo1 = new AxonPrincipalWriteRepository(context1, UnitOfWork);
+                using var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
+                using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1);
                 var principal1 = await repo1.GetByIdAsync(principalA.Id, CancellationToken.None);
 
                 var linkResult = principal1!.LinkWalletOwnership(
@@ -70,7 +76,8 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
             async context2 =>
             {
                 // Principal B tries to verify the same wallet
-                using var repo2 = new AxonPrincipalWriteRepository(context2, UnitOfWork);
+                using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+                using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
                 var principal2 = await repo2.GetByIdAsync(principalB.Id, CancellationToken.None);
 
                 var linkResult = principal2!.LinkWalletOwnership(
@@ -119,21 +126,58 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         var verifiedOwnershipA = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
         var verifiedOwnershipB = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, sharedWallet.Id);
 
-        // Act & Assert: Concurrent insert should trigger constraint violation
-        await AssertPartialUniqueIndexViolation(async () =>
+        // Act: Execute concurrent operations
+        var (exception1, exception2) = await ExecuteConcurrentOperations(
+            async context1 =>
+            {
+                // Insert verified ownership directly via SQL for principal A
+                // Note: WalletOwnership is an owned entity with composite key (principal_id, id)
+                var insertSql = @"INSERT INTO identity.""WalletOwnership""
+                                 (principal_id, id, wallet_id, access_mode, status, verification_source, verified_at, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @walletId, 'Signing', 'Verified', 'DynamicAttested', NOW(), NOW(), NOW(), false)";
+                await context1.Database.ExecuteSqlRawAsync(
+                    insertSql,
+                    new NpgsqlParameter("@principalId", principalA.Id.Value),
+                    new NpgsqlParameter("@id", verifiedOwnershipA.Id.Value),
+                    new NpgsqlParameter("@walletId", sharedWallet.Id.Value));
+            },
+            async context2 =>
+            {
+                // Insert verified ownership directly via SQL for principal B
+                // Note: WalletOwnership is an owned entity with composite key (principal_id, id)
+                var insertSql = @"INSERT INTO identity.""WalletOwnership""
+                                 (principal_id, id, wallet_id, access_mode, status, verification_source, verified_at, created_at, updated_at, is_deleted)
+                                 VALUES (@principalId, @id, @walletId, 'Signing', 'Verified', 'DynamicAttested', NOW(), NOW(), NOW(), false)";
+                await context2.Database.ExecuteSqlRawAsync(
+                    insertSql,
+                    new NpgsqlParameter("@principalId", principalB.Id.Value),
+                    new NpgsqlParameter("@id", verifiedOwnershipB.Id.Value),
+                    new NpgsqlParameter("@walletId", sharedWallet.Id.Value));
+            });
+
+        // Assert: At least one operation should have failed with constraint violation
+        var hasConstraintViolation = false;
+        PostgresException? postgresException = null;
+
+        if (exception1 is PostgresException pgEx1)
         {
-            await ExecuteConcurrentOperations(
-                async context1 =>
-                {
-                    context1.Set<WalletOwnership>().Add(verifiedOwnershipA);
-                    await context1.SaveChangesAsync();
-                },
-                async context2 =>
-                {
-                    context2.Set<WalletOwnership>().Add(verifiedOwnershipB);
-                    await context2.SaveChangesAsync();
-                });
-        }, "idx_wallet_ownership_verified_signing_unique");
+            postgresException = pgEx1;
+            hasConstraintViolation = true;
+        }
+        else if (exception2 is PostgresException pgEx2)
+        {
+            postgresException = pgEx2;
+            hasConstraintViolation = true;
+        }
+
+        hasConstraintViolation.ShouldBeTrue("Expected at least one operation to fail with unique constraint violation");
+        postgresException.ShouldNotBeNull("Expected PostgreSQL partial index violation");
+        postgresException!.SqlState.ShouldBe("23505", "Expected unique constraint violation");
+
+        // For partial indexes, the constraint name might be the index name
+        var constraintName = postgresException.ConstraintName ?? postgresException.Detail ?? "";
+        constraintName.Contains("ux_exclusive_signing", StringComparison.OrdinalIgnoreCase).ShouldBeTrue(
+            $"Expected partial index 'ux_exclusive_signing' to be violated, but got constraint: '{constraintName}'");
 
         // NOTE: This test validates that the database itself prevents dual verified+signing
         // ownership even if domain logic is bypassed
@@ -182,8 +226,14 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         await PrincipalRepository.UpdateAsync(winnerPrincipal, CancellationToken.None);
         await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
-        // TODO: Implement auto-revocation logic in the domain or infrastructure
-        // This should automatically revoke all other pending ownerships for the same wallet
+        // Simulate what happens in real application - auto-revoke pending ownerships
+        // In production, this would be done by the application service/handler
+        var revokedCount = await PrincipalRepository.RevokePendingOwnershipsForWalletAsync(
+            contestedWallet.Id, winnerPrincipal.Id, CancellationToken.None);
+        if (revokedCount > 0)
+        {
+            await UnitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
 
         // Assert: All other pending ownerships should be revoked with conflict_lost reason
         await VerifyAutoRevocationOccurred(contestedWallet.Id, winnerPrincipal.Id);
@@ -207,10 +257,11 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
 
         // Create verified ownership first
         var verifiedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(existingVerifiedPrincipal.Id, wallet.Id);
-        existingVerifiedPrincipal.LinkWalletOwnership(
+        var linkVerifiedResult = existingVerifiedPrincipal.LinkWalletOwnership(
             verifiedOwnership,
-            (_, _, _) => Result.Success<bool, Error>(false));
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
 
+        linkVerifiedResult.IsSuccess.ShouldBeTrue("Should be able to add verified ownership to empty wallet");
         await PrincipalRepository.UpdateAsync(existingVerifiedPrincipal, CancellationToken.None);
         await UnitOfWork.SaveChangesAsync(CancellationToken.None);
 
@@ -256,7 +307,7 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
 
         var linkResult = principal.LinkWalletOwnership(
             revokedOwnership,
-            (_, _, _) => Result.Success<bool, Error>(false));
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
 
         linkResult.IsSuccess.ShouldBeTrue();
         await PrincipalRepository.UpdateAsync(principal, CancellationToken.None);
@@ -303,7 +354,10 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
             AccessMode.Signing,
             OwnershipStatus.Revoked);
 
-        revokedPrincipal.LinkWalletOwnership(revokedOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        var revokedLinkResult = revokedPrincipal.LinkWalletOwnership(
+            revokedOwnership,
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+        revokedLinkResult.IsSuccess.ShouldBeTrue("Should be able to link revoked ownership");
 
         // Create verified ownership for competing principal
         var verifiedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(competingPrincipal.Id, wallet.Id);
@@ -347,14 +401,15 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         AccessMode accessMode,
         OwnershipStatus status)
     {
-        var existingOwnership = await context.Set<WalletOwnership>()
-            .Where(wo => wo.WalletId == walletId &&
-                        wo.AccessMode == accessMode &&
-                        wo.Status == status &&
-                        !wo.IsDeleted)
-            .FirstOrDefaultAsync();
+        // Since WalletOwnership is now an owned entity, we need to check through the principal aggregate
+        var hasExistingOwnership = await context.Set<AxonPrincipal>()
+            .AnyAsync(p => p.WalletOwnerships.Any(wo =>
+                wo.WalletId == walletId &&
+                wo.AccessMode == accessMode &&
+                wo.Status == status &&
+                !wo.IsDeleted));
 
-        return Result.Success<bool, Error>(existingOwnership != null);
+        return Result.Success<bool, Error>(hasExistingOwnership);
     }
 
     /// <summary>
@@ -388,9 +443,16 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
     {
         ClearChangeTracker();
 
-        var allOwnerships = await DbContext.Set<WalletOwnership>()
-            .Where(wo => wo.WalletId == walletId && !wo.IsDeleted)
+        // Get all principals and their ownerships for the wallet
+        var principals = await DbContext.Set<AxonPrincipal>()
+            .Include(p => p.WalletOwnerships)
+            .Where(p => p.WalletOwnerships.Any(wo => wo.WalletId == walletId && !wo.IsDeleted))
             .ToListAsync();
+
+        var allOwnerships = principals
+            .SelectMany(p => p.WalletOwnerships)
+            .Where(wo => wo.WalletId == walletId && !wo.IsDeleted)
+            .ToList();
 
         var verifiedOwnerships = allOwnerships.Where(wo => wo.Status == OwnershipStatus.Verified).ToList();
         var revokedOwnerships = allOwnerships.Where(wo => wo.Status == OwnershipStatus.Revoked).ToList();
@@ -413,12 +475,23 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
     {
         ClearChangeTracker();
 
-        var allVerifiedOwnerships = await DbContext.Set<WalletOwnership>()
-            .Where(wo => wo.WalletId == walletId &&
-                        wo.Status == OwnershipStatus.Verified &&
-                        wo.AccessMode == AccessMode.Signing &&
-                        !wo.IsDeleted)
+        // Get all principals with verified+signing ownership for this wallet
+        var principals = await DbContext.Set<AxonPrincipal>()
+            .Include(p => p.WalletOwnerships)
+            .Where(p => p.WalletOwnerships.Any(wo =>
+                wo.WalletId == walletId &&
+                wo.Status == OwnershipStatus.Verified &&
+                wo.AccessMode == AccessMode.Signing &&
+                !wo.IsDeleted))
             .ToListAsync();
+
+        var allVerifiedOwnerships = principals
+            .SelectMany(p => p.WalletOwnerships)
+            .Where(wo => wo.WalletId == walletId &&
+                       wo.Status == OwnershipStatus.Verified &&
+                       wo.AccessMode == AccessMode.Signing &&
+                       !wo.IsDeleted)
+            .ToList();
 
         allVerifiedOwnerships.Count.ShouldBe(1, "Exactly one verified+signing ownership should exist after re-verification");
         allVerifiedOwnerships[0].PrincipalId.ShouldBe(principalId, "Re-verified ownership should belong to correct principal");

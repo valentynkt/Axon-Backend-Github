@@ -9,7 +9,7 @@ using NUnit.Framework;
 using Shouldly;
 using SimpleBase;
 
-namespace Axon.Modules.Identity.Infrastructure.Services.Tests;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Services;
 
 /// <summary>
 /// Performance tests and benchmarks for Ed25519SignatureVerifier.

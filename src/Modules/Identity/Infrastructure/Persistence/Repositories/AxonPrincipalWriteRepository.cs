@@ -131,4 +131,29 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         return revokedCount;
     }
 
+    public async Task<List<AxonPrincipal>> GetPrincipalsWithPendingOwnershipAsync(
+        WalletId walletId,
+        AxonUserId excludePrincipalId,
+        CancellationToken ct = default)
+    {
+        return await GetPrincipalWithIncludes()
+            .Where(p => p.Id != excludePrincipalId &&
+                       p.WalletOwnerships.Any(wo => wo.WalletId == walletId &&
+                                                   wo.Status == OwnershipStatus.Pending &&
+                                                   !wo.IsDeleted))
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> HasVerifiedSigningOwnershipAsync(
+        WalletId walletId,
+        AxonUserId excludePrincipalId,
+        CancellationToken ct = default)
+    {
+        return await GetPrincipalWithIncludes()
+            .AnyAsync(p => p.Id != excludePrincipalId &&
+                          p.WalletOwnerships.Any(wo => wo.WalletId == walletId &&
+                                                      wo.Status == OwnershipStatus.Verified &&
+                                                      wo.AccessMode == AccessMode.Signing &&
+                                                      !wo.IsDeleted), ct);
+    }
 }

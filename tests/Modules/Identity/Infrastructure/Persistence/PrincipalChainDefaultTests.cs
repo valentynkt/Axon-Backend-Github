@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Infrastructure.Persistence;
+namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// Integration tests specifically for PrincipalChainDefault persistence issues.
@@ -77,9 +77,12 @@ public class PrincipalChainDefaultPersistenceTests : IdentityPersistenceTestBase
         ClearChangeTracker();
 
         // Step 6: Query database directly to verify PrincipalChainDefaults were saved
-        var savedDefaults = await DbContext.PrincipalChainDefaults
-            .Where(pcd => pcd.PrincipalId == principal.Id)
-            .ToListAsync();
+        // Access through aggregate root as these are owned entities
+        var principalWithDefaults = await DbContext.Principals
+            .Include(p => p.PrincipalChainDefaults)
+            .FirstOrDefaultAsync(p => p.Id == principal.Id);
+
+        var savedDefaults = principalWithDefaults?.PrincipalChainDefaults ?? new List<PrincipalChainDefault>();
 
         // CRITICAL ASSERTION: This is what was failing before the fix
         savedDefaults.ShouldNotBeEmpty("PrincipalChainDefaults should be saved to database");
@@ -130,9 +133,12 @@ public class PrincipalChainDefaultPersistenceTests : IdentityPersistenceTestBase
 
         // Verify the change was persisted
         ClearChangeTracker();
-        var savedDefaults = await DbContext.PrincipalChainDefaults
-            .Where(pcd => pcd.PrincipalId == principal.Id)
-            .ToListAsync();
+        // Access through aggregate root as these are owned entities
+        var principalWithDefaults = await DbContext.Principals
+            .Include(p => p.PrincipalChainDefaults)
+            .FirstOrDefaultAsync(p => p.Id == principal.Id);
+
+        var savedDefaults = principalWithDefaults?.PrincipalChainDefaults ?? new List<PrincipalChainDefault>();
 
         savedDefaults.Count.ShouldBe(1);
         savedDefaults.Single().WalletId.ShouldBe(wallet2.Id);

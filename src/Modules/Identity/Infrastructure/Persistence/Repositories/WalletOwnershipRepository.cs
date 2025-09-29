@@ -26,17 +26,27 @@ public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
         WalletId walletId,
         CancellationToken cancellationToken = default)
     {
-        // Join WalletOwnership with AxonPrincipal to get both entities
-        var result = await (from wo in _readContext.Set<WalletOwnership>()
-                           join p in _readContext.Set<AxonPrincipal>() on wo.PrincipalId equals p.Id
-                           where wo.WalletId == walletId && wo.Status != OwnershipStatus.Revoked
-                           select new { Ownership = wo, Principal = p })
+        // Query principals with their wallet ownerships
+        // Since WalletOwnership is an owned entity, we must query through the aggregate root
+        var principals = await _readContext.Principals
+            .Include(p => p.WalletOwnerships)
+            .Where(p => p.WalletOwnerships.Any(wo => wo.WalletId == walletId && wo.Status != OwnershipStatus.Revoked))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        return result.Select(r => new WalletOwnershipWithPrincipal(r.Ownership, r.Principal))
-                    .ToList()
-                    .AsReadOnly();
+        var result = new List<WalletOwnershipWithPrincipal>();
+        foreach (var principal in principals)
+        {
+            var ownerships = principal.WalletOwnerships
+                .Where(wo => wo.WalletId == walletId && wo.Status != OwnershipStatus.Revoked);
+
+            foreach (var ownership in ownerships)
+            {
+                result.Add(new WalletOwnershipWithPrincipal(ownership, principal));
+            }
+        }
+
+        return result.AsReadOnly();
     }
 
 
@@ -48,19 +58,36 @@ public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
         if (walletIdList.Count == 0)
             return new Dictionary<WalletId, AxonPrincipal>();
 
-        // Join WalletOwnership with AxonPrincipal and include related collections
-        var ownerships = await (from wo in _readContext.Set<WalletOwnership>()
-                               join p in _readContext.Set<AxonPrincipal>()
-                                   .Include(p => p.WalletOwnerships)
-                                   .Include(p => p.Credentials)
-                                   on wo.PrincipalId equals p.Id
-                               where walletIdList.Contains(wo.WalletId) &&
-                                     wo.Status == OwnershipStatus.Verified &&
-                                     wo.AccessMode == AccessMode.Signing
-                               select new { wo.WalletId, Principal = p })
+        // Query principals that have verified signing ownerships for the specified wallets
+        // Since WalletOwnership is an owned entity, we must query through the aggregate root
+        var principals = await _readContext.Principals
+            .Include(p => p.WalletOwnerships)
+            .Include(p => p.Credentials)
+            .Where(p => p.WalletOwnerships.Any(wo =>
+                walletIdList.Contains(wo.WalletId) &&
+                wo.Status == OwnershipStatus.Verified &&
+                wo.AccessMode == AccessMode.Signing))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        return ownerships.ToDictionary(o => o.WalletId, o => o.Principal);
+        var result = new Dictionary<WalletId, AxonPrincipal>();
+        foreach (var principal in principals)
+        {
+            var verifiedSigningOwnerships = principal.WalletOwnerships
+                .Where(wo => walletIdList.Contains(wo.WalletId) &&
+                            wo.Status == OwnershipStatus.Verified &&
+                            wo.AccessMode == AccessMode.Signing);
+
+            foreach (var ownership in verifiedSigningOwnerships)
+            {
+                // Only include the first principal for each wallet (should be unique due to constraints)
+                if (!result.ContainsKey(ownership.WalletId))
+                {
+                    result[ownership.WalletId] = principal;
+                }
+            }
+        }
+
+        return result;
     }
 }
