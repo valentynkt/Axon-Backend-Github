@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Axon.Modules.Identity.Application.Tests._TestInfrastructure.Fixtures;
+using AppTestFixtures = Axon.Modules.Identity.Application.Tests._TestInfrastructure.Fixtures.TestDataFixtures;
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
@@ -38,18 +39,18 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         var (existingPrincipal, _) = SetupCredentialFirstScenario();
 
         // Add wallet data to command for defaults application
-        var commandWithWallet = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
+        var commandWithWallet = CreateDynamicExchangeCommand(AppTestFixtures.DynA_Subject);
 
         // Mock repository behavior
         MockCredentialResolution(existingPrincipal);
         MockCredentialUniqueness(false);
 
         // Mock wallet creation and linking
-        var wallet = TestDataFixtures.CreateW1Main();
-        var address = Address.Create(TestDataFixtures.W1MainAddress).Value;
+        var wallet = AppTestFixtures.CreateW1Main();
+        var address = Address.Create(AppTestFixtures.W1MainAddress).Value;
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address), wallet.Id }
+            { (AppTestFixtures.SolanaMainnetChain, address), wallet.Id }
         });
         MockNoWalletOwners(); // No conflicts
 
@@ -95,13 +96,13 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         MockCredentialUniqueness(false);
 
         // Mock wallet lookups
-        var wallet1 = TestDataFixtures.CreateW1Main();
-        var wallet2 = TestDataFixtures.CreateW2Main();
-        var address2 = Address.Create(TestDataFixtures.W2MainAddress).Value;
+        var wallet1 = AppTestFixtures.CreateW1Main();
+        var wallet2 = AppTestFixtures.CreateW2Main();
+        var address2 = Address.Create(AppTestFixtures.W2MainAddress).Value;
 
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address2), wallet2.Id }
+            { (AppTestFixtures.SolanaMainnetChain, address2), wallet2.Id }
         });
 
         // Mock existing ownership for principal (owns wallet1, not wallet2)
@@ -142,13 +143,13 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         // Mock wallet creation
         var wallet1Id = WalletId.New();
         var wallet2Id = WalletId.New();
-        var address1 = Address.Create(TestDataFixtures.W1MainAddress).Value;
-        var address2 = Address.Create(TestDataFixtures.W2MainAddress).Value;
+        var address1 = Address.Create(AppTestFixtures.W1MainAddress).Value;
+        var address2 = Address.Create(AppTestFixtures.W2MainAddress).Value;
 
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address1), wallet1Id },
-            { (TestDataFixtures.SolanaMainnetChain, address2), wallet2Id }
+            { (AppTestFixtures.SolanaMainnetChain, address1), wallet1Id },
+            { (AppTestFixtures.SolanaMainnetChain, address2), wallet2Id }
         });
 
         // Mock UnitOfWork
@@ -186,10 +187,10 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         MockCredentialUniqueness(false);
 
         // Mock wallet lookup and ownership conflict
-        var address = Address.Create(TestDataFixtures.W1MainAddress).Value;
+        var address = Address.Create(AppTestFixtures.W1MainAddress).Value;
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address), ownedWallet.Id }
+            { (AppTestFixtures.SolanaMainnetChain, address), ownedWallet.Id }
         });
 
         MockWalletOwnerResolution(new Dictionary<WalletId, AxonPrincipal>
@@ -219,8 +220,8 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
     public async Task Integration_CredentialBelongsToOther_ShouldFailWithConflictError()
     {
         // Arrange: Create scenario where credential belongs to another principal
-        _ = TestDataFixtures.CreatePrincipalA(); // Owns the credential - affects credential uniqueness check
-        var command = CreateDynamicExchangeCommand(TestDataFixtures.DynA_Subject);
+        _ = AppTestFixtures.CreatePrincipalA(); // Owns the credential - affects credential uniqueness check
+        var command = CreateDynamicExchangeCommand(AppTestFixtures.DynA_Subject);
 
         // Mock credential taken by another principal
         MockNoCredentialMatch(); // Force creation attempt
@@ -266,7 +267,7 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         foreach (var wallet in wallets)
         {
             var address = Address.Create(wallet.Address.Value).Value;
-            walletLookup.Add((TestDataFixtures.SolanaMainnetChain, address), wallet.Id);
+            walletLookup.Add((AppTestFixtures.SolanaMainnetChain, address), wallet.Id);
         }
         MockWalletLookup(walletLookup);
 
@@ -316,7 +317,7 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         var walletId = WalletId.New();
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address), walletId }
+            { (AppTestFixtures.SolanaMainnetChain, address), walletId }
         });
 
         var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
@@ -356,11 +357,11 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         MockNoWalletOwners();
         MockCredentialUniqueness(false);
 
-        var address = Address.Create(TestDataFixtures.W1MainAddress).Value;
+        var address = Address.Create(AppTestFixtures.W1MainAddress).Value;
         var walletId = WalletId.New();
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address), walletId }
+            { (AppTestFixtures.SolanaMainnetChain, address), walletId }
         });
 
         var mockUnitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
@@ -398,7 +399,7 @@ public class ResolutionFlowIntegrationTests : PrincipalResolutionTestBase
         var walletId = WalletId.New();
         MockWalletLookup(new Dictionary<(string, Address), WalletId>
         {
-            { (TestDataFixtures.SolanaMainnetChain, address), walletId }
+            { (AppTestFixtures.SolanaMainnetChain, address), walletId }
         });
 
         // Mock database save failure

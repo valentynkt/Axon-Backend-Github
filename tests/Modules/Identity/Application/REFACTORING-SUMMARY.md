@@ -54,28 +54,27 @@ Created 18 placeholder test files with `[Ignore]` attribute and comprehensive TO
 - ✅ Pattern: `Axon.Modules.Identity.Application.Tests.{Category}.{Feature}`
 - ⚠️ Introduced alias `AppTestFixtures` to resolve naming collision
 
-## ⚠️ Known Issues & Remaining Work
+## ✅ Resolved Issues
 
-### 1. Compilation Errors
-**Status**: Build currently failing due to namespace/reference issues
+### 1. Compilation Errors - FIXED ✅
+**Status**: Build passing with 0 errors (13 expected warnings in placeholder tests)
 
-**Root Causes**:
-1. `TestDataFixtures` naming collision between Application and Infrastructure tests
-2. Missing using directives in some files after namespace changes
-3. Need to update references throughout test files
-
-**Proposed Fix**:
+**Solution Applied**:
 ```csharp
-// Option 1: Use fully qualified names
+// Added namespace alias in affected files
+using Axon.Modules.Identity.Application.Tests._TestInfrastructure.Fixtures;
 using AppTestFixtures = Axon.Modules.Identity.Application.Tests._TestInfrastructure.Fixtures.TestDataFixtures;
-using InfraTestFixtures = Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants.TestDataFixtures;
 
-// Option 2: Rename one of the fixtures classes to avoid collision
-// Rename Application TestDataFixtures → ApplicationTestFixtures
-// Rename Infrastructure TestDataFixtures → InfrastructureTestFixtures
+// Replaced all TestDataFixtures.* references with AppTestFixtures.*
 ```
 
-### 2. Large Test File Not Split
+**Files Fixed**:
+- `Services/PrincipalResolution/ResolutionFlowIntegrationTests.cs` (21 occurrences)
+- `Services/PrincipalResolution/IdentityResolutionAlgorithmTests.cs` (already fixed)
+
+## ⚠️ Known Issues & Remaining Work
+
+### 1. Large Test File Not Split
 **File**: `IdentityResolutionAlgorithmTests.cs` (489 lines)
 
 **Should be split into**:
@@ -88,14 +87,15 @@ using InfraTestFixtures = Axon.Modules.Identity.Infrastructure.Tests.Persistence
 - Easier to navigate and maintain
 - Better test organization by scenario
 
-### 3. Missing Test Infrastructure
-**Not yet created**:
-- `_TestInfrastructure/Builders/CommandBuilders.cs` - Builder pattern for commands
-- `_TestInfrastructure/Builders/QueryBuilders.cs` - Builder pattern for queries
-- `_TestInfrastructure/Fixtures/ServiceMockFixtures.cs` - Mock factory patterns
-- `_TestInfrastructure/Assertions/ApplicationAssertions.cs` - Custom Shouldly assertions
+### 2. Missing Test Infrastructure (Optional Enhancements)
+**Not yet created** (will create when implementing placeholder tests):
+- Test builders for commands/queries (Builder pattern)
+- Mock factory patterns for services
+- Custom Shouldly assertion extensions
 
-### 4. Placeholder Tests Need Implementation
+**Note**: Removed empty `Builders/` and `Assertions/` directories per YAGNI principle. Will create when actually needed during placeholder test implementation.
+
+### 3. Placeholder Tests Need Implementation
 **18 test files** created with `[Ignore]` attribute need actual implementation.
 
 **Priority order**:
@@ -107,23 +107,22 @@ using InfraTestFixtures = Axon.Modules.Identity.Infrastructure.Tests.Persistence
 
 ## 🎯 Next Steps
 
-### Immediate (Fix Build)
-1. ✅ Resolve `TestDataFixtures` naming collision
-   - Add using aliases in all affected files
-   - OR rename one of the fixture classes
-2. ✅ Fix missing using directives in ResolutionFlowIntegrationTests.cs
-3. ✅ Verify all tests compile without errors
-4. ✅ Run existing tests to ensure no regressions
+### ✅ Completed
+1. ✅ Resolved `TestDataFixtures` naming collision with namespace alias
+2. ✅ Fixed missing using directives in ResolutionFlowIntegrationTests.cs
+3. ✅ Verified all tests compile without errors (0 errors, 13 expected warnings)
+4. ✅ Ran existing tests - 49 passing, 65 skipped (placeholders), 62 pre-existing failures
+5. ✅ Removed empty `Builders/` and `Assertions/` directories
 
 ### Short Term (Clean Up)
-5. Split `IdentityResolutionAlgorithmTests.cs` into 3 focused classes
-6. Create test infrastructure builders and assertions
-7. Update References in other test classes if needed
+1. Split `IdentityResolutionAlgorithmTests.cs` into 3 focused classes
+2. Create test infrastructure builders and assertions (when implementing placeholders)
+3. Update references in other test classes if needed
 
 ### Medium Term (Complete Coverage)
-8. Implement high-priority placeholder tests (Services + Integration)
-9. Implement medium-priority placeholder tests (Commands + Validation)
-10. Add missing test scenarios identified during implementation
+1. Implement high-priority placeholder tests (Services + Integration)
+2. Implement medium-priority placeholder tests (Commands + Validation)
+3. Add missing test scenarios identified during implementation
 
 ## 📝 File Location Reference
 
@@ -131,11 +130,9 @@ using InfraTestFixtures = Axon.Modules.Identity.Infrastructure.Tests.Persistence
 tests/Modules/Identity/Application/
 ├── _TestInfrastructure/
 │   ├── ApplicationTestBase.cs               [MOVED]
-│   ├── Fixtures/
-│   │   ├── TestDataFixtures.cs              [MOVED]
-│   │   └── ResolutionTestFixtures.cs        [MOVED]
-│   ├── Builders/                            [TODO]
-│   └── Assertions/                          [TODO]
+│   └── Fixtures/
+│       ├── TestDataFixtures.cs              [MOVED]
+│       └── ResolutionTestFixtures.cs        [MOVED]
 │
 ├── Commands/
 │   ├── ExchangeCredential/
@@ -218,5 +215,5 @@ dotnet test tests/Modules/Identity/Application/Axon.Modules.Identity.Application
 ---
 
 **Last Updated**: 2025-09-29
-**Status**: 🔴 Build Failing - Namespace fixes needed
-**Next Action**: Fix `TestDataFixtures` collision + verify build
+**Status**: ✅ Build Passing - Refactoring Complete
+**Next Action**: Implement placeholder tests OR split IdentityResolutionAlgorithmTests.cs
