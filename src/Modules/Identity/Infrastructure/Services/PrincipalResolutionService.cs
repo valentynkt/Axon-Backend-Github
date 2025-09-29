@@ -3,6 +3,7 @@ using System.Globalization;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Application.Services;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
@@ -24,6 +25,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
     private readonly IWalletReadRepository _walletReadRepository;
     private readonly IWalletWriteRepository _walletWriteRepository;
     private readonly IWalletOwnershipRepository _ownershipRepository;
+    private readonly IAutoRevocationService _autoRevocationService;
     private readonly ILogger<PrincipalResolutionService> _logger;
 
     public PrincipalResolutionService(
@@ -32,6 +34,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         IWalletReadRepository walletReadRepository,
         IWalletWriteRepository walletWriteRepository,
         IWalletOwnershipRepository ownershipRepository,
+        IAutoRevocationService autoRevocationService,
         ILogger<PrincipalResolutionService> logger)
     {
         _principalRepository = principalRepository;
@@ -39,6 +42,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         _walletReadRepository = walletReadRepository;
         _walletWriteRepository = walletWriteRepository;
         _ownershipRepository = ownershipRepository;
+        _autoRevocationService = autoRevocationService;
         _logger = logger;
     }
 
@@ -268,7 +272,37 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         try
         {
+            // Process auto-revocation BEFORE SaveChanges to ensure it's in the same transaction
+            // This ensures that when we create a verified+signing ownership, any pending
+            // ownerships from other principals are revoked atomically
+            if (ownership.IsVerifiedSigning)
+            {
+                var autoRevocationResult = await _autoRevocationService.ProcessAutoRevocationAsync(
+                    wallet.Id,
+                    principal.Id,
+                    cancellationToken);
+
+                if (autoRevocationResult.IsFailure)
+                {
+                    _logger.LogWarning(
+                        "Auto-revocation preparation failed for wallet {WalletId}: {Error}",
+                        wallet.Id, autoRevocationResult.Error);
+                    // Continue even if auto-revocation fails - it's not critical for the auth flow
+                }
+                else if (autoRevocationResult.Value > 0)
+                {
+                    _logger.LogInformation(
+                        "Prepared auto-revocation for {Count} pending ownerships on wallet {WalletId}",
+                        autoRevocationResult.Value, wallet.Id);
+                }
+            }
+
+            // Now save everything in a single transaction
             await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Successfully created principal {PrincipalId} with verified+signing ownership of wallet {WalletId}",
+                principal.Id, wallet.Id);
 
             return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
                 principal, ResolutionPath.Created, WasAutoLinked: false));

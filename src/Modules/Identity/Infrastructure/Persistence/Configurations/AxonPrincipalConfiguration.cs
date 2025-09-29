@@ -54,10 +54,13 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
             // Composite key for owned entity
             credentials.HasKey(c => new { c.PrincipalId, c.Id });
 
+            // Owned entities should not have concurrency tokens - they're protected by aggregate root
+            // ValueGeneratedNever tells EF Core the application provides IDs, so these are new INSERTs
             credentials.Property(c => c.Id)
                 .HasConversion(id => id.Value, value => new IdentityCredentialId(value))
                 .HasColumnName("id")
-                .HasColumnType("uuid");
+                .HasColumnType("uuid")
+                .ValueGeneratedNever();
 
             credentials.Property(c => c.PrincipalId)
                 .HasConversion(id => id.Value, value => new AxonUserId(value))
@@ -119,10 +122,13 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
             // Composite key for owned entity
             ownerships.HasKey(o => new { o.PrincipalId, o.Id });
 
+            // Owned entities should not have concurrency tokens - they're protected by aggregate root
+            // ValueGeneratedNever tells EF Core the application provides IDs, so these are new INSERTs
             ownerships.Property(o => o.Id)
                 .HasConversion(id => id.Value, value => new WalletOwnershipId(value))
                 .HasColumnName("id")
-                .HasColumnType("uuid");
+                .HasColumnType("uuid")
+                .ValueGeneratedNever();
 
             ownerships.Property(o => o.PrincipalId)
                 .HasConversion(id => id.Value, value => new AxonUserId(value))
@@ -207,9 +213,12 @@ public class AxonPrincipalConfiguration : IEntityTypeConfiguration<AxonPrincipal
             // Composite key for owned entity
             chainDefaults.HasKey(d => new { d.PrincipalId, d.Id });
 
+            // Owned entities should not have concurrency tokens - they're protected by aggregate root
+            // ValueGeneratedNever tells EF Core the application provides IDs, so these are new INSERTs
             chainDefaults.Property(d => d.Id)
                 .HasColumnName("id")
-                .HasColumnType("uuid");
+                .HasColumnType("uuid")
+                .ValueGeneratedNever();
 
             chainDefaults.Property(d => d.PrincipalId)
                 .HasConversion(id => id.Value, value => new AxonUserId(value))

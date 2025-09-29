@@ -6,10 +6,13 @@ namespace Axon.Modules.Identity.Domain.Entities;
 /// <summary>
 /// Maps a principal's default wallet per blockchain.
 /// ChainId now contains compound format (e.g., "solana-mainnet") with all network information.
-/// This is a child entity that relies on the parent aggregate's concurrency control.
+/// This is an owned entity that belongs to the AxonPrincipal aggregate.
 /// </summary>
-public sealed class PrincipalChainDefault : AuditableDeletableEntity<Guid>
+public sealed class PrincipalChainDefault : OwnedAuditableEntity
 {
+    // Id property is kept as a regular property (not from base class)
+    // since owned entities don't have independent identity
+    public Guid Id { get; private set; }
     public AxonUserId PrincipalId { get; private set; }
     public string ChainId { get; private set; } = string.Empty;
     public WalletId WalletId { get; private set; }
@@ -18,8 +21,9 @@ public sealed class PrincipalChainDefault : AuditableDeletableEntity<Guid>
     // EF Core constructor
     private PrincipalChainDefault() { }
 
-    private PrincipalChainDefault(AxonUserId principalId, string chainId, WalletId walletId) : base(Guid.CreateVersion7())
+    private PrincipalChainDefault(AxonUserId principalId, string chainId, WalletId walletId) : base()
     {
+        Id = Guid.CreateVersion7();
         PrincipalId = principalId;
         ChainId = chainId;
         WalletId = walletId;

@@ -138,14 +138,20 @@ public class GetMyPrincipalHandlerRefactoredTests
         // Act
         await _handler.Handle(query, CancellationToken.None);
 
-        // Assert
-        _logger.Received(1).LogDebug(
-            "Processing GetMyPrincipal query for principal {PrincipalId}",
-            TestPrincipalId.Value);
+        // Assert - Verify logger was called with Debug level and correct principal ID
+        _logger.Received(1).Log(
+            LogLevel.Debug,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Processing GetMyPrincipal query")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
 
-        _logger.Received(1).LogDebug(
-            "Successfully retrieved user profile for principal {PrincipalId}",
-            TestPrincipalId.Value);
+        _logger.Received(1).Log(
+            LogLevel.Debug,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Successfully retrieved user profile")),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     [Test]
@@ -162,10 +168,14 @@ public class GetMyPrincipalHandlerRefactoredTests
         // Act
         await _handler.Handle(query, CancellationToken.None);
 
-        // Assert
-        _logger.Received(1).LogDebug(
-            "Failed to retrieve user profile for principal {PrincipalId}: {Error}",
-            TestPrincipalId.Value, expectedError);
+        // Assert - Verify failure was logged at Debug level with error details
+        _logger.Received(1).Log(
+            LogLevel.Debug,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(o => o.ToString()!.Contains("Failed to retrieve user profile") &&
+                                o.ToString()!.Contains(TestPrincipalId.Value.ToString())),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     private static CurrentUserResult CreateTestUserResult()

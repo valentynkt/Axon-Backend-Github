@@ -505,7 +505,6 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                                 .HasColumnName("principal_id");
 
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid")
                                 .HasColumnName("id");
 

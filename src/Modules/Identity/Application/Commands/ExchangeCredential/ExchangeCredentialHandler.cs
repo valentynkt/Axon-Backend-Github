@@ -67,20 +67,39 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
             TokenType: "Bearer",
             ExpiresIn: (int)(response.ExpiresAt - DateTime.UtcNow).TotalSeconds,
             AxonUserId: new AxonUserId(response.UserId),
-            Created: response.AdditionalData?.ContainsKey("created") == true && (bool)response.AdditionalData["created"],
-            WalletsProcessed: response.AdditionalData?.ContainsKey("wallets_processed") == true
-                ? Convert.ToInt32(response.AdditionalData["wallets_processed"], CultureInfo.InvariantCulture) : 0,
-            WalletsLinked: response.AdditionalData?.ContainsKey("wallets_linked") == true
-                ? Convert.ToInt32(response.AdditionalData["wallets_linked"], CultureInfo.InvariantCulture) : 0,
-            DefaultsApplied: response.AdditionalData?.ContainsKey("defaults_applied") == true
-                ? Convert.ToInt32(response.AdditionalData["defaults_applied"], CultureInfo.InvariantCulture) : 0,
-            Skipped: response.AdditionalData?.ContainsKey("skipped") == true
-                ? Convert.ToInt32(response.AdditionalData["skipped"], CultureInfo.InvariantCulture) : 0,
-            Conflicts: response.AdditionalData?.ContainsKey("conflicts") == true
-                ? Convert.ToInt32(response.AdditionalData["conflicts"], CultureInfo.InvariantCulture) : 0);
+            Created: GetBoolValue(response.AdditionalData, "created", false),
+            WalletsProcessed: GetIntValue(response.AdditionalData, "wallets_processed", 0),
+            WalletsLinked: GetIntValue(response.AdditionalData, "wallets_linked", 0),
+            DefaultsApplied: GetIntValue(response.AdditionalData, "defaults_applied", 0),
+            Skipped: GetIntValue(response.AdditionalData, "skipped", 0),
+            Conflicts: GetIntValue(response.AdditionalData, "conflicts", 0));
 
         _logger.LogInformation("Dynamic token exchange successful for principal {PrincipalId}", response.UserId);
 
         return Result.Success<ExchangeOutcome, Error>(outcome);
+    }
+
+    /// <summary>
+    /// Safely extracts an integer value from additional data dictionary
+    /// </summary>
+    private static int GetIntValue(Dictionary<string, object>? additionalData, string key, int defaultValue)
+    {
+        if (additionalData?.TryGetValue(key, out var value) == true && value != null)
+        {
+            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+        return defaultValue;
+    }
+
+    /// <summary>
+    /// Safely extracts a boolean value from additional data dictionary
+    /// </summary>
+    private static bool GetBoolValue(Dictionary<string, object>? additionalData, string key, bool defaultValue)
+    {
+        if (additionalData?.TryGetValue(key, out var value) == true && value != null)
+        {
+            return Convert.ToBoolean(value, CultureInfo.InvariantCulture);
+        }
+        return defaultValue;
     }
 }

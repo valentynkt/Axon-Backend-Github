@@ -20,6 +20,9 @@ public sealed class ChatReadDbContext : ReadDbContextBase<ChatModule>, IChatRead
 
     public override string ModuleName => "chat";
 
+    // Expose Conversations for direct query access in read operations
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -1,6 +1,7 @@
 using Axon.Modules.Identity.Application.Tests._TestInfrastructure.Fixtures;
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
+using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
@@ -54,6 +55,27 @@ public abstract class PrincipalResolutionTestBase
         // Create handler with mocked dependencies for new simplified constructor
         var mockOrchestrator = Substitute.For<IAuthenticationOrchestrator>();
         var mockJwtTokenService = Substitute.For<IJwtTokenService>();
+
+        // Setup mock orchestrator to return valid AuthenticationResponse with AdditionalData
+        var mockResponse = new AuthenticationResponse(
+            AccessToken: "mock-access-token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "dynamic",
+            ExpiresAt: DateTime.UtcNow.AddHours(1),
+            AdditionalData: new Dictionary<string, object>
+            {
+                ["created"] = true,
+                ["wallets_processed"] = 1,
+                ["wallets_linked"] = 1,
+                ["defaults_applied"] = 1,
+                ["skipped"] = 0,
+                ["conflicts"] = 0
+            });
+
+        mockOrchestrator.ExchangeDynamicTokenAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
 
         ExchangeHandler = new ExchangeCredentialHandler(
             MockCurrentUserService,

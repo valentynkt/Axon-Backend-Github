@@ -1,4 +1,5 @@
 using System.Reflection;
+using Axon.Modules.Identity.Application.Services;
 using BuildingBlocks.Application.Configuration;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,10 +25,13 @@ public static class ServiceCollectionExtensions
 
         // Register Identity-specific services
         services.AddSingleton(TimeProvider.System);
-        
+
+        // Register auto-revocation service for handling exclusive ownership constraints
+        services.AddScoped<IAutoRevocationService, AutoRevocationService>();
+
         // Register canonical Auth command/query handlers (MediatR will auto-discover them)
         // ExchangeCredentialHandler and GetMyPrincipalHandler are auto-registered by MediatR
-        
+
         return services;
     }
 }

@@ -241,7 +241,7 @@ public sealed class WalletVerificationService : IWalletVerificationService
         // This is a simplified implementation since we should access through aggregate root
         // In production, we'd need to find which principal owns this ownership
         // Use static method to create failure result
-        var error = Error.Failure("Operation not supported in current implementation", "NOT_IMPLEMENTED");
+        var error = Error.Failure("NOT_IMPLEMENTED", "Operation not supported in current implementation");
         return Task.FromResult(UnitResult.Failure<Error>(error));
     }
 

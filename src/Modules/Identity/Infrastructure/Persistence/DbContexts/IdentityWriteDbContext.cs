@@ -6,6 +6,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Events;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using BuildingBlocks.Infrastructure.Persistence.Write;
@@ -44,102 +45,44 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
     // Keep old property names for compatibility
     public DbSet<AxonPrincipal> AxonPrincipals => Principals;
+    
 
     /// <summary>
-    /// Override SaveChangesAsync to implement auto-revocation of pending ownerships
-    /// when a principal gains verified+signing ownership of a wallet.
+    /// Override SaveChangesAsync - owned entities now properly configured with ValueGeneratedNever.
+    /// No special handling needed as EF Core will correctly INSERT new owned entities.
     /// </summary>
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // Process auto-revocation before saving
-        await ProcessAutoRevocationsAsync(cancellationToken);
-
-        // Call base SaveChangesAsync
+        // Simply delegate to base - owned entities are now correctly configured
         return await base.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Processes auto-revocation for wallet ownerships based on domain events.
-    /// When a principal gains verified+signing ownership, all other principals'
-    /// pending ownerships for that wallet are automatically revoked.
-    /// </summary>
-    private async Task ProcessAutoRevocationsAsync(CancellationToken cancellationToken)
+
+    private static void ThrowConcurrencyException(DbUpdateConcurrencyException ex)
     {
-        // Check ALL tracked principals regardless of state
-        // After the first save, principals remain tracked but may not be marked as Modified
-        var trackedPrincipals = ChangeTracker.Entries<AxonPrincipal>()
-            .Select(e => e.Entity)
-            .ToList();
-
-        // Find all principals with new verified+signing ownership events
-        var principalsWithNewVerifiedOwnerships = trackedPrincipals
-            .Where(p => p.DomainEvents.Any(evt =>
-                evt is OwnershipChangedEvent oce &&
-                oce.ChangeType == "verified_signing_added" &&
-                oce.Metadata != null &&
-                oce.Metadata.ContainsKey("RequiresAutoRevocation") &&
-                oce.Metadata["RequiresAutoRevocation"] == "true"))
-            .ToList();
-
-        if (principalsWithNewVerifiedOwnerships.Count == 0)
-            return;
-
-        foreach (var winnerPrincipal in principalsWithNewVerifiedOwnerships)
+        var firstEntry = ex.Entries.Count > 0 ? ex.Entries[0] : null;
+        if (firstEntry == null)
         {
-            // Extract wallet IDs that need auto-revocation from the domain events
-            var walletIdsToRevoke = winnerPrincipal.DomainEvents
-                .OfType<OwnershipChangedEvent>()
-                .Where(evt => evt.ChangeType == "verified_signing_added" &&
-                             evt.Metadata != null &&
-                             evt.Metadata.ContainsKey("RequiresAutoRevocation") &&
-                             evt.Metadata["RequiresAutoRevocation"] == "true")
-                .Select(evt => evt.WalletId)
-                .Distinct()
-                .ToList();
-
-            foreach (var walletId in walletIdsToRevoke)
-            {
-                _logger.LogDebug("Processing auto-revocation for wallet {WalletId} excluding principal {PrincipalId}", walletId, winnerPrincipal.Id);
-                await RevokeCompetingOwnershipsAsync(walletId, winnerPrincipal.Id, cancellationToken);
-            }
+            throw ex; // Re-throw original if no entries
         }
+
+        var entityType = firstEntry.Entity.GetType().Name;
+
+        // Use EF Core's metadata to get primary key values
+        var keyValues = firstEntry.Metadata.FindPrimaryKey()?.Properties
+            .Select(p => firstEntry.CurrentValues[p]?.ToString() ?? "null")
+            .ToArray() ?? ["unknown"];
+        var entityId = string.Join(", ", keyValues);
+
+        // With PostgreSQL xmin, version details are managed by the database
+        throw new ConcurrencyException(
+            $"The {entityType} with key [{entityId}] has been modified by another user. Please refresh and try again.",
+            entityType,
+            entityId,
+            "xmin", // Using PostgreSQL xmin for concurrency
+            "xmin");
     }
 
-    /// <summary>
-    /// Revokes all pending ownerships for a wallet except for the specified principal.
-    /// This maintains the exclusivity constraint for verified+signing ownership.
-    /// </summary>
-    private async Task RevokeCompetingOwnershipsAsync(
-        WalletId walletId,
-        AxonUserId excludePrincipalId,
-        CancellationToken cancellationToken)
-    {
-        // Find all principals with pending ownership of this wallet (excluding the winner)
-        var principalsWithPendingOwnership = await Principals
-            .Include(p => p.WalletOwnerships)
-            .Where(p => p.Id != excludePrincipalId &&
-                       p.WalletOwnerships.Any(wo => wo.WalletId == walletId &&
-                                                   wo.Status == OwnershipStatus.Pending &&
-                                                   !wo.IsDeleted))
-            .ToListAsync(cancellationToken);
-
-        _logger.LogDebug("Found {Count} principals with pending ownership for wallet {WalletId}",
-            principalsWithPendingOwnership.Count, walletId);
-
-        // Revoke pending ownerships through the aggregate method
-        foreach (var principal in principalsWithPendingOwnership)
-        {
-            var revokeResult = principal.RevokePendingOwnershipsForWallet(
-                walletId,
-                "Auto-revoked due to exclusivity constraint");
-
-            _logger.LogDebug("Revoked {Count} pending ownerships for principal {PrincipalId} on wallet {WalletId}",
-                revokeResult.Value, principal.Id, walletId);
-
-            // The aggregate method handles raising the appropriate domain events
-            // and the result indicates how many ownerships were revoked
-        }
-    }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

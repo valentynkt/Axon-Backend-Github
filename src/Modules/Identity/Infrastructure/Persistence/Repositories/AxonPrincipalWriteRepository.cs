@@ -23,9 +23,9 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
 
     public IWriteUnitOfWork<IdentityModule> UnitOfWork => _unitOfWork;
 
-    // Override removed - the base implementation handles concurrency correctly
-    // The previous detaching logic was interfering with EF Core's change tracking
-    // and preventing proper concurrency control from working
+    // No override needed - the base EfWriteRepository handles concurrency correctly
+    // The key insight: EF Core automatically detects changes in owned entities
+    // and the xmin concurrency token is checked whenever ANY part of the aggregate changes
 
     private IQueryable<AxonPrincipal> GetPrincipalWithIncludes()
     {

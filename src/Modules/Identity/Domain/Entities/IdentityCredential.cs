@@ -5,9 +5,13 @@ namespace Axon.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Identity credential linking a principal to an external identity provider.
+/// This is an owned entity that belongs to the AxonPrincipal aggregate.
 /// </summary>
-public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCredentialId>
+public sealed class IdentityCredential : OwnedAuditableEntity
 {
+    // Id property is kept as a regular property (not from base class)
+    // since owned entities don't have independent identity
+    public IdentityCredentialId Id { get; private set; }
     public AxonUserId PrincipalId { get; private set; }
     public string Provider { get; private set; } = string.Empty;
     public string Issuer { get; private set; } = string.Empty;
@@ -17,8 +21,9 @@ public sealed class IdentityCredential : AuditableDeletableEntity<IdentityCreden
     // EF Core constructor
     private IdentityCredential() { }
 
-    private IdentityCredential(IdentityCredentialId id, AxonUserId principalId, string provider, string issuer, string subject, DateTime timestamp) : base(id)
+    private IdentityCredential(IdentityCredentialId id, AxonUserId principalId, string provider, string issuer, string subject, DateTime timestamp) : base()
     {
+        Id = id;
         PrincipalId = principalId;
         Provider = provider;
         Issuer = issuer;

@@ -8,10 +8,13 @@ namespace Axon.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Links a principal to a wallet with ownership details.
-/// This is a child entity that relies on the parent aggregate's concurrency control.
+/// This is an owned entity that belongs to the AxonPrincipal aggregate.
 /// </summary>
-public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId>
+public sealed class WalletOwnership : OwnedAuditableEntity
 {
+    // Id property is kept as a regular property (not from base class)
+    // since owned entities don't have independent identity
+    public WalletOwnershipId Id { get; private set; }
     public AxonUserId PrincipalId { get; private set; }
     public WalletId WalletId { get; private set; }
     public AccessMode AccessMode { get; private set; }
@@ -30,8 +33,9 @@ public sealed class WalletOwnership : AuditableDeletableEntity<WalletOwnershipId
         WalletId walletId,
         AccessMode accessMode,
         OwnershipStatus status,
-        VerificationSource verificationSource) : base(id)
+        VerificationSource verificationSource) : base()
     {
+        Id = id;
         PrincipalId = principalId;
         WalletId = walletId;
         AccessMode = accessMode;
