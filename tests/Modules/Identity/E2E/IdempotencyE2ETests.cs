@@ -394,39 +394,26 @@ public class IdempotencyE2ETests : E2ETestBase
 
     /// <summary>
     /// Creates a basic exchange request payload.
+    /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// </summary>
     private static StringContent CreateExchangeRequestPayload()
     {
-        var requestData = new
-        {
-            environmentId = TestDataFixtures.MainnetEnvironment,
-            wallets = Array.Empty<object>()
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        return CreateJsonContent(json);
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        return CreateJsonContent("{}");
     }
 
     /// <summary>
     /// Creates an exchange request payload with wallet data.
+    /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
+    /// Wallet data is no longer sent in request body.
     /// </summary>
     private static StringContent CreateExchangeRequestWithWallet(string address, string chainId)
     {
-        var requestData = new
-        {
-            environmentId = TestDataFixtures.MainnetEnvironment,
-            wallets = new[]
-            {
-                new
-                {
-                    address,
-                    chain = chainId
-                }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        return CreateJsonContent(json);
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        // Wallet data is processed from Dynamic JWT claims, not from request body
+        _ = address; // Unused - kept for backward compatibility with test signatures
+        _ = chainId; // Unused - kept for backward compatibility with test signatures
+        return CreateJsonContent("{}");
     }
 
     #endregion

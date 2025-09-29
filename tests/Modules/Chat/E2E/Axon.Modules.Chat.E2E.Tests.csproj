@@ -1,25 +1,34 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
         <RootNamespace>Axon.Modules.Chat.E2E</RootNamespace>
+        <!-- Suppress CA1859 for test projects - mocking requires interfaces, not concrete types -->
+        <!-- Suppress IDE0060 for test helper methods with optional parameters -->
+        <NoWarn>$(NoWarn);CA1859;IDE0060</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-        <PackageReference Include="NUnit" Version="4.0.1" />
-        <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
-        <PackageReference Include="NUnit.Analyzers" Version="3.9.0">
+        <PackageReference Include="coverlet.collector" Version="6.0.2">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Shouldly" Version="4.2.1" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.0" />
-        <PackageReference Include="Testcontainers.PostgreSql" Version="3.6.0" />
-        <PackageReference Include="WireMock.Net" Version="1.5.42" />
+        <PackageReference Include="Shouldly" Version="4.3.0" />
+        <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.1.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.8" />
+        <PackageReference Include="Testcontainers.PostgreSql" Version="4.7.0" />
+        <PackageReference Include="NUnit" Version="4.3.1" />
+        <PackageReference Include="NUnit.Analyzers" Version="4.3.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+        <PackageReference Include="WireMock.Net" Version="1.12.0" />
     </ItemGroup>
 
     <ItemGroup>

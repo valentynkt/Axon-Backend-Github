@@ -375,53 +375,24 @@ public class WalletSignatureE2ETests : E2ETestBase
     private static StringContent CreateExchangeRequestWithWalletSignature(
         string walletAddress, string message, string signature)
     {
-        var requestData = new
-        {
-            userData = new
-            {
-                axonUserId = TestDataFixtures.DynA_Subject,
-                dynamicEnvironmentId = "test-env-id",
-                wallets = new[]
-                {
-                    new
-                    {
-                        address = walletAddress,
-                        chain = "solana",
-                        signature = signature,
-                        message = message
-                    }
-                }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        return new StringContent(json, Encoding.UTF8, "application/json");
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        // Wallet signature data is processed from Dynamic JWT claims, not from request body
+        _ = walletAddress; // Unused - kept for backward compatibility with test signatures
+        _ = message; // Unused - kept for backward compatibility with test signatures
+        _ = signature; // Unused - kept for backward compatibility with test signatures
+        return new StringContent("{}", Encoding.UTF8, "application/json");
     }
 
     private static StringContent CreateExchangeRequestWithCustomChain(
         string chainId, string address, string message, string signature)
     {
-        var requestData = new
-        {
-            userData = new
-            {
-                axonUserId = TestDataFixtures.DynA_Subject,
-                dynamicEnvironmentId = "test-env-id",
-                wallets = new[]
-                {
-                    new
-                    {
-                        address = address,
-                        chain = chainId,
-                        signature = signature,
-                        message = message
-                    }
-                }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        return new StringContent(json, Encoding.UTF8, "application/json");
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        // Wallet signature data is processed from Dynamic JWT claims, not from request body
+        _ = chainId; // Unused - kept for backward compatibility with test signatures
+        _ = address; // Unused - kept for backward compatibility with test signatures
+        _ = message; // Unused - kept for backward compatibility with test signatures
+        _ = signature; // Unused - kept for backward compatibility with test signatures
+        return new StringContent("{}", Encoding.UTF8, "application/json");
     }
 
     #endregion

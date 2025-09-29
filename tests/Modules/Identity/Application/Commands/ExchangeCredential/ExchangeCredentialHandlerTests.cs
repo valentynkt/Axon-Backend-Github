@@ -1,36 +1,43 @@
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
-using Axon.Modules.Identity.Application.DTOs.Exchange;
 using BuildingBlocks.Core.Abstractions.Authentication;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using NUnit.Framework;
 using Shouldly;
 
-namespace Axon.Modules.Identity.Application.Tests.Commands;
+namespace Axon.Modules.Identity.Application.Tests.Commands.ExchangeCredential;
 
+/// <summary>
+/// Tests for ExchangeCredentialHandler command handler.
+/// Sprint 6 - Command handler tests following Sprint 5 patterns.
+///
+/// TESTING PHILOSOPHY:
+/// - Focus on token exchange orchestration + complex DTO mapping
+/// - Test dictionary parsing from AuthenticationResponse.AdditionalData
+/// - Verify safe extraction helpers (GetIntValue, GetBoolValue)
+/// - Minimal mocking (orchestrator + jwtTokenService + logger)
+/// </summary>
 [TestFixture]
 public class ExchangeCredentialHandlerTests
 {
-    private ICurrentUserService _currentUserService = null!;
     private IAuthenticationOrchestrator _orchestrator = null!;
     private IJwtTokenService _jwtTokenService = null!;
+    private ICurrentUserService _currentUserService = null!;
     private ILogger<ExchangeCredentialHandler> _logger = null!;
     private ExchangeCredentialHandler _handler = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _currentUserService = Substitute.For<ICurrentUserService>();
         _orchestrator = Substitute.For<IAuthenticationOrchestrator>();
         _jwtTokenService = Substitute.For<IJwtTokenService>();
+        _currentUserService = Substitute.For<ICurrentUserService>();
         _logger = Substitute.For<ILogger<ExchangeCredentialHandler>>();
-
-        // Configure default behaviors for the new services
-        ConfigureDefaultServiceBehaviors();
 
         _handler = new ExchangeCredentialHandler(
             _currentUserService,
@@ -39,39 +46,137 @@ public class ExchangeCredentialHandlerTests
             _logger);
     }
 
-    [TearDown]
-    public void TearDown()
-    {
-        // No resources to dispose in the simplified test setup
-    }
+    #region Success Scenarios (3 tests)
 
-    private void ConfigureDefaultServiceBehaviors()
+    [Test]
+    public async Task ExchangeCredential_WithValidToken_ShouldReturnExchangeOutcome()
     {
-        // Configure default orchestrator behavior - success with mock response
-        var mockResponse = new AuthenticationResponse(
-            AccessToken: "mock-access-token",
-            UserId: Guid.NewGuid(),
-            ProviderType: "dynamic",
-            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
+        // Arrange
+        var bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dynamic-jwt-token";
+        var userId = Guid.NewGuid();
+        var expiresAt = DateTime.UtcNow.AddMinutes(30);
+
+        var authResponse = new AuthenticationResponse(
+            AccessToken: "axon-access-token-xyz789",
+            UserId: userId,
+            ProviderType: "Dynamic",
+            ExpiresAt: expiresAt,
             AdditionalData: new Dictionary<string, object>
             {
-                ["created"] = false,
-                ["wallets_processed"] = 1,
-                ["wallets_linked"] = 1,
-                ["defaults_applied"] = 0,
-                ["skipped"] = 0,
+                ["created"] = true,
+                ["wallets_processed"] = 5,
+                ["wallets_linked"] = 3,
+                ["defaults_applied"] = 2,
+                ["skipped"] = 1,
                 ["conflicts"] = 0
             });
 
-        _orchestrator.ExchangeDynamicTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        var outcome = result.Value;
+        outcome.AccessToken.ShouldBe("axon-access-token-xyz789");
+        outcome.TokenType.ShouldBe("Bearer");
+        outcome.AxonUserId.Value.ShouldBe(userId);
+        outcome.Created.ShouldBeTrue();
+        outcome.WalletsProcessed.ShouldBe(5);
+        outcome.WalletsLinked.ShouldBe(3);
+        outcome.DefaultsApplied.ShouldBe(2);
+        outcome.Skipped.ShouldBe(1);
+        outcome.Conflicts.ShouldBe(0);
     }
 
     [Test]
-    public async Task Should_ReturnFailure_When_BearerTokenIsEmpty()
+    public async Task ExchangeCredential_WithValidToken_ShouldCallOrchestratorOnce()
     {
         // Arrange
-        var command = new ExchangeCredentialCommand("");
+        var bearerToken = "valid-dynamic-jwt-token";
+        var authResponse = new AuthenticationResponse(
+            AccessToken: "axon-token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "Dynamic",
+            ExpiresAt: DateTime.UtcNow.AddMinutes(30),
+            AdditionalData: null);
+
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
+
+        // Act
+        await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        await _orchestrator.Received(1).ExchangeDynamicTokenAsync(
+            bearerToken,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExchangeCredential_MapsAllFieldsCorrectly()
+    {
+        // Arrange
+        var bearerToken = "dynamic-jwt-token";
+        var userId = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var expiresAt = DateTime.UtcNow.AddMinutes(15);
+        var expectedExpiresIn = (int)(expiresAt - DateTime.UtcNow).TotalSeconds;
+
+        var authResponse = new AuthenticationResponse(
+            AccessToken: "mapped-access-token",
+            UserId: userId,
+            ProviderType: "Dynamic",
+            ExpiresAt: expiresAt,
+            AdditionalData: new Dictionary<string, object>
+            {
+                ["created"] = false,
+                ["wallets_processed"] = 10,
+                ["wallets_linked"] = 8,
+                ["defaults_applied"] = 5,
+                ["skipped"] = 2,
+                ["conflicts"] = 1
+            });
+
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        var outcome = result.Value;
+
+        // Verify all fields mapped correctly
+        outcome.AccessToken.ShouldBe("mapped-access-token");
+        outcome.TokenType.ShouldBe("Bearer"); // Hardcoded
+        outcome.ExpiresIn.ShouldBeInRange(expectedExpiresIn - 1, expectedExpiresIn + 1); // Allow 1s variance
+        outcome.AxonUserId.Value.ShouldBe(userId);
+        outcome.Created.ShouldBeFalse();
+        outcome.WalletsProcessed.ShouldBe(10);
+        outcome.WalletsLinked.ShouldBe(8);
+        outcome.DefaultsApplied.ShouldBe(5);
+        outcome.Skipped.ShouldBe(2);
+        outcome.Conflicts.ShouldBe(1);
+    }
+
+    #endregion
+
+    #region Validation Scenarios (2 tests)
+
+    [Test]
+    public async Task ExchangeCredential_WithEmptyToken_ShouldReturnValidationError()
+    {
+        // Arrange
+        var command = new ExchangeCredentialCommand(string.Empty);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -79,26 +184,17 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.Validation);
-        result.Error.Message.ShouldContain("Bearer token is required");
+        result.Error.Code.ShouldBe("AUTH.TOKEN_REQUIRED");
+        result.Error.Message.ShouldBe("Bearer token is required");
+
+        // Should not call orchestrator
+        await _orchestrator.DidNotReceive().ExchangeDynamicTokenAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task Should_ReturnFailure_When_BearerTokenIsNull()
-    {
-        // Arrange
-        var command = new ExchangeCredentialCommand(null!);
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Type.ShouldBe(ErrorType.Validation);
-        result.Error.Message.ShouldContain("Bearer token is required");
-    }
-
-    [Test]
-    public async Task Should_ReturnFailure_When_BearerTokenIsWhitespace()
+    public async Task ExchangeCredential_WithWhitespaceToken_ShouldReturnValidationError()
     {
         // Arrange
         var command = new ExchangeCredentialCommand("   ");
@@ -109,124 +205,120 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.Validation);
-        result.Error.Message.ShouldContain("Bearer token is required");
+        result.Error.Code.ShouldBe("AUTH.TOKEN_REQUIRED");
+
+        // Should not call orchestrator
+        await _orchestrator.DidNotReceive().ExchangeDynamicTokenAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
     }
 
+    #endregion
+
+    #region Error Propagation (2 tests)
+
     [Test]
-    public async Task Should_ReturnFailure_When_OrchestratorFails()
+    public async Task ExchangeCredential_WithInvalidToken_ShouldReturnOrchestratorError()
     {
         // Arrange
-        var command = new ExchangeCredentialCommand("invalid-token");
-        _orchestrator.ExchangeDynamicTokenAsync("invalid-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<AuthenticationResponse, Error>(Error.Validation("Invalid token", "AUTH.INVALID_TOKEN")));
+        var bearerToken = "invalid-jwt-token";
+        var error = Error.Unauthorized("Invalid JWT signature", "AUTH.INVALID_TOKEN");
+
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<AuthenticationResponse, Error>(error));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        result.Error.Type.ShouldBe(ErrorType.Validation);
-        result.Error.Message.ShouldContain("Invalid token");
+        result.Error.Type.ShouldBe(ErrorType.Unauthorized);
+        result.Error.Code.ShouldBe("AUTH.INVALID_TOKEN");
+        result.Error.Message.ShouldBe("Invalid JWT signature");
     }
 
     [Test]
-    public async Task Should_ReturnSuccess_When_OrchestratorSucceeds()
+    public async Task ExchangeCredential_WithExpiredToken_ShouldReturnUnauthorizedError()
     {
         // Arrange
-        var command = new ExchangeCredentialCommand("valid-bearer-token");
-        var mockResponse = new AuthenticationResponse(
-            AccessToken: "mock-access-token",
-            UserId: Guid.NewGuid(),
-            ProviderType: "dynamic",
-            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
-            AdditionalData: new Dictionary<string, object>
-            {
-                ["created"] = true,
-                ["wallets_processed"] = 2,
-                ["wallets_linked"] = 2,
-                ["defaults_applied"] = 1,
-                ["skipped"] = 0,
-                ["conflicts"] = 0
-            });
+        var bearerToken = "expired-jwt-token";
+        var error = Error.Unauthorized("Token has expired", "AUTH.TOKEN_EXPIRED");
 
-        _orchestrator.ExchangeDynamicTokenAsync("valid-bearer-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Failure<AuthenticationResponse, Error>(error));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Unauthorized);
+        result.Error.Code.ShouldBe("AUTH.TOKEN_EXPIRED");
+    }
+
+    #endregion
+
+    #region Dictionary Parsing Edge Cases (3 tests)
+
+    [Test]
+    public async Task ExchangeCredential_WithNullAdditionalData_ShouldUseDefaults()
+    {
+        // Arrange
+        var bearerToken = "valid-token";
+        var authResponse = new AuthenticationResponse(
+            AccessToken: "token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "Dynamic",
+            ExpiresAt: DateTime.UtcNow.AddMinutes(30),
+            AdditionalData: null); // Null dictionary
+
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.Value.AccessToken.ShouldBe("mock-access-token");
-        result.Value.TokenType.ShouldBe("Bearer");
-        result.Value.Created.ShouldBeTrue();
-        result.Value.WalletsProcessed.ShouldBe(2);
-        result.Value.WalletsLinked.ShouldBe(2);
-        result.Value.DefaultsApplied.ShouldBe(1);
+        var outcome = result.Value;
+
+        // All dictionary-based fields should use defaults
+        outcome.Created.ShouldBeFalse(); // Default bool
+        outcome.WalletsProcessed.ShouldBe(0); // Default int
+        outcome.WalletsLinked.ShouldBe(0);
+        outcome.DefaultsApplied.ShouldBe(0);
+        outcome.Skipped.ShouldBe(0);
+        outcome.Conflicts.ShouldBe(0);
     }
 
     [Test]
-    public async Task Should_DelegateToOrchestrator_When_ValidTokenProvided()
+    public async Task ExchangeCredential_WithPartialAdditionalData_ShouldHandleGracefully()
     {
         // Arrange
-        var command = new ExchangeCredentialCommand("valid-bearer-token");
-        var expectedUserId = Guid.NewGuid();
-        var mockResponse = new AuthenticationResponse(
-            AccessToken: "new-access-token",
-            UserId: expectedUserId,
-            ProviderType: "dynamic",
+        var bearerToken = "valid-token";
+        var authResponse = new AuthenticationResponse(
+            AccessToken: "token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "Dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
             AdditionalData: new Dictionary<string, object>
             {
-                ["created"] = true,
-                ["wallets_processed"] = 1,
-                ["wallets_linked"] = 1,
-                ["defaults_applied"] = 1,
-                ["skipped"] = 0,
-                ["conflicts"] = 0
+                ["created"] = true, // Only 3 of 6 keys present
+                ["wallets_processed"] = 7,
+                ["conflicts"] = 2
+                // Missing: wallets_linked, defaults_applied, skipped
             });
 
-        _orchestrator.ExchangeDynamicTokenAsync("valid-bearer-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
 
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        result.Value.Created.ShouldBeTrue();
-        result.Value.AxonUserId.Value.ShouldBe(expectedUserId);
-        result.Value.AccessToken.ShouldBe("new-access-token");
-
-        // Verify orchestrator was called with correct token
-        await _orchestrator.Received(1)
-            .ExchangeDynamicTokenAsync("valid-bearer-token", Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task Should_ConvertAuthenticationResponseToExchangeOutcome()
-    {
-        // Arrange
-        var command = new ExchangeCredentialCommand("valid-bearer-token");
-        var expectedUserId = Guid.NewGuid();
-        var expiresAt = DateTime.UtcNow.AddMinutes(30);
-        var mockResponse = new AuthenticationResponse(
-            AccessToken: "test-token",
-            UserId: expectedUserId,
-            ProviderType: "dynamic",
-            ExpiresAt: expiresAt,
-            AdditionalData: new Dictionary<string, object>
-            {
-                ["created"] = false,
-                ["wallets_processed"] = 3,
-                ["wallets_linked"] = 2,
-                ["defaults_applied"] = 1,
-                ["skipped"] = 0,
-                ["conflicts"] = 0
-            });
-
-        _orchestrator.ExchangeDynamicTokenAsync("valid-bearer-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
+        var command = new ExchangeCredentialCommand(bearerToken);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -234,68 +326,42 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsSuccess.ShouldBeTrue();
         var outcome = result.Value;
-        outcome.AccessToken.ShouldBe("test-token");
-        outcome.TokenType.ShouldBe("Bearer");
-        outcome.AxonUserId.Value.ShouldBe(expectedUserId);
-        outcome.Created.ShouldBeFalse();
-        outcome.WalletsProcessed.ShouldBe(3);
-        outcome.WalletsLinked.ShouldBe(2);
-        outcome.DefaultsApplied.ShouldBe(1);
+
+        // Present keys should have their values
+        outcome.Created.ShouldBeTrue();
+        outcome.WalletsProcessed.ShouldBe(7);
+        outcome.Conflicts.ShouldBe(2);
+
+        // Missing keys should use defaults
+        outcome.WalletsLinked.ShouldBe(0);
+        outcome.DefaultsApplied.ShouldBe(0);
         outcome.Skipped.ShouldBe(0);
-        outcome.Conflicts.ShouldBe(0);
-        outcome.ExpiresIn.ShouldBeGreaterThan(1790); // Should be close to 30 minutes
     }
 
     [Test]
-    public async Task Should_HandleMissingAdditionalData()
+    public async Task ExchangeCredential_WithMixedDataTypes_ShouldConvertCorrectly()
     {
         // Arrange
-        var command = new ExchangeCredentialCommand("valid-bearer-token");
-        var expectedUserId = Guid.NewGuid();
-        var mockResponse = new AuthenticationResponse(
-            AccessToken: "test-token",
-            UserId: expectedUserId,
-            ProviderType: "dynamic",
-            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
-            AdditionalData: null); // No additional data
-
-        _orchestrator.ExchangeDynamicTokenAsync("valid-bearer-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        var outcome = result.Value;
-        outcome.Created.ShouldBeFalse(); // Default value
-        outcome.WalletsProcessed.ShouldBe(0); // Default value
-        outcome.WalletsLinked.ShouldBe(0); // Default value
-        outcome.DefaultsApplied.ShouldBe(0); // Default value
-        outcome.Skipped.ShouldBe(0); // Default value
-        outcome.Conflicts.ShouldBe(0); // Default value
-    }
-
-    [Test]
-    public async Task Should_HandlePartialAdditionalData()
-    {
-        // Arrange
-        var command = new ExchangeCredentialCommand("valid-bearer-token");
-        var expectedUserId = Guid.NewGuid();
-        var mockResponse = new AuthenticationResponse(
-            AccessToken: "test-token",
-            UserId: expectedUserId,
-            ProviderType: "dynamic",
-            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
+        var bearerToken = "valid-token";
+        var authResponse = new AuthenticationResponse(
+            AccessToken: "token",
+            UserId: Guid.NewGuid(),
+            ProviderType: "Dynamic",
+            ExpiresAt: DateTime.UtcNow.AddMinutes(30),
             AdditionalData: new Dictionary<string, object>
             {
-                ["created"] = true,
-                ["wallets_processed"] = 2
-                // Missing other fields
+                ["created"] = "true", // String instead of bool
+                ["wallets_processed"] = "15", // String instead of int
+                ["wallets_linked"] = 10, // Actual int
+                ["defaults_applied"] = "0", // String "0"
+                ["skipped"] = 1, // Actual int
+                ["conflicts"] = "3" // String "3"
             });
 
-        _orchestrator.ExchangeDynamicTokenAsync("valid-bearer-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AuthenticationResponse, Error>(mockResponse));
+        _orchestrator.ExchangeDynamicTokenAsync(bearerToken, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
+
+        var command = new ExchangeCredentialCommand(bearerToken);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -303,18 +369,15 @@ public class ExchangeCredentialHandlerTests
         // Assert
         result.IsSuccess.ShouldBeTrue();
         var outcome = result.Value;
-        outcome.Created.ShouldBeTrue(); // Present
-        outcome.WalletsProcessed.ShouldBe(2); // Present
-        outcome.WalletsLinked.ShouldBe(0); // Default value for missing
-        outcome.DefaultsApplied.ShouldBe(0); // Default value for missing
-        outcome.Skipped.ShouldBe(0); // Default value for missing
-        outcome.Conflicts.ShouldBe(0); // Default value for missing
+
+        // Convert.ToBoolean and Convert.ToInt32 should handle strings
+        outcome.Created.ShouldBeTrue();
+        outcome.WalletsProcessed.ShouldBe(15);
+        outcome.WalletsLinked.ShouldBe(10);
+        outcome.DefaultsApplied.ShouldBe(0);
+        outcome.Skipped.ShouldBe(1);
+        outcome.Conflicts.ShouldBe(3);
     }
 
-    [Test]
-    public void Should_ValidateLoggingDependency()
-    {
-        // This test validates that logging dependencies are properly injected
-        _logger.ShouldNotBeNull();
-    }
+    #endregion
 }

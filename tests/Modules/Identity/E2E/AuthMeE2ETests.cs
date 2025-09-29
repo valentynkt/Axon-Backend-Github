@@ -407,21 +407,12 @@ public class AuthMeE2ETests : E2ETestBase
 
     /// <summary>
     /// Sets up a principal with credential and wallets via exchange endpoint.
+    /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// </summary>
     private async Task SetupPrincipalWithWallets(string jwt)
     {
-        var requestData = new
-        {
-            environmentId = TestDataFixtures.MainnetEnvironment,
-            wallets = new[]
-            {
-                new { address = TestDataFixtures.W1MainAddress, chain = TestDataFixtures.SolanaMainnetChain },
-                new { address = TestDataFixtures.W2MainAddress, chain = TestDataFixtures.SolanaMainnetChain }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        using var content = CreateJsonContent(json);
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        using var content = CreateJsonContent("{}");
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -430,17 +421,12 @@ public class AuthMeE2ETests : E2ETestBase
 
     /// <summary>
     /// Sets up a principal with credential only (no wallets).
+    /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// </summary>
     private async Task SetupCredentialOnlyPrincipal(string jwt)
     {
-        var requestData = new
-        {
-            environmentId = TestDataFixtures.MainnetEnvironment,
-            wallets = Array.Empty<object>()
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        using var content = CreateJsonContent(json);
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        using var content = CreateJsonContent("{}");
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -449,20 +435,12 @@ public class AuthMeE2ETests : E2ETestBase
 
     /// <summary>
     /// Adds a wallet to an existing principal.
+    /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// </summary>
     private async Task AddWalletToPrincipal(string jwt)
     {
-        var requestData = new
-        {
-            environmentId = TestDataFixtures.MainnetEnvironment,
-            wallets = new[]
-            {
-                new { address = TestDataFixtures.W1MainAddress, chain = TestDataFixtures.SolanaMainnetChain }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        using var content = CreateJsonContent(json);
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        using var content = CreateJsonContent("{}");
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
@@ -471,20 +449,12 @@ public class AuthMeE2ETests : E2ETestBase
 
     /// <summary>
     /// Adds a second wallet to an existing principal.
+    /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// </summary>
     private async Task AddSecondWalletToPrincipal(string jwt)
     {
-        var requestData = new
-        {
-            environmentId = TestDataFixtures.MainnetEnvironment,
-            wallets = new[]
-            {
-                new { address = TestDataFixtures.W2MainAddress, chain = TestDataFixtures.SolanaMainnetChain }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestData, JsonOptions);
-        using var content = CreateJsonContent(json);
+        // Exchange endpoint accepts empty body - JWT extracted from Authorization header
+        using var content = CreateJsonContent("{}");
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);

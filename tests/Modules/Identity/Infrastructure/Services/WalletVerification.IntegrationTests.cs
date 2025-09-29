@@ -76,9 +76,27 @@ public class WalletVerificationIntegrationTests
     public async Task TearDown()
     {
         // TRUNCATE principal CASCADE will automatically clear owned entities (wallet_ownership, principal_chain_default)
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.\"Principal\" CASCADE");
-        await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.\"Wallet\" CASCADE");
-        await _writeContext.DisposeAsync();
+        // Check if context and connection are still valid before attempting cleanup
+        if (_writeContext != null)
+        {
+            try
+            {
+                var connection = _writeContext.Database.GetDbConnection();
+                if (connection?.State != System.Data.ConnectionState.Closed)
+                {
+                    await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.\"Principal\" CASCADE");
+                    await _writeContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE identity.\"Wallet\" CASCADE");
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Connection already disposed, skip cleanup
+            }
+            finally
+            {
+                await _writeContext.DisposeAsync();
+            }
+        }
     }
 
     [Test]

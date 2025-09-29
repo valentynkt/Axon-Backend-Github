@@ -23,18 +23,10 @@ public static class JwtTestTokenFactory
     public const string TestKid1 = TestDataFixtures.Kid1;
     public const string TestKid2 = TestDataFixtures.Kid2;
 
-    // Ed25519 test keys (in practice, these would be properly generated)
-    private static readonly byte[] TestPrivateKey1 = Convert.FromBase64String(
-        "MC4CAQAwBQYDK2VwBCIEIC1hNKQqAruS7+8P5ELQDfOdZWQgKDDLKZj2Y7HGN2VF");
-
-    private static readonly byte[] TestPublicKey1 = Convert.FromBase64String(
-        "MCowBQYDK2VwAyEAqEW1B2Kgkz1r6nQ2QoL1fZYp3tJ5mP0xR4fL3eE2sA==");
-
-    private static readonly byte[] TestPrivateKey2 = Convert.FromBase64String(
-        "MC4CAQAwBQYDK2VwBCIEIM2oNLRrBtuT8/9Q6FMRDeQeaXRhLEELKaj3Z8IGO3WG");
-
-    private static readonly byte[] TestPublicKey2 = Convert.FromBase64String(
-        "MCowBQYDK2VwAyEArFX2C3Lhla2s7oR3RpM2gZbq4uK6nQ1yS5gM4fF4tB==");
+    // RSA test keys for JWT signing (matching the actual token generation)
+    // These are cached to ensure consistent keys across JWKS and token generation
+    private static readonly Lazy<RSA> TestRsa1 = new(() => RSA.Create(2048));
+    private static readonly Lazy<RSA> TestRsa2 = new(() => RSA.Create(2048));
 
     #region JWT Token Creation
 
@@ -192,7 +184,7 @@ public static class JwtTestTokenFactory
         {
             keys = new[]
             {
-                CreateJwkFromPublicKey(TestPublicKey1, TestKid1)
+                CreateJwkFromRsaKey(TestRsa1.Value, TestKid1)
             }
         };
 
@@ -208,8 +200,8 @@ public static class JwtTestTokenFactory
         {
             keys = new[]
             {
-                CreateJwkFromPublicKey(TestPublicKey1, TestKid1), // Keep old key
-                CreateJwkFromPublicKey(TestPublicKey2, TestKid2)  // Add new key
+                CreateJwkFromRsaKey(TestRsa1.Value, TestKid1), // Keep old key
+                CreateJwkFromRsaKey(TestRsa2.Value, TestKid2)  // Add new key
             }
         };
 
@@ -225,7 +217,7 @@ public static class JwtTestTokenFactory
         {
             keys = new[]
             {
-                CreateJwkFromPublicKey(TestPublicKey2, TestKid2) // Only new key
+                CreateJwkFromRsaKey(TestRsa2.Value, TestKid2) // Only new key
             }
         };
 
@@ -241,9 +233,8 @@ public static class JwtTestTokenFactory
     /// </summary>
     private static string CreateJwtToken(List<Claim> claims, string kid)
     {
-        // Note: Ed25519 is not yet supported in Microsoft.IdentityModel.Tokens 8.x
-        // Using RSA256 as a temporary fallback for tests
-        using var rsa = RSA.Create(2048);
+        // Use the cached RSA key for consistent signing
+        var rsa = kid == TestKid1 ? TestRsa1.Value : TestRsa2.Value;
         var rsaKey = new RsaSecurityKey(rsa) { KeyId = kid };
         var credentials = new SigningCredentials(rsaKey, SecurityAlgorithms.RsaSha256);
 
@@ -260,26 +251,36 @@ public static class JwtTestTokenFactory
     }
 
     /// <summary>
-    /// Creates a JWK object from a public key and key ID.
+    /// Creates a JWK object from an RSA key and key ID.
     /// </summary>
-    private static object CreateJwkFromPublicKey(byte[] publicKey, string kid)
+    private static object CreateJwkFromRsaKey(RSA rsa, string kid)
     {
-        // For Ed25519, we need to extract the 32-byte key from the DER encoding
-        var keyBytes = publicKey.Skip(12).Take(32).ToArray();
+        // Export RSA parameters for JWK format
+        var parameters = rsa.ExportParameters(false); // false = public key only
 
         return new
         {
-            kty = "OKP",
-            crv = "Ed25519",
+            kty = "RSA",
             kid,
             use = "sig",
-            x = Convert.ToBase64String(keyBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+            alg = "RS256",
+            n = Convert.ToBase64String(parameters.Modulus!).TrimEnd('=').Replace('+', '-').Replace('/', '_'),
+            e = Convert.ToBase64String(parameters.Exponent!).TrimEnd('=').Replace('+', '-').Replace('/', '_')
         };
     }
 
     #endregion
 
     #region Token Validation Helpers
+
+    /// <summary>
+    /// Gets the RSA signing keys for test token validation.
+    /// </summary>
+    public static IEnumerable<SecurityKey> GetTestSigningKeys()
+    {
+        yield return new RsaSecurityKey(TestRsa1.Value) { KeyId = TestKid1 };
+        yield return new RsaSecurityKey(TestRsa2.Value) { KeyId = TestKid2 };
+    }
 
     /// <summary>
     /// Validates that a JWT token has the expected structure without cryptographic verification.

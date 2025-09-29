@@ -1,0 +1,60 @@
+# Story Refactoring Workflow - Safe Brownfield Code Improvement
+name: story-refactoring
+description: "Safely refactor existing code with impact analysis, backward compatibility checks, and rollback planning. Extends story-implementation with extra safety measures."
+author: "Axon Module"
+
+# Critical variables
+config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+
+# Axon module paths
+docs_root: "{config_source}:project_paths.docs_root"
+engineering_docs: "{config_source}:project_paths.engineering_docs"
+source_root: "{config_source}:project_paths.source_root"
+tests_root: "{config_source}:project_paths.tests_root"
+
+# Refactoring-specific settings
+checkpoint_count: 5  # One extra checkpoint for refactoring plan
+extra_validation: true
+backward_compatibility_check: true
+impact_analysis_required: true
+rollback_plan_required: true
+
+# Module path and component files
+installed_path: "{project-root}/bmad/axon/workflows/story-refactoring"
+template: true
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Required inputs
+required_inputs:
+  - story_file: "Refactoring story markdown file (story-NNN.md)"
+
+# Output configuration
+default_output_folder: "{output_folder}/active-stories/{{story_id}}"
+refactoring_plan: "{default_output_folder}/refactoring-plan.md"
+impact_analysis: "{default_output_folder}/impact-analysis.md"
+rollback_plan: "{default_output_folder}/rollback-plan.md"
+decision_log_path: "{default_output_folder}/decisions.yaml"
+
+# Agents used
+agents_used:
+  - axon-story-orchestrator
+  - axon-doc-oracle
+  - axon-archaeologist       # CRITICAL: Maps ALL usages
+  - axon-library-sage
+  - axon-implementation-surgeon
+  - axon-quality-guardian
+
+# Success criteria (stricter than story-implementation)
+success_metrics:
+  - pattern_compliance: "95%+"
+  - test_coverage: "90%+"
+  - ac_coverage: "100%"
+  - build_success: "100%"
+  - all_existing_tests_pass: "100%"  # MANDATORY
+  - backward_compatibility: "100%"  # MANDATORY
+  - no_breaking_changes: "true"     # MANDATORY

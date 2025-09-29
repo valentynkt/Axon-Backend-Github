@@ -1,0 +1,61 @@
+# Story Bugfix Workflow - Root Cause Analysis + Fix
+name: story-bugfix
+description: "Resolve issues with root cause analysis, minimal fix approach, and mandatory regression testing. Faster than story-implementation, diagnostic focus."
+author: "Axon Module"
+
+# Critical variables
+config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+
+# Axon module paths
+docs_root: "{config_source}:project_paths.docs_root"
+engineering_docs: "{config_source}:project_paths.engineering_docs"
+source_root: "{config_source}:project_paths.source_root"
+tests_root: "{config_source}:project_paths.tests_root"
+
+# Bugfix-specific settings
+checkpoint_count: 4  # Same as story-implementation
+root_cause_analysis_required: true
+regression_test_mandatory: true
+minimal_fix_approach: true
+
+# Module path and component files
+installed_path: "{project-root}/bmad/axon/workflows/story-bugfix"
+template: true
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Required inputs
+required_inputs:
+  - story_file: "Bugfix story markdown file (story-NNN.md)"
+  - reproduction_steps: "How to reproduce the bug (optional)"
+  - error_logs: "Error logs or stack traces (optional)"
+
+# Output configuration
+default_output_folder: "{output_folder}/active-stories/{{story_id}}"
+root_cause_analysis: "{default_output_folder}/root-cause-analysis.md"
+fix_strategy: "{default_output_folder}/fix-strategy.md"
+regression_test: "{default_output_folder}/regression-test.md"
+decision_log_path: "{default_output_folder}/decisions.yaml"
+
+# Agents used
+agents_used:
+  - axon-story-orchestrator
+  - axon-doc-oracle
+  - axon-archaeologist       # Find faulty code
+  - axon-library-sage
+  - axon-implementation-surgeon  # Apply minimal fix
+  - axon-quality-guardian
+
+# Success criteria
+success_metrics:
+  - bug_reproduced: "true"  # MANDATORY
+  - root_cause_identified: "true"  # MANDATORY
+  - regression_test_added: "true"  # MANDATORY
+  - bug_fixed: "true"
+  - regression_test_passes: "true"  # MANDATORY
+  - all_existing_tests_pass: "100%"  # MANDATORY
+  - no_new_bugs_introduced: "true"  # MANDATORY

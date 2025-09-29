@@ -28,11 +28,11 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         // Arrange: Create conversation
         var conversation = CreateTestConversation(timeProvider: TimeProvider);
 
-        // Act & Assert: Domain should prevent user message with AI response ID
+        // Act & Assert: Domain invariant validation should prevent user message with AI response ID
         var content = MessageContent.From("User message");
 
         // Try to create user message with AI response ID using reflection
-        // (Domain rules should prevent this normally)
+        // The Message constructor validates invariants and should throw
         var messageType = typeof(Message);
         var constructor = messageType.GetConstructor(
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
@@ -41,22 +41,25 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
                    typeof(MessageContent), typeof(int), typeof(AiResponseId) },
             null);
 
-        // This would violate domain rules if allowed
-        var invalidMessage = constructor?.Invoke(new object?[]
+        constructor.ShouldNotBeNull();
+
+        // Assert: Constructor should throw InvalidOperationException due to domain invariant validation
+        var exception = Should.Throw<System.Reflection.TargetInvocationException>(() =>
         {
-            MessageId.New(),
-            conversation.Id,
-            MessageRole.User,
-            content,
-            1,
-            new AiResponseId("should-not-be-here") // Invalid for user message
+            constructor.Invoke(new object?[]
+            {
+                MessageId.New(),
+                conversation.Id,
+                MessageRole.User,
+                content,
+                1,
+                new AiResponseId("should-not-be-here") // Invalid for user message
+            });
         });
 
-        // Domain validation should catch this
-        invalidMessage.ShouldNotBeNull();
-
-        // If we try to persist this directly (bypassing domain), it should still maintain integrity
-        // This is why domain rules are critical - they prevent invalid states
+        // Inner exception should be InvalidOperationException from domain validation
+        exception.InnerException.ShouldBeOfType<InvalidOperationException>();
+        exception.InnerException?.Message.ShouldContain("User messages cannot have an AI response ID");
     }
 
     [Test]
@@ -183,7 +186,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         var conversation = CreateTestConversation(timeProvider: TimeProvider);
 
         // Act: Try to add message with content at max length
-        var maxContent = new string('A', 100000); // Max allowed
+        var maxContent = new string('A', 16000); // Max allowed (ChatPrimitiveConstants.MessageContentDefault.MaxLength)
         var contentResult = MessageContent.Create(maxContent);
         contentResult.IsSuccess.ShouldBeTrue();
 
@@ -198,7 +201,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         saved.ShouldNotBeNull();
 
         var message = saved.GetAllMessages().First();
-        message.Content.Value.Length.ShouldBe(100000);
+        message.Content.Value.Length.ShouldBe(16000);
     }
 
     [Test]
@@ -228,14 +231,12 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         var conversation = CreateTestConversationWithMessages(timeProvider: TimeProvider);
         await SaveConversationAsync(conversation);
 
-        // Act: Soft delete a message (using reflection since it's internal)
+        // Act: Soft delete a message using domain method
         var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
         var messageToDelete = loaded.GetAllMessages().First();
-        var isDeletedProperty = typeof(Message)
-            .GetProperty("IsDeleted", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-        isDeletedProperty?.SetValue(messageToDelete, true);
+        messageToDelete.SoftDelete();
 
         await ConversationRepository.UpdateAsync(loaded);
         await UnitOfWork.SaveChangesAsync();

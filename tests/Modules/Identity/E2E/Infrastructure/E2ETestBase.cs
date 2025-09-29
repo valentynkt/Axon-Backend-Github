@@ -1,16 +1,20 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Axon.Modules.Identity.Infrastructure.Persistence;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.IdentityModel.Tokens;
 using NUnit.Framework;
 using Testcontainers.PostgreSql;
 using WireMock.RequestBuilders;
@@ -34,6 +38,7 @@ public abstract class E2ETestBase : IAsyncDisposable
 
     private PostgreSqlContainer _postgreSqlContainer = null!;
     private string _connectionString = null!;
+    private bool _disposed;
 
     /// <summary>
     /// Test timestamp for deterministic time-based testing.
@@ -80,6 +85,9 @@ public abstract class E2ETestBase : IAsyncDisposable
     [SetUp]
     public async Task SetUpAsync()
     {
+        // Reset disposal flag for new test
+        _disposed = false;
+
         // Initialize deterministic time provider
         TimeProvider = new FakeTimeProvider(TestTime);
 
@@ -91,6 +99,33 @@ public abstract class E2ETestBase : IAsyncDisposable
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Testing");
+
+                // CRITICAL FIX: Configure Dynamic Auth settings to OVERRIDE appsettings
+                // AddInMemoryCollection must be LAST to ensure it overrides file-based config
+                builder.ConfigureAppConfiguration((context, config) =>
+                {
+                    // Clear existing sources to ensure clean slate
+                    config.Sources.Clear();
+
+                    // Re-add base configuration
+                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+                    config.AddJsonFile($"appsettings.{context.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: false);
+                    config.AddEnvironmentVariables();
+
+                    // Add test-specific overrides LAST (highest priority)
+                    var dynamicConfig = new Dictionary<string, string?>
+                    {
+                        ["Dynamic:Authority"] = "", // Clear Authority to force JwksUri usage
+                        ["Dynamic:JwksUri"] = $"http://localhost:{JwksServer.Port}/.well-known/jwks.json",
+                        ["Dynamic:Issuer"] = TestDataFixtures.DynamicIssuer,
+                        ["Dynamic:Audience"] = "axon-api",
+                        // Add test environment mapping for Dynamic validation
+                        ["DynamicValidation:EnvironmentMapping:dyn_test_env_12345"] = "test"
+                    };
+
+                    config.AddInMemoryCollection(dynamicConfig);
+                });
+
                 builder.ConfigureServices(services =>
                 {
                     // Replace connection string for test database
@@ -102,12 +137,20 @@ public abstract class E2ETestBase : IAsyncDisposable
                     // Replace time provider with deterministic one
                     services.AddSingleton<TimeProvider>(TimeProvider);
 
-                    // Configure Dynamic Auth service to use WireMock JWKS endpoint
-                    services.Configure<DynamicAuthOptions>(options =>
+                    // CRITICAL FIX: Post-configure DynamicJwt options to use test issuer and signing keys
+                    // This runs AFTER IdentityApiModule registers JWT authentication
+                    services.PostConfigure<JwtBearerOptions>("DynamicJwt", options =>
                     {
-                        options.JwksEndpoint = $"http://localhost:{JwksServer.Port}/.well-known/jwks.json";
-                        options.Issuer = TestDataFixtures.DynamicIssuer;
-                        options.Audience = "axon-api";
+                        options.TokenValidationParameters.ValidIssuer = TestDataFixtures.DynamicIssuer;
+
+                        // Directly provide test RSA keys instead of relying on JWKS discovery
+                        // This ensures signature validation works in tests
+                        var testKeys = JwtTestTokenFactory.GetTestSigningKeys();
+                        options.TokenValidationParameters.IssuerSigningKeys = testKeys;
+
+                        // Disable JWKS refresh since we're providing keys directly
+                        options.RefreshOnIssuerKeyNotFound = false;
+                        options.RequireHttpsMetadata = false; // Allow HTTP for testing
                     });
 
                     // Disable authentication for some E2E tests when needed
@@ -134,6 +177,8 @@ public abstract class E2ETestBase : IAsyncDisposable
     [TearDown]
     public async Task TearDownAsync()
     {
+        if (_disposed) return;
+
         try
         {
             await TearDownDerivedAsync();
@@ -142,7 +187,13 @@ public abstract class E2ETestBase : IAsyncDisposable
         {
             await CleanupDatabaseAsync();
             HttpClient?.Dispose();
-            await Factory.DisposeAsync();
+
+            if (Factory != null)
+            {
+                await Factory.DisposeAsync();
+            }
+
+            _disposed = true;
         }
     }
 
@@ -317,17 +368,6 @@ public abstract class E2ETestBase : IAsyncDisposable
         await TearDownAsync();
         GC.SuppressFinalize(this);
     }
-}
-
-
-/// <summary>
-/// Configuration options for Dynamic Auth service in tests.
-/// </summary>
-internal sealed class DynamicAuthOptions
-{
-    public string JwksEndpoint { get; set; } = string.Empty;
-    public string Issuer { get; set; } = string.Empty;
-    public string Audience { get; set; } = string.Empty;
 }
 
 /// <summary>

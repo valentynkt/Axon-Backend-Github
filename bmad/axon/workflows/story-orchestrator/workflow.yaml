@@ -1,0 +1,53 @@
+# Story Orchestrator Workflow - Master Story Router
+name: story-orchestrator
+description: "Master coordinator that analyzes stories and routes to appropriate implementation workflows based on story type (Feature/Refactor/Bugfix) and module context (Identity/Chat/API)."
+author: "Axon Module"
+
+# Critical variables
+config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+
+# Module path and component files
+installed_path: "{project-root}/bmad/axon/workflows/story-orchestrator"
+template: false  # This is a routing workflow, not a document generator
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Routing targets (workflows this orchestrator can delegate to)
+routing_targets:
+  tier2_core:
+    - story-implementation    # Feature stories
+    - story-refactoring       # Refactor stories
+    - story-bugfix            # Bugfix stories
+  tier3_module:
+    - identity-workflow       # Identity module specialization
+    - chat-workflow           # Chat module specialization
+    - api-workflow            # API/FastEndpoints specialization
+
+# Required inputs
+required_inputs:
+  - story_file: "Story markdown file (story-NNN.md)"
+
+# Routing configuration
+routing_logic:
+  story_type_detection:
+    feature: "Story type contains 'Feature' OR title suggests new capability"
+    refactor: "Story type contains 'Refactor' OR title suggests code improvement"
+    bugfix: "Story type contains 'Bugfix' OR title suggests issue resolution"
+
+  module_detection:
+    identity: "Module field = 'Identity' OR story mentions auth/wallet/credential/principal"
+    chat: "Module field = 'Chat' OR story mentions conversation/message/AI/Claude"
+    api: "Module field = 'API' OR story mentions endpoint/FastEndpoints/REST/HTTP"
+    cross_cutting: "Module field = 'Cross-cutting' OR affects multiple modules"
+
+# Output configuration (routing decision log)
+default_output_file: "{output_folder}/routing-decisions/{{story_id}}-routing.yaml"
+
+# Required tools
+required_tools:
+  - Read                # Story file reading
+  - Write               # Routing decision log

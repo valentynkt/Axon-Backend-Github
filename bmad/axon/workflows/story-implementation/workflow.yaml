@@ -1,0 +1,68 @@
+# Story Implementation Workflow - Feature Development (Greenfield in Brownfield)
+name: story-implementation
+description: "Implement new features with doc-grounded, discovery-first, library-aware approach. Full lifecycle: Understanding → Pre-Flight → Implementation → Validation with 4 strategic checkpoints."
+author: "Axon Module"
+
+# Critical variables
+config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+
+# Axon module paths
+docs_root: "{config_source}:project_paths.docs_root"
+engineering_docs: "{config_source}:project_paths.engineering_docs"
+libraries_docs: "{config_source}:project_paths.libraries_docs"
+source_root: "{config_source}:project_paths.source_root"
+tests_root: "{config_source}:project_paths.tests_root"
+
+# Workflow settings
+checkpoint_count: 4
+yolo_mode_available: true
+progressive_doc_loading: true
+pattern_validation_strict: true
+library_first_enforcement: true
+
+# Module path and component files
+installed_path: "{project-root}/bmad/axon/workflows/story-implementation"
+template: true  # This workflow generates code + tests + docs
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+story_template: "{project-root}/bmad/axon/templates/story-template.md"
+
+# Required inputs
+required_inputs:
+  - story_file: "Story markdown file (story-NNN.md)"
+  - tech_spec: "Optional BMM tech-spec reference"
+
+# Output configuration
+default_output_folder: "{output_folder}/active-stories/{{story_id}}"
+decision_log_path: "{default_output_folder}/decisions.yaml"
+implementation_log: "{default_output_folder}/implementation-log.md"
+
+# Agent invocations (this workflow coordinates these agents)
+agents_used:
+  - axon-story-orchestrator    # Phase 0: Story understanding
+  - axon-doc-oracle             # Phase 0-1: Doc loading, Phase 1: Pattern validation
+  - axon-archaeologist          # Phase 1: Codebase discovery (parallel)
+  - axon-library-sage           # Phase 1: Library capability check (parallel)
+  - axon-implementation-surgeon # Phase 2: Code generation
+  - axon-quality-guardian       # Phase 3: Testing, validation, doc sync
+
+# Required tools (Claude Code native tools)
+required_tools:
+  - Read                # File reading
+  - Write               # File creation
+  - Edit                # File modification
+  - Grep                # Code search
+  - Glob                # File pattern matching
+  - Bash                # Build & test execution
+
+# Success criteria
+success_metrics:
+  - pattern_compliance: "95%+ (Result<T>, StrongId<T>, CQRS)"
+  - test_coverage: "90%+"
+  - ac_coverage: "100%"
+  - build_success: "100%"
+  - doc_sync: "Zero drift"

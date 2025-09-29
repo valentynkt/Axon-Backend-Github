@@ -311,14 +311,12 @@ public class ChatDbContextTests : ChatPersistenceTestBase
         var conversation = CreateTestConversation(timeProvider: TimeProvider);
         await SaveConversationAsync(conversation);
 
-        // Act: Soft delete by setting IsDeleted
+        // Act: Soft delete using domain method
         var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
-        // Use reflection to set IsDeleted (normally done through domain methods)
-        var isDeletedProperty = typeof(Conversation)
-            .GetProperty("IsDeleted", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-        isDeletedProperty?.SetValue(loaded, true);
+        // Use the domain method for soft delete
+        loaded.SoftDelete();
 
         await ConversationRepository.UpdateAsync(loaded);
         await UnitOfWork.SaveChangesAsync();
@@ -331,6 +329,7 @@ public class ChatDbContextTests : ChatPersistenceTestBase
 
         deletedConv.ShouldNotBeNull("Soft deleted record should still exist");
         deletedConv.IsDeleted.ShouldBeTrue();
+        deletedConv.DeletedAt.ShouldNotBeNull("DeletedAt should be set");
     }
 
     #endregion

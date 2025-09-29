@@ -437,7 +437,7 @@ public class ChatTurnE2ETests : E2ETestBase
         conversationsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var content = await conversationsResponse.Content.ReadAsStringAsync();
-        content.ShouldContain(conversationId.ToString(), "Conversation should exist in conversations list");
+        content.ShouldContain(conversationId.ToString());
     }
 
     private async Task VerifyMessagesExist(Guid conversationId, int expectedCount)
@@ -448,12 +448,11 @@ public class ChatTurnE2ETests : E2ETestBase
 
         var content = await messagesResponse.Content.ReadAsStringAsync();
         var messagesData = JsonSerializer.Deserialize<GetConversationMessagesResponseDto>(content, JsonOptions);
-        messagesData!.Messages.Count.ShouldBe(expectedCount, $"Should have {expectedCount} messages");
+        messagesData!.Items.Count.ShouldBe(expectedCount, $"Should have {expectedCount} messages");
     }
 
     private async Task SetupPrincipalWithWallets(string jwt, string? userId = null)
     {
-        var subject = userId ?? TestDataFixtures.DynA_Subject;
         var requestData = new
         {
             environmentId = TestDataFixtures.MainnetEnvironment,
@@ -471,27 +470,27 @@ public class ChatTurnE2ETests : E2ETestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private void SetupMockAiService()
+    private static void SetupMockAiService()
     {
         // This would typically set up a mock AI service response
         // For now, we assume the AI service is configured in the test environment
         // to return predictable responses
     }
 
-    private void SetupMockAiServiceFailure()
+    private static void SetupMockAiServiceFailure()
     {
         // Configure mock to simulate AI service failure
         // This might involve setting environment variables or
         // configuring a test-specific AI service implementation
     }
 
-    private void SetupMockAiServiceTimeout()
+    private static void SetupMockAiServiceTimeout()
     {
         // Configure mock to simulate AI service timeout
         // This might involve delayed responses or timeout simulation
     }
 
-    private void SetupMockAiServiceWithDuplicateResponseId()
+    private static void SetupMockAiServiceWithDuplicateResponseId()
     {
         // Configure mock to return duplicate AI response IDs
         // This tests the idempotency logic in the message processing
