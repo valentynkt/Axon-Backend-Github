@@ -96,7 +96,7 @@ public static class AuthenticationTestFixtures
     {
         return SingleWalletData(
             address: address ?? "0x1234567890123456789012345678901234567890",
-            chain: "evm-1",
+            chain: "ethereum",
             walletName: "MetaMask",
             provider: "metamask");
     }
@@ -236,7 +236,7 @@ public static class AuthenticationTestFixtures
         string? environmentId = null)
     {
         var user = AxonUserAuth.Create(
-            principalId: principalId ?? AxonUserId.Create(),
+            principalId: principalId ?? new AxonUserId(Guid.NewGuid()),
             providerType: "dynamic",
             issuer: "https://app.dynamic.xyz",
             subject: dynamicUserId ?? Guid.NewGuid().ToString(),
@@ -289,7 +289,7 @@ public static class AuthenticationTestFixtures
     public static (DynamicUserData userData, AxonUserAuth existingUser) ExistingUserScenario()
     {
         var userId = Guid.NewGuid().ToString();
-        var principalId = AxonUserId.Create();
+        var principalId = new AxonUserId(Guid.NewGuid());
 
         var userData = ValidDynamicUserData(
             userId: userId,

@@ -1,0 +1,5 @@
+# Data directory
+# Will contain:
+# - pattern-catalog.yaml (Phase 6)
+# - library-capabilities.yaml (Phase 6)
+# - module-boundaries.yaml (Phase 6)

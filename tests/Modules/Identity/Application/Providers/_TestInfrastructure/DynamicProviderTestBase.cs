@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Axon.Modules.Identity;
+using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.ExternalServices;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
@@ -8,7 +10,9 @@ using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using BuildingBlocks.Application;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Infrastructure.Persistence.Write;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.Http;
@@ -96,7 +100,7 @@ public abstract class DynamicProviderTestBase
             });
 
         // Default: Unit of work returns mocked save changes
-        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
         unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(1));
         PrincipalRepo.UnitOfWork.Returns(unitOfWork);
@@ -121,6 +125,37 @@ public abstract class DynamicProviderTestBase
         object? cacheEntry;
         MemoryCache.TryGetValue(Arg.Any<object>(), out cacheEntry)
             .Returns(false);
+
+        // Default: Wallet repository EnsureManyByChainAndAddressAsync returns wallet IDs
+        WalletRepo.EnsureManyByChainAndAddressAsync(
+            Arg.Any<List<(string chainId, Address address)>>(),
+            Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                // Extract wallet specs from call and create WalletIds for each
+                var specs = call.ArgAt<List<(string chainId, Address address)>>(0);
+                var result = new Dictionary<(string, Address), WalletId>();
+                foreach (var spec in specs)
+                {
+                    result[spec] = new WalletId(Guid.NewGuid());
+                }
+                return Task.FromResult<IReadOnlyDictionary<(string, Address), WalletId>>(result);
+            });
+
+        // Default: Wallet verification succeeds
+        WalletVerificationService.VerifyWalletOwnershipAsync(
+            Arg.Any<WalletId>(),
+            Arg.Any<AxonUserId>(),
+            Arg.Any<AccessMode>(),
+            Arg.Any<VerificationSource>(),
+            Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var walletId = call.ArgAt<WalletId>(0);
+                var principalId = call.ArgAt<AxonUserId>(1);
+                var ownership = CreateWalletOwnership(walletId, principalId);
+                return Task.FromResult(Result.Success<WalletOwnership, Error>(ownership));
+            });
     }
 
     protected static UserManager<AxonUserAuth> MockUserManager()
@@ -130,6 +165,18 @@ public abstract class DynamicProviderTestBase
             store,
             null, null, null, null, null, null, null, null);
         return userManager;
+    }
+
+    /// <summary>
+    /// Configures ResolutionService mock to return a specific result for any arguments.
+    /// This helper avoids Vogen value object initialization issues with NSubstitute argument matchers.
+    /// </summary>
+    protected void ConfigureResolutionServiceMock(PrincipalResolutionResult result)
+    {
+        // Configure return with actual Vogen instances (to avoid uninitialized exceptions)
+        // Then use .ReturnsForAnyArgs() to apply to ALL calls regardless of parameters
+        ResolutionService.ResolveAsync(ProviderType.Dynamic, "", "", ChainId.From("ethereum"), Address.From("0x" + new string('0', 40)), default)
+            .ReturnsForAnyArgs(Task.FromResult(Result.Success<PrincipalResolutionResult, Error>(result)));
     }
 
     #endregion
@@ -194,50 +241,46 @@ public abstract class DynamicProviderTestBase
     /// <summary>
     /// Creates a Wallet entity for testing
     /// </summary>
-    protected Wallet CreateWallet(
-        ChainId? chainId = null,
+    protected static Wallet CreateWallet(
+        WalletId? walletId = null,
+        string? chainId = null,
         Address? address = null)
     {
-        var chain = chainId ?? ChainId.Create("evm-1").Value;
+        var wId = walletId ?? new WalletId(Guid.NewGuid());
+        var chain = chainId ?? "evm-1";
         var addr = address ?? Address.Create("0x1234567890123456789012345678901234567890").Value;
 
-        var result = Wallet.Create(chain, addr);
-        result.IsSuccess.ShouldBeTrue();
-        return result.Value;
+        return Wallet.Create(wId, chain, addr);
     }
 
     /// <summary>
     /// Creates a WalletOwnership entity for testing
     /// </summary>
-    protected WalletOwnership CreateWalletOwnership(
+    protected static WalletOwnership CreateWalletOwnership(
         WalletId walletId,
         AxonUserId principalId,
         AccessMode accessMode = AccessMode.Signing,
         OwnershipStatus status = OwnershipStatus.Verified,
         VerificationSource source = VerificationSource.DynamicAttested)
     {
-        var result = WalletOwnership.Create(
-            walletId,
+        return WalletOwnership.Create(
             principalId,
+            walletId,
             accessMode,
             status,
-            source,
-            DateTimeOffset.UtcNow);
-
-        result.IsSuccess.ShouldBeTrue();
-        return result.Value;
+            source);
     }
 
     /// <summary>
     /// Creates an AxonUserAuth (Identity user) for testing
     /// </summary>
-    protected AxonUserAuth CreateAxonUserAuth(
+    protected static AxonUserAuth CreateAxonUserAuth(
         AxonUserId? principalId = null,
         string? dynamicUserId = null,
         string? email = null)
     {
         var user = AxonUserAuth.Create(
-            principalId: principalId ?? AxonUserId.Create(),
+            principalId: principalId ?? new AxonUserId(Guid.NewGuid()),
             providerType: "dynamic",
             issuer: "https://app.dynamic.xyz",
             subject: dynamicUserId ?? Guid.NewGuid().ToString(),

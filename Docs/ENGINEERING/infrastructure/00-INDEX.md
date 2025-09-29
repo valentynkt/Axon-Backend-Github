@@ -23,10 +23,29 @@
   - Cache invalidation (event-driven)
   - CurrentUserService hierarchy
 
-### Security, Observability, Resilience
-> **STATUS**: 🚧 To be created based on actual implementation
->
-> **Next Steps**: Document JWT authentication, OpenTelemetry setup, and Polly patterns based on codebase usage
+- **[Security Guide](./SECURITY.md)** - JWT authentication & authorization
+  - Dual JWT system (Dynamic.xyz + Axon-issued tokens)
+  - Policy-based authentication scheme selection
+  - Rate limiting (IP-based per endpoint)
+  - Token replay protection with ETag
+  - Secrets management (User Secrets + Environment Variables)
+  - Security headers (CSP, HSTS, X-Frame-Options)
+
+- **[Observability Guide](./OBSERVABILITY.md)** - OpenTelemetry & monitoring
+  - OpenTelemetry with Azure Monitor (Application Insights)
+  - Distributed tracing (ActivitySource)
+  - Metrics (Meter with custom counters/histograms)
+  - Structured logging with correlation IDs
+  - Health checks (database, external services)
+  - ObservabilityBehavior in MediatR pipeline
+
+- **[Resilience Guide](./RESILIENCE.md)** - Polly fault tolerance
+  - Database retry with exponential backoff (EF Core)
+  - HTTP client policies (retry, circuit breaker, timeout)
+  - Policy wrapping for multi-layer resilience
+  - Cancellation token propagation
+  - Fallback strategies and cache-as-fallback
+  - Testing resilience patterns
 
 ---
 
@@ -40,6 +59,12 @@
 | **Create migrations** | [Persistence](./PERSISTENCE.md) | Migrations |
 | **Cache queries** | [Caching](./CACHING.md) | Cacheable Queries |
 | **Invalidate cache** | [Caching](./CACHING.md) | Cache Invalidation |
+| **Configure JWT auth** | [Security](./SECURITY.md) | JWT Authentication |
+| **Add rate limiting** | [Security](./SECURITY.md) | Rate Limiting |
+| **Set up tracing** | [Observability](./OBSERVABILITY.md) | Distributed Tracing |
+| **Add metrics** | [Observability](./OBSERVABILITY.md) | Metrics |
+| **Configure retry** | [Resilience](./RESILIENCE.md) | Retry Policy |
+| **Add circuit breaker** | [Resilience](./RESILIENCE.md) | Circuit Breaker |
 
 ---
 
