@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -120,7 +121,11 @@ public abstract class E2ETestBase : IAsyncDisposable
                         ["Dynamic:Issuer"] = TestDataFixtures.DynamicIssuer,
                         ["Dynamic:Audience"] = "axon-api",
                         // Add test environment mapping for Dynamic validation
-                        ["DynamicValidation:EnvironmentMapping:dyn_test_env_12345"] = "test"
+                        ["DynamicValidation:EnvironmentMapping:dyn_test_env_12345"] = "test",
+                        // Axon JWT configuration (for internal tokens, not used in these tests)
+                        ["Axon:Issuer"] = "https://api.axon.test",
+                        ["Axon:Audience"] = "axon-api",
+                        ["Axon:SigningKey"] = "dGVzdC1zaWduaW5nLWtleS1mb3ItZTJlLXRlc3RzLW1pbmltdW0tMjU2LWJpdHMtcmVxdWlyZWQtaGVyZS1wYWRkaW5n" // Base64: minimum 256-bit key
                     };
 
                     config.AddInMemoryCollection(dynamicConfig);
@@ -152,6 +157,26 @@ public abstract class E2ETestBase : IAsyncDisposable
                         options.RefreshOnIssuerKeyNotFound = false;
                         options.RequireHttpsMetadata = false; // Allow HTTP for testing
                     });
+
+                    // CRITICAL FIX: Configure DynamicAuthService validation for E2E tests
+                    // This is the SECOND validation layer that runs within DynamicAuthenticationProvider
+                    services.PostConfigure<Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration.DynamicValidationOptions>(options =>
+                    {
+                        // Ensure test environment mapping is present
+                        options.EnvironmentMapping["dyn_test_env_12345"] = "test";
+
+                        // Disable background JWKS refresh during tests
+                        options.EnableBackgroundRefresh = false;
+
+                        // Use test-friendly validation settings
+                        options.ValidateAudience = true;
+                        options.DefaultAllowedAudiences = new List<string> { "axon-api", "axon-web" };
+                        options.ClockSkewSeconds = 60;
+                    });
+
+                    // Replace IJwksService with test implementation that returns test RSA keys
+                    // This prevents DynamicAuthService from fetching production keys on startup
+                    services.AddSingleton<Axon.Modules.Identity.Application.Contracts.ExternalServices.IJwksService, TestJwksService>();
 
                     // Disable authentication for some E2E tests when needed
                     ConfigureTestServices(services);
@@ -223,9 +248,23 @@ public abstract class E2ETestBase : IAsyncDisposable
     private async Task EnsureDatabaseSetupAsync()
     {
         using var scope = Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
 
-        await dbContext.Database.EnsureCreatedAsync();
+        // CRITICAL: Both DbContexts share the same migrations history table in the 'identity' schema
+        // To avoid conflicts, we must ensure a clean database before running EnsureCreatedAsync
+
+        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+
+        // Delete entire database to ensure clean state
+        await writeDbContext.Database.EnsureDeletedAsync();
+
+        // IMPORTANT: Create IdentityContext schema FIRST (AspNetUsers, AspNetRoles, etc.)
+        // This must be done before IdentityWriteDbContext to ensure ASP.NET Identity tables are created
+        await identityContext.Database.EnsureCreatedAsync();
+
+        // Create IdentityWriteDbContext schema (axon_principal, wallet, etc.)
+        // Since IdentityContext already created the migrations history, this will only add new tables
+        await writeDbContext.Database.EnsureCreatedAsync();
     }
 
     /// <summary>
@@ -234,23 +273,28 @@ public abstract class E2ETestBase : IAsyncDisposable
     private async Task CleanupDatabaseAsync()
     {
         using var scope = Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
 
         try
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                TRUNCATE TABLE identity.principal_chain_default CASCADE;
-                TRUNCATE TABLE identity.wallet_ownership CASCADE;
-                TRUNCATE TABLE identity.credential CASCADE;
-                TRUNCATE TABLE identity.wallet CASCADE;
-                TRUNCATE TABLE identity.axon_principal CASCADE;
+            await writeDbContext.Database.ExecuteSqlRawAsync(@"
+                TRUNCATE TABLE identity.""PrincipalChainDefault"" CASCADE;
+                TRUNCATE TABLE identity.""WalletOwnership"" CASCADE;
+                TRUNCATE TABLE identity.""Credential"" CASCADE;
+                TRUNCATE TABLE identity.""Wallet"" CASCADE;
+                TRUNCATE TABLE identity.""Principal"" CASCADE;
+                TRUNCATE TABLE identity.""AspNetUsers"" CASCADE;
+                TRUNCATE TABLE identity.""AspNetRoles"" CASCADE;
+                TRUNCATE TABLE identity.""AspNetUserRoles"" CASCADE;
             ");
         }
         catch
         {
             // If truncate fails, recreate database
-            await dbContext.Database.EnsureDeletedAsync();
-            await dbContext.Database.EnsureCreatedAsync();
+            await writeDbContext.Database.EnsureDeletedAsync();
+            await identityContext.Database.EnsureCreatedAsync();
+            await writeDbContext.Database.EnsureCreatedAsync();
         }
     }
 

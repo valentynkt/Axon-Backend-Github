@@ -26,7 +26,7 @@
     ],
     "tech_spec_reference": "{{tech_spec_path}}",
     "patterns_required": [
-      "Result<T>",
+      "Result<T,Error>",
       "StrongId<T>",
       "CQRS"
     ],

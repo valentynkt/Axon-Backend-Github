@@ -63,6 +63,8 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
             })
             .UseInternalServiceProvider(serviceProvider)
+            .LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information)
+            .EnableSensitiveDataLogging()
             .Options;
 
         // Setup read DbContext

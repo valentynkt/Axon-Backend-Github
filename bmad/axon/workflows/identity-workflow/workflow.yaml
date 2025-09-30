@@ -1,0 +1,242 @@
+# Identity Workflow - Module-Specific Enhancement for Identity Module
+name: identity-workflow
+description: "Identity module enhancement for story-implementation workflow. Adds Identity-specific documentation, patterns, and validation for authentication (JWT/JWKS/Dynamic.xyz), wallet management (Ed25519 signatures, ownership verification), principal resolution (deterministic identity mapping), and credential management (OAuth/JWT, multi-provider) in brownfield .NET development with Clean Architecture + DDD + CQRS."
+author: "Axon Module"
+
+# ═══════════════════════════════════════════════════════════
+#                WORKFLOW INHERITANCE
+# ═══════════════════════════════════════════════════════════
+
+# This workflow EXTENDS story-implementation (does not duplicate its 4-phase structure)
+extends: "{project-root}/bmad/axon/workflows/story-implementation/workflow.yaml"
+tier: 3  # Module-specialized (Tier 3)
+invoked_by: story-orchestrator  # When module = "Identity"
+
+# ═══════════════════════════════════════════════════════════
+#                CRITICAL VARIABLES
+# ═══════════════════════════════════════════════════════════
+
+# Inherit from Axon config
+config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+
+# Module paths (inherited from Axon config)
+docs_root: "{config_source}:project_paths.docs_root"
+engineering_docs: "{config_source}:project_paths.engineering_docs"
+libraries_docs: "{config_source}:project_paths.libraries_docs"
+source_root: "{config_source}:project_paths.source_root"
+tests_root: "{config_source}:project_paths.tests_root"
+
+# ═══════════════════════════════════════════════════════════
+#                WORKFLOW CONFIGURATION
+# ═══════════════════════════════════════════════════════════
+
+# Module path and component files
+installed_path: "{project-root}/bmad/axon/workflows/identity-workflow"
+template: false  # Enhancement workflow - no template (inherits from story-implementation)
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Workflow metadata
+complexity: high
+estimated_duration_minutes: 50  # Additional time on top of story-implementation (40-70 min)
+enhancement_type: module-specific
+
+# ═══════════════════════════════════════════════════════════
+#                IDENTITY MODULE DOCUMENTATION
+# ═══════════════════════════════════════════════════════════
+
+# Progressive doc loading (7 files total)
+identity_module_docs:
+  - "{engineering_docs}/modules/identity/00-INDEX.md"              # Module overview (294 lines)
+  - "{engineering_docs}/modules/identity/01-domain-model.md"      # AxonPrincipal aggregate, owned entities, invariants
+  - "{engineering_docs}/modules/identity/03-authentication.md"    # JWT + wallet auth flows (detailed)
+  - "{engineering_docs}/modules/identity/05-api-contracts.md"     # REST endpoints, request/response schemas
+  - "{engineering_docs}/modules/identity/06-database-schema.md"   # EF Core owned entity patterns, concurrency
+
+identity_library_docs:
+  - "{libraries_docs}/dynamic_auth/IMPLEMENTATION_GUIDE.md"       # Dynamic.xyz JWT validation, wallet claims
+
+identity_integration_docs:
+  - "{engineering_docs}/integrations/00-INDEX.md"                 # Integration patterns
+
+# ═══════════════════════════════════════════════════════════
+#                IDENTITY-SPECIFIC CONTEXT
+# ═══════════════════════════════════════════════════════════
+
+# Identity subdomains (for story classification)
+identity_subdomains:
+  authentication:
+    description: "JWT validation, JWKS, Dynamic.xyz integration"
+    key_services:
+      - JwksService
+      - DynamicAuthService
+      - DynamicClaimNormalizer
+    key_patterns:
+      - "JWKS caching"
+      - "Token validation"
+      - "Claim normalization"
+
+  wallet_management:
+    description: "Ed25519 signatures, ownership verification, multi-chain"
+    key_services:
+      - Ed25519SignatureVerifier
+      - WalletVerificationService
+      - AddressNormalizationService
+    key_patterns:
+      - "Challenge-response authentication"
+      - "Solana base58 encoding"
+      - "Signature verification (Ed25519)"
+
+  principal_resolution:
+    description: "Deterministic identity mapping, credential uniqueness"
+    key_services:
+      - PrincipalResolutionService
+    key_patterns:
+      - "Deterministic ID generation from credentials"
+      - "Credential uniqueness (Provider, Issuer, Subject)"
+
+  credential_management:
+    description: "OAuth/JWT credentials, multi-provider support"
+    key_entities:
+      - IdentityCredential (owned entity)
+    key_patterns:
+      - "Idempotent credential sync"
+      - "Last-seen timestamp tracking"
+
+# Identity-specific challenges (from design doc)
+identity_challenges:
+  - "JWT validation (JWKS, Dynamic.xyz specifics)"
+  - "Wallet signature verification (Ed25519 for Solana)"
+  - "Multi-provider credential management"
+  - "Principal resolution (deterministic)"
+  - "Auto-revocation logic"
+  - "Owned entity patterns (WalletOwnership, IdentityCredential)"
+
+# Domain invariants (must be preserved)
+identity_domain_invariants:
+  - name: "Service Risk Constraint"
+    description: "Service principals must have RiskTier.Low"
+    enforcement: "AxonPrincipal.UpdateRiskTier() validates type"
+
+  - name: "Ownership Uniqueness"
+    description: "One principal-wallet-accessMode tuple"
+    enforcement: "Composite key (PrincipalId, Id) + unique constraint"
+
+  - name: "Signing Exclusivity"
+    description: "One verified+signing ownership per wallet globally"
+    enforcement: "Partial unique index + LinkWalletOwnership validation"
+
+  - name: "Chain Default Uniqueness"
+    description: "One default wallet per chain per principal"
+    enforcement: "SetChainDefault() enforces uniqueness"
+
+  - name: "Default Eligibility"
+    description: "Only verified+signing wallets can be chain defaults"
+    enforcement: "CanSetAsDefault() query validates eligibility"
+
+  - name: "Max Wallets"
+    description: "10 wallet ownerships per principal"
+    enforcement: "LinkWalletOwnership() checks IsAtWalletLimit"
+
+# Key codebase patterns (for agent awareness)
+identity_code_patterns:
+  aggregate_root:
+    name: "AxonPrincipal"
+    location: "src/Modules/Identity/Domain/Aggregates/AxonPrincipal/"
+    files:
+      - "AxonPrincipal.cs (partial class - properties, factory methods)"
+      - "AxonPrincipal.Commands.cs (50+ command methods)"
+      - "AxonPrincipal.Queries.cs (query methods)"
+    key_methods:
+      - "CreateHuman(), CreateService(), CreateWithDynamicCredential()"
+      - "LinkWalletOwnership(), VerifyWalletOwnership(), RemoveWalletOwnership()"
+      - "AddCredential(), UpdateRiskTier()"
+      - "SetChainDefault(), ClearChainDefault(), ApplyChainDefaultsBatch()"
+    pattern_notes: "Result<T, Error> for all operations, domain events raised"
+
+  owned_entities:
+    pattern: "EF Core OwnsMany with composite keys"
+    entities:
+      - name: "IdentityCredential"
+        composite_key: "(PrincipalId, Id)"
+        unique_constraint: "(Provider, Issuer, Subject)"
+      - name: "WalletOwnership"
+        composite_key: "(PrincipalId, Id)"
+        partial_unique_index: "Verified+Signing exclusivity"
+      - name: "PrincipalChainDefault"
+        composite_key: "(PrincipalId, Id)"
+    access_pattern: "Accessed only via aggregate root, no independent DbSet"
+    concurrency: "Single xmin token on AxonPrincipal aggregate root"
+
+  cqrs_handlers:
+    commands:
+      - "ExchangeCredentialHandler - Idempotent principal sync from JWT"
+      - "GenerateChallengeHandler - Wallet challenge generation"
+      - "VerifyWalletSignatureHandler - Wallet signature verification"
+      - "RefreshTokenHandler - Token refresh"
+    queries:
+      - "GetMyPrincipalHandler - Current principal with ETag support"
+    location: "src/Modules/Identity/Application/Commands|Queries/"
+
+# ═══════════════════════════════════════════════════════════
+#                AGENTS & TOOLS
+# ═══════════════════════════════════════════════════════════
+
+# Agents (inherits from story-implementation, all 6 agents)
+agents_used:
+  - axon-story-orchestrator    # Story understanding + routing
+  - axon-doc-oracle             # Identity doc loading + pattern validation
+  - axon-archaeologist          # Identity code discovery
+  - axon-library-sage           # Dynamic.xyz + NSec.Cryptography + IdentityModel.Tokens
+  - axon-implementation-surgeon # Code generation with Identity patterns
+  - axon-quality-guardian       # Identity-specific test generation
+
+# Required tools (inherited from story-implementation)
+required_tools:
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+  - Bash
+
+# ═══════════════════════════════════════════════════════════
+#                SUCCESS CRITERIA (IDENTITY-SPECIFIC)
+# ═══════════════════════════════════════════════════════════
+
+success_metrics:
+  # Pattern compliance (inherited + Identity-specific)
+  pattern_compliance: "95%+ (Result<T>, StrongId<T>, CQRS, owned entities)"
+
+  # Identity-specific validations
+  domain_invariants_preserved: "100% (all 6 invariants)"
+  owned_entity_patterns_correct: "100% (composite keys, no independent DbSet)"
+  ef_core_configuration_correct: "100% (OwnsMany, concurrency token)"
+
+  # Testing (inherited + Identity-specific)
+  test_coverage: "90%+"
+  ac_coverage: "100%"
+  identity_test_scenarios:
+    - "JWT validation with JWKS"
+    - "Ed25519 signature verification (Solana)"
+    - "Principal resolution determinism"
+    - "Credential uniqueness enforcement"
+    - "Wallet signing exclusivity"
+    - "Chain default eligibility"
+    - "Auto-revocation logic"
+    - "Owned entity cascade operations"
+
+  # Build & quality (inherited)
+  build_success: "100%"
+  doc_sync: "Zero drift"
+
+# ═══════════════════════════════════════════════════════════
+#                OUTPUT CONFIGURATION
+# ═══════════════════════════════════════════════════════════
+
+# Inherits output paths from story-implementation
+# Additional Identity-specific outputs (none - uses same structure)

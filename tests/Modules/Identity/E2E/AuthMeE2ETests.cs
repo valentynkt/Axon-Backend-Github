@@ -26,7 +26,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Act: Call /auth/me
         SetAuthorizationHeader(validJwt);
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return complete user snapshot
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -71,7 +71,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Act: Call /auth/me
         SetAuthorizationHeader(validJwt);
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should include ETag header
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -92,7 +92,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Act: Call /auth/me
         SetAuthorizationHeader(validJwt);
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return principal with empty wallets and defaults
         AuthMeResponseValidator.ValidateAuthMeResponse(
@@ -121,13 +121,13 @@ public class AuthMeE2ETests : E2ETestBase
         await SetupPrincipalWithWallets(validJwt);
 
         SetAuthorizationHeader(validJwt);
-        var initialResponse = await HttpClient.GetAsync("/auth/me");
+        var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         // Act: Call /auth/me with If-None-Match header
         SetAuthorizationHeader(validJwt);
         SetIfNoneMatchHeader(initialETag);
-        var conditionalResponse = await HttpClient.GetAsync("/auth/me");
+        var conditionalResponse = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return 304 Not Modified
         AuthMeResponseValidator.ValidateNotModifiedResponse(conditionalResponse, initialETag);
@@ -141,7 +141,7 @@ public class AuthMeE2ETests : E2ETestBase
         await SetupCredentialOnlyPrincipal(validJwt);
 
         SetAuthorizationHeader(validJwt);
-        var initialResponse = await HttpClient.GetAsync("/auth/me");
+        var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         // Modify principal by adding a wallet
@@ -150,7 +150,7 @@ public class AuthMeE2ETests : E2ETestBase
         // Act: Call /auth/me with old ETag
         SetAuthorizationHeader(validJwt);
         SetIfNoneMatchHeader(initialETag);
-        var updatedResponse = await HttpClient.GetAsync("/auth/me");
+        var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return 200 with updated data
         updatedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -174,13 +174,13 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Act: Make multiple /auth/me requests without data changes
         SetAuthorizationHeader(validJwt);
-        var response1 = await HttpClient.GetAsync("/auth/me");
+        var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
 
         SetAuthorizationHeader(validJwt);
-        var response2 = await HttpClient.GetAsync("/auth/me");
+        var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
 
         SetAuthorizationHeader(validJwt);
-        var response3 = await HttpClient.GetAsync("/auth/me");
+        var response3 = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: ETags should be identical
         var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
@@ -200,7 +200,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get initial state
         SetAuthorizationHeader(validJwt);
-        var response1 = await HttpClient.GetAsync("/auth/me");
+        var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
         var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
 
         // Modify state by adding wallet
@@ -208,7 +208,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get updated state
         SetAuthorizationHeader(validJwt);
-        var response2 = await HttpClient.GetAsync("/auth/me");
+        var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
         var etag2 = AuthMeResponseValidator.ValidateAndExtractETag(response2);
 
         // Modify state again by adding second wallet
@@ -216,7 +216,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get final state
         SetAuthorizationHeader(validJwt);
-        var response3 = await HttpClient.GetAsync("/auth/me");
+        var response3 = await HttpClient.GetAsync("/api/v1/auth/me");
         var etag3 = AuthMeResponseValidator.ValidateAndExtractETag(response3);
 
         // Assert: ETags should change with each modification
@@ -237,7 +237,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get initial state (with pending wallet)
         SetAuthorizationHeader(validJwt);
-        var pendingResponse = await HttpClient.GetAsync("/auth/me");
+        var pendingResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var pendingETag = AuthMeResponseValidator.ValidateAndExtractETag(pendingResponse);
 
         var pendingContent = await pendingResponse.Content.ReadAsStringAsync();
@@ -250,7 +250,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get updated state (with verified wallet)
         SetAuthorizationHeader(validJwt);
-        var verifiedResponse = await HttpClient.GetAsync("/auth/me");
+        var verifiedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var verifiedETag = AuthMeResponseValidator.ValidateAndExtractETag(verifiedResponse);
 
         // Assert: ETag should change and wallet status should be updated
@@ -271,7 +271,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get initial state
         SetAuthorizationHeader(validJwt);
-        var initialResponse = await HttpClient.GetAsync("/auth/me");
+        var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         var initialContent = await initialResponse.Content.ReadAsStringAsync();
@@ -284,7 +284,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Get updated state
         SetAuthorizationHeader(validJwt);
-        var updatedResponse = await HttpClient.GetAsync("/auth/me");
+        var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var updatedETag = AuthMeResponseValidator.ValidateAndExtractETag(updatedResponse);
 
         // Assert: ETag should change and default should be updated
@@ -309,7 +309,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Act: Call /auth/me with invalid token
         SetAuthorizationHeader(expiredJwt);
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return 401
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -325,7 +325,7 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_NoAuthorizationHeader_ShouldReturn401()
     {
         // Act: Call /auth/me without authorization
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return 401
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -339,7 +339,7 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Act: Call /auth/me
         SetAuthorizationHeader(unknownUserJwt);
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return 404 (principal not found)
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -365,7 +365,7 @@ public class AuthMeE2ETests : E2ETestBase
         // Act: Measure response time
         SetAuthorizationHeader(validJwt);
         var startTime = DateTime.UtcNow;
-        var response = await HttpClient.GetAsync("/auth/me");
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
         var duration = DateTime.UtcNow - startTime;
 
         // Assert: Should complete within performance target
@@ -383,7 +383,7 @@ public class AuthMeE2ETests : E2ETestBase
         // Act: Measure initial response time
         SetAuthorizationHeader(validJwt);
         var startTime1 = DateTime.UtcNow;
-        var response1 = await HttpClient.GetAsync("/auth/me");
+        var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
         var duration1 = DateTime.UtcNow - startTime1;
 
         response1.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -393,7 +393,7 @@ public class AuthMeE2ETests : E2ETestBase
         SetAuthorizationHeader(validJwt);
         SetIfNoneMatchHeader(etag1);
         var startTime2 = DateTime.UtcNow;
-        var response2 = await HttpClient.GetAsync("/auth/me");
+        var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
         var duration2 = DateTime.UtcNow - startTime2;
 
         // Assert: Cached response should be faster (304)

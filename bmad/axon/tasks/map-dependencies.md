@@ -1,60 +1,73 @@
 # Map Dependencies Task
 
-**Agent**: Axon Archaeologist
-**Purpose**: Map dependencies and calculate impact analysis (blast radius)
+<task id="archaeologist/map-dependencies" name="Map Dependencies & Calculate Blast Radius">
+  <llm critical="true">
+    <i>Map ALL dependencies for target code and calculate impact analysis (blast radius)</i>
+    <i>CRITICAL: Find EVERY usage - same module, cross-module, API, infrastructure, tests</i>
+    <i>Calculate blast radius: SMALL (1-5 files), MEDIUM (6-15), LARGE (16+)</i>
+    <i>Identify breaking changes: Public API, database schema, cross-module contracts, events</i>
+  </llm>
 
----
+  <flow>
+    <step n="1" title="Parse Input & Validate Target">
+      <action>Extract target code (class/method/entity to be changed)</action>
+      <action>Extract change type (modify/delete/rename/move)</action>
+      <action>Validate target exists: Read file to confirm class/method exists</action>
+      <action>HALT if target not found with error message</action>
+    </step>
 
-## Task Instructions
+    <step n="2" title="Find All Usages (Comprehensive Search)">
+      <action>Direct usages: Grep "{TargetName}" in src/ (case-sensitive)</action>
+      <action>Type references: Grep "{TargetName}" in method signatures, constructors, properties</action>
+      <action>Property access: Grep "{TargetName}\\..*" (accessing members)</action>
+      <action>Inheritance: Grep "class.*:.*{TargetName}" (subtypes)</action>
+      <action>Record ALL file:line occurrences</action>
+    </step>
 
-### Input Requirements
-- Target code (class, method, entity to be changed)
-- Change type (modify, delete, rename, move)
+    <step n="3" title="Categorize Dependencies by Layer">
+      <action>Same Module: Usages within same module (e.g., Identity → Identity)</action>
+      <action>Cross-Module: Usages from other modules (e.g., Chat → Identity)</action>
+      <action>API Layer: HTTP endpoints (src/Api/)</action>
+      <action>Infrastructure: Repositories, configurations, migrations</action>
+      <action>Tests: All test files (tests/)</action>
+      <action>Count usages per category</action>
+    </step>
 
-### Process
+    <step n="4" title="Calculate Blast Radius">
+      <action>Count total files affected</action>
+      <action>Count modules affected (same vs cross-module)</action>
+      <action>Classify: SMALL (1-5 files), MEDIUM (6-15 files), LARGE (16+ files)</action>
+      <action>Calculate impact per file: LOW (read-only), MEDIUM (constructor calls), HIGH (schema/config)</action>
+    </step>
 
-1. **Find All Usages**
-   ```bash
-   Target: "WalletOwnership" class
+    <step n="5" title="Identify Breaking Changes">
+      <action>DATABASE_SCHEMA: Check Infrastructure/Persistence/Configurations/ for entity config changes</action>
+      <action>API_CONTRACT: Check src/Api/ for public endpoint changes</action>
+      <action>CROSS_MODULE: Check if other modules depend on this code</action>
+      <action>EVENT_SIGNATURE: Check Domain/Events/ for event contract changes</action>
+      <action>For each breaking change, suggest mitigation strategy</action>
+    </step>
 
-   # Direct usages
-   Grep: "WalletOwnership" in src/
+    <step n="6" title="Generate Recommendations">
+      <action>Backward compatibility: Suggest nullable properties, optional parameters, versioning</action>
+      <action>Migration strategy: Database migrations, API versioning, deprecated warnings</action>
+      <action>Testing strategy: Which test suites must pass (module + cross-module)</action>
+      <action>Rollback plan: How to safely revert changes</action>
+    </step>
+  </flow>
 
-   # Type references
-   Grep: "WalletOwnership" in method signatures
-   Grep: "WalletOwnership" in constructors
+  <validation>
+    <i>All usages found (comprehensive grep across src/ and tests/)</i>
+    <i>Blast radius classification matches file count</i>
+    <i>Breaking changes identified with mitigation strategies</i>
+    <i>Recommendations actionable and specific</i>
+  </validation>
 
-   # Property access
-   Grep: "WalletOwnership\\..*" in src/
-   ```
-
-2. **Categorize Dependencies**
-   - **Same Module**: Within Identity module
-   - **Cross-Module**: From Chat/other modules
-   - **API Layer**: HTTP endpoints
-   - **Infrastructure**: Repositories, configurations
-   - **Tests**: Test files
-
-3. **Calculate Blast Radius**
-   ```yaml
-   blast_radius:
-     small: 1-5 files affected
-     medium: 6-15 files affected
-     large: 16+ files affected
-   ```
-
-4. **Identify Breaking Changes**
-   - Public API changes (HTTP endpoints)
-   - Database schema changes
-   - Cross-module contract changes
-   - Event signature changes
-
-### Output Format
-```yaml
+  <output format="yaml">
 dependency_map:
   target: "WalletOwnership"
   target_file: "src/Modules/Identity/Domain/Entities/WalletOwnership.cs"
-  change_type: "modify"  # add property AutoRevokeAt
+  change_type: "modify"
   total_usages: 24
 
   blast_radius:
@@ -73,13 +86,6 @@ dependency_map:
           breaking: false
           note: "Constructor call - add new optional parameter"
 
-        - file: "src/Modules/Identity/Infrastructure/Persistence/Configurations/WalletOwnershipConfiguration.cs"
-          line: 22
-          usage: "EF Core entity configuration"
-          impact: HIGH
-          breaking: true
-          note: "Add new property configuration for AutoRevokeAt"
-
     cross_module:
       count: 2
       files:
@@ -88,37 +94,13 @@ dependency_map:
           usage: "Reads WalletOwnership.WalletAddress"
           impact: LOW
           breaking: false
-          note: "No impact - only reads existing property"
 
     api_layer:
       count: 3
-      files:
-        - file: "src/Api/Endpoints/Identity/GetWalletsEndpoint.cs"
-          line: 34
-          usage: "Maps WalletOwnership to DTO"
-          impact: MEDIUM
-          breaking: false
-          note: "Update DTO to include AutoRevokeAt (optional field)"
-
     infrastructure:
       count: 4
-      files:
-        - file: "src/Modules/Identity/Infrastructure/Persistence/IdentityDbContext.cs"
-          line: 28
-          usage: "DbSet<WalletOwnership>"
-          impact: HIGH
-          breaking: true
-          note: "Database migration required for new column"
-
     tests:
       count: 7
-      files:
-        - file: "tests/Modules/Identity/Domain/WalletOwnershipTests.cs"
-          line: 15
-          usage: "Test fixture creates instances"
-          impact: MEDIUM
-          breaking: false
-          note: "Update test builders with AutoRevokeAt"
 
   breaking_changes:
     - type: DATABASE_SCHEMA
@@ -126,26 +108,26 @@ dependency_map:
       description: "New column AutoRevokeAt requires migration"
       mitigation: "Create EF Core migration, nullable column for backward compatibility"
 
-    - type: API_CONTRACT
-      severity: LOW
-      description: "Response DTOs gain new optional field"
-      mitigation: "Add field as optional, existing clients ignore"
-
   impact_summary:
-    low_impact: 10 files  # Read-only usages
-    medium_impact: 8 files  # Constructor calls, DTOs
-    high_impact: 4 files  # Configuration, schema, critical paths
+    low_impact: 10 files
+    medium_impact: 8 files
+    high_impact: 4 files
     breaking: 2 files
 
   recommendations:
     - "Add AutoRevokeAt as nullable property for backward compatibility"
     - "Create database migration before deploying"
-    - "Update all test builders to include AutoRevokeAt"
-    - "Version API if response contract changes significantly"
     - "Run full regression test suite (identity + chat modules)"
-```
+  </output>
 
----
+  <halt-conditions>
+    <i>Target code not found - ask user to verify class/method name</i>
+    <i>Grep failures - report tool error</i>
+    <i>Large blast radius (20+ files) - warn user about high risk, recommend phased approach</i>
+  </halt-conditions>
 
-## TODO: Full Implementation
-Implement usage detection, impact categorization, and breaking change analysis.
+  <references>
+    <i>Docs/ENGINEERING/guides/codebase/dependency-management.md - Dependency patterns</i>
+    <i>Example: Use WalletOwnership or Message for realistic dependency analysis</i>
+  </references>
+</task>

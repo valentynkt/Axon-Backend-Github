@@ -139,7 +139,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         var versionBefore = await GetAggregateVersion(conversation.Id);
 
         // Act: Add a message to the conversation
-        DbContext.ChangeTracker.Clear();
+        // NOTE: Don't clear ChangeTracker - it needs to track original xmin value for concurrency
         var loadedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
         loadedConversation.ShouldNotBeNull();
 
@@ -167,7 +167,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         var versionBefore = await GetAggregateVersion(conversation.Id);
 
         // Act: Update title
-        DbContext.ChangeTracker.Clear();
+        // NOTE: Don't clear ChangeTracker - it needs to track original xmin value for concurrency
         var loadedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
         loadedConversation.ShouldNotBeNull();
 

@@ -1,0 +1,172 @@
+# chat-workflow.yaml - Chat Module Enhancement Workflow
+# Extends story-implementation with Chat-specific validation, patterns, and testing
+# Tier 3: Module-specialized workflow
+
+workflow_metadata:
+  id: chat-workflow
+  name: "Chat Module Story Implementation"
+  version: "1.0.0"
+  tier: 3  # Module-specialized (extends story-implementation)
+  created_date: "2025-09-30"
+  last_updated: "2025-09-30"
+
+  description: |
+    Chat module enhancement workflow for conversation management, message processing,
+    AI integration (Claude API + MCP), and real-time communication features.
+
+    Extends story-implementation with Chat-specific:
+    - Conversation aggregate patterns (owned Message entities)
+    - 19 business rules (turn-taking, limits, idempotency, validation)
+    - AI integration patterns (Claude API, MCP servers, streaming)
+    - Universal endpoint architecture (/api/v1/chat/turns)
+    - Owned entity patterns (Message with composite keys)
+    - Domain event patterns (6 events)
+    - Real-time features (SSE, streaming)
+
+  module_context: chat
+  subdomain_classification:
+    - Conversation Management    # Conversation aggregate, lifecycle, state
+    - Message Processing         # Turn-taking, sequencing, validation
+    - AI Integration            # Claude API, MCP servers, prompt caching
+    - Real-Time Communication   # SSE, streaming, async processing
+
+# Integration with story-implementation (Tier 2)
+extends:
+  base_workflow: story-implementation
+  inheritance_strategy: enhancement  # Inject at specific points, no duplication
+  enhancement_points:
+    - point_1: "After doc loading (Phase 0.2)"
+    - point_2: "During pre-flight validation (Phase 1.2)"
+    - point_3: "During implementation (Phase 2.2)"
+    - point_4: "During comprehensive testing (Phase 3.2)"
+
+# Invocation
+invoked_by:
+  agent: axon-story-orchestrator
+  condition: "story type = Feature AND module context = Chat"
+  routing_decision: "chat-workflow selected for Chat module stories"
+
+# Chat-specific variables
+variables:
+  # Module documentation paths (5 module docs)
+  chat_module_docs:
+    - "{project-root}/Docs/ENGINEERING/modules/chat/00-INDEX.md"
+    - "{project-root}/Docs/ENGINEERING/modules/chat/01-domain-model.md"
+    - "{project-root}/Docs/ENGINEERING/modules/chat/03-messaging-flows.md"
+    - "{project-root}/Docs/ENGINEERING/modules/chat/05-api-contracts.md"
+    - "{project-root}/Docs/ENGINEERING/modules/chat/06-database-schema.md"
+
+  # Chat-specific library docs (3 libraries: MediatR, MCP SDK, MCP AspNetCore)
+  chat_library_docs:
+    - "{project-root}/Docs/Libraries/MediatR/IMPLEMENTATION_GUIDE.md"
+    - "{project-root}/Docs/Libraries/ModelContextProtocol/IMPLEMENTATION_GUIDE.md"
+    - "{project-root}/Docs/Libraries/ModelContextProtocolAspNetCore/IMPLEMENTATION_GUIDE.md"
+
+  # Optional: Integration docs (Claude API)
+  chat_integration_docs:
+    - "{project-root}/Docs/ENGINEERING/integrations/00-INDEX.md"
+
+  # Subdomain classification (4 options)
+  chat_subdomains:
+    - name: "Conversation Management"
+      scope: "Conversation aggregate, lifecycle, CRUD, queries, state management"
+      key_patterns: "Aggregate root, owned entities, domain events, specifications"
+
+    - name: "Message Processing"
+      scope: "Turn-taking, sequencing, validation, content processing, history import"
+      key_patterns: "Business rules, message entities, sequence integrity, role validation"
+
+    - name: "AI Integration"
+      scope: "Claude API, MCP servers, prompt caching, streaming, tool execution"
+      key_patterns: "AI service, MCP resolution, idempotency (AiResponseId), async processing"
+
+    - name: "Real-Time Communication"
+      scope: "SSE, streaming responses, async processing, real-time updates"
+      key_patterns: "Async/await, streaming, SSE endpoints, cancellation tokens"
+
+  # Chat domain invariants (6 must be preserved)
+  chat_domain_invariants:
+    - name: "Turn-Taking Rule"
+      code: "CHAT010"
+      description: "Must alternate User → Assistant → User (no consecutive same-role)"
+      enforcement: "MessageTurnTakingRule, Conversation.AppendUserMessage/AppendAssistantResponse"
+
+    - name: "Message Limit"
+      code: "CHAT006"
+      description: "100 messages maximum per conversation"
+      enforcement: "ConversationCanAcceptMoreMessagesRule"
+
+    - name: "Content Length"
+      code: "CHAT008"
+      description: "Message content 1-32,000 characters"
+      enforcement: "MessageContentWithinLimitsRule, MessageContent value object"
+
+    - name: "Active Conversation Only"
+      code: "CHAT003"
+      description: "Can only append to Active conversations (not Completed)"
+      enforcement: "ConversationMustBeActiveRule"
+
+    - name: "Ownership Verification"
+      code: "CHAT004"
+      description: "Only owner can access/modify conversation (403 Forbidden)"
+      enforcement: "ConversationMustBelongToOwnerRule, API authorization"
+
+    - name: "AiResponseId Uniqueness"
+      code: "CHAT013"
+      description: "No duplicate AI response IDs (idempotency guarantee)"
+      enforcement: "AiResponseIdMustBeUniqueRule, Conversation.AppendAssistantResponse"
+
+  # Chat-specific codebase context
+  conversation_aggregate_path: "{project-root}/src/Modules/Chat/Domain/Aggregates/Conversation"
+  message_entity_path: "{project-root}/src/Modules/Chat/Domain/Entities/Message.cs"
+  business_rules_path: "{project-root}/src/Modules/Chat/Domain/Rules"
+  domain_events_path: "{project-root}/src/Modules/Chat/Domain/Events"
+  ai_services_path: "{project-root}/src/Modules/Chat/Application/Services/AI"
+
+  # Test paths
+  chat_tests_root: "{project-root}/tests/Modules/Chat"
+  chat_domain_tests: "{chat_tests_root}/Domain"
+  chat_application_tests: "{chat_tests_root}/Application"
+  chat_infrastructure_tests: "{chat_tests_root}/Infrastructure"
+  chat_e2e_tests: "{chat_tests_root}/E2E"
+
+# Workflow configuration
+config_source: "{project-root}/bmad/axon/config.yaml"
+installed_path: "{project-root}/bmad/axon/workflows/chat-workflow"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+complexity: high
+estimated_duration_minutes: 50  # Additional on top of story-implementation (40-70 min)
+
+# Success criteria (Chat-specific additions to base 5 gates)
+success_metrics:
+  # Inherited from story-implementation (5 base gates):
+  # 1. Pattern Compliance ≥ 95%
+  # 2. Test Coverage ≥ 90%
+  # 3. AC Coverage = 100%
+  # 4. Build Success = 100%
+  # 5. Doc Sync = Zero Drift
+
+  # Chat-specific gates (6 additional):
+  chat_domain_invariants_preserved: "100% (all 6 invariants: CHAT010, CHAT006, CHAT008, CHAT003, CHAT004, CHAT013)"
+  owned_entity_patterns_correct: "100% (composite keys, no independent DbSet<Message>)"
+  ef_core_configuration_correct: "100% (OwnsMany, xmin concurrency token)"
+  ai_integration_patterns_correct: "100% (AiResponseId idempotency, prompt caching, MCP resolution)"
+  universal_endpoint_correctness: "100% (POST /api/v1/chat/turns handles both new + append)"
+  chat_test_scenarios_complete: "8/8 scenarios passing"
+
+# Agents (all 6 from story-implementation)
+agents_used:
+  - axon-story-orchestrator
+  - axon-doc-oracle
+  - axon-archaeologist
+  - axon-library-sage
+  - axon-implementation-surgeon
+  - axon-quality-guardian
+
+# Related workflows
+related_workflows:
+  - "story-implementation (base workflow, Tier 2)"
+  - "identity-workflow (sibling, Tier 3)"
+  - "api-workflow (sibling, Tier 3)"
+  - "story-orchestrator (invokes this workflow, Tier 1)"

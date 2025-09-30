@@ -1,53 +1,58 @@
 # Discover Similar Implementations Task
 
-**Agent**: Axon Archaeologist
-**Purpose**: Semantic similarity search for related code
+<task id="archaeologist/discover-similar" name="Semantic Similarity Search">
+  <llm critical="true">
+    <i>Perform semantic similarity search for related code implementations</i>
+    <i>CRITICAL: Extract key terms, search with synonyms, calculate similarity scores (0-100%)</i>
+    <i>GOAL: Find reusable code even if named differently (semantic, not just keyword match)</i>
+    <i>Rank by relevance + reuse potential (HIGH/MEDIUM/LOW)</i>
+  </llm>
 
----
+  <flow>
+    <step n="1" title="Parse Input & Extract Key Terms">
+      <action>Parse target concept (e.g., "auto-revoke credentials after expiry")</action>
+      <action>Extract domain context (Identity/Chat/etc.)</action>
+      <action>Extract key terms: [auto, revoke, credential, expiry, automatic, timeout]</action>
+      <action>Generate synonyms: revoke → [delete, remove, invalidate], expiry → [TTL, timeout, duration]</action>
+    </step>
 
-## Task Instructions
+    <step n="2" title="Primary Semantic Search (Exact + Synonyms)">
+      <action>Search exact key terms: Grep "revoke|expir" in src/Modules/{Domain}/</action>
+      <action>Search synonyms: Grep "delete|remove|invalidate" + "TTL|timeout|duration"</action>
+      <action>Search domain-specific terms: credential → [wallet, token, session]</action>
+      <action>Collect all matching files with line numbers</action>
+    </step>
 
-### Input Requirements
-- Target concept (e.g., "auto-revoke credentials after expiry")
-- Domain context (Identity, Chat, etc.)
+    <step n="3" title="Extended Search (Cross-Module)">
+      <action>If primary search yields &lt; 3 results, expand to all modules</action>
+      <action>Grep "auto.*delete|remove" in src/Modules/</action>
+      <action>Grep "scheduled.*cleanup" in src/</action>
+      <action>Grep "background.*job.*expir" in src/BuildingBlocks/</action>
+    </step>
 
-### Process
+    <step n="4" title="Calculate Similarity Scores">
+      <action>For each match, calculate: (Matching terms / Total terms) × 100</action>
+      <action>Add context bonus: Same module +20%, Same pattern +10%</action>
+      <action>Read code snippets to verify semantic similarity (not just keyword match)</action>
+      <action>Rank results by score (highest first)</action>
+    </step>
 
-1. **Extract Key Terms**
-   ```
-   Concept: "auto-revoke credentials after expiry"
-   Key terms: [auto, revoke, credential, expiry, automatic, timeout]
-   ```
+    <step n="5" title="Assess Reuse Potential">
+      <action>HIGH: Same domain + same pattern + 80%+ similarity</action>
+      <action>MEDIUM: Different domain but similar pattern + 60-79% similarity</action>
+      <action>LOW: Different domain + different pattern but related concept + &lt;60%</action>
+      <action>Generate adaptation notes for each result</action>
+    </step>
+  </flow>
 
-2. **Semantic Search Strategy**
-   - **Exact matches**: Search for exact key terms
-   - **Synonyms**: revoke → delete, remove, invalidate
-   - **Related concepts**: expiry → TTL, timeout, duration, validity
-   - **Domain-specific**: credential → wallet, token, session
+  <validation>
+    <i>At least 1 result found (or report no similar implementations exist)</i>
+    <i>Similarity scores between 0-100%</i>
+    <i>Code snippets accurate (file:line verified)</i>
+    <i>Reuse recommendations actionable and specific</i>
+  </validation>
 
-3. **Search Scope**
-   ```bash
-   # Primary search
-   Grep: "revoke" in src/Modules/Identity/
-   Grep: "expir" in src/Modules/Identity/
-   Grep: "TTL|timeout|duration" in src/Modules/Identity/
-
-   # Extended search (other modules)
-   Grep: "auto.*delete|remove" in src/Modules/
-   Grep: "scheduled.*cleanup" in src/Modules/
-   ```
-
-4. **Calculate Similarity Score**
-   ```
-   Score = (Matching terms / Total terms) × 100
-   + Context bonus (same module: +20%)
-   + Pattern bonus (same pattern: +10%)
-   ```
-
-5. **Rank by Relevance**
-
-### Output Format
-```yaml
+  <output format="yaml">
 similarity_search:
   concept: "auto-revoke credentials after expiry"
   key_terms: [auto, revoke, credential, expiry, automatic, timeout]
@@ -59,13 +64,11 @@ similarity_search:
       line: 67
       match_reason: "Has TTL and revocation logic"
       snippet: |
-        public Result<Unit> CheckExpiration()
+        public Result&lt;Unit> CheckExpiration()
         {
-            if (ExpiresAt.HasValue && ExpiresAt.Value < DateTimeOffset.UtcNow)
-            {
+            if (ExpiresAt.HasValue && ExpiresAt.Value &lt; DateTimeOffset.UtcNow)
                 return Revoke(RevokedBy.System);
-            }
-            return Result<Unit>.Success(Unit.Value);
+            return Result&lt;Unit>.Success(Unit.Value);
         }
       key_terms_matched: [revoke, expiry, automatic]
       reuse_potential: HIGH
@@ -76,41 +79,29 @@ similarity_search:
       line: 45
       match_reason: "Has auto-cleanup after period"
       snippet: |
-        private DateTimeOffset? DeletedAt { get; set; }
-
-        public Result<Unit> ScheduleAutoDeletion(TimeSpan after)
+        public Result&lt;Unit> ScheduleAutoDeletion(TimeSpan after)
         {
             DeletedAt = DateTimeOffset.UtcNow.Add(after);
-            return Result<Unit>.Success(Unit.Value);
+            return Result&lt;Unit>.Success(Unit.Value);
         }
       key_terms_matched: [auto, delete, timeout]
       reuse_potential: MEDIUM
       adaptation_notes: "Different domain but similar time-based auto-action pattern."
 
-    - similarity: 60%
-      file: "src/BuildingBlocks/Infrastructure/BackgroundJobs/CleanupExpiredItemsJob.cs"
-      line: 23
-      match_reason: "Background job for cleanup"
-      snippet: |
-        public async Task Execute(IJobExecutionContext context)
-        {
-            var expired = await _repository.GetExpiredItemsAsync();
-            foreach (var item in expired)
-            {
-                await item.MarkAsExpired();
-            }
-        }
-      key_terms_matched: [expired, cleanup, automatic]
-      reuse_potential: LOW
-      adaptation_notes: "Infrastructure pattern for scheduled cleanup. Could use for batch wallet revocation."
-
   reuse_recommendations:
     primary: "Adapt IdentityCredential.CheckExpiration() pattern to WalletOwnership"
     secondary: "Consider background job for batch processing expired wallets"
     libraries: "Check if any library provides TTL/expiration out-of-box"
-```
+  </output>
 
----
+  <halt-conditions>
+    <i>Zero matches found - report no similar code exists, suggest creating new</i>
+    <i>All matches &lt;30% similarity - warn low relevance, ask if search criteria should change</i>
+    <i>Grep failures - report tool error</i>
+  </halt-conditions>
 
-## TODO: Full Implementation
-Implement semantic search, synonym expansion, and similarity scoring.
+  <references>
+    <i>Docs/ENGINEERING/guides/patterns/domain-modeling.md - Entity lifecycle patterns</i>
+    <i>Example: IdentityCredential for expiration patterns, Message for auto-deletion</i>
+  </references>
+</task>
