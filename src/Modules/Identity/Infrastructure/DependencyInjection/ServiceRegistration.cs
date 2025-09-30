@@ -212,6 +212,7 @@ public static class ServiceRegistration
         // NO FEATURE FLAGS - Clean implementation only
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IChallengeService, ChallengeService>();
+        services.AddScoped<IChallengeValidationService, ChallengeValidationService>();
         services.AddScoped<ChallengeTokenProvider>();
         services.AddScoped<RefreshTokenProvider>();
         services.AddScoped<IRefreshTokenProvider>(sp => sp.GetRequiredService<RefreshTokenProvider>());

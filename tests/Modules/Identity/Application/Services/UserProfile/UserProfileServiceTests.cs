@@ -382,7 +382,7 @@ public class UserProfileServiceTests
 
         var principal = CreatePrincipalWithOwnerships(principalId, new[] { ownership });
         // Set chain default using domain method
-        principal.SetChainDefault(chainId, defaultWalletId);
+        principal.SetChainDefault(chainId, defaultWalletId, TimeProvider.System);
 
         var wallet = CreateWallet(defaultWalletId, chainId, "0x1111111111111111111111111111111111111111");
 
@@ -493,7 +493,7 @@ public class UserProfileServiceTests
 
         foreach (var ownership in ownerships)
         {
-            principal.LinkWalletOwnership(ownership, stubUniquenessCheck);
+            principal.LinkWalletOwnership(ownership, stubUniquenessCheck, TimeProvider.System);
         }
 
         return principal;

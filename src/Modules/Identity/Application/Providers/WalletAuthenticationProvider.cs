@@ -1,9 +1,5 @@
 namespace Axon.Modules.Identity.Application.Providers;
 
-using System.Globalization;
-using System.Text;
-using System.Text.Json;
-using Axon.Modules.Identity.Application.Common;
 using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
@@ -26,14 +22,9 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
     private readonly IWalletOwnershipRepository _walletOwnershipRepo;
     private readonly IWalletWriteRepository _walletRepo;
     private readonly UserManager<AxonUserAuth> _userManager;
-    private readonly IChallengeService _challengeService;
+    private readonly IChallengeValidationService _challengeValidationService;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<WalletAuthenticationProvider> _logger;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false
-    };
 
     public WalletAuthenticationProvider(
         IWalletSignatureVerifier signatureVerifier,
@@ -41,7 +32,8 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
         IWalletOwnershipRepository walletOwnershipRepo,
         IWalletWriteRepository walletRepo,
         UserManager<AxonUserAuth> userManager,
-        IChallengeService challengeService,
+        IChallengeValidationService challengeValidationService,
+        TimeProvider timeProvider,
         ILogger<WalletAuthenticationProvider> logger)
     {
         _signatureVerifier = signatureVerifier ?? throw new ArgumentNullException(nameof(signatureVerifier));
@@ -49,7 +41,8 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
         _walletOwnershipRepo = walletOwnershipRepo ?? throw new ArgumentNullException(nameof(walletOwnershipRepo));
         _walletRepo = walletRepo ?? throw new ArgumentNullException(nameof(walletRepo));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
-        _challengeService = challengeService ?? throw new ArgumentNullException(nameof(challengeService));
+        _challengeValidationService = challengeValidationService ?? throw new ArgumentNullException(nameof(challengeValidationService));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -75,11 +68,11 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             _logger.LogInformation("Starting wallet authentication for chain {ChainId}, address {Address}",
                 walletRequest.ChainId, MaskAddress(walletRequest.Address));
 
-            // Validate challenge MAC and timing
-            var messageBytes = Encoding.UTF8.GetBytes(walletRequest.SignedMessage);
-            var challengeValidation = ValidateChallenge(
-                messageBytes,
-                int.Parse(walletRequest.Mkv.Replace("v", "", StringComparison.Ordinal), CultureInfo.InvariantCulture));
+            // Validate challenge message structure, MAC, TTL, and replay protection
+            var challengeValidation = await _challengeValidationService.ValidateWalletChallengeAsync(
+                walletRequest.SignedMessage,
+                walletRequest.Mkv,
+                cancellationToken);
 
             if (challengeValidation.IsFailure)
             {
@@ -152,48 +145,6 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             _logger.LogError(ex, "Wallet authentication failed unexpectedly");
             return Result.Failure<AuthenticationData, Error>(
                 Error.Internal("Wallet authentication failed"));
-        }
-    }
-
-    private Result<bool, Error> ValidateChallenge(byte[] message, int keyVersion = 1)
-    {
-        try
-        {
-            var messageJson = Encoding.UTF8.GetString(message);
-
-            // Parse challenge to extract validation parameters
-            using var doc = JsonDocument.Parse(messageJson);
-            var root = doc.RootElement;
-
-            var chainId = root.GetProperty("chain_id").GetString();
-            var address = root.GetProperty("wallet_address").GetString();
-            var audience = root.TryGetProperty("aud", out var audElement) ? audElement.GetString() : "axon-challenge";
-
-            if (string.IsNullOrEmpty(chainId) || string.IsNullOrEmpty(address))
-            {
-                return Result.Failure<bool, Error>(Error.Validation("Invalid challenge format"));
-            }
-
-            // Validate challenge using Identity token system
-            var challengeValidation = _challengeService.ValidateChallenge(messageJson, chainId ?? "", address ?? "", audience ?? "axon-challenge");
-            if (challengeValidation.IsFailure || !challengeValidation.Value)
-            {
-                return Result.Failure<bool, Error>(Error.Validation("Invalid challenge"));
-            }
-
-            // Check and mark nonce as used
-            var nonceResult = _challengeService.CheckAndMarkNonceUsedAsync(messageJson, $"v{keyVersion}").Result;
-            if (nonceResult.IsFailure)
-            {
-                return Result.Failure<bool, Error>(nonceResult.Error);
-            }
-
-            return Result.Success<bool, Error>(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Challenge validation failed");
-            return Result.Failure<bool, Error>(Error.Validation("Invalid challenge format"));
         }
     }
 
@@ -274,7 +225,7 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
                 return Result.Success<bool, Error>(false);
             };
 
-        var linkResult = newPrincipal.LinkWalletOwnership(ownership, checkExistingOwnership);
+        var linkResult = newPrincipal.LinkWalletOwnership(ownership, checkExistingOwnership, _timeProvider);
         if (linkResult.IsFailure)
         {
             return Result.Failure<AxonPrincipal, Error>(linkResult.Error);

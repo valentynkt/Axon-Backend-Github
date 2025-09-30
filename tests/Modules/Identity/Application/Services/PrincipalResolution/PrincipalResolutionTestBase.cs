@@ -241,7 +241,7 @@ public abstract class PrincipalResolutionTestBase
         var principal = AxonPrincipal.CreateHuman();
         var wallet = TestDataFixtures.CreateW1Main();
         var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);
@@ -293,8 +293,8 @@ public abstract class PrincipalResolutionTestBase
             OwnershipStatus.Verified);
 
         // Link ownerships
-        principalA.LinkWalletOwnership(ownershipA, (_, _, _) => Result.Success<bool, Error>(false));
-        principalB.LinkWalletOwnership(ownershipB, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownershipA, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalB.LinkWalletOwnership(ownershipB, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(TestDataFixtures.W1MainAddress);

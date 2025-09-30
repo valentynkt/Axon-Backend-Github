@@ -88,10 +88,10 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
-            p1 => p1.UpdateRiskTier(RiskTier.High), // Officer 1: High risk
-            p2 => p2.UpdateRiskTier(RiskTier.Low)   // Officer 2: Low risk
+            p1 => p1.UpdateRiskTier(RiskTier.High, TimeProvider.System), // Officer 1: High risk
+            p2 => p2.UpdateRiskTier(RiskTier.Low, TimeProvider.System)   // Officer 2: Low risk
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -99,7 +99,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
         // Verify the first update was applied
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(verifyContext);
-        using var verifyRepo = new AxonPrincipalWriteRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new AxonPrincipalWriteRepository(verifyContext, verifyUnitOfWork, TimeProvider.System);
         var updated = await verifyRepo.GetByIdAsync(principal.Id);
         updated.ShouldNotBeNull();
         updated.RiskTier.ShouldBe(RiskTier.High);
@@ -131,14 +131,16 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.AddCredential(
                 credential1,
-                checkCredentialUniquenessFunc: (provider, issuer, subject) => Result.Success<bool, Error>(false)),
+                checkCredentialUniquenessFunc: (provider, issuer, subject) => Result.Success<bool, Error>(false),
+                TimeProvider.System),
             p2 => p2.AddCredential(
                 credential2,
-                checkCredentialUniquenessFunc: (provider, issuer, subject) => Result.Success<bool, Error>(false))
+                checkCredentialUniquenessFunc: (provider, issuer, subject) => Result.Success<bool, Error>(false),
+                TimeProvider.System)
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -164,12 +166,13 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
-            p1 => p1.RemoveWalletOwnership(walletId),
+            p1 => p1.RemoveWalletOwnership(walletId, TimeProvider.System),
             p2 => p2.AddCredential(
                 newCredential,
-                checkCredentialUniquenessFunc: (_, _, _) => Result.Success<bool, Error>(false))
+                checkCredentialUniquenessFunc: (_, _, _) => Result.Success<bool, Error>(false),
+                TimeProvider.System)
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -188,10 +191,10 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
-            p1 => p1.UpdateWalletOwnershipStatus(walletId, OwnershipStatus.Verified),
-            p2 => p2.UpdateWalletOwnershipStatus(walletId, OwnershipStatus.Revoked, "Suspicious activity")
+            p1 => p1.UpdateWalletOwnershipStatus(walletId, OwnershipStatus.Verified, TimeProvider.System),
+            p2 => p2.UpdateWalletOwnershipStatus(walletId, OwnershipStatus.Revoked, TimeProvider.System, "Suspicious activity")
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -210,10 +213,10 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
-            p1 => p1.SetChainDefault("1", wallets[0].WalletId), // Device 1: Set first wallet
-            p2 => p2.SetChainDefault("1", wallets[1].WalletId)  // Device 2: Set second wallet
+            p1 => p1.SetChainDefault("1", wallets[0].WalletId, TimeProvider.System), // Device 1: Set first wallet
+            p2 => p2.SetChainDefault("1", wallets[1].WalletId, TimeProvider.System)  // Device 2: Set second wallet
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -234,14 +237,16 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.LinkWalletOwnership(
                 ownership1,
-                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false)),
+                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false),
+                TimeProvider.System),
             p2 => p2.LinkWalletOwnership(
                 ownership2,
-                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false))
+                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false),
+                TimeProvider.System)
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -259,10 +264,10 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
-            p1 => p1.UpdateRiskTier(RiskTier.Medium),
-            p2 => p2.UpdateRiskTier(RiskTier.High)
+            p1 => p1.UpdateRiskTier(RiskTier.Medium, TimeProvider.System),
+            p2 => p2.UpdateRiskTier(RiskTier.High, TimeProvider.System)
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -283,12 +288,13 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-                return new AxonPrincipalWriteRepository(context, unitOfWork);
+                return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.LinkWalletOwnership(
                 newOwnership,
-                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false)),
-            p2 => p2.RemoveWalletOwnership(removeWalletId)
+                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false),
+                TimeProvider.System),
+            p2 => p2.RemoveWalletOwnership(removeWalletId, TimeProvider.System)
         );
 
         AssertOptimisticConcurrencyHandled(result);
@@ -301,7 +307,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
     private async Task<AxonPrincipal> CreateAndSavePrincipalAsync()
     {
         var principal = AxonPrincipal.CreateHuman(AxonUserId.New());
-        using var repository = new AxonPrincipalWriteRepository(_setupContext, _unitOfWork);
+        using var repository = new AxonPrincipalWriteRepository(_setupContext, _unitOfWork, TimeProvider.System);
 
         await repository.AddAsync(principal);
         await _setupContext.SaveChangesAsync();
@@ -326,10 +332,11 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
         var ownership = CreateWalletOwnership(principal.Id, wallet.Id);
         var linkResult = principal.LinkWalletOwnership(
             ownership,
-            checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false));
+            checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false),
+            TimeProvider.System);
         linkResult.IsSuccess.ShouldBeTrue();
 
-        using var repository = new AxonPrincipalWriteRepository(_setupContext, _unitOfWork);
+        using var repository = new AxonPrincipalWriteRepository(_setupContext, _unitOfWork, TimeProvider.System);
         await repository.UpdateAsync(principal);
         await _setupContext.SaveChangesAsync();
 
@@ -358,11 +365,12 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             var ownership = CreateWalletOwnership(principal.Id, wallet.Id);
             var linkResult = principal.LinkWalletOwnership(
                 ownership,
-                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false));
+                checkExistingOwnershipFunc: (walletId, accessMode, status) => Result.Success<bool, Error>(false),
+                TimeProvider.System);
             linkResult.IsSuccess.ShouldBeTrue();
         }
 
-        using var repository = new AxonPrincipalWriteRepository(_setupContext, _unitOfWork);
+        using var repository = new AxonPrincipalWriteRepository(_setupContext, _unitOfWork, TimeProvider.System);
         await repository.UpdateAsync(principal);
         await _setupContext.SaveChangesAsync();
 

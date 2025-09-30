@@ -46,7 +46,7 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
 
         DbContext = new IdentityWriteDbContext(options);
         UnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(DbContext);
-        PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork);
+        PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork, TimeProvider.System);
         WalletRepository = new WalletWriteRepository(DbContext, UnitOfWork);
 
         // Create schema using EF model configuration for tests
@@ -210,9 +210,9 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
         var ownership2 = CreateTestOwnership(principal.Id, polygon.Id);
         var ownership3 = CreateTestOwnership(principal.Id, bsc.Id, AccessMode.WatchOnly);
 
-        var linkResult1 = principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        var linkResult2 = principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
-        var linkResult3 = principal.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult1 = principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        var linkResult2 = principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        var linkResult3 = principal.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         linkResult1.IsSuccess.ShouldBeTrue();
         linkResult2.IsSuccess.ShouldBeTrue();

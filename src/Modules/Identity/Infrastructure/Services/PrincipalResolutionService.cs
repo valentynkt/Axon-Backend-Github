@@ -26,6 +26,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
     private readonly IWalletWriteRepository _walletWriteRepository;
     private readonly IWalletOwnershipRepository _ownershipRepository;
     private readonly IAutoRevocationService _autoRevocationService;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<PrincipalResolutionService> _logger;
 
     public PrincipalResolutionService(
@@ -35,6 +36,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         IWalletWriteRepository walletWriteRepository,
         IWalletOwnershipRepository ownershipRepository,
         IAutoRevocationService autoRevocationService,
+        TimeProvider timeProvider,
         ILogger<PrincipalResolutionService> logger)
     {
         _principalRepository = principalRepository;
@@ -43,6 +45,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         _walletWriteRepository = walletWriteRepository;
         _ownershipRepository = ownershipRepository;
         _autoRevocationService = autoRevocationService;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -176,6 +179,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
                 var revokeResult = principal.UpdateWalletOwnershipStatus(
                     ownershipWithPrincipal.Ownership.WalletId,
                     OwnershipStatus.Revoked,
+                    _timeProvider,
                     "conflict_lost");
 
                 if (revokeResult.IsSuccess)
@@ -262,7 +266,7 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
                 return Result.Success<bool, Error>(false);
             };
 
-        var linkResult = principal.LinkWalletOwnership(ownership, checkExistingOwnership);
+        var linkResult = principal.LinkWalletOwnership(ownership, checkExistingOwnership, _timeProvider);
         if (linkResult.IsFailure)
         {
             return Result.Failure<PrincipalResolutionResult, Error>(linkResult.Error);

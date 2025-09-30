@@ -21,16 +21,19 @@ public sealed class WalletVerificationService : IWalletVerificationService
 {
     private readonly IAxonPrincipalWriteRepository _principalRepository;
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<WalletVerificationService> _logger;
     private const int MaxRetryAttempts = 2;
 
     public WalletVerificationService(
         IAxonPrincipalWriteRepository principalRepository,
         IWriteUnitOfWork<IdentityModule> unitOfWork,
+        TimeProvider timeProvider,
         ILogger<WalletVerificationService> logger)
     {
         _principalRepository = principalRepository;
         _unitOfWork = unitOfWork;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -73,7 +76,8 @@ public sealed class WalletVerificationService : IWalletVerificationService
                 var verifyResult = principal.VerifyWalletOwnership(
                     walletId,
                     accessMode,
-                    verificationSource);
+                    verificationSource,
+                    _timeProvider);
 
                 if (verifyResult.IsFailure)
                 {
@@ -91,6 +95,21 @@ public sealed class WalletVerificationService : IWalletVerificationService
                     walletId, principalId);
 
                 return verifyResult;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx &&
+                                               pgEx.SqlState == "23505" &&
+                                               pgEx.ConstraintName == "ux_exclusive_signing")
+            {
+                // Race condition: Another transaction created verified signing ownership first
+                // This is expected behavior - the unique constraint did its job
+                _logger.LogWarning(ex,
+                    "Wallet {WalletId} already has verified signing ownership by another principal. Constraint: {Constraint}",
+                    walletId, pgEx.ConstraintName);
+
+                return Result.Failure<WalletOwnership, Error>(
+                    Error.Conflict(
+                        "Wallet already has verified signing ownership by another principal",
+                        "WALLET.OWNERSHIP.ALREADY_VERIFIED"));
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -138,6 +157,7 @@ public sealed class WalletVerificationService : IWalletVerificationService
             var revokeResult = principal.UpdateWalletOwnershipStatus(
                 walletId,
                 OwnershipStatus.Revoked,
+                _timeProvider,
                 reason);
 
             if (revokeResult.IsSuccess)
@@ -171,7 +191,7 @@ public sealed class WalletVerificationService : IWalletVerificationService
                 Error.NotFound($"Principal {principalId.Value} not found", "PRINCIPAL.NOT_FOUND"));
         }
 
-        var applyResult = principal.ApplyChainDefaultsBatch(chainDefaults);
+        var applyResult = principal.ApplyChainDefaultsBatch(chainDefaults, _timeProvider);
         if (applyResult.IsFailure)
         {
             return UnitResult.Failure<Error>(applyResult.Error);
@@ -199,7 +219,7 @@ public sealed class WalletVerificationService : IWalletVerificationService
                 Error.NotFound($"Principal {principalId.Value} not found", "PRINCIPAL.NOT_FOUND"));
         }
 
-        var removeResult = principal.RemoveWalletOwnership(walletId);
+        var removeResult = principal.RemoveWalletOwnership(walletId, _timeProvider);
         if (removeResult.IsFailure)
         {
             return removeResult;
@@ -285,7 +305,8 @@ public sealed class WalletVerificationService : IWalletVerificationService
                 var verifyResult = principal.VerifyWalletOwnership(
                     request.WalletId,
                     request.AccessMode,
-                    request.VerificationSource);
+                    request.VerificationSource,
+                    _timeProvider);
 
                 if (verifyResult.IsFailure)
                 {
@@ -298,12 +319,29 @@ public sealed class WalletVerificationService : IWalletVerificationService
             await _principalRepository.UpdateAsync(principal, cancellationToken);
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation(
-            "Batch verified {Count} wallet ownerships",
-            verifiedOwnerships.Count);
+            _logger.LogInformation(
+                "Batch verified {Count} wallet ownerships",
+                verifiedOwnerships.Count);
 
-        return Result.Success<IReadOnlyList<WalletOwnership>, Error>(verifiedOwnerships.AsReadOnly());
+            return Result.Success<IReadOnlyList<WalletOwnership>, Error>(verifiedOwnerships.AsReadOnly());
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx &&
+                                           pgEx.SqlState == "23505" &&
+                                           pgEx.ConstraintName == "ux_exclusive_signing")
+        {
+            // Race condition in batch operation
+            _logger.LogWarning(ex,
+                "Batch verification failed due to exclusive signing constraint violation. Constraint: {Constraint}",
+                pgEx.ConstraintName);
+
+            return Result.Failure<IReadOnlyList<WalletOwnership>, Error>(
+                Error.Conflict(
+                    "One or more wallets already have verified signing ownership by another principal",
+                    "WALLET.OWNERSHIP.BATCH_CONFLICT"));
+        }
     }
 }

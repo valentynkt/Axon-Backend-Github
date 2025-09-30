@@ -32,8 +32,8 @@ public class CoverageVerificationTests
             var ownership2 = WalletOwnership.Create(principal.Id, walletId2, AccessMode.Signing, OwnershipStatus.Verified);
 
             // Act - Exercise both branches of the invariant
-            var firstResult = principal.LinkWalletOwnership(ownership1, (wId, mode, status) => Result.Success<bool, Error>(false));
-            var secondResult = principal.LinkWalletOwnership(ownership2, (wId, mode, status) => Result.Success<bool, Error>(true)); // Simulate conflict
+            var firstResult = principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            var secondResult = principal.LinkWalletOwnership(ownership2, (wId, mode, status) => Result.Success<bool, Error>(true), TimeProvider.System); // Simulate conflict
 
             // Assert - Both success and failure paths should be exercised  
             firstResult.IsSuccess.ShouldBeTrue(); // Success path
@@ -51,12 +51,12 @@ public class CoverageVerificationTests
             var verifiedOwnership = WalletOwnership.Create(principal.Id, verifiedWalletId, AccessMode.Signing, OwnershipStatus.Verified);
             var pendingOwnership = WalletOwnership.Create(principal.Id, pendingWalletId, AccessMode.Signing, OwnershipStatus.Pending);
 
-            principal.LinkWalletOwnership(verifiedOwnership, (wId, mode, status) => Result.Success<bool, Error>(false));
-            principal.LinkWalletOwnership(pendingOwnership, (wId, mode, status) => Result.Success<bool, Error>(false));
+            principal.LinkWalletOwnership(verifiedOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
             // Act - Exercise both branches of verified-first invariant
-            var verifiedDefaultResult = principal.ApplyChainDefault( "solana-mainnet", verifiedWalletId);
-            var pendingDefaultResult = principal.ApplyChainDefault( "ethereum-mainnet", pendingWalletId);
+            var verifiedDefaultResult = principal.ApplyChainDefault( "solana-mainnet", verifiedWalletId, TimeProvider.System);
+            var pendingDefaultResult = principal.ApplyChainDefault( "ethereum-mainnet", pendingWalletId, TimeProvider.System);
 
             // Assert - Both success and failure paths should be exercised
             verifiedDefaultResult.IsSuccess.ShouldBeTrue(); // Success path (verified wallet)
@@ -71,9 +71,9 @@ public class CoverageVerificationTests
             var humanPrincipal = AxonPrincipal.CreateHuman();
 
             // Act - Exercise both branches of service risk constraint
-            var serviceHighRiskResult = servicePrincipal.UpdateRiskTier(RiskTier.High);
-            var serviceLowRiskResult = servicePrincipal.UpdateRiskTier(RiskTier.Low);
-            var humanHighRiskResult = humanPrincipal.UpdateRiskTier(RiskTier.High);
+            var serviceHighRiskResult = servicePrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
+            var serviceLowRiskResult = servicePrincipal.UpdateRiskTier(RiskTier.Low, TimeProvider.System);
+            var humanHighRiskResult = humanPrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
 
             // Assert - All branches should be exercised
             serviceHighRiskResult.IsFailure.ShouldBeTrue(); // Failure path (service + high risk)
@@ -86,11 +86,11 @@ public class CoverageVerificationTests
         {
             // Arrange - Given principal with established state
             var principal = AxonPrincipal.CreateHuman();
-            principal.UpdateRiskTier(RiskTier.Medium);
+            principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
 
             // Act - Exercise both no-op and actual change paths
-            var noOpResult = principal.UpdateRiskTier(RiskTier.Medium); // No-op path
-            var changeResult = principal.UpdateRiskTier(RiskTier.High); // Actual change path
+            var noOpResult = principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System); // No-op path
+            var changeResult = principal.UpdateRiskTier(RiskTier.High, TimeProvider.System); // Actual change path
 
             // Assert - Both branches should be exercised
             noOpResult.IsSuccess.ShouldBeTrue();
@@ -129,10 +129,10 @@ public class CoverageVerificationTests
             
             // Test with null/invalid inputs (should throw ArgumentNullException)
             Should.Throw<ArgumentNullException>(() => 
-                principal.ApplyChainDefault( null!, WalletId.New()));
+                principal.ApplyChainDefault( null!, WalletId.New(), TimeProvider.System));
                 
             Should.Throw<ArgumentNullException>(() =>
-                principal.LinkWalletOwnership(null!, (wId, mode, status) => Result.Success<bool, Error>(false)));
+                principal.LinkWalletOwnership(null!, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System));
 
             // Test with empty collections
             principal.WalletOwnerships.ShouldBeEmpty(); // Initially empty
@@ -174,24 +174,26 @@ public class CoverageVerificationTests
             var errors = new List<Result<object, Error>>
             {
                 // Wallet not owned error
-                principal.ApplyChainDefault( "test", walletId).IsSuccess 
+                principal.ApplyChainDefault( "test", walletId, TimeProvider.System).IsSuccess 
                     ? Result.Success<object, Error>(new object()) 
-                    : Result.Failure<object, Error>(principal.ApplyChainDefault( "test", walletId).Error),
+                    : Result.Failure<object, Error>(principal.ApplyChainDefault( "test", walletId, TimeProvider.System).Error),
                 
                 // Service principal risk constraint error  
-                servicePrincipal.UpdateRiskTier(RiskTier.High).IsSuccess 
+                servicePrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System).IsSuccess 
                     ? Result.Success<object, Error>(new object()) 
-                    : Result.Failure<object, Error>(servicePrincipal.UpdateRiskTier(RiskTier.High).Error),
+                    : Result.Failure<object, Error>(servicePrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System).Error),
                 
                 // Duplicate verified signing owner error
                 principal.LinkWalletOwnership(
                     WalletOwnership.Create(principal.Id, walletId, AccessMode.Signing, OwnershipStatus.Verified),
-                    (wId, mode, status) => Result.Success<bool, Error>(true)
-                ).IsSuccess 
-                    ? Result.Success<object, Error>(new object()) 
+                    (wId, mode, status) => Result.Success<bool, Error>(true),
+                    TimeProvider.System
+                ).IsSuccess
+                    ? Result.Success<object, Error>(new object())
                     : Result.Failure<object, Error>(principal.LinkWalletOwnership(
                         WalletOwnership.Create(principal.Id, walletId, AccessMode.Signing, OwnershipStatus.Verified),
-                        (wId, mode, status) => Result.Success<bool, Error>(true)
+                        (wId, mode, status) => Result.Success<bool, Error>(true),
+                        TimeProvider.System
                     ).Error)
             };
 
@@ -222,16 +224,16 @@ public class CoverageVerificationTests
             var watchOnlyOwnership2 = WalletOwnership.Create(principal.Id, wallet2, AccessMode.WatchOnly, OwnershipStatus.Verified);
 
             // Execute complex state transitions
-            var result1 = principal.LinkWalletOwnership(pendingOwnership1, (wId, mode, status) => Result.Success<bool, Error>(false));
-            var result2 = principal.LinkWalletOwnership(verifiedOwnership1, (wId, mode, status) => Result.Success<bool, Error>(false));
-            var result3 = principal.LinkWalletOwnership(watchOnlyOwnership2, (wId, mode, status) => Result.Success<bool, Error>(false));
+            var result1 = principal.LinkWalletOwnership(pendingOwnership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            var result2 = principal.LinkWalletOwnership(verifiedOwnership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            var result3 = principal.LinkWalletOwnership(watchOnlyOwnership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
             // Set defaults for different chains
-            var default1 = principal.ApplyChainDefault( "solana-mainnet", wallet1);
-            var default2 = principal.ApplyChainDefault( "ethereum-mainnet", wallet2); // Should fail (watch-only)
+            var default1 = principal.ApplyChainDefault( "solana-mainnet", wallet1, TimeProvider.System);
+            var default2 = principal.ApplyChainDefault( "ethereum-mainnet", wallet2, TimeProvider.System); // Should fail (watch-only)
 
             // Update risk tier
-            var riskUpdate = principal.UpdateRiskTier(RiskTier.High);
+            var riskUpdate = principal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
 
             // Verify complex scenario results
             result1.IsSuccess.ShouldBeTrue();
@@ -260,13 +262,13 @@ public class CoverageVerificationTests
             var ownership1 = WalletOwnership.Create(principal.Id, wallet1, AccessMode.Signing, OwnershipStatus.Verified);
             var ownership2 = WalletOwnership.Create(principal.Id, wallet2, AccessMode.Signing, OwnershipStatus.Verified);
 
-            principal.LinkWalletOwnership(ownership1, (wId, mode, status) => Result.Success<bool, Error>(false));
-            principal.LinkWalletOwnership(ownership2, (wId, mode, status) => Result.Success<bool, Error>(false));
-            principal.UpdateRiskTier(RiskTier.Medium);
-            principal.ApplyChainDefault( "solana-mainnet", wallet1);
-            principal.UpdateRiskTier(RiskTier.High);
-            principal.ApplyChainDefault( "ethereum-mainnet", wallet2);
-            principal.UpdateRiskTier(RiskTier.Low);
+            principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
+            principal.ApplyChainDefault( "solana-mainnet", wallet1, TimeProvider.System);
+            principal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
+            principal.ApplyChainDefault( "ethereum-mainnet", wallet2, TimeProvider.System);
+            principal.UpdateRiskTier(RiskTier.Low, TimeProvider.System);
 
             // Verify final consistency
             principal.WalletOwnerships.Count.ShouldBe(2);
@@ -335,7 +337,7 @@ public class CoverageVerificationTests
             
             foreach (var riskTier in riskTierValues)
             {
-                var result = principal.UpdateRiskTier(riskTier);
+                var result = principal.UpdateRiskTier(riskTier, TimeProvider.System);
                 if (principal.Type == PrincipalType.Service && riskTier != RiskTier.Low)
                 {
                     result.IsFailure.ShouldBeTrue(); // Service constraint
@@ -384,15 +386,16 @@ public class CoverageVerificationTests
             var errorResults = new List<Result<object, Error>>();
 
             // Trigger various domain errors to ensure coverage
-            var result1 = principal.ApplyChainDefault( "test", WalletId.New());
+            var result1 = principal.ApplyChainDefault( "test", WalletId.New(), TimeProvider.System);
             errorResults.Add(result1.IsSuccess ? Result.Success<object, Error>(new object()) : Result.Failure<object, Error>(result1.Error)); // Wallet not owned
             
-            var result2 = servicePrincipal.UpdateRiskTier(RiskTier.High);
+            var result2 = servicePrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
             errorResults.Add(result2.IsSuccess ? Result.Success<object, Error>(new object()) : Result.Failure<object, Error>(result2.Error)); // Service risk constraint
             
             var result3 = principal.LinkWalletOwnership(
                 WalletOwnership.Create(principal.Id, WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified),
-                (wId, mode, status) => Result.Success<bool, Error>(true));
+                (wId, mode, status) => Result.Success<bool, Error>(true),
+                TimeProvider.System);
             errorResults.Add(result3.IsSuccess ? Result.Success<object, Error>(new object()) : Result.Failure<object, Error>(result3.Error)); // Duplicate owner
             
             var result4 = wallet.LinkToOwner(AxonUserId.New(), AccessMode.Signing, OwnershipStatus.Verified,

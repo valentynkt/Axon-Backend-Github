@@ -66,7 +66,8 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
 
             messages.Property(m => m.Id)
                 .HasConversion(new MessageId.EfCoreValueConverter())
-                .IsRequired();
+                .IsRequired()
+                .ValueGeneratedNever();
 
             messages.Property(m => m.ConversationId)
                 .HasConversion(new ConversationId.EfCoreValueConverter())
@@ -103,6 +104,11 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             // Index for query performance
             messages.HasIndex(m => m.ConversationId);
             messages.HasIndex(m => new { m.ConversationId, m.Sequence });
+
+            // Unique constraint on AiResponseId for idempotency - prevents duplicate AI responses globally
+            messages.HasIndex(m => m.AiResponseId)
+                .IsUnique()
+                .HasFilter("\"AiResponseId\" IS NOT NULL"); // Partial index - only non-null values must be unique
 
             messages.UsePropertyAccessMode(PropertyAccessMode.Field);
         });

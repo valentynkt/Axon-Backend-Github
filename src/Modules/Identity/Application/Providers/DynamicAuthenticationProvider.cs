@@ -39,6 +39,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
     private readonly IMemoryCache _memoryCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly UserManager<AxonUserAuth> _userManager;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<DynamicAuthenticationProvider> _logger;
 
     private static readonly ActivitySource ActivitySource = new("Axon.Identity.DynamicProvider");
@@ -54,6 +55,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         IMemoryCache memoryCache,
         IHttpContextAccessor httpContextAccessor,
         UserManager<AxonUserAuth> userManager,
+        TimeProvider timeProvider,
         ILogger<DynamicAuthenticationProvider> logger)
     {
         _dynamicAuthService = dynamicAuthService ?? throw new ArgumentNullException(nameof(dynamicAuthService));
@@ -65,6 +67,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -340,7 +343,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             providerType, credential.Issuer, credential.Subject, cancellationToken);
 
         var addResult = principal.AddCredential(credential, (provider, iss, subj) =>
-            Result.Success<bool, Error>(isTaken));
+            Result.Success<bool, Error>(isTaken), _timeProvider);
 
         if (addResult.IsFailure)
         {
@@ -412,7 +415,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             {
                 var ownership = verificationResult.Value;
                 var linkResult = principal.LinkWalletOwnership(ownership, (wId, mode, status) =>
-                    Result.Success<bool, Error>(false));
+                    Result.Success<bool, Error>(false), _timeProvider);
 
                 if (linkResult.IsSuccess)
                     linked++;
@@ -454,7 +457,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         if (chainWalletMappings.Count == 0)
             return 0;
 
-        var batchResult = principal.ApplyChainDefaultsBatch(chainWalletMappings);
+        var batchResult = principal.ApplyChainDefaultsBatch(chainWalletMappings, _timeProvider);
         return batchResult.IsSuccess ? batchResult.Value : 0;
     }
 

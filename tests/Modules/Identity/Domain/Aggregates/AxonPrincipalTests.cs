@@ -157,7 +157,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var initialTier = principal.RiskTier;
 
             // Act
-            var result = principal.UpdateRiskTier(RiskTier.Low);
+            var result = principal.UpdateRiskTier(RiskTier.Low, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -173,7 +173,7 @@ public class AxonPrincipalTests : IdentityTestBase
             principal.ClearDomainEvents(); // Clear creation events
 
             // Act
-            var result = principal.UpdateRiskTier(RiskTier.Medium);
+            var result = principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -196,7 +196,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var principal = AxonPrincipal.CreateService();
 
             // Act
-            var result = principal.UpdateRiskTier(RiskTier.Medium);
+            var result = principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -214,7 +214,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var principal = AxonPrincipal.CreateHuman();
 
             // Act
-            var result = principal.UpdateRiskTier(newTier);
+            var result = principal.UpdateRiskTier(newTier, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -238,7 +238,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
 
             // Act
-            var result = principal.LinkWalletOwnership(ownership, NoConflictResolver);
+            var result = principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -269,11 +269,11 @@ public class AxonPrincipalTests : IdentityTestBase
             // Arrange
             var principal = AxonPrincipal.CreateHuman();
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
-            principal.LinkWalletOwnership(ownership, NoConflictResolver);
+            principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.LinkWalletOwnership(ownership, NoConflictResolver);
+            var result = principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -289,7 +289,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
 
             // Act
-            var result = principal.LinkWalletOwnership(ownership, ConflictResolver);
+            var result = principal.LinkWalletOwnership(ownership, ConflictResolver, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -307,13 +307,13 @@ public class AxonPrincipalTests : IdentityTestBase
             for (int i = 0; i < 10; i++)
             {
                 var ownership = CreateOwnership(principal.Id, WalletId.New());
-                principal.LinkWalletOwnership(ownership, NoConflictResolver);
+                principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
             }
 
             var extraOwnership = CreateOwnership(principal.Id, WalletId.New());
 
             // Act
-            var result = principal.LinkWalletOwnership(extraOwnership, NoConflictResolver);
+            var result = principal.LinkWalletOwnership(extraOwnership, NoConflictResolver, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -329,7 +329,7 @@ public class AxonPrincipalTests : IdentityTestBase
 
             // Act & Assert
             Should.Throw<ArgumentNullException>(() =>
-                principal.LinkWalletOwnership(null!, NoConflictResolver));
+                principal.LinkWalletOwnership(null!, NoConflictResolver, TimeProvider.System));
         }
 
         [Test]
@@ -341,7 +341,7 @@ public class AxonPrincipalTests : IdentityTestBase
 
             // Act & Assert
             Should.Throw<ArgumentNullException>(() =>
-                principal.LinkWalletOwnership(ownership, null!));
+                principal.LinkWalletOwnership(ownership, null!, TimeProvider.System));
         }
 
         [Test]
@@ -352,7 +352,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
 
             // Act
-            var result = principal.LinkWalletOwnership(ownership, ErrorResolver);
+            var result = principal.LinkWalletOwnership(ownership, ErrorResolver, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -370,11 +370,11 @@ public class AxonPrincipalTests : IdentityTestBase
             // Arrange
             var principal = AxonPrincipal.CreateHuman();
             var ownership = CreateOwnership(principal.Id);
-            principal.LinkWalletOwnership(ownership, NoConflictResolver);
+            principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.RemoveWalletOwnership(ownership.WalletId);
+            var result = principal.RemoveWalletOwnership(ownership.WalletId, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -397,7 +397,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var nonExistentWalletId = WalletId.New();
 
             // Act
-            var result = principal.RemoveWalletOwnership(nonExistentWalletId);
+            var result = principal.RemoveWalletOwnership(nonExistentWalletId, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -412,12 +412,12 @@ public class AxonPrincipalTests : IdentityTestBase
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
             var walletId = ownership.WalletId;
 
-            principal.LinkWalletOwnership(ownership, NoConflictResolver);
-            principal.ApplyChainDefault("ethereum-mainnet", walletId);
+            principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
+            principal.ApplyChainDefault("ethereum-mainnet", walletId, TimeProvider.System);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.RemoveWalletOwnership(walletId);
+            var result = principal.RemoveWalletOwnership(walletId, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -444,7 +444,7 @@ public class AxonPrincipalTests : IdentityTestBase
             Func<string, string, string, Result<bool, Error>> uniquenessCheck = (_, _, _) => Result.Success<bool, Error>(false);
 
             // Act
-            var result = principal.AddCredential(credential, uniquenessCheck);
+            var result = principal.AddCredential(credential, uniquenessCheck, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -468,7 +468,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var credential = CreateCredential(principal.Id, provider: "github", issuer: "github.com", subject: "user123");
 
             Func<string, string, string, Result<bool, Error>> uniquenessCheck = (_, _, _) => Result.Success<bool, Error>(false);
-            principal.AddCredential(credential, uniquenessCheck);
+            principal.AddCredential(credential, uniquenessCheck, TimeProvider.System);
 
             var originalLastSeen = credential.LastSeenAt;
             var newerCredential = CreateCredential(principal.Id, provider: "github", issuer: "github.com", subject: "user123",
@@ -477,7 +477,7 @@ public class AxonPrincipalTests : IdentityTestBase
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.AddCredential(newerCredential, uniquenessCheck);
+            var result = principal.AddCredential(newerCredential, uniquenessCheck, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -496,7 +496,7 @@ public class AxonPrincipalTests : IdentityTestBase
             Func<string, string, string, Result<bool, Error>> uniquenessCheck = (_, _, _) => Result.Success<bool, Error>(true);
 
             // Act
-            var result = principal.AddCredential(credential, uniquenessCheck);
+            var result = principal.AddCredential(credential, uniquenessCheck, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -515,7 +515,7 @@ public class AxonPrincipalTests : IdentityTestBase
                 Result.Failure<bool, Error>(Error.Failure("Database error", "DB_ERROR"));
 
             // Act
-            var result = principal.AddCredential(credential, uniquenessCheck);
+            var result = principal.AddCredential(credential, uniquenessCheck, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -537,11 +537,11 @@ public class AxonPrincipalTests : IdentityTestBase
             // Arrange
             var principal = AxonPrincipal.CreateHuman();
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
-            principal.LinkWalletOwnership(ownership, NoConflictResolver);
+            principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -568,12 +568,12 @@ public class AxonPrincipalTests : IdentityTestBase
             // Arrange
             var principal = AxonPrincipal.CreateHuman();
             var ownership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Verified);
-            principal.LinkWalletOwnership(ownership, NoConflictResolver);
-            principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId);
+            principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
+            principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId, TimeProvider.System);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", ownership.WalletId, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();
@@ -589,7 +589,7 @@ public class AxonPrincipalTests : IdentityTestBase
             var nonOwnedWalletId = WalletId.New();
 
             // Act
-            var result = principal.ApplyChainDefault("ethereum-mainnet", nonOwnedWalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", nonOwnedWalletId, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -602,10 +602,10 @@ public class AxonPrincipalTests : IdentityTestBase
             // Arrange
             var principal = AxonPrincipal.CreateHuman();
             var watchOnlyOwnership = CreateOwnership(principal.Id, accessMode: AccessMode.WatchOnly, status: OwnershipStatus.Verified);
-            principal.LinkWalletOwnership(watchOnlyOwnership, NoConflictResolver);
+            principal.LinkWalletOwnership(watchOnlyOwnership, NoConflictResolver, TimeProvider.System);
 
             // Act
-            var result = principal.ApplyChainDefault("ethereum-mainnet", watchOnlyOwnership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", watchOnlyOwnership.WalletId, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -618,10 +618,10 @@ public class AxonPrincipalTests : IdentityTestBase
             // Arrange
             var principal = AxonPrincipal.CreateHuman();
             var pendingOwnership = CreateOwnership(principal.Id, accessMode: AccessMode.Signing, status: OwnershipStatus.Pending);
-            principal.LinkWalletOwnership(pendingOwnership, NoConflictResolver);
+            principal.LinkWalletOwnership(pendingOwnership, NoConflictResolver, TimeProvider.System);
 
             // Act
-            var result = principal.ApplyChainDefault("ethereum-mainnet", pendingOwnership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", pendingOwnership.WalletId, TimeProvider.System);
 
             // Assert
             result.IsFailure.ShouldBeTrue();
@@ -637,7 +637,7 @@ public class AxonPrincipalTests : IdentityTestBase
 
             // Act & Assert
             Should.Throw<ArgumentNullException>(() =>
-                principal.ApplyChainDefault(null!, walletId));
+                principal.ApplyChainDefault(null!, walletId, TimeProvider.System));
         }
 
         [Test]
@@ -648,13 +648,13 @@ public class AxonPrincipalTests : IdentityTestBase
             var firstOwnership = CreateOwnership(principal.Id, WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
             var secondOwnership = CreateOwnership(principal.Id, WalletId.New(), AccessMode.Signing, OwnershipStatus.Verified);
 
-            principal.LinkWalletOwnership(firstOwnership, NoConflictResolver);
-            principal.LinkWalletOwnership(secondOwnership, NoConflictResolver);
-            principal.ApplyChainDefault("ethereum-mainnet", firstOwnership.WalletId);
+            principal.LinkWalletOwnership(firstOwnership, NoConflictResolver, TimeProvider.System);
+            principal.LinkWalletOwnership(secondOwnership, NoConflictResolver, TimeProvider.System);
+            principal.ApplyChainDefault("ethereum-mainnet", firstOwnership.WalletId, TimeProvider.System);
             principal.ClearDomainEvents();
 
             // Act
-            var result = principal.ApplyChainDefault("ethereum-mainnet", secondOwnership.WalletId);
+            var result = principal.ApplyChainDefault("ethereum-mainnet", secondOwnership.WalletId, TimeProvider.System);
 
             // Assert
             result.IsSuccess.ShouldBeTrue();

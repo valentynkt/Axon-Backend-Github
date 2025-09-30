@@ -50,7 +50,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
             AccessMode.Signing,
             OwnershipStatus.Verified);
 
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
 
@@ -64,7 +64,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
             AccessMode.Signing,
             OwnershipStatus.Verified);
 
-        reloadedPrincipal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        reloadedPrincipal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal2);
 
         // Assert: Should fail due to unique partial index constraint
@@ -95,9 +95,9 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var ownership2 = CreateTestOwnership(principal2.Id, sharedWallet.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
         var ownership3 = CreateTestOwnership(principal3.Id, sharedWallet.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
 
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
-        principal3.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
+        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal3.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
@@ -146,8 +146,8 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
         var ownership2 = CreateTestOwnership(principal2.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
 
-        var linkResult1 = principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        var linkResult2 = principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult1 = principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        var linkResult2 = principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         linkResult1.IsSuccess.ShouldBeTrue($"First ownership link should succeed");
         linkResult2.IsSuccess.ShouldBeTrue($"Second ownership link should succeed");
@@ -184,7 +184,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Add initial ownership
         var ownership1 = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -194,7 +194,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         var ownership2 = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
-        var linkResult = reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult = reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Assert: Should fail at domain level
         linkResult.IsFailure.ShouldBeTrue();
@@ -214,7 +214,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await SavePrincipalWithWallets(principal, wallet);
 
         var pendingOwnership = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
-        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -261,11 +261,11 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Principal1 gets verified signing ownership
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Principal2 gets pending signing ownership
         var ownership2 = CreateTestOwnership(principal2.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
-        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
@@ -307,8 +307,8 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
         var ownership2 = CreateTestOwnership(principal2.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
 
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
@@ -324,7 +324,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal2.ShouldNotBeNull();
 
         // Remove principal1's ownership
-        reloadedPrincipal1.RemoveWalletOwnership(sharedWallet.Id);
+        reloadedPrincipal1.RemoveWalletOwnership(sharedWallet.Id, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal1);
         await UnitOfWork.SaveChangesAsync();
 
@@ -371,7 +371,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Principal1 initially owns the wallet
         var ownership1 = CreateTestOwnership(principal1.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
@@ -384,13 +384,13 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal2.ShouldNotBeNull();
 
         // Remove from principal1
-        reloadedPrincipal1.RemoveWalletOwnership(wallet.Id);
+        reloadedPrincipal1.RemoveWalletOwnership(wallet.Id, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal1);
         await UnitOfWork.SaveChangesAsync();
 
         // Add to principal2
         var ownership2 = CreateTestOwnership(principal2.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        reloadedPrincipal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        reloadedPrincipal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal2);
         await UnitOfWork.SaveChangesAsync();
 
@@ -423,9 +423,9 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var ownership2 = CreateTestOwnership(principal.Id, polygon.Id, AccessMode.Signing, OwnershipStatus.Verified);
         var ownership3 = CreateTestOwnership(principal.Id, bsc.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
 
-        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -474,7 +474,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await SavePrincipalWithWallets(principal, wallet);
 
         var ownership = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.Signing, OwnershipStatus.Pending);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -482,7 +482,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         // Create separate contexts for concurrent access
         using var concurrentContext = CreateConcurrentDbContext();
         using var concurrentUow = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
-        using var concurrentRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUow);
+        using var concurrentRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUow, TimeProvider.System);
 
         // Load principal in two separate contexts
         // Clear tracker to ensure clean load
@@ -504,8 +504,8 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         principal2.RiskTier.ShouldBe(RiskTier.Low, "Principal2 should start with Low risk tier");
 
         // Both principals start with RiskTier.Low, so update to different values
-        var result1 = principal1.UpdateRiskTier(RiskTier.Medium);
-        var result2 = principal2.UpdateRiskTier(RiskTier.High);
+        var result1 = principal1.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
+        var result2 = principal2.UpdateRiskTier(RiskTier.High, TimeProvider.System);
 
         result1.IsSuccess.ShouldBeTrue("Principal1 risk tier update should succeed");
         result2.IsSuccess.ShouldBeTrue("Principal2 risk tier update should succeed");
@@ -554,7 +554,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         await SavePrincipalWithWallets(principal, wallet);
 
         var watchOnlyOwnership = CreateTestOwnership(principal.Id, wallet.Id, AccessMode.WatchOnly, OwnershipStatus.Verified);
-        principal.LinkWalletOwnership(watchOnlyOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(watchOnlyOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -563,7 +563,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
         var reloadedPrincipal = await PrincipalRepository.GetByIdAsync(principal.Id);
         reloadedPrincipal.ShouldNotBeNull();
 
-        var chainDefaultResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("ethereum-mainnet", wallet.Id) });
+        var chainDefaultResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("ethereum-mainnet", wallet.Id) }, TimeProvider.System);
 
         // Assert: Should fail at domain level
         chainDefaultResult.IsFailure.ShouldBeTrue();

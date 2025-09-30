@@ -1,0 +1,136 @@
+# pre-flight-validation.yaml - Reusable Pre-Flight Validation Workflow
+# Tier 4: Support workflow (can be invoked by any implementation workflow)
+
+workflow_metadata:
+  id: pre-flight-validation
+  name: "Pre-Flight Validation"
+  version: "1.0.0"
+  tier: 4  # Support workflow (reusable)
+  created_date: "2025-09-30"
+  last_updated: "2025-09-30"
+
+  description: |
+    Reusable pre-flight validation workflow for discovery-first, library-first,
+    and pattern-compliance validation before code generation.
+
+    Executes in parallel:
+    - @axon-archaeologist: Codebase discovery (search existing, map APIs, find patterns)
+    - @axon-library-sage: Library capabilities check (avoid manual code)
+    - @axon-doc-oracle: Pattern compliance validation (Result<T>, StrongId<T>, CQRS, ADRs)
+
+    Used by: story-implementation, story-refactoring, identity-workflow, chat-workflow, api-workflow
+
+  workflow_type: support
+  reusable: true
+  can_be_invoked_by:
+    - story-implementation
+    - story-refactoring
+    - identity-workflow
+    - chat-workflow
+    - api-workflow
+
+# Invocation
+invoked_by:
+  workflows: ["story-implementation", "story-refactoring", "identity-workflow", "chat-workflow", "api-workflow"]
+  phase: "Phase 1: Pre-Flight Validation"
+  timing: "After story understanding, before implementation"
+
+# Input requirements (passed from invoking workflow)
+required_inputs:
+  - story_context: "Story metadata, acceptance criteria, tech spec reference"
+  - module_context: "Identity | Chat | API | Cross-cutting"
+  - docs_loaded: "List of documentation already loaded"
+  - patterns_required: "List of patterns required (Result<T>, StrongId<T>, CQRS, etc.)"
+
+# Variables
+variables:
+  # Configuration
+  config_source: "{project-root}/bmad/axon/config.yaml"
+  output_folder: "{config_source}:output_folder"
+
+  # Paths
+  source_root: "{config_source}:project_paths.source_root"
+  docs_root: "{config_source}:project_paths.docs_root"
+  libraries_docs: "{config_source}:project_paths.libraries_docs"
+
+  # Validation dimensions
+  discovery_layers:
+    - Domain: "Aggregates, entities, value objects, domain events, specifications"
+    - Application: "Commands, queries, handlers, services, DTOs"
+    - Infrastructure: "Repositories, EF Core configs, external service clients"
+    - API: "Endpoints, validators, contracts"
+    - Cross-Module: "Shared kernel, building blocks"
+
+  library_categories:
+    - Core: "MediatR, FluentValidation, FastEndpoints"
+    - Data: "EF Core, Dapper"
+    - External: "Dynamic.xyz, OpenAI, Helius"
+    - Infrastructure: "OpenTelemetry, Polly, Serilog"
+
+  pattern_dimensions:
+    - Result_Pattern: "Result<T, Error> for all operations"
+    - StrongId_Pattern: "StrongId<T> for all IDs"
+    - CQRS_Pattern: "Commands, queries, handlers, MediatR"
+    - Domain_Events: "Event raising, handlers"
+    - Owned_Entities: "EF Core OwnsMany, composite keys (if applicable)"
+
+# Workflow configuration
+installed_path: "{project-root}/bmad/axon/workflows/pre-flight-validation"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+complexity: medium
+estimated_duration_minutes: 10-15  # Parallel execution
+
+# Output format
+outputs:
+  discovery_report:
+    format: "YAML"
+    path: "{output_folder}/{story_id}/discovery-report.yaml"
+    sections:
+      - existing_components: "REUSE recommendations"
+      - similar_patterns: "EXTEND recommendations"
+      - adaptation_needed: "ADAPT recommendations"
+      - new_components: "CREATE recommendations"
+      - reuse_score: "High | Medium | Low"
+
+  library_validation_report:
+    format: "YAML"
+    path: "{output_folder}/{story_id}/library-validation.yaml"
+    sections:
+      - library_recommendations: "Which libraries to use"
+      - capability_match: "How well libraries cover requirements"
+      - manual_code_needed: "What must be written manually"
+      - integration_complexity: "Low | Medium | High"
+
+  pattern_compliance_report:
+    format: "YAML"
+    path: "{output_folder}/{story_id}/pattern-compliance.yaml"
+    sections:
+      - compliance_score: "0-100%"
+      - pattern_breakdown: "Score per pattern dimension"
+      - violations: "List of pattern violations"
+      - adr_alignment: "Which ADRs apply"
+      - recommendations: "How to achieve compliance"
+
+# Success criteria
+success_metrics:
+  discovery_complete: "100% (all 5 layers searched)"
+  reuse_score_calculated: "High | Medium | Low"
+  library_validation_complete: "100% (all categories checked)"
+  pattern_compliance_score: "≥ 95%"
+  execution_time: "≤ 15 minutes"
+  parallel_execution: "All 3 agents run concurrently"
+
+# Agents (3 agents, executed in parallel)
+agents_used:
+  - axon-archaeologist     # Codebase discovery
+  - axon-library-sage      # Library validation
+  - axon-doc-oracle        # Pattern compliance
+
+# Related workflows
+related_workflows:
+  - "story-implementation (invokes this workflow, Tier 2)"
+  - "story-refactoring (invokes this workflow, Tier 2)"
+  - "identity-workflow (invokes this workflow, Tier 3)"
+  - "chat-workflow (invokes this workflow, Tier 3)"
+  - "api-workflow (invokes this workflow, Tier 3)"

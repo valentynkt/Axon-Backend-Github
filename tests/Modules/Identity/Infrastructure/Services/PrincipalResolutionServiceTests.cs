@@ -64,6 +64,7 @@ public class PrincipalResolutionServiceTests
             _walletWriteRepository,
             _ownershipRepository,
             _autoRevocationService,
+            TimeProvider.System,
             _logger);
 
         // Test data setup

@@ -153,6 +153,10 @@ public abstract class E2ETestBase : IAsyncDisposable
                         var testKeys = JwtTestTokenFactory.GetTestSigningKeys();
                         options.TokenValidationParameters.IssuerSigningKeys = testKeys;
 
+                        // CRITICAL: Ensure lifetime validation is enabled for expired token tests
+                        options.TokenValidationParameters.ValidateLifetime = true;
+                        options.TokenValidationParameters.ClockSkew = TimeSpan.FromSeconds(60);
+
                         // Disable JWKS refresh since we're providing keys directly
                         options.RefreshOnIssuerKeyNotFound = false;
                         options.RequireHttpsMetadata = false; // Allow HTTP for testing

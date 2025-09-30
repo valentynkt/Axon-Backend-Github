@@ -1,0 +1,672 @@
+# Axon Module Boundaries
+# Clear boundaries, responsibilities, and integration patterns for Identity and Chat modules
+# Version: 1.0
+# Last Updated: 2025-09-30
+
+# ═══════════════════════════════════════════════════════════
+#                    MODULE OVERVIEW
+# ═══════════════════════════════════════════════════════════
+
+architecture:
+  style: modular_monolith
+  pattern: clean_architecture
+  domain_approach: ddd
+  cqrs: enabled
+  event_driven: enabled
+
+  principles:
+    - "Modules are independent bounded contexts"
+    - "No direct dependencies between modules"
+    - "Communication via domain events only"
+    - "Each module owns its data (separate schemas)"
+    - "Shared BuildingBlocks for common patterns"
+
+  allowed_dependencies:
+    - "Commands/Queries within same module"
+    - "Domain events for cross-module communication"
+    - "Shared BuildingBlocks (Result, StrongId, Error)"
+    - "Infrastructure abstractions (IRepository, IDbContext)"
+
+  forbidden_dependencies:
+    - "Direct method calls between modules"
+    - "Shared database tables"
+    - "Cross-module queries"
+    - "Direct aggregate references"
+
+# ═══════════════════════════════════════════════════════════
+#                    IDENTITY MODULE
+# ═══════════════════════════════════════════════════════════
+
+identity_module:
+  name: Identity
+  code: identity
+  purpose: "User authentication, authorization, and wallet management"
+  schema: identity
+  foundational: true
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOMAIN MODEL
+  # ─────────────────────────────────────────────────────────
+
+  domain_model:
+    aggregates:
+      axon_principal:
+        file: "src/Modules/Identity/Domain/Aggregates/AxonPrincipal/AxonPrincipal.cs"
+        purpose: "Root entity for user identity and wallet ownership"
+        strong_id: AxonUserId
+        owned_entities:
+          - IdentityCredential
+          - WalletOwnership
+          - PrincipalChainDefault
+        business_rules:
+          - "Max 10 wallets per principal"
+          - "Max 1 credential per provider"
+          - "Wallet ownership requires cryptographic proof"
+          - "Auto-revoke old credentials on exchange"
+          - "Idempotent wallet linking"
+          - "Per-chain default wallet enforcement"
+        command_methods: 50+
+        domain_events:
+          - WalletLinkedEvent
+          - WalletVerifiedEvent
+          - WalletRevokedEvent
+          - CredentialExchangedEvent
+          - ChainDefaultChangedEvent
+          - PrincipalCreatedEvent
+
+      wallet:
+        file: "src/Modules/Identity/Domain/Aggregates/Wallet/Wallet.cs"
+        purpose: "Wallet verification aggregate"
+        strong_id: WalletId
+        owned_entities: []
+
+    entities:
+      identity_credential:
+        purpose: "OAuth/JWT credential (owned by AxonPrincipal)"
+        strong_id: CredentialId
+        ownership: owned_by_axon_principal
+        lifecycle: "Created, Exchanged, Revoked"
+
+      wallet_ownership:
+        purpose: "Wallet ownership proof (owned by AxonPrincipal)"
+        strong_id: WalletId
+        ownership: owned_by_axon_principal
+        lifecycle: "Pending, Verified, Revoked"
+        proof_types:
+          - DynamicAttested
+          - ManualVerified
+          - SiwsVerified
+
+      principal_chain_default:
+        purpose: "Per-chain default wallet (owned by AxonPrincipal)"
+        strong_id: ChainId
+        ownership: owned_by_axon_principal
+        constraint: "One default wallet per chain"
+
+    value_objects:
+      - Address (blockchain address)
+      - ChainId (chain identifier)
+      - ProviderType (auth provider)
+      - ProofType (cryptographic proof type)
+
+    enums:
+      - PrincipalType (Human | Service)
+      - RiskTier (Low | Medium | High)
+      - AccessMode (Signing | WatchOnly)
+      - OwnershipStatus (Pending | Verified | Revoked)
+      - VerificationSource (DynamicAttested | ManualVerified | SiwsVerified)
+
+  # ─────────────────────────────────────────────────────────
+  #                 APPLICATION LAYER
+  # ─────────────────────────────────────────────────────────
+
+  application_layer:
+    commands:
+      exchange_credential:
+        purpose: "Sync Dynamic JWT → Axon principal"
+        file: "src/Modules/Identity/Application/Commands/ExchangeCredential/"
+        input: Bearer token
+        output: ExchangeOutcome (principal ID + wallet count)
+        side_effects:
+          - Create principal if not exists
+          - Exchange credential
+          - Auto-revoke old credentials
+
+      generate_challenge:
+        purpose: "Create wallet signature challenge"
+        file: "src/Modules/Identity/Application/Commands/GenerateChallenge/"
+        input: Wallet address
+        output: Challenge string
+        side_effects: None (pure computation)
+
+      verify_wallet_signature:
+        purpose: "Verify Solana Ed25519 signatures"
+        file: "src/Modules/Identity/Application/Commands/VerifyWalletSignature/"
+        input: Wallet address, signature, message
+        output: Verification result
+        side_effects: Link wallet if verified
+
+      refresh_token:
+        purpose: "Token refresh flow"
+        file: "src/Modules/Identity/Application/Commands/RefreshToken/"
+        input: Refresh token
+        output: New JWT + refresh token
+        side_effects: Update credential tokens
+
+    queries:
+      get_my_principal:
+        purpose: "Current user snapshot with ETag"
+        file: "src/Modules/Identity/Application/Queries/GetMyPrincipal/"
+        input: AxonUserId (from JWT claims)
+        output: CurrentUserResult (principal + wallets + credentials)
+        caching: ETag support via xmin
+
+    services:
+      dynamic_authentication_provider:
+        purpose: "Dynamic.xyz JWT validation"
+        responsibilities:
+          - JWT signature verification
+          - JWKS key rotation
+          - Wallet claim normalization
+
+      wallet_authentication_provider:
+        purpose: "Wallet signature verification"
+        responsibilities:
+          - Ed25519 signature verification
+          - Challenge generation
+          - Message format validation
+
+      principal_resolution_service:
+        purpose: "Deterministic principal resolution"
+        responsibilities:
+          - Find or create principal from credential
+          - Identity resolution algorithm
+          - Conflict resolution
+
+      auto_revocation_service:
+        purpose: "Auto-revoke old credentials"
+        responsibilities:
+          - Revoke credentials older than N days
+          - Keep most recent credential
+          - Background service execution
+
+  # ─────────────────────────────────────────────────────────
+  #                 INFRASTRUCTURE LAYER
+  # ─────────────────────────────────────────────────────────
+
+  infrastructure_layer:
+    persistence:
+      db_context: IdentityWriteDbContext
+      schema: identity
+      tables:
+        - Principals
+        - IdentityCredentials (owned)
+        - WalletOwnerships (owned)
+        - PrincipalChainDefaults (owned)
+      migrations: src/Modules/Identity/Infrastructure/Persistence/Migrations/
+
+    repositories:
+      axon_principal_repository:
+        interface: IAxonPrincipalRepository
+        implementation: AxonPrincipalWriteRepository
+        methods:
+          - GetByIdAsync
+          - GetByWalletAsync
+          - GetByCredentialAsync
+          - AddAsync
+          - SaveChangesAsync
+
+    external_services:
+      dynamic_xyz:
+        purpose: "JWT validation via JWKS"
+        library: custom_integration
+        api_calls:
+          - ValidateJwtAsync
+          - GetJwksKeysAsync
+
+  # ─────────────────────────────────────────────────────────
+  #                 API LAYER
+  # ─────────────────────────────────────────────────────────
+
+  api_layer:
+    endpoints:
+      - "POST /api/v1/auth/exchange - Exchange Dynamic JWT"
+      - "POST /api/v1/auth/challenge - Generate wallet challenge"
+      - "POST /api/v1/auth/verify - Verify wallet signature"
+      - "POST /api/v1/auth/refresh - Refresh JWT token"
+      - "GET /api/v1/auth/me - Get current user"
+
+  # ─────────────────────────────────────────────────────────
+  #                 DEPENDENCIES
+  # ─────────────────────────────────────────────────────────
+
+  dependencies:
+    external:
+      - "Dynamic.xyz (JWT validation)"
+      - "NSec.Cryptography (Ed25519 verification)"
+
+    internal:
+      - "BuildingBlocks.Core (Result, StrongId, Error)"
+      - "BuildingBlocks.Infrastructure (EfWriteRepository, DbContextBase)"
+
+    modules:
+      depends_on: []
+      depended_by:
+        - Chat (for user authentication)
+        - Any future modules requiring auth
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOMAIN INVARIANTS
+  # ─────────────────────────────────────────────────────────
+
+  domain_invariants:
+    - "Principal must have at least one verified wallet or credential"
+    - "Wallet address is unique across all principals"
+    - "Credential (provider + providerUserId) is unique"
+    - "Max 10 wallets per principal"
+    - "Max 1 credential per provider per principal"
+    - "Chain default must reference verified wallet"
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOCUMENTATION
+  # ─────────────────────────────────────────────────────────
+
+  documentation:
+    index: "Docs/ENGINEERING/modules/identity/00-INDEX.md"
+    domain_model: "Docs/ENGINEERING/modules/identity/01-domain-model.md"
+    authentication: "Docs/ENGINEERING/modules/identity/03-authentication.md"
+    api_contracts: "Docs/ENGINEERING/modules/identity/05-api-contracts.md"
+    database_schema: "Docs/ENGINEERING/modules/identity/06-database-schema.md"
+
+# ═══════════════════════════════════════════════════════════
+#                    CHAT MODULE
+# ═══════════════════════════════════════════════════════════
+
+chat_module:
+  name: Chat
+  code: chat
+  purpose: "AI-powered conversations with Claude API + MCP integration"
+  schema: chat
+  foundational: false
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOMAIN MODEL
+  # ─────────────────────────────────────────────────────────
+
+  domain_model:
+    aggregates:
+      conversation:
+        file: "src/Modules/Chat/Domain/Aggregates/Conversation/Conversation.cs"
+        purpose: "Conversation root with owned messages"
+        strong_id: ConversationId
+        owned_entities:
+          - Message (EF Core OwnsMany)
+        business_rules:
+          - "Max 100 messages per conversation"
+          - "Message content: 1-32,000 characters"
+          - "Turn-taking: User → Assistant alternation"
+          - "No consecutive messages from same role"
+          - "Idempotent AI responses via AiResponseId"
+          - "Max 5 participants per conversation"
+          - "Creator is always a participant"
+        command_methods: 15+
+        domain_events:
+          - ConversationStartedEvent
+          - UserMessageAppendedEvent
+          - AssistantMessageAppendedEvent
+          - ConversationCompletedEvent
+          - ConversationDeletedEvent
+          - ParticipantAddedEvent
+
+    entities:
+      message:
+        purpose: "Message owned by Conversation"
+        strong_id: MessageId
+        ownership: owned_by_conversation
+        composite_key: "(ConversationId, MessageId)"
+        roles:
+          - User
+          - Assistant
+          - System
+        fields:
+          - Role (enum)
+          - Content (1-32K chars)
+          - TokenCount (optional)
+          - McpToolCalls (optional)
+          - CreatedAt
+
+      participant:
+        purpose: "Participant in conversation"
+        strong_id: ParticipantId
+        ownership: owned_by_conversation
+        fields:
+          - AxonUserId
+          - JoinedAt
+          - Role (Creator | Member)
+
+    value_objects:
+      - ConversationId
+      - MessageId
+      - ParticipantId
+      - AiResponseId (idempotency key)
+      - ConversationTitle
+
+    enums:
+      - MessageRole (User | Assistant | System)
+      - ConversationStatus (Active | Completed | Deleted)
+      - ParticipantRole (Creator | Member)
+
+  # ─────────────────────────────────────────────────────────
+  #                 APPLICATION LAYER
+  # ─────────────────────────────────────────────────────────
+
+  application_layer:
+    commands:
+      start_conversation:
+        purpose: "Create new conversation with first user message"
+        file: "src/Modules/Chat/Application/Commands/StartConversation/"
+        input: Title (optional), first message
+        output: ConversationId + MessageId
+        side_effects:
+          - Create conversation aggregate
+          - Add creator as participant
+          - Append user message
+
+      append_user_message:
+        purpose: "Add user message to existing conversation"
+        file: "src/Modules/Chat/Application/Commands/AppendUserMessage/"
+        input: ConversationId, message content
+        output: MessageId
+        side_effects:
+          - Enforce turn-taking
+          - Validate message limits
+          - Trigger AI processing
+
+      send_turn:
+        purpose: "Send user message + get AI response (atomic)"
+        file: "src/Modules/Chat/Application/Commands/SendTurn/"
+        input: ConversationId (or null for new), message
+        output: UserMessageId + AssistantMessageId
+        side_effects:
+          - Create conversation if null
+          - Append user message
+          - Process AI response
+          - Append assistant message
+
+    queries:
+      get_conversations:
+        purpose: "List user's conversations"
+        file: "src/Modules/Chat/Application/Queries/GetConversations/"
+        input: UserId, pagination, sorting
+        output: Paginated conversation list
+        sorting_options:
+          - UpdatedAt (desc)
+          - CreatedAt (desc)
+          - Title (asc)
+
+      get_conversation_messages:
+        purpose: "Get messages for conversation"
+        file: "src/Modules/Chat/Application/Queries/GetConversationMessages/"
+        input: ConversationId, pagination
+        output: Paginated message list
+        ordering: CreatedAt ascending
+
+    services:
+      ai_processing_service:
+        purpose: "Claude API integration"
+        responsibilities:
+          - Send messages to Claude API
+          - Stream responses
+          - Token counting
+          - Error handling
+
+      mcp_server_resolution_service:
+        purpose: "MCP server selection"
+        responsibilities:
+          - Resolve MCP servers from conversation context
+          - Tool call routing
+          - Capability discovery
+
+      message_processing_orchestrator:
+        purpose: "Coordinate AI message processing"
+        responsibilities:
+          - Build message history
+          - Call AI service
+          - Handle streaming
+          - Persist responses
+
+  # ─────────────────────────────────────────────────────────
+  #                 INFRASTRUCTURE LAYER
+  # ─────────────────────────────────────────────────────────
+
+  infrastructure_layer:
+    persistence:
+      db_context: ChatWriteDbContext
+      schema: chat
+      tables:
+        - Conversations
+        - Messages (owned)
+        - Participants (owned)
+      concurrency: "Optimistic locking via xmin"
+      migrations: src/Modules/Chat/Infrastructure/Persistence/Migrations/
+
+    repositories:
+      conversation_repository:
+        interface: IConversationRepository
+        implementation: ConversationWriteRepository
+        methods:
+          - GetByIdAsync
+          - GetByUserAsync
+          - AddAsync
+          - SaveChangesAsync
+
+    external_services:
+      anthropic_claude:
+        purpose: "Claude API client"
+        library: custom_integration
+        api_calls:
+          - CreateChatCompletionAsync
+          - StreamChatCompletionAsync
+
+  # ─────────────────────────────────────────────────────────
+  #                 API LAYER
+  # ─────────────────────────────────────────────────────────
+
+  api_layer:
+    endpoints:
+      - "POST /api/v1/chat/turns - Send message + get AI response"
+      - "POST /api/v1/conversations - Start new conversation"
+      - "GET /api/v1/conversations - List conversations"
+      - "GET /api/v1/conversations/{id} - Get conversation details"
+      - "GET /api/v1/conversations/{id}/messages - Get messages"
+      - "DELETE /api/v1/conversations/{id} - Delete conversation"
+
+  # ─────────────────────────────────────────────────────────
+  #                 DEPENDENCIES
+  # ─────────────────────────────────────────────────────────
+
+  dependencies:
+    external:
+      - "Anthropic Claude API (AI processing)"
+      - "MCP servers (optional extended capabilities)"
+
+    internal:
+      - "BuildingBlocks.Core (Result, StrongId, Error)"
+      - "BuildingBlocks.Infrastructure (EfWriteRepository, DbContextBase)"
+
+    modules:
+      depends_on:
+        - Identity (for AxonUserId authentication)
+      depended_by: []
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOMAIN INVARIANTS
+  # ─────────────────────────────────────────────────────────
+
+  domain_invariants:
+    - "Message content must be 1-32,000 characters"
+    - "Max 100 messages per conversation"
+    - "Turn-taking enforced (no consecutive same-role messages)"
+    - "Creator must be a participant"
+    - "Max 5 participants per conversation"
+    - "AiResponseId is unique per conversation"
+    - "Deleted conversations cannot be modified"
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOCUMENTATION
+  # ─────────────────────────────────────────────────────────
+
+  documentation:
+    index: "Docs/ENGINEERING/modules/chat/00-INDEX.md"
+    domain_model: "Docs/ENGINEERING/modules/chat/01-domain-model.md"
+    messaging_flows: "Docs/ENGINEERING/modules/chat/03-messaging-flows.md"
+    api_contracts: "Docs/ENGINEERING/modules/chat/05-api-contracts.md"
+    database_schema: "Docs/ENGINEERING/modules/chat/06-database-schema.md"
+
+# ═══════════════════════════════════════════════════════════
+#                    API LAYER (CROSS-CUTTING)
+# ═══════════════════════════════════════════════════════════
+
+api_layer:
+  name: API
+  code: api
+  purpose: "FastEndpoints-based REST API with JWT authentication"
+  pattern: fastendpoints
+
+  # ─────────────────────────────────────────────────────────
+  #                 RESPONSIBILITIES
+  # ─────────────────────────────────────────────────────────
+
+  responsibilities:
+    - "HTTP request/response handling"
+    - "Request validation (FluentValidation)"
+    - "JWT authentication (ASP.NET Core)"
+    - "Authorization policies"
+    - "OpenAPI/Swagger documentation"
+    - "Error response formatting"
+    - "Versioning (v1, v2, etc.)"
+
+  # ─────────────────────────────────────────────────────────
+  #                 PATTERNS
+  # ─────────────────────────────────────────────────────────
+
+  patterns:
+    endpoint_pattern:
+      base_class: "Endpoint<TRequest, TResponse>"
+      configuration: "Configure() method"
+      handler: "HandleAsync() method"
+      validation: "Validator<TRequest>"
+
+    authentication:
+      scheme: JWT Bearer
+      claims:
+        - sub (AxonUserId)
+        - email
+        - wallet_address
+      anonymous_endpoints:
+        - "/api/v1/auth/exchange"
+        - "/api/v1/auth/challenge"
+
+    error_handling:
+      pattern: "Result<T, Error> → HTTP status"
+      error_codes: "CATEGORY.SPECIFIC_ERROR"
+      problem_details: RFC 7807
+
+  # ─────────────────────────────────────────────────────────
+  #                 VERSIONING
+  # ─────────────────────────────────────────────────────────
+
+  versioning:
+    strategy: url_based
+    current_version: v1
+    format: "/api/v{version}/{resource}"
+
+  # ─────────────────────────────────────────────────────────
+  #                 REST CONVENTIONS
+  # ─────────────────────────────────────────────────────────
+
+  rest_conventions:
+    - "POST - Create resource"
+    - "GET - Retrieve resource(s)"
+    - "PUT - Replace resource"
+    - "PATCH - Update resource"
+    - "DELETE - Delete resource"
+
+  status_codes:
+    success:
+      - "200 OK - GET success"
+      - "201 Created - POST success"
+      - "204 No Content - DELETE success"
+    client_errors:
+      - "400 Bad Request - Validation error"
+      - "401 Unauthorized - Auth required"
+      - "403 Forbidden - Insufficient permissions"
+      - "404 Not Found - Resource not found"
+      - "409 Conflict - Duplicate resource"
+      - "422 Unprocessable Entity - Business rule violation"
+    server_errors:
+      - "500 Internal Server Error - Unexpected error"
+      - "502 Bad Gateway - External service error"
+
+  # ─────────────────────────────────────────────────────────
+  #                 DOCUMENTATION
+  # ─────────────────────────────────────────────────────────
+
+  documentation:
+    index: "Docs/ENGINEERING/api/00-INDEX.md"
+    rest_conventions: "Docs/ENGINEERING/api/rest-conventions.md"
+    authentication: "Docs/ENGINEERING/api/authentication.md"
+    error_handling: "Docs/ENGINEERING/api/error-handling.md"
+
+# ═══════════════════════════════════════════════════════════
+#                    MODULE INTEGRATION PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+integration_patterns:
+  domain_events:
+    purpose: "Decoupled cross-module communication"
+    pattern: "Publish/Subscribe via MediatR notifications"
+    example:
+      publisher: "Identity module raises WalletLinkedEvent"
+      subscriber: "Chat module handles event to initialize user preferences"
+
+  anti_corruption_layer:
+    purpose: "Protect module boundaries"
+    pattern: "DTOs + Mappers for cross-module data"
+    rule: "Never pass domain entities between modules"
+
+  shared_kernel:
+    purpose: "Common patterns and abstractions"
+    location: "BuildingBlocks/"
+    contents:
+      - Result<T, Error>
+      - StrongId<T>
+      - Error factories
+      - AggregateRoot base class
+      - Entity base class
+      - IRepository abstractions
+
+# ═══════════════════════════════════════════════════════════
+#                    METADATA
+# ═══════════════════════════════════════════════════════════
+
+metadata:
+  version: "1.0"
+  last_updated: "2025-09-30"
+  total_modules: 2
+  foundational_modules: 1
+  module_list:
+    - Identity (foundational)
+    - Chat (dependent on Identity)
+
+  usage_notes:
+    - "Load this file when working on module-specific features"
+    - "Reference module boundaries in task instructions"
+    - "Ensure module dependencies are respected"
+    - "Use domain events for cross-module communication"
+
+  references:
+    - "Docs/ENGINEERING/guides/architecture/system-overview.md"
+    - "Docs/ENGINEERING/modules/identity/00-INDEX.md"
+    - "Docs/ENGINEERING/modules/chat/00-INDEX.md"
+    - "Docs/ENGINEERING/guides/patterns/domain-modeling.md"

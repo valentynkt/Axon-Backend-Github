@@ -84,12 +84,20 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
         }
         else if (entry.State == EntityState.Unchanged || entry.State == EntityState.Modified)
         {
-            // For tracked entities, only mark as Modified if currently Unchanged
-            // This preserves the change tracking from domain modifications
-            if (entry.State == EntityState.Unchanged)
+            // CRITICAL: For tracked aggregates, ensure UpdatedAt is set to trigger UPDATE
+            // This is essential for aggregates with owned entities in separate tables
+            if (aggregate is BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid> auditable)
             {
-                entry.State = EntityState.Modified;
+                // Set UpdatedAt to now - this ensures an UPDATE is generated even if only children changed
+                auditable.SetUpdatedAtInternal(TimeProvider.System.GetUtcNow());
+
+                // CRITICAL: Explicitly mark UpdatedAt property as modified in EF Core's change tracker
+                // This guarantees EF Core will generate an UPDATE statement for this property
+                entry.Property(nameof(BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid>.UpdatedAt)).IsModified = true;
             }
+
+            // Mark aggregate as Modified to generate UPDATE statement
+            entry.State = EntityState.Modified;
 
             // CRITICAL: Ensure Version property is not modified and preserves its original value
             // This ensures EF Core includes the concurrency check in the WHERE clause

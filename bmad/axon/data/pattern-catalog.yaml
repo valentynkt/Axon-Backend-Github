@@ -1,0 +1,735 @@
+# Axon Pattern Catalog
+# Comprehensive reference for architectural and code patterns used in Axon Backend
+# Version: 1.0
+# Last Updated: 2025-09-30
+
+# ═══════════════════════════════════════════════════════════
+#                    CORE PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+core_patterns:
+  result_pattern:
+    name: "Result<T, Error>"
+    category: functional_core
+    purpose: "Type-safe error handling without exceptions"
+    library: CSharpFunctionalExtensions
+    when_to_use:
+      - "All domain operations that can fail"
+      - "Command/Query handlers"
+      - "Repository operations"
+      - "External service calls"
+
+    basic_usage: |
+      // Success
+      Result.Success<User, Error>(user)
+
+      // Failure
+      Result.Failure<User, Error>(Error.NotFound("Not found", "USER.NOT_FOUND"))
+
+    chaining: |
+      return ValidateInput(request)
+          .Bind(validated => CreateEntity(validated))
+          .Bind(entity => _repo.SaveAsync(entity))
+          .Map(entity => entity.Id);
+
+    pattern_matching: |
+      return await result.Match(
+          onSuccess: value => SendOkAsync(value, ct),
+          onFailure: error => SendResultAsync(Results.Problem(error.ToProblem())));
+
+    anti_patterns:
+      - "Don't throw exceptions in domain logic"
+      - "Don't use nullable return types instead of Result"
+      - "Don't ignore error cases"
+
+    related_patterns: [error_factories, command_pattern, query_pattern]
+
+  strong_id_pattern:
+    name: "StrongId<T>"
+    category: domain_modeling
+    purpose: "Type-safe entity identifiers preventing ID mix-ups"
+    library: StronglyTypedId
+    when_to_use:
+      - "All aggregate root identifiers"
+      - "Entity identifiers"
+      - "Value object identifiers"
+
+    definition: |
+      [StronglyTypedId(Template.Guid)]
+      public readonly partial struct AxonUserId { }
+
+      [StronglyTypedId(Template.Guid)]
+      public readonly partial struct WalletId { }
+
+    usage: |
+      // Create new
+      AxonUserId.New()
+
+      // From existing GUID
+      AxonUserId.From(Guid value)
+
+      // Get underlying value
+      userId.Value
+
+    benefits:
+      - "Compile-time type safety"
+      - "Prevents passing wrong ID to methods"
+      - "Self-documenting code"
+      - "IDE autocomplete support"
+
+    example_bug_prevention: |
+      void Process(AxonUserId userId) { }
+      void Process(WalletId walletId) { }
+
+      // This won't compile - prevents bugs!
+      Process(walletId); // ❌ Compile error
+
+    related_patterns: [aggregate_root, value_object]
+
+  error_factories:
+    name: "Error Factory Pattern"
+    category: error_handling
+    purpose: "Consistent error creation with HTTP status mapping"
+    library: custom_buildingblock
+    when_to_use:
+      - "Creating validation errors"
+      - "Business rule violations"
+      - "External service failures"
+      - "Not found scenarios"
+
+    client_errors: |
+      // 400 Bad Request
+      Error.Validation("Email required", "EMAIL.REQUIRED")
+
+      // 404 Not Found
+      Error.NotFound("User not found", "USER.NOT_FOUND")
+
+      // 409 Conflict
+      Error.Conflict("Email exists", "EMAIL.DUPLICATE")
+
+      // 422 Unprocessable Entity
+      Error.BusinessRule("Max wallets reached", "WALLET.MAX_LIMIT")
+
+      // 401 Unauthorized
+      Error.Unauthorized("Auth required", "AUTH.REQUIRED")
+
+    server_errors: |
+      // 500 Internal Server Error
+      Error.Internal("Unexpected error", "INTERNAL.ERROR", exception)
+
+      // 502 Bad Gateway
+      Error.External("Service unavailable", "EXTERNAL.SERVICE_DOWN", exception)
+
+      // 500 with DB context
+      Error.Persistence("DB connection failed", "DB.CONNECTION_ERROR", exception)
+
+    http_mapping:
+      validation: 400
+      not_found: 404
+      conflict: 409
+      business_rule: 422
+      unauthorized: 401
+      internal: 500
+      external: 502
+      persistence: 500
+
+    naming_convention: "CATEGORY.SPECIFIC_ERROR"
+
+    related_patterns: [result_pattern]
+
+# ═══════════════════════════════════════════════════════════
+#                    CQRS PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+cqrs_patterns:
+  command_pattern:
+    name: "Command Pattern"
+    category: cqrs
+    purpose: "Write operations that modify state"
+    library: MediatR
+    when_to_use:
+      - "Creating entities"
+      - "Updating state"
+      - "Deleting resources"
+      - "Any state-changing operation"
+
+    definition: |
+      public sealed record ExchangeCredentialCommand(string BearerToken)
+          : ICommand<ExchangeOutcome>;
+
+    handler: |
+      public sealed class ExchangeCredentialHandler
+          : IRequestHandler<ExchangeCredentialCommand, Result<ExchangeOutcome, Error>>
+      {
+          private readonly IAxonPrincipalOrchestrator _orchestrator;
+
+          public async Task<Result<ExchangeOutcome, Error>> Handle(
+              ExchangeCredentialCommand cmd,
+              CancellationToken ct)
+          {
+              return await _orchestrator.ExchangeAsync(cmd.BearerToken, ct);
+          }
+      }
+
+    validation: |
+      public sealed class ExchangeCredentialCommandValidator
+          : AbstractValidator<ExchangeCredentialCommand>
+      {
+          public ExchangeCredentialCommandValidator()
+          {
+              RuleFor(x => x.BearerToken)
+                  .NotEmpty()
+                  .WithMessage("Bearer token is required");
+          }
+      }
+
+    best_practices:
+      - "Commands are records (immutable)"
+      - "Commands return Result<T, Error>"
+      - "Validation happens before handler"
+      - "Handlers should be thin - delegate to orchestrators/domain"
+      - "Use descriptive command names (verb + noun)"
+
+    related_patterns: [query_pattern, validator_pattern, result_pattern]
+
+  query_pattern:
+    name: "Query Pattern"
+    category: cqrs
+    purpose: "Read operations that don't modify state"
+    library: MediatR
+    when_to_use:
+      - "Fetching data"
+      - "Read-only operations"
+      - "Listing resources"
+      - "Any non-state-changing operation"
+
+    definition: |
+      public sealed record GetMyPrincipalQuery(AxonUserId Id)
+          : IQuery<CurrentUserResult>;
+
+    handler: |
+      public sealed class GetMyPrincipalHandler
+          : IRequestHandler<GetMyPrincipalQuery, Result<CurrentUserResult, Error>>
+      {
+          private readonly IAxonPrincipalRepository _repo;
+
+          public async Task<Result<CurrentUserResult, Error>> Handle(
+              GetMyPrincipalQuery query,
+              CancellationToken ct)
+          {
+              var principal = await _repo.GetByIdAsync(query.Id, ct);
+
+              return principal is null
+                  ? Error.NotFound("Principal not found", "PRINCIPAL.NOT_FOUND")
+                  : Result.Success<CurrentUserResult, Error>(MapToDto(principal));
+          }
+      }
+
+    best_practices:
+      - "Queries are records (immutable)"
+      - "Queries return Result<T, Error>"
+      - "Use DTOs for responses (never domain entities)"
+      - "Queries can bypass domain layer for reads"
+      - "Use descriptive query names (Get/List/Find + noun)"
+
+    related_patterns: [command_pattern, result_pattern]
+
+# ═══════════════════════════════════════════════════════════
+#                    DOMAIN PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+domain_patterns:
+  aggregate_root:
+    name: "Aggregate Root"
+    category: ddd
+    purpose: "Transactional consistency boundary with enforced invariants"
+    when_to_use:
+      - "Top-level domain entities"
+      - "Entities with children/collections"
+      - "Entities with business rules"
+
+    template: |
+      public sealed class AxonPrincipal : AggregateRoot<AxonUserId>
+      {
+          // 1. Private state (encapsulation)
+          private readonly List<WalletOwnership> _wallets = [];
+
+          // 2. Read-only public access
+          public IReadOnlyCollection<WalletOwnership> Wallets => _wallets.AsReadOnly();
+
+          // 3. Properties (never public setters!)
+          public PrincipalType Type { get; private set; }
+
+          // 4. Factory method (not public constructor)
+          public static AxonPrincipal CreateHuman()
+              => new(AxonUserId.New(), PrincipalType.Human);
+
+          // 5. Command methods (enforce invariants)
+          public Result<Unit, Error> LinkWallet(WalletOwnership ownership)
+          {
+              // Check idempotency
+              if (_wallets.Any(w => w.WalletId == ownership.WalletId))
+                  return Result.Success<Unit, Error>(Unit.Value);
+
+              // Enforce invariant
+              if (_wallets.Count >= 10)
+                  return Error.BusinessRule("Max 10 wallets", "WALLET.MAX_LIMIT");
+
+              // Apply change
+              _wallets.Add(ownership);
+
+              // Raise domain event
+              RaiseDomainEvent(new WalletLinkedEvent(Id, ownership.WalletId));
+
+              return Result.Success<Unit, Error>(Unit.Value);
+          }
+
+          // 6. Private constructor (use factory)
+          private AxonPrincipal(AxonUserId id, PrincipalType type)
+              : base(id)
+          {
+              Type = type;
+          }
+      }
+
+    rules:
+      - "All state mutations through command methods"
+      - "Never expose collections directly (use IReadOnlyCollection)"
+      - "Enforce invariants in command methods"
+      - "Raise domain events for important changes"
+      - "No public setters"
+      - "Use factory methods instead of public constructors"
+
+    related_patterns: [entity_pattern, value_object, domain_events]
+
+  entity_pattern:
+    name: "Entity"
+    category: ddd
+    purpose: "Objects with identity (not just value equality)"
+    when_to_use:
+      - "Objects that have lifecycle"
+      - "Objects that need to be tracked"
+      - "Child objects of aggregates"
+
+    template: |
+      public sealed class WalletOwnership : Entity<WalletId>
+      {
+          public AxonUserId OwnerId { get; private set; }
+          public string Address { get; private set; }
+          public DateTime LinkedAt { get; private set; }
+
+          public static WalletOwnership Create(
+              WalletId id,
+              AxonUserId ownerId,
+              string address)
+          {
+              return new WalletOwnership
+              {
+                  Id = id,
+                  OwnerId = ownerId,
+                  Address = address,
+                  LinkedAt = DateTime.UtcNow
+              };
+          }
+
+          private WalletOwnership() { } // EF Core
+      }
+
+    rules:
+      - "Has identity (ID property)"
+      - "Private setters"
+      - "Factory methods for creation"
+      - "EF Core requires private parameterless constructor"
+
+    related_patterns: [aggregate_root, value_object]
+
+  value_object:
+    name: "Value Object"
+    category: ddd
+    purpose: "Immutable objects compared by value, not identity"
+    library: Vogen
+    when_to_use:
+      - "Email addresses"
+      - "Money/currency"
+      - "Date ranges"
+      - "Any concept defined by attributes, not identity"
+
+    template: |
+      [ValueObject(typeof(string))]
+      public readonly partial struct EmailAddress
+      {
+          private static Validation Validate(string value)
+          {
+              if (string.IsNullOrWhiteSpace(value))
+                  return Validation.Invalid("Email cannot be empty");
+
+              if (!value.Contains('@'))
+                  return Validation.Invalid("Invalid email format");
+
+              return Validation.Ok;
+          }
+      }
+
+    characteristics:
+      - "Immutable"
+      - "Validated on creation"
+      - "Equality by value"
+      - "No identity"
+
+    related_patterns: [entity_pattern, strong_id_pattern]
+
+  domain_events:
+    name: "Domain Events"
+    category: ddd
+    purpose: "Decoupled communication between aggregates"
+    when_to_use:
+      - "Cross-module communication"
+      - "Side effects after state changes"
+      - "Audit logging"
+      - "Notifications"
+
+    definition: |
+      public sealed record WalletLinkedEvent(
+          AxonUserId PrincipalId,
+          WalletId WalletId) : IDomainEvent;
+
+    raising_event: |
+      public Result<Unit, Error> LinkWallet(WalletOwnership ownership)
+      {
+          _wallets.Add(ownership);
+
+          // Raise event
+          RaiseDomainEvent(new WalletLinkedEvent(Id, ownership.WalletId));
+
+          return Result.Success<Unit, Error>(Unit.Value);
+      }
+
+    handling_event: |
+      public sealed class WalletLinkedEventHandler
+          : IDomainEventHandler<WalletLinkedEvent>
+      {
+          public async Task Handle(WalletLinkedEvent evt, CancellationToken ct)
+          {
+              // Side effect logic (audit, notifications, etc.)
+          }
+      }
+
+    best_practices:
+      - "Events are past tense (WalletLinked, not LinkWallet)"
+      - "Events are immutable records"
+      - "Handlers should be idempotent"
+      - "Don't pass aggregates in events (use IDs)"
+
+    related_patterns: [aggregate_root]
+
+# ═══════════════════════════════════════════════════════════
+#                    API PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+api_patterns:
+  fastendpoints_pattern:
+    name: "FastEndpoints Pattern"
+    category: api
+    purpose: "Minimal API endpoints with built-in validation"
+    library: FastEndpoints
+    when_to_use: "All HTTP endpoints"
+
+    template: |
+      public sealed class ExchangeCredentialEndpoint
+          : Endpoint<ExchangeCredentialRequest, ExchangeOutcome>
+      {
+          private readonly ISender _sender;
+
+          public ExchangeCredentialEndpoint(ISender sender)
+              => _sender = sender;
+
+          public override void Configure()
+          {
+              Post("/api/v1/auth/exchange");
+              AllowAnonymous();
+          }
+
+          public override async Task HandleAsync(
+              ExchangeCredentialRequest req,
+              CancellationToken ct)
+          {
+              var command = new ExchangeCredentialCommand(req.BearerToken);
+              var result = await _sender.Send(command, ct);
+
+              await result.Match(
+                  onSuccess: value => SendOkAsync(value, ct),
+                  onFailure: error => SendResultAsync(Results.Problem(error.ToProblem())));
+          }
+      }
+
+    request_dto: |
+      public sealed record ExchangeCredentialRequest(
+          [property: JsonPropertyName("bearer_token")] string BearerToken);
+
+    validation: |
+      public sealed class ExchangeCredentialRequestValidator
+          : Validator<ExchangeCredentialRequest>
+      {
+          public ExchangeCredentialRequestValidator()
+          {
+              RuleFor(x => x.BearerToken)
+                  .NotEmpty()
+                  .WithMessage("Bearer token is required");
+          }
+      }
+
+    best_practices:
+      - "One endpoint per file"
+      - "Requests/responses are records"
+      - "Validation in separate class"
+      - "Use MediatR for business logic"
+      - "Handle Result pattern in endpoint"
+
+    related_patterns: [command_pattern, query_pattern, validator_pattern]
+
+  validator_pattern:
+    name: "Validator Pattern"
+    category: validation
+    purpose: "Request and command validation"
+    library: FluentValidation
+    when_to_use:
+      - "HTTP request validation"
+      - "Command validation"
+      - "Input sanitization"
+
+    template: |
+      public sealed class CreateUserRequestValidator
+          : Validator<CreateUserRequest>
+      {
+          public CreateUserRequestValidator()
+          {
+              RuleFor(x => x.Email)
+                  .NotEmpty()
+                  .EmailAddress()
+                  .WithMessage("Valid email required");
+
+              RuleFor(x => x.WalletAddress)
+                  .NotEmpty()
+                  .Length(32, 44)
+                  .WithMessage("Valid Solana address required");
+
+              RuleFor(x => x.Type)
+                  .IsInEnum()
+                  .WithMessage("Invalid principal type");
+          }
+      }
+
+    common_rules:
+      - "NotEmpty() - Required fields"
+      - "EmailAddress() - Email format"
+      - "Length(min, max) - String length"
+      - "IsInEnum() - Enum validation"
+      - "Must(predicate) - Custom validation"
+      - "GreaterThan(value) - Numeric comparison"
+
+    related_patterns: [command_pattern, fastendpoints_pattern]
+
+# ═══════════════════════════════════════════════════════════
+#                    INFRASTRUCTURE PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+infrastructure_patterns:
+  repository_pattern:
+    name: "Repository Pattern"
+    category: persistence
+    purpose: "Abstract persistence logic from domain"
+    when_to_use: "All aggregate root persistence"
+
+    interface: |
+      public interface IAxonPrincipalRepository
+      {
+          Task<AxonPrincipal?> GetByIdAsync(AxonUserId id, CancellationToken ct);
+          Task<AxonPrincipal?> GetByWalletAsync(string address, CancellationToken ct);
+          Task AddAsync(AxonPrincipal principal, CancellationToken ct);
+          Task SaveChangesAsync(CancellationToken ct);
+      }
+
+    implementation: |
+      public sealed class AxonPrincipalRepository
+          : EfWriteRepository<AxonPrincipal, AxonUserId>, IAxonPrincipalRepository
+      {
+          public AxonPrincipalRepository(IdentityWriteDbContext context)
+              : base(context) { }
+
+          public async Task<AxonPrincipal?> GetByWalletAsync(
+              string address,
+              CancellationToken ct)
+          {
+              return await DbSet
+                  .Include(p => p.Wallets)
+                  .FirstOrDefaultAsync(
+                      p => p.Wallets.Any(w => w.Address == address),
+                      ct);
+          }
+      }
+
+    rules:
+      - "One repository per aggregate root"
+      - "Return domain entities, not DTOs"
+      - "Include related entities when needed"
+      - "Use CancellationToken for async operations"
+
+    related_patterns: [aggregate_root, unit_of_work]
+
+  unit_of_work:
+    name: "Unit of Work (DbContext)"
+    category: persistence
+    purpose: "Transaction boundary for database operations"
+    library: EF Core
+    when_to_use: "Automatic via EF Core DbContext"
+
+    usage: |
+      // Implicit transaction
+      await _repo.AddAsync(principal, ct);
+      await _repo.SaveChangesAsync(ct); // Commits transaction
+
+    explicit_transaction: |
+      using var transaction = await _context.Database.BeginTransactionAsync(ct);
+      try
+      {
+          await _repo.AddAsync(principal, ct);
+          await _repo2.AddAsync(other, ct);
+          await _context.SaveChangesAsync(ct);
+          await transaction.CommitAsync(ct);
+      }
+      catch
+      {
+          await transaction.RollbackAsync(ct);
+          throw;
+      }
+
+    related_patterns: [repository_pattern]
+
+# ═══════════════════════════════════════════════════════════
+#                    TESTING PATTERNS
+# ═══════════════════════════════════════════════════════════
+
+testing_patterns:
+  unit_test_pattern:
+    name: "Unit Test Pattern"
+    category: testing
+    purpose: "Test single units of logic in isolation"
+    library: NUnit + Shouldly + NSubstitute
+    when_to_use:
+      - "Domain logic testing"
+      - "Handler testing"
+      - "Validation testing"
+
+    template: |
+      [TestFixture]
+      public sealed class AxonPrincipalTests
+      {
+          [Test]
+          public void LinkWallet_WhenMaxWalletsReached_ShouldReturnError()
+          {
+              // Arrange
+              var principal = AxonPrincipal.CreateHuman();
+              for (int i = 0; i < 10; i++)
+                  principal.LinkWallet(CreateOwnership());
+
+              // Act
+              var result = principal.LinkWallet(CreateOwnership());
+
+              // Assert
+              result.IsFailure.ShouldBeTrue();
+              result.Error.Code.ShouldBe("WALLET.MAX_LIMIT");
+          }
+      }
+
+    naming_convention: "MethodName_Scenario_ExpectedResult"
+
+    assertion_style: |
+      // Shouldly fluent assertions
+      result.IsSuccess.ShouldBeTrue();
+      result.Value.ShouldBe(expected);
+      user.Email.ShouldBe("test@example.com");
+      list.ShouldContain(item);
+
+    related_patterns: [integration_test_pattern]
+
+  integration_test_pattern:
+    name: "Integration Test Pattern"
+    category: testing
+    purpose: "Test full stack with real database"
+    library: NUnit + Testcontainers
+    when_to_use:
+      - "Repository testing"
+      - "Database schema validation"
+      - "End-to-end flows"
+
+    template: |
+      [TestFixture]
+      public sealed class AxonPrincipalRepositoryTests : IntegrationTestBase
+      {
+          [Test]
+          public async Task GetByWalletAsync_WhenExists_ShouldReturnPrincipal()
+          {
+              // Arrange
+              var principal = await CreatePrincipalWithWallet("addr123");
+
+              // Act
+              var result = await _repo.GetByWalletAsync("addr123", default);
+
+              // Assert
+              result.ShouldNotBeNull();
+              result.Id.ShouldBe(principal.Id);
+          }
+      }
+
+    base_class: |
+      public abstract class IntegrationTestBase : IDisposable
+      {
+          protected PostgreSqlContainer _postgres;
+          protected DbContext _context;
+
+          [OneTimeSetUp]
+          public async Task OneTimeSetUp()
+          {
+              _postgres = new PostgreSqlBuilder().Build();
+              await _postgres.StartAsync();
+          }
+
+          [OneTimeTearDown]
+          public async Task OneTimeTearDown()
+          {
+              await _postgres.DisposeAsync();
+          }
+      }
+
+    related_patterns: [unit_test_pattern, repository_pattern]
+
+# ═══════════════════════════════════════════════════════════
+#                    METADATA
+# ═══════════════════════════════════════════════════════════
+
+metadata:
+  version: "1.0"
+  last_updated: "2025-09-30"
+  total_patterns: 19
+  categories:
+    - functional_core
+    - domain_modeling
+    - error_handling
+    - cqrs
+    - ddd
+    - api
+    - validation
+    - persistence
+    - testing
+
+  usage_notes:
+    - "Load this file when implementing new features"
+    - "Reference patterns by name in task instructions"
+    - "Combine patterns appropriately (e.g., Command + Result + Validator)"
+    - "All patterns are mandatory for consistency"
+
+  references:
+    - "Docs/ENGINEERING/guides/patterns/00-QUICK-REFERENCE.md"
+    - "Docs/ENGINEERING/guides/patterns/cqrs.md"
+    - "Docs/ENGINEERING/guides/patterns/domain-modeling.md"
+    - "Docs/ENGINEERING/guides/codebase/coding-standards.md"

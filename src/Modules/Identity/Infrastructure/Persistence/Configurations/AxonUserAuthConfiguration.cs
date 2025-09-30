@@ -11,8 +11,8 @@ public class AxonUserAuthConfiguration : IEntityTypeConfiguration<AxonUserAuth>
 {
     public void Configure(EntityTypeBuilder<AxonUserAuth> builder)
     {
-        // Table mapping
-        builder.ToTable("AxonUserAuth", "identity");
+        // Table mapping is configured in IdentityContext.OnModelCreating
+        // to match ASP.NET Identity conventions (AspNetUsers table)
 
         // Primary key
         builder.HasKey(x => x.Id);

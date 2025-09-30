@@ -17,7 +17,7 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Updates the risk tier with no-op guard.
     /// </summary>
-    public Result<Unit, Error> UpdateRiskTier(RiskTier riskTier)
+    public Result<Unit, Error> UpdateRiskTier(RiskTier riskTier, TimeProvider timeProvider)
     {
         // No-op guard: if same value, don't update
         if (RiskTier == riskTier)
@@ -29,6 +29,9 @@ public sealed partial class AxonPrincipal
 
         var oldTier = RiskTier;
         RiskTier = riskTier;
+
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
 
         // Raise domain event only when actual change occurs
         RaiseDomainEvent(new PrincipalChangedEvent(
@@ -46,7 +49,8 @@ public sealed partial class AxonPrincipal
     /// </summary>
     public Result<Unit, Error> LinkWalletOwnership(
         WalletOwnership ownership,
-        Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> checkExistingOwnershipFunc)
+        Func<WalletId, AccessMode, OwnershipStatus, Result<bool, Error>> checkExistingOwnershipFunc,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(ownership);
         ArgumentNullException.ThrowIfNull(checkExistingOwnershipFunc);
@@ -74,6 +78,9 @@ public sealed partial class AxonPrincipal
                 var updateResult = anyExistingOwnership.UpdateStatus(ownership.Status);
                 if (updateResult.IsFailure)
                     return Result.Failure<Unit, Error>(updateResult.Error);
+
+                // Mark aggregate as updated to trigger concurrency token (xmin) update
+                MarkUpdated(timeProvider);
 
                 // Raise domain event for status update
                 RaiseDomainEvent(new OwnershipChangedEvent(
@@ -132,6 +139,9 @@ public sealed partial class AxonPrincipal
 
         _walletOwnerships.Add(ownership);
 
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
+
         // Raise domain event
         RaiseDomainEvent(new OwnershipChangedEvent(
             Id,
@@ -162,7 +172,8 @@ public sealed partial class AxonPrincipal
     /// </summary>
     public Result<Unit, Error> AddCredential(
         IdentityCredential credential,
-        Func<string, string, string, Result<bool, Error>> checkCredentialUniquenessFunc)
+        Func<string, string, string, Result<bool, Error>> checkCredentialUniquenessFunc,
+        TimeProvider timeProvider)
     {
         // Check if we already have this credential (idempotency)
         var existingCredential = _credentials.FirstOrDefault(c =>
@@ -174,6 +185,8 @@ public sealed partial class AxonPrincipal
         {
             // Update last seen if newer
             existingCredential.UpdateLastSeen(credential.LastSeenAt);
+            // Mark as updated even for idempotent update (last seen changed)
+            MarkUpdated(timeProvider);
             return Result.Success<Unit, Error>(Unit.Value);
         }
 
@@ -192,6 +205,9 @@ public sealed partial class AxonPrincipal
 
         _credentials.Add(credential);
 
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
+
         // Raise domain event
         RaiseDomainEvent(new CredentialChangedEvent(
             Id,
@@ -209,6 +225,7 @@ public sealed partial class AxonPrincipal
     /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
     /// <param name="walletChainMappings">Collection of tuples containing (chainId, walletId) pairs to set as defaults</param>
+    /// <param name="timeProvider">Time provider for timestamps.</param>
     /// <returns>Number of actual defaults applied (excluding no-ops and failures)</returns>
     /// <remarks>
     /// This method performs optimizations that individual calls cannot:
@@ -217,7 +234,7 @@ public sealed partial class AxonPrincipal
     /// - Reduced IsDeleted checks and LINQ operations
     /// Only processes chains that don't already have the target wallet as default.
     /// </remarks>
-    public Result<int, Error> ApplyChainDefaultsBatch(IEnumerable<(string chainId, WalletId walletId)> walletChainMappings)
+    public Result<int, Error> ApplyChainDefaultsBatch(IEnumerable<(string chainId, WalletId walletId)> walletChainMappings, TimeProvider timeProvider)
     {
         var mappings = walletChainMappings.ToList();
         if (mappings.Count == 0)
@@ -278,6 +295,12 @@ public sealed partial class AxonPrincipal
             domainEvents.Add((chainId, oldDefault, walletId));
         }
 
+        // Mark aggregate as updated if any defaults were applied
+        if (defaultsApplied > 0)
+        {
+            MarkUpdated(timeProvider);
+        }
+
         // Raise domain events for all changes
         foreach (var (chainId, oldDefault, newDefault) in domainEvents)
         {
@@ -296,12 +319,12 @@ public sealed partial class AxonPrincipal
     /// Applies a chain default with verified-first enforcement.
     /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
-    public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId)
+    public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
         // Use the optimized batch method for consistent logic and reduced complexity
-        var batchResult = ApplyChainDefaultsBatch(new[] { (chainId, walletId) });
+        var batchResult = ApplyChainDefaultsBatch(new[] { (chainId, walletId) }, timeProvider);
 
         if (batchResult.IsFailure)
             return Result.Failure<Unit, Error>(batchResult.Error);
@@ -315,8 +338,9 @@ public sealed partial class AxonPrincipal
     /// </summary>
     /// <param name="chainId">The chain ID in compound format.</param>
     /// <param name="walletId">The wallet ID to set as default.</param>
+    /// <param name="timeProvider">Time provider for timestamps.</param>
     /// <returns>Result indicating success or failure.</returns>
-    public Result<Unit, Error> SetChainDefault(string chainId, WalletId walletId)
+    public Result<Unit, Error> SetChainDefault(string chainId, WalletId walletId, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
@@ -355,6 +379,9 @@ public sealed partial class AxonPrincipal
             _principalChainDefaults.Add(newDefault);
         }
 
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
+
         // Raise domain event
         RaiseDomainEvent(new PrincipalChangedEvent(
             Id,
@@ -372,8 +399,9 @@ public sealed partial class AxonPrincipal
     /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
     /// </summary>
     /// <param name="chainId">The chain ID in compound format.</param>
+    /// <param name="timeProvider">Time provider for timestamps.</param>
     /// <returns>Result indicating success or failure.</returns>
-    public Result<Unit, Error> ClearChainDefault(string chainId)
+    public Result<Unit, Error> ClearChainDefault(string chainId, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(chainId);
 
@@ -388,6 +416,9 @@ public sealed partial class AxonPrincipal
 
         // Soft delete the default
         defaultEntry.SoftDelete();
+
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
 
         // Raise domain event
         RaiseDomainEvent(new PrincipalChangedEvent(
@@ -405,8 +436,9 @@ public sealed partial class AxonPrincipal
     /// Used when wallet ownership is revoked.
     /// </summary>
     /// <param name="walletId">The wallet ID to clear from defaults.</param>
+    /// <param name="timeProvider">Time provider for timestamps.</param>
     /// <returns>Number of defaults cleared.</returns>
-    public Result<int, Error> ClearChainDefaultsForWallet(WalletId walletId)
+    public Result<int, Error> ClearChainDefaultsForWallet(WalletId walletId, TimeProvider timeProvider)
     {
         var defaultsToRemove = _principalChainDefaults
             .Where(d => d.WalletId == walletId && !d.IsDeleted)
@@ -428,13 +460,16 @@ public sealed partial class AxonPrincipal
             ));
         }
 
+        // Mark aggregate as updated if any defaults were cleared
+        MarkUpdated(timeProvider);
+
         return Result.Success<int, Error>(defaultsToRemove.Count);
     }
 
     /// <summary>
     /// Updates the status of a wallet ownership and clears defaults if revoked.
     /// </summary>
-    public Result<Unit, Error> UpdateWalletOwnershipStatus(WalletId walletId, OwnershipStatus newStatus, string? revokeReason = null)
+    public Result<Unit, Error> UpdateWalletOwnershipStatus(WalletId walletId, OwnershipStatus newStatus, TimeProvider timeProvider, string? revokeReason = null)
     {
         var ownership = _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
         if (ownership == null)
@@ -448,10 +483,13 @@ public sealed partial class AxonPrincipal
         // Clear defaults if status becomes Revoked (strict clear-on-revoke policy)
         if (newStatus == OwnershipStatus.Revoked && oldStatus != OwnershipStatus.Revoked)
         {
-            var clearResult = ClearChainDefaultsForWallet(walletId);
+            var clearResult = ClearChainDefaultsForWallet(walletId, timeProvider);
             if (clearResult.IsFailure)
                 return Result.Failure<Unit, Error>(clearResult.Error);
         }
+
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
 
         // Raise domain event
         RaiseDomainEvent(new OwnershipChangedEvent(
@@ -469,7 +507,7 @@ public sealed partial class AxonPrincipal
     /// Revokes pending ownerships for a specific wallet.
     /// Used when another principal is taking exclusive ownership.
     /// </summary>
-    public Result<int, Error> RevokePendingOwnershipsForWallet(WalletId walletId, string reason = "Auto-revoked due to exclusivity constraint")
+    public Result<int, Error> RevokePendingOwnershipsForWallet(WalletId walletId, TimeProvider timeProvider, string reason = "Auto-revoked due to exclusivity constraint")
     {
         var pendingOwnerships = _walletOwnerships
             .Where(wo => wo.WalletId == walletId &&
@@ -496,13 +534,19 @@ public sealed partial class AxonPrincipal
             }
         }
 
+        // Mark aggregate as updated if any ownerships were revoked
+        if (revokedCount > 0)
+        {
+            MarkUpdated(timeProvider);
+        }
+
         return Result.Success<int, Error>(revokedCount);
     }
 
     /// <summary>
     /// Removes a wallet ownership from the principal.
     /// </summary>
-    public Result<Unit, Error> RemoveWalletOwnership(WalletId walletId)
+    public Result<Unit, Error> RemoveWalletOwnership(WalletId walletId, TimeProvider timeProvider)
     {
         var ownership = _walletOwnerships.FirstOrDefault(o => o.WalletId == walletId);
         if (ownership == null)
@@ -516,6 +560,9 @@ public sealed partial class AxonPrincipal
         {
             _principalChainDefaults.Remove(defaultToRemove);
         }
+
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
 
         // Raise domain event
         RaiseDomainEvent(new OwnershipChangedEvent(
@@ -535,7 +582,8 @@ public sealed partial class AxonPrincipal
     public Result<WalletOwnership, Error> VerifyWalletOwnership(
         WalletId walletId,
         AccessMode accessMode,
-        VerificationSource verificationSource)
+        VerificationSource verificationSource,
+        TimeProvider timeProvider)
     {
         // Check for existing ownership
         var existingOwnership = _walletOwnerships.FirstOrDefault(wo =>
@@ -556,6 +604,9 @@ public sealed partial class AxonPrincipal
             {
                 return Result.Failure<WalletOwnership, Error>(updateResult.Error);
             }
+
+            // Mark aggregate as updated to trigger concurrency token (xmin) update
+            MarkUpdated(timeProvider);
 
             // Raise domain event
             RaiseDomainEvent(new OwnershipChangedEvent(
@@ -578,6 +629,9 @@ public sealed partial class AxonPrincipal
             verificationSource);
 
         _walletOwnerships.Add(newOwnership);
+
+        // Mark aggregate as updated to trigger concurrency token (xmin) update
+        MarkUpdated(timeProvider);
 
         // Raise domain event
         RaiseDomainEvent(new OwnershipChangedEvent(

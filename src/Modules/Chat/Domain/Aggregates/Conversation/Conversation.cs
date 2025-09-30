@@ -177,7 +177,10 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             CheckRule(new MessageContentMeetsDomainStandardsRule(content.Value));
 
             var now = timeProvider.GetUtcNow();
-            var message = CreateAndAddUserMessage(content, timeProvider);
+            var message = CreateAndAddUserMessage(content);
+
+            // Mark aggregate as updated to trigger concurrency token (xmin) update
+            MarkUpdated(timeProvider);
 
             RaiseUserMessageEvent(message, content.Value, now);
 
@@ -215,7 +218,10 @@ public sealed class Conversation : AggregateRoot<ConversationId>
                 return Result.Success<Message, Error>(existing);
 
             var now = timeProvider.GetUtcNow();
-            var message = CreateAndAddAssistantMessage(content, aiResponseId, timeProvider);
+            var message = CreateAndAddAssistantMessage(content, aiResponseId);
+
+            // Mark aggregate as updated to trigger concurrency token (xmin) update
+            MarkUpdated(timeProvider);
 
             RaiseAssistantMessageEvent(message, content.Value, aiResponseId, now);
             
@@ -263,15 +269,18 @@ public sealed class Conversation : AggregateRoot<ConversationId>
             }
 
             var now = timeProvider.GetUtcNow();
-            
+
             // Add user message
-            var userMessage = CreateAndAddUserMessage(userContent, timeProvider);
+            var userMessage = CreateAndAddUserMessage(userContent);
             RaiseUserMessageEvent(userMessage, userContent.Value, now);
-            
+
             // Add assistant message
-            var assistantMessage = CreateAndAddAssistantMessage(assistantContent, aiResponseId, timeProvider);
+            var assistantMessage = CreateAndAddAssistantMessage(assistantContent, aiResponseId);
             RaiseAssistantMessageEvent(assistantMessage, assistantContent.Value, aiResponseId, now);
-            
+
+            // Mark aggregate as updated to trigger concurrency token (xmin) update
+            MarkUpdated(timeProvider);
+
             CheckRule(new MessageSequenceIntegrityRule(_messages));
             
             return Result.Success<(Message, Message), Error>((userMessage, assistantMessage));
@@ -486,22 +495,22 @@ public sealed class Conversation : AggregateRoot<ConversationId>
     private Message? FindExistingMessageByAiResponseId(AiResponseId aiResponseId)
         => _messages.FirstOrDefault(m => m.AiResponseId?.Equals(aiResponseId) == true);
 
-    private Message CreateAndAddUserMessage(MessageContent content, TimeProvider timeProvider)
+    private Message CreateAndAddUserMessage(MessageContent content)
     {
         var sequence = GetMessageCount() + 1;
         var message = Message.CreateUserMessage(Id, content, sequence);
         _messages.Add(message);
-        MarkUpdated(timeProvider);
+        // Note: MarkUpdated() is called by the public business method, not here
         return message;
     }
 
-    private Message CreateAndAddAssistantMessage(MessageContent content, AiResponseId aiResponseId, TimeProvider timeProvider)
+    private Message CreateAndAddAssistantMessage(MessageContent content, AiResponseId aiResponseId)
     {
         var sequence = GetMessageCount() + 1;
         var message = Message.CreateAssistantMessage(Id, content, sequence, aiResponseId);
         _messages.Add(message);
         LastAiResponseId = aiResponseId;
-        MarkUpdated(timeProvider);
+        // Note: MarkUpdated() is called by the public business method, not here
         return message;
     }
 

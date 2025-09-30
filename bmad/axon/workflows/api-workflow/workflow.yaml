@@ -1,0 +1,168 @@
+# api-workflow.yaml - API/FastEndpoints Module Enhancement Workflow
+# Extends story-implementation with API-specific validation, patterns, and testing
+# Tier 3: Module-specialized workflow
+
+workflow_metadata:
+  id: api-workflow
+  name: "API/FastEndpoints Story Implementation"
+  version: "1.0.0"
+  tier: 3  # Module-specialized (extends story-implementation)
+  created_date: "2025-09-30"
+  last_updated: "2025-09-30"
+
+  description: |
+    API module enhancement workflow for REST endpoint development with FastEndpoints 7.0,
+    REPR pattern implementation, OpenAPI documentation, and comprehensive API testing.
+
+    Extends story-implementation with API-specific:
+    - FastEndpoints REPR pattern (Request-Endpoint-Response)
+    - REST conventions (resource naming, HTTP verbs, status codes)
+    - OpenAPI/Swagger documentation generation
+    - FluentValidation integration for request validation
+    - Error handling (Problem Details RFC 7807)
+    - Authentication/authorization (JWT Bearer, claims, roles)
+    - API testing strategies (integration, contract, E2E)
+
+  module_context: api
+  subdomain_classification:
+    - REST Endpoint Development  # FastEndpoints, REPR pattern, routing
+    - Request/Response Contracts # DTOs, validation, serialization
+    - API Documentation          # OpenAPI, Swagger, examples
+    - Error Handling             # Problem Details, status codes, error mapping
+
+# Integration with story-implementation (Tier 2)
+extends:
+  base_workflow: story-implementation
+  inheritance_strategy: enhancement  # Inject at specific points, no duplication
+  enhancement_points:
+    - point_1: "After doc loading (Phase 0.2)"
+    - point_2: "During pre-flight validation (Phase 1.2)"
+    - point_3: "During implementation (Phase 2.2)"
+    - point_4: "During comprehensive testing (Phase 3.2)"
+
+# Invocation
+invoked_by:
+  agent: axon-story-orchestrator
+  condition: "story type = Feature AND module context = API"
+  routing_decision: "api-workflow selected for API/endpoint stories"
+
+# API-specific variables
+variables:
+  # API documentation paths (2 docs)
+  api_docs:
+    - "{project-root}/Docs/ENGINEERING/api/00-INDEX.md"              # REST conventions, status codes, versioning
+    - "{project-root}/Docs/ENGINEERING/guides/codebase/coding-standards.md"  # C# coding standards
+
+  # FastEndpoints library docs (1 library)
+  api_library_docs:
+    - "{project-root}/Docs/Libraries/FastEndpoints/IMPLEMENTATION_GUIDE.md"  # REPR pattern, validation, auth
+
+  # Related library docs (FluentValidation - already covered by base workflow)
+  related_library_docs:
+    - "{project-root}/Docs/Libraries/FluentValidation/IMPLEMENTATION_GUIDE.md"  # Request validation
+
+  # Subdomain classification (4 options)
+  api_subdomains:
+    - name: "REST Endpoint Development"
+      scope: "FastEndpoints configuration, REPR pattern, routing, HTTP verbs, versioning"
+      key_patterns: "Endpoint<TRequest, TResponse>, Configure(), HandleAsync(), vertical slice"
+
+    - name: "Request/Response Contracts"
+      scope: "DTO design, record types, validation rules, serialization, binding"
+      key_patterns: "Sealed records, init-only properties, Validator<T>, FluentValidation rules"
+
+    - name: "API Documentation"
+      scope: "OpenAPI generation, Swagger configuration, endpoint summaries, examples"
+      key_patterns: "Summary(), Tags(), response examples, authentication schemes"
+
+    - name: "Error Handling"
+      scope: "Problem Details format, Result<T> mapping, status codes, error responses"
+      key_patterns: "RFC 7807 Problem Details, SendErrorsAsync(), AddError(), status code mapping"
+
+  # REST conventions (from API docs)
+  rest_conventions:
+    resource_naming:
+      - "Plural nouns (/users, /conversations, not /user)"
+      - "Lowercase with hyphens (/wallet-ownerships)"
+      - "No verbs in URLs (use HTTP verbs)"
+    
+    http_verbs:
+      GET: "Read resource(s) - Idempotent, Safe"
+      POST: "Create resource - Non-idempotent"
+      PUT: "Replace resource - Idempotent"
+      PATCH: "Partial update - Non-idempotent"
+      DELETE: "Delete resource - Idempotent"
+    
+    status_codes:
+      success: "200 OK, 201 Created, 204 No Content, 304 Not Modified"
+      client_errors: "400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 422 Unprocessable Entity"
+      server_errors: "500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable"
+
+  # FastEndpoints patterns (from library guide)
+  fastendpoints_patterns:
+    repr_pattern:
+      request: "Sealed record with init-only properties"
+      endpoint: "Endpoint<TRequest, TResponse> with Configure() and HandleAsync()"
+      response: "Sealed record with computed properties"
+      validator: "Validator<TRequest> with FluentValidation rules"
+    
+    configuration:
+      routing: "Post/Get/Put/Patch/Delete with /api/v1/{resource} pattern"
+      auth: "Claims(), Roles(), AllowAnonymous()"
+      openapi: "Summary(s => ...), Tags(...), response examples"
+    
+    handling:
+      mediator: "Inject IMediator, send commands/queries"
+      result_mapping: "Map Result<T, Error> to HTTP responses"
+      errors: "SendErrorsAsync(), AddError(), ThrowError()"
+
+  # API-specific codebase context
+  api_endpoints_root: "{project-root}/src/Api/Endpoints"
+  api_contracts_root: "{project-root}/src/Api/Contracts"
+  api_validators_root: "{project-root}/src/Api/Endpoints"  # Co-located with endpoints
+  api_tests_root: "{project-root}/tests/Api"
+
+  # Existing endpoint examples (for pattern discovery)
+  identity_endpoints: "{api_endpoints_root}/V1/Auth"
+  chat_endpoints: "{api_endpoints_root}/V1/Chat"
+
+# Workflow configuration
+config_source: "{project-root}/bmad/axon/config.yaml"
+installed_path: "{project-root}/bmad/axon/workflows/api-workflow"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+complexity: medium
+estimated_duration_minutes: 30  # Additional on top of story-implementation (40-70 min)
+
+# Success criteria (API-specific additions to base 5 gates)
+success_metrics:
+  # Inherited from story-implementation (5 base gates):
+  # 1. Pattern Compliance ≥ 95%
+  # 2. Test Coverage ≥ 90%
+  # 3. AC Coverage = 100%
+  # 4. Build Success = 100%
+  # 5. Doc Sync = Zero Drift
+
+  # API-specific gates (6 additional):
+  rest_conventions_followed: "100% (resource naming, HTTP verbs, status codes)"
+  repr_pattern_correct: "100% (sealed records, Endpoint<TRequest, TResponse>, Validator<T>)"
+  openapi_documentation_complete: "100% (summaries, tags, examples, auth)"
+  error_handling_correct: "100% (Problem Details RFC 7807, Result<T> mapping)"
+  authentication_configured: "100% (JWT Bearer, claims, roles, policies)"
+  api_test_scenarios_complete: "6/6 scenarios passing"
+
+# Agents (all 6 from story-implementation)
+agents_used:
+  - axon-story-orchestrator
+  - axon-doc-oracle
+  - axon-archaeologist
+  - axon-library-sage
+  - axon-implementation-surgeon
+  - axon-quality-guardian
+
+# Related workflows
+related_workflows:
+  - "story-implementation (base workflow, Tier 2)"
+  - "identity-workflow (sibling, Tier 3)"
+  - "chat-workflow (sibling, Tier 3)"
+  - "story-orchestrator (invokes this workflow, Tier 1)"

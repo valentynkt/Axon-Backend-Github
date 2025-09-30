@@ -250,7 +250,7 @@ public class IdentityResolutionAlgorithmTests : PrincipalResolutionTestBase
 
         // Create pending signing ownership (active but not verified)
         var ownership = AppTestFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(AppTestFixtures.W1MainAddress);
@@ -327,8 +327,8 @@ public class IdentityResolutionAlgorithmTests : PrincipalResolutionTestBase
         var ownershipA = AppTestFixtures.CreatePendingSigningOwnership(principalA.Id, wallet.Id);
         var ownershipB = AppTestFixtures.CreatePendingSigningOwnership(principalB.Id, wallet.Id);
 
-        principalA.LinkWalletOwnership(ownershipA, (_, _, _) => Result.Success<bool, Error>(false));
-        principalB.LinkWalletOwnership(ownershipB, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownershipA, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalB.LinkWalletOwnership(ownershipB, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create command with wallet data
         var walletData = CreateWalletExchangeData(AppTestFixtures.W1MainAddress);
@@ -469,7 +469,7 @@ public class IdentityResolutionAlgorithmTests : PrincipalResolutionTestBase
 
         // Setup wallet ownership for second principal
         var ownership = AppTestFixtures.CreateVerifiedSigningOwnership(principalWithWallet.Id, wallet.Id);
-        principalWithWallet.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principalWithWallet.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create command that could resolve to either principal
         var walletData = CreateWalletExchangeData(AppTestFixtures.W1MainAddress);

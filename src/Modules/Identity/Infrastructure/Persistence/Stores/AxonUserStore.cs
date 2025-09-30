@@ -31,6 +31,7 @@ public sealed class AxonUserStore :
     private readonly IAxonPrincipalWriteRepository _principalRepo;
     private readonly IdentityContext _dbContext;
     private readonly IIdentityReadDbContext _readDbContext;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<AxonUserStore> _logger;
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
@@ -38,12 +39,14 @@ public sealed class AxonUserStore :
         IAxonPrincipalWriteRepository principalRepo,
         IdentityContext dbContext,
         IIdentityReadDbContext readDbContext,
+        TimeProvider timeProvider,
         ILogger<AxonUserStore> logger,
         IWriteUnitOfWork<IdentityModule> unitOfWork)
     {
         _principalRepo = principalRepo;
         _dbContext = dbContext;
         _readDbContext = readDbContext;
+        _timeProvider = timeProvider;
         _logger = logger;
         _unitOfWork = unitOfWork;
     }
@@ -180,7 +183,7 @@ public sealed class AxonUserStore :
                 login.ProviderKey);
 
             var addResult = principal.AddCredential(credential, (provider, issuer, subject) =>
-                Result.Success<bool, Error>(false));
+                Result.Success<bool, Error>(false), _timeProvider);
 
             if (addResult.IsSuccess)
             {

@@ -18,13 +18,16 @@ namespace Axon.Modules.Identity.Application.Services;
 public sealed class AutoRevocationService : IAutoRevocationService
 {
     private readonly IIdentityWriteDbContext _dbContext;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<AutoRevocationService> _logger;
 
     public AutoRevocationService(
         IIdentityWriteDbContext dbContext,
+        TimeProvider timeProvider,
         ILogger<AutoRevocationService> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -59,6 +62,7 @@ public sealed class AutoRevocationService : IAutoRevocationService
             {
                 var revokeResult = principal.RevokePendingOwnershipsForWallet(
                     walletId,
+                    _timeProvider,
                     "Auto-revoked due to exclusivity constraint");
 
                 if (revokeResult.IsFailure)

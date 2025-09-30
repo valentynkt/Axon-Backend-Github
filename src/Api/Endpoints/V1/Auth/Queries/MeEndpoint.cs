@@ -15,7 +15,6 @@ namespace Axon.Api.Endpoints.V1.Auth;
 /// GET /auth/me - Get current user information
 /// Accepts both Dynamic JWT and Axon JWT tokens
 /// </summary>
-[Authorize(Policy = "DynamicOrAxon")]
 public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
 {
     public MeEndpoint(
@@ -28,6 +27,9 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
     public override void Configure()
     {
         base.Configure();
+
+        // Require authorization with DynamicOrAxon policy
+        Policies("DynamicOrAxon");
 
         // Apply rate limiting for auth endpoints
         Options(x => x.RequireRateLimiting("AuthExchange"));

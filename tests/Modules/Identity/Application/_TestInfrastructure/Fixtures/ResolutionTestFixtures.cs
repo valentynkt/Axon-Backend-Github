@@ -104,14 +104,14 @@ public static class ResolutionTestFixtures
             var sharedWallet = TestDataFixtures.CreateW1Main();
 
             var verifiedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(walletPrincipal.Id, sharedWallet.Id);
-            walletPrincipal.LinkWalletOwnership(verifiedOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+            walletPrincipal.LinkWalletOwnership(verifiedOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
             // Principal 3: Has both credential and wallet ownership with different wallet
             var ambiguousPrincipal = TestDataFixtures.CreatePrincipalB(); // Has different Dynamic credential
             var anotherWallet = TestDataFixtures.CreateW2Main();
 
             var anotherOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(ambiguousPrincipal.Id, anotherWallet.Id);
-            ambiguousPrincipal.LinkWalletOwnership(anotherOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+            ambiguousPrincipal.LinkWalletOwnership(anotherOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
             return (credentialPrincipal, walletPrincipal, ambiguousPrincipal, sharedWallet);
         }
@@ -147,9 +147,9 @@ public static class ResolutionTestFixtures
                 OwnershipStatus.Pending); // Another pending signing (tie-breaker needed)
 
             // Link ownerships
-            signingPrincipal.LinkWalletOwnership(signingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
-            watchOnlyPrincipal.LinkWalletOwnership(watchOnlyOwnership, (_, _, _) => Result.Success<bool, Error>(false));
-            pendingPrincipal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+            signingPrincipal.LinkWalletOwnership(signingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            watchOnlyPrincipal.LinkWalletOwnership(watchOnlyOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            pendingPrincipal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
             return (signingPrincipal, watchOnlyPrincipal, pendingPrincipal, contestedWallet);
         }
@@ -275,7 +275,7 @@ public static class ResolutionTestFixtures
 
                 // Link wallet to principal
                 var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-                principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+                principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
             }
 
             var command = ExchangeCommandBuilder.CreateWalletOnlyCommand();
@@ -342,7 +342,7 @@ public static class ResolutionTestFixtures
 
             // Link wallet to owner
             var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(ownerPrincipal.Id, ownedWallet.Id);
-            ownerPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+            ownerPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
             // Create command from different user trying to claim same wallet
             var conflictCommand = ExchangeCommandBuilder.CreateWalletOnlyCommand();

@@ -71,7 +71,7 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         // Add first credential through aggregate
         var firstCredential = TestDataFixtures.CreateDynACredential(principal.Id);
-        principal.AddCredential(firstCredential, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.AddCredential(firstCredential, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -79,7 +79,7 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         // Act: Try to create duplicate credential tuple for another principal
         var principal2 = TestDataFixtures.CreatePlainPrincipal();
         var duplicateCredential = TestDataFixtures.CreateDynACredential(principal2.Id);
-        principal2.AddCredential(duplicateCredential, (_, _, _) => Result.Success<bool, Error>(false));
+        principal2.AddCredential(duplicateCredential, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal2);
 
@@ -100,8 +100,8 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var credentialA = TestDataFixtures.CreateDynACredential(principal.Id);
         var credentialB = TestDataFixtures.CreateDynBCredential(principal.Id); // Different subject
 
-        principal.AddCredential(credentialA, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.AddCredential(credentialB, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.AddCredential(credentialA, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.AddCredential(credentialB, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
 
@@ -122,7 +122,7 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         // Add first ownership to principal before saving
         var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await WalletRepository.AddAsync(wallet);
@@ -157,9 +157,9 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, wallet2.Id);
         var ownership3 = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principalA.Id, wallet2.Id);
 
-        principalA.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principalA.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
-        principalB.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalA.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalB.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principalA);
         await PrincipalRepository.AddAsync(principalB);
@@ -182,7 +182,7 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         // Give first principal verified signing ownership
         var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
-        principalA.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principalA);
         await PrincipalRepository.AddAsync(principalB);
@@ -216,8 +216,8 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var ownershipSigning = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, sharedWallet.Id);
         var ownershipWatchOnly = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principalB.Id, sharedWallet.Id);
 
-        principalA.LinkWalletOwnership(ownershipSigning, (_, _, _) => Result.Success<bool, Error>(false));
-        principalB.LinkWalletOwnership(ownershipWatchOnly, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownershipSigning, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalB.LinkWalletOwnership(ownershipWatchOnly, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principalA);
         await PrincipalRepository.AddAsync(principalB);
@@ -290,11 +290,11 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet1.Id);
         var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet2.Id);
 
-        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Set first wallet as default for mainnet
-        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id, TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await WalletRepository.AddAsync(wallet1);
@@ -330,12 +330,12 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         var ownershipMainnet = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, walletMainnet.Id);
         var ownershipDevnet = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, walletDevnet.Id);
 
-        principal.LinkWalletOwnership(ownershipMainnet, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(ownershipDevnet, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownershipMainnet, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(ownershipDevnet, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Act: Set defaults for different chains
-        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, walletMainnet.Id);
-        principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, walletDevnet.Id);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, walletMainnet.Id, TimeProvider.System);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, walletDevnet.Id, TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await WalletRepository.AddAsync(walletMainnet);
@@ -358,7 +358,7 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         // Create watch-only ownership
         var ownership = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await WalletRepository.AddAsync(wallet);
@@ -390,7 +390,7 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         // Create pending ownership
         var ownership = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await WalletRepository.AddAsync(wallet);
@@ -422,10 +422,10 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
 
         // Create verified signing ownership
         var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Set as default through domain (this validates at domain layer)
-        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await WalletRepository.AddAsync(wallet);
@@ -449,10 +449,10 @@ public class IdentityDbInvariantsTests : IdentityDbInvariantsTestBase
         // Act & Assert: Step-by-step validation of all constraints
 
         // 1. Link ownership to principal
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // 2. Set as default (should succeed - verified signing)
-        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         // 3. Save principal and wallet
         await PrincipalRepository.AddAsync(principal);

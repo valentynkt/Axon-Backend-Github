@@ -192,6 +192,10 @@ public sealed class JwtEventHandlers
                 $"Bearer error=\"{context.Error}\", error_description=\"{context.ErrorDescription}\"";
         }
 
+        // Store error information in HttpContext for middleware to use
+        context.HttpContext.Items["AuthChallenge_Error"] = context.Error;
+        context.HttpContext.Items["AuthChallenge_ErrorDescription"] = context.ErrorDescription;
+
         return Task.CompletedTask;
     }
 

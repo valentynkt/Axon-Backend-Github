@@ -76,8 +76,8 @@ public sealed class TestDataVerificationRepository : ITestDataVerificationReposi
     /// <inheritdoc />
     public async Task<uint> GetConversationVersionAsync(ConversationId conversationId, CancellationToken ct = default)
     {
-        // For testing purposes, we can check if conversation exists
-        // Version tracking is handled internally by EF Core with xmin
+        // Query the actual xmin value from PostgreSQL
+        // xmin is mapped to the Version property in the aggregate root
         var conversation = await _context.Conversations
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == conversationId, ct);
@@ -85,9 +85,9 @@ public sealed class TestDataVerificationRepository : ITestDataVerificationReposi
         if (conversation == null)
             return 0;
 
-        // Return a non-zero value to indicate conversation exists
-        // Actual version tracking is done via xmin column in PostgreSQL
-        return 1;
+        // Return the actual Version (xmin) value from the entity
+        // This is populated by EF Core when the entity is loaded from the database
+        return conversation.Version;
     }
 
     /// <inheritdoc />

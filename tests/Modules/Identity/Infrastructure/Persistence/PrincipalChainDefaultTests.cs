@@ -44,8 +44,8 @@ public class PrincipalChainDefaultPersistenceTests : IdentityPersistenceTestBase
         var ownership2 = WalletOwnership.Create(
             reloadedPrincipal.Id, wallet2.Id, AccessMode.Signing, OwnershipStatus.Verified);
 
-        var linkResult1 = reloadedPrincipal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        var linkResult2 = reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult1 = reloadedPrincipal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        var linkResult2 = reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         linkResult1.IsSuccess.ShouldBeTrue();
         linkResult2.IsSuccess.ShouldBeTrue();
@@ -57,7 +57,7 @@ public class PrincipalChainDefaultPersistenceTests : IdentityPersistenceTestBase
             ("137", wallet2.Id)
         };
 
-        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(chainMappings);
+        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(chainMappings, TimeProvider.System);
         batchResult.IsSuccess.ShouldBeTrue();
         batchResult.Value.ShouldBe(2); // Should apply 2 defaults
 
@@ -109,8 +109,8 @@ public class PrincipalChainDefaultPersistenceTests : IdentityPersistenceTestBase
 
         // Add initial default
         var ownership1 = WalletOwnership.Create(principal.Id, wallet1.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.ApplyChainDefaultsBatch(new[] { ("1", wallet1.Id) });
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.ApplyChainDefaultsBatch(new[] { ("1", wallet1.Id) }, TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -120,10 +120,10 @@ public class PrincipalChainDefaultPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         var ownership2 = WalletOwnership.Create(reloadedPrincipal.Id, wallet2.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        reloadedPrincipal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Change the default to wallet2
-        var updateResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", wallet2.Id) });
+        var updateResult = reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", wallet2.Id) }, TimeProvider.System);
         updateResult.IsSuccess.ShouldBeTrue();
         updateResult.Value.ShouldBe(1); // Should update 1 default
 

@@ -141,7 +141,7 @@ public static class TestDataFixtures
         var principal = AxonPrincipal.CreateHuman();
         var wallet = CreateW1Main();
         var ownership = CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         return (principal, wallet);
     }
 

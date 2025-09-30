@@ -145,6 +145,24 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        var now = TimeProvider.System.GetUtcNow();
+
+        // Apply audit information to all changed entities
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added when entry.Entity is BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid> addedAuditable:
+                    addedAuditable.SetCreatedAtInternal(now);
+                    addedAuditable.SetUpdatedAtInternal(now);
+                    break;
+
+                case EntityState.Modified when entry.Entity is BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid> modifiedAuditable:
+                    modifiedAuditable.SetUpdatedAtInternal(now);
+                    break;
+            }
+        }
+
         ApplyAuditInformation();
 
         try

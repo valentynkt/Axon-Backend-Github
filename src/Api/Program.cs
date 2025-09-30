@@ -16,6 +16,7 @@ using BuildingBlocks.Infrastructure.Persistence;
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Axon.Api;
+using Axon.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -189,13 +190,16 @@ app.UseMiddleware<RateLimitObservabilityMiddleware>();
 // Configure routing
 app.UseRouting();
 
-// Authentication and authorization (skip JWT validation for exchange endpoint)
+// Authentication and authorization (must be in main pipeline for FastEndpoints)
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Format 401 responses as JSON (skip for exchange endpoint which handles its own responses)
 app.UseWhen(
     context => !context.Request.Path.StartsWithSegments("/api/v1/auth/exchange"),
     appBuilder =>
     {
-        appBuilder.UseAuthentication();
-        appBuilder.UseAuthorization();
+        appBuilder.UseAuthenticationErrorFormatting();
     });
 
 // Configure FastEndpoints (before MVC controllers)

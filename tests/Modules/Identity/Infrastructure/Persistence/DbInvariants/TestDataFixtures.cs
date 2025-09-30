@@ -370,7 +370,7 @@ public static class TestDataFixtures
 
         // Link wallet to principal with verified signing ownership
         var ownership = CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         return (principal, wallet);
     }
@@ -386,7 +386,7 @@ public static class TestDataFixtures
 
         // Link wallet with verified signing ownership
         var ownership = CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         return (principal, wallet);
     }
@@ -402,7 +402,7 @@ public static class TestDataFixtures
 
         // Link wallet with watch-only ownership (only active owner)
         var ownership = CreateVerifiedWatchOnlyOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         return (principal, wallet);
     }
@@ -419,11 +419,11 @@ public static class TestDataFixtures
 
         // Principal A has pending signing (higher authority than watch-only)
         var ownershipA = CreatePendingSigningOwnership(principalA.Id, wallet.Id);
-        principalA.LinkWalletOwnership(ownershipA, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(ownershipA, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Principal B has verified watch-only (lower authority)
         var ownershipB = CreateVerifiedWatchOnlyOwnership(principalB.Id, wallet.Id);
-        principalB.LinkWalletOwnership(ownershipB, (_, _, _) => Result.Success<bool, Error>(false));
+        principalB.LinkWalletOwnership(ownershipB, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         return (principalA, principalB, wallet);
     }
@@ -452,7 +452,7 @@ public static class TestDataFixtures
 
         // This will be the first verified+signing wallet
         var ownership = CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         return (principal, wallet);
     }
@@ -468,11 +468,11 @@ public static class TestDataFixtures
 
         // Create verified signing ownership
         var ownership = CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create default for this wallet
         var chainDefault = CreateMainnetSolanaDefault(principal.Id, wallet.Id);
-        principal.ApplyChainDefault(SolanaMainnetChain, wallet.Id);
+        principal.ApplyChainDefault(SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         return (principal, wallet, chainDefault);
     }
@@ -490,8 +490,8 @@ public static class TestDataFixtures
         var mainnetOwnership = CreateVerifiedSigningOwnership(principal.Id, mainnetWallet.Id);
         var devnetOwnership = CreateVerifiedSigningOwnership(principal.Id, devnetWallet.Id);
 
-        principal.LinkWalletOwnership(mainnetOwnership, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(devnetOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(mainnetOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(devnetOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         return (principal, mainnetWallet, devnetWallet);
     }

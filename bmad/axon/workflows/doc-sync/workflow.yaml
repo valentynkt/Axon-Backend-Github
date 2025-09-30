@@ -1,0 +1,141 @@
+# doc-sync.yaml - Documentation Synchronization Workflow
+# Tier 4: Support workflow (maintains zero documentation drift)
+
+workflow_metadata:
+  id: doc-sync
+  name: "Documentation Synchronization"
+  version: "1.0.0"
+  tier: 4  # Support workflow (reusable)
+  created_date: "2025-09-30"
+  last_updated: "2025-09-30"
+
+  description: |
+    Reusable documentation synchronization workflow that prevents drift between
+    code and documentation through automated detection and update generation.
+
+    Capabilities:
+    - Detect documentation drift (4 drift types: Missing, Outdated, Incorrect, Orphaned)
+    - Generate documentation updates (minimal, targeted changes)
+    - Validate documentation completeness (coverage checks)
+    - Sync inline XML comments (method, class, property documentation)
+
+    Used by: story-implementation, story-refactoring, identity-workflow, chat-workflow, api-workflow
+
+  workflow_type: support
+  reusable: true
+  can_be_invoked_by:
+    - story-implementation
+    - story-refactoring
+    - story-bugfix
+    - identity-workflow
+    - chat-workflow
+    - api-workflow
+
+# Invocation
+invoked_by:
+  workflows: ["story-implementation", "story-refactoring", "story-bugfix", "module workflows"]
+  phase: "Phase 3: Validation (after code generation, before tests)"
+  timing: "After implementation complete, before final commit"
+
+# Input requirements (passed from invoking workflow)
+required_inputs:
+  - story_context: "Story metadata, module context"
+  - code_changes: "List of files changed (file paths)"
+  - implementation_summary: "What was implemented"
+  - patterns_used: "Patterns applied (Result<T>, StrongId<T>, CQRS, etc.)"
+
+# Variables
+variables:
+  # Configuration
+  config_source: "{project-root}/bmad/axon/config.yaml"
+  output_folder: "{config_source}:output_folder"
+
+  # Documentation paths
+  docs_root: "{config_source}:project_paths.docs_root"
+  engineering_docs: "{project-root}/Docs/ENGINEERING"
+  module_docs: "{engineering_docs}/modules"
+  api_docs: "{engineering_docs}/api"
+  guides_docs: "{engineering_docs}/guides"
+
+  # Drift detection dimensions
+  drift_types:
+    - Missing: "Documentation doesn't exist for code that exists"
+    - Outdated: "Documentation exists but describes old behavior"
+    - Incorrect: "Documentation contradicts actual code behavior"
+    - Orphaned: "Documentation exists for code that no longer exists"
+
+  # Documentation layers (by module)
+  doc_layers_identity:
+    - "modules/identity/00-INDEX.md"
+    - "modules/identity/01-domain-model.md"
+    - "modules/identity/03-authentication.md"
+    - "modules/identity/05-api-contracts.md"
+    - "modules/identity/06-database-schema.md"
+
+  doc_layers_chat:
+    - "modules/chat/00-INDEX.md"
+    - "modules/chat/01-domain-model.md"
+    - "modules/chat/03-messaging-flows.md"
+    - "modules/chat/05-api-contracts.md"
+    - "modules/chat/06-database-schema.md"
+
+  doc_layers_api:
+    - "api/00-INDEX.md"
+    - "guides/codebase/coding-standards.md"
+
+  # Update types
+  update_types:
+    - New: "Add new documentation section"
+    - Modify: "Update existing documentation"
+    - Delete: "Remove outdated documentation"
+    - Inline: "Add/update XML comments in code"
+
+# Workflow configuration
+installed_path: "{project-root}/bmad/axon/workflows/doc-sync"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+complexity: low
+estimated_duration_minutes: 5-10
+
+# Output format
+outputs:
+  drift_detection_report:
+    format: "YAML"
+    path: "{output_folder}/{story_id}/drift-detection.yaml"
+    sections:
+      - drift_summary: "Count by type (Missing, Outdated, Incorrect, Orphaned)"
+      - drifts_detected: "List of drift instances with details"
+      - affected_docs: "Which documentation files need updates"
+      - severity: "Critical | High | Medium | Low"
+
+  doc_update_recommendations:
+    format: "Markdown"
+    path: "{output_folder}/{story_id}/doc-updates.md"
+    template_path: "{project-root}/bmad/axon/templates/doc-update-template.md"
+    sections:
+      - changes_summary: "What changed in code"
+      - documentation_updates: "Proposed doc changes (before/after, reason)"
+      - inline_xml_updates: "XML comments to add/update"
+      - validation_checklist: "How to verify updates"
+
+# Success criteria
+success_metrics:
+  drift_detected: "All 4 types checked (Missing, Outdated, Incorrect, Orphaned)"
+  drift_count: "0 (zero drift)"
+  doc_updates_generated: "100% (all drift addressed)"
+  inline_xml_coverage: "100% (all public APIs documented)"
+  execution_time: "≤ 10 minutes"
+
+# Agents (2 agents)
+agents_used:
+  - axon-doc-oracle         # Drift detection, validation
+  - axon-quality-guardian   # Documentation completeness check
+
+# Related workflows
+related_workflows:
+  - "story-implementation (invokes this workflow, Tier 2)"
+  - "story-refactoring (invokes this workflow, Tier 2)"
+  - "story-bugfix (invokes this workflow, Tier 2)"
+  - "identity-workflow (invokes this workflow, Tier 3)"
+  - "chat-workflow (invokes this workflow, Tier 3)"
+  - "api-workflow (invokes this workflow, Tier 3)"

@@ -102,7 +102,7 @@ public class IdentityTestDataBuilder
             // Add ownerships
             foreach (var ownership in _ownerships)
             {
-                var linkResult = principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+                var linkResult = principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
                 if (linkResult.IsFailure)
                 {
                     throw new InvalidOperationException($"Failed to link wallet ownership: {linkResult.Error}");
@@ -113,7 +113,7 @@ public class IdentityTestDataBuilder
             if (_chainDefaults.Count > 0)
             {
                 var chainDefaultsArray = _chainDefaults.Select(cd => (cd.ChainId, cd.WalletId)).ToArray();
-                var chainDefaultsResult = principal.ApplyChainDefaultsBatch(chainDefaultsArray);
+                var chainDefaultsResult = principal.ApplyChainDefaultsBatch(chainDefaultsArray, TimeProvider.System);
                 if (chainDefaultsResult.IsFailure)
                 {
                     throw new InvalidOperationException($"Failed to apply chain defaults: {chainDefaultsResult.Error}");

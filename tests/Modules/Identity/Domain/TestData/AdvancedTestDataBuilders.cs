@@ -145,7 +145,7 @@ public static class AdvancedTestDataBuilders
             // Update risk tier if different from default
             if (_riskTier != RiskTier.Low)
             {
-                principal.UpdateRiskTier(_riskTier);
+                principal.UpdateRiskTier(_riskTier, TimeProvider.System);
             }
 
             // Add credentials using reflection (since they're normally added through domain commands)

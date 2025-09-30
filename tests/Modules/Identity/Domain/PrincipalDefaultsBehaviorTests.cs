@@ -32,7 +32,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
 
         // Act: Apply chain default for the first verified+signing wallet
-        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         // Assert: Should succeed and create default
         result.IsSuccess.ShouldBeTrue();
@@ -58,8 +58,8 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
 
         // Act: Apply defaults for both chains
-        var mainnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id);
-        var devnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, devnetWallet.Id);
+        var mainnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id, TimeProvider.System);
+        var devnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, devnetWallet.Id, TimeProvider.System);
 
         // Assert: Both should succeed
         mainnetResult.IsSuccess.ShouldBeTrue();
@@ -88,11 +88,11 @@ public class PrincipalDefaultsBehaviorTests
 
         // Create pending ownership (not verified)
         var pendingOwnership = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
-        var linkResult = principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult = principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         linkResult.IsSuccess.ShouldBeTrue();
 
         // Act: Try to set pending wallet as default
-        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         // Assert: Should fail because wallet is not verified+signing
         result.IsFailure.ShouldBeTrue();
@@ -111,11 +111,11 @@ public class PrincipalDefaultsBehaviorTests
 
         // Create watch-only ownership (verified but not signing)
         var watchOnlyOwnership = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principal.Id, wallet.Id);
-        var linkResult = principal.LinkWalletOwnership(watchOnlyOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult = principal.LinkWalletOwnership(watchOnlyOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         linkResult.IsSuccess.ShouldBeTrue();
 
         // Act: Try to set watch-only wallet as default
-        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         // Assert: Should fail because wallet is watch-only
         result.IsFailure.ShouldBeTrue();
@@ -132,8 +132,8 @@ public class PrincipalDefaultsBehaviorTests
         var (principal, wallet) = TestDataFixtures.CreateAutoSeedDefaultScenario();
 
         // Act: Apply same default twice
-        var result1 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
-        var result2 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id);
+        var result1 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
+        var result2 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet.Id, TimeProvider.System);
 
         // Assert: Both should succeed
         result1.IsSuccess.ShouldBeTrue();
@@ -160,7 +160,7 @@ public class PrincipalDefaultsBehaviorTests
         };
 
         // Act: Apply batch defaults
-        var result = principal.ApplyChainDefaultsBatch(walletChainMappings);
+        var result = principal.ApplyChainDefaultsBatch(walletChainMappings, TimeProvider.System);
 
         // Assert: Should succeed and create 2 defaults
         result.IsSuccess.ShouldBeTrue();
@@ -195,7 +195,7 @@ public class PrincipalDefaultsBehaviorTests
         existingDefault.IsDeleted.ShouldBeFalse();
 
         // Act: Remove wallet ownership (revoke)
-        var result = principal.RemoveWalletOwnership(wallet.Id);
+        var result = principal.RemoveWalletOwnership(wallet.Id, TimeProvider.System);
 
         // Assert: Should succeed
         result.IsSuccess.ShouldBeTrue();
@@ -220,11 +220,11 @@ public class PrincipalDefaultsBehaviorTests
         var defaultedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, defaultedWallet.Id);
         var nonDefaultedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, nonDefaultedWallet.Id);
 
-        principal.LinkWalletOwnership(defaultedOwnership, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(nonDefaultedOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(defaultedOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(nonDefaultedOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Set only first wallet as default
-        var defaultResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, defaultedWallet.Id);
+        var defaultResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, defaultedWallet.Id, TimeProvider.System);
         defaultResult.IsSuccess.ShouldBeTrue();
 
         // Verify setup
@@ -232,7 +232,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(1);
 
         // Act: Remove non-defaulted wallet
-        var result = principal.RemoveWalletOwnership(nonDefaultedWallet.Id);
+        var result = principal.RemoveWalletOwnership(nonDefaultedWallet.Id, TimeProvider.System);
 
         // Assert: Should succeed
         result.IsSuccess.ShouldBeTrue();
@@ -255,8 +255,8 @@ public class PrincipalDefaultsBehaviorTests
         var (principal, mainnetWallet, devnetWallet) = TestDataFixtures.CreateMultiChainDefaultScenario();
 
         // Set defaults for both chains
-        var mainnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id);
-        var devnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, devnetWallet.Id);
+        var mainnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, mainnetWallet.Id, TimeProvider.System);
+        var devnetResult = principal.ApplyChainDefault(TestDataFixtures.SolanaDevnetChain, devnetWallet.Id, TimeProvider.System);
 
         mainnetResult.IsSuccess.ShouldBeTrue();
         devnetResult.IsSuccess.ShouldBeTrue();
@@ -266,7 +266,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(2);
 
         // Act: Remove only mainnet wallet
-        var result = principal.RemoveWalletOwnership(mainnetWallet.Id);
+        var result = principal.RemoveWalletOwnership(mainnetWallet.Id, TimeProvider.System);
 
         // Assert: Should succeed
         result.IsSuccess.ShouldBeTrue();
@@ -294,7 +294,7 @@ public class PrincipalDefaultsBehaviorTests
         principal.PrincipalChainDefaults.Count.ShouldBe(1);
 
         // Act: Change ownership status to revoked using principal method
-        var statusResult = principal.UpdateWalletOwnershipStatus(wallet.Id, OwnershipStatus.Revoked);
+        var statusResult = principal.UpdateWalletOwnershipStatus(wallet.Id, OwnershipStatus.Revoked, TimeProvider.System);
 
         // Assert: Status change should succeed
         statusResult.IsSuccess.ShouldBeTrue();
@@ -322,10 +322,10 @@ public class PrincipalDefaultsBehaviorTests
 
         // Step 1: Link first wallet (should auto-seed default)
         var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet1.Id);
-        var linkResult1 = principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult1 = principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         linkResult1.IsSuccess.ShouldBeTrue();
 
-        var defaultResult1 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id);
+        var defaultResult1 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id, TimeProvider.System);
         defaultResult1.IsSuccess.ShouldBeTrue();
 
         // Verify first default
@@ -333,10 +333,10 @@ public class PrincipalDefaultsBehaviorTests
 
         // Step 2: Link second wallet and update default
         var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet2.Id);
-        var linkResult2 = principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        var linkResult2 = principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         linkResult2.IsSuccess.ShouldBeTrue();
 
-        var defaultResult2 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet2.Id);
+        var defaultResult2 = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet2.Id, TimeProvider.System);
         defaultResult2.IsSuccess.ShouldBeTrue();
 
         // Verify default was updated (not duplicated)
@@ -345,14 +345,14 @@ public class PrincipalDefaultsBehaviorTests
         currentDefault.WalletId.ShouldBe(wallet2.Id);
 
         // Step 3: Revoke current default wallet
-        var revokeResult = principal.RemoveWalletOwnership(wallet2.Id);
+        var revokeResult = principal.RemoveWalletOwnership(wallet2.Id, TimeProvider.System);
         revokeResult.IsSuccess.ShouldBeTrue();
 
         // Verify default was cleared
         principal.PrincipalChainDefaults.Count.ShouldBe(0);
 
         // Step 4: Re-apply default with remaining wallet
-        var reapplyResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id);
+        var reapplyResult = principal.ApplyChainDefault(TestDataFixtures.SolanaMainnetChain, wallet1.Id, TimeProvider.System);
         reapplyResult.IsSuccess.ShouldBeTrue();
 
         // Verify new default was created
@@ -372,11 +372,11 @@ public class PrincipalDefaultsBehaviorTests
 
         // Link only one wallet as verified+signing
         var validOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, validWallet.Id);
-        principal.LinkWalletOwnership(validOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(validOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Create invalid ownership (watch-only)
         var invalidOwnership = TestDataFixtures.CreateVerifiedWatchOnlyOwnership(principal.Id, invalidWallet.Id);
-        principal.LinkWalletOwnership(invalidOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(invalidOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Prepare batch with mixed valid/invalid wallets
         var walletChainMappings = new List<(string chainId, WalletId walletId)>
@@ -386,7 +386,7 @@ public class PrincipalDefaultsBehaviorTests
         };
 
         // Act: Try to apply batch defaults
-        var result = principal.ApplyChainDefaultsBatch(walletChainMappings);
+        var result = principal.ApplyChainDefaultsBatch(walletChainMappings, TimeProvider.System);
 
         // Assert: Should fail due to invalid wallet in batch
         result.IsFailure.ShouldBeTrue();

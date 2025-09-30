@@ -29,8 +29,8 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
     {
         var serviceLogger = Substitute.For<ILogger<WalletVerificationService>>();
         _unitOfWork = Substitute.For<IWriteUnitOfWork<IdentityModule>>();
-        _principalRepository = new AxonPrincipalWriteRepository(DbContext, _unitOfWork);
-        _service = new WalletVerificationService(_principalRepository, _unitOfWork, serviceLogger);
+        _principalRepository = new AxonPrincipalWriteRepository(DbContext, _unitOfWork, TimeProvider.System);
+        _service = new WalletVerificationService(_principalRepository, _unitOfWork, TimeProvider.System, serviceLogger);
         await Task.CompletedTask;
     }
 
@@ -387,7 +387,7 @@ public class WalletVerificationServiceTests : IdentityPersistenceTestBase
 
         // Create and link ownership
         var ownership = CreateTestWalletOwnership(principalId, walletId, accessMode, status);
-        principal.LinkWalletOwnership(ownership, (_, _, _) => CSharpFunctionalExtensions.Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => CSharpFunctionalExtensions.Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Save principal with ownership
         if (isNew)

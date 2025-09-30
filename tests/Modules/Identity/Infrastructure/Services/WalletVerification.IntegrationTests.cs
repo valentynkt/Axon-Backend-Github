@@ -68,8 +68,8 @@ public class WalletVerificationIntegrationTests
         _logger = Substitute.For<ILogger<WalletVerificationService>>();
         // Use a real unit of work implementation instead of a mock
         _unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(_writeContext);
-        _principalRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork);
-        _verificationService = new WalletVerificationService(_principalRepository, _unitOfWork, _logger);
+        _principalRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork, TimeProvider.System);
+        _verificationService = new WalletVerificationService(_principalRepository, _unitOfWork, TimeProvider.System, _logger);
     }
 
     [TearDown]
@@ -292,7 +292,7 @@ public class WalletVerificationIntegrationTests
 
         if (principal != null)
         {
-            principal.RemoveWalletOwnership(walletId);
+            principal.RemoveWalletOwnership(walletId, TimeProvider.System);
             await _writeContext.SaveChangesAsync();
         }
 
@@ -332,7 +332,7 @@ public class WalletVerificationIntegrationTests
             VerificationSource.DynamicAttested);
 
         principal.LinkWalletOwnership(existingOwnership, (_, _, _) =>
-            Result.Success<bool, Error>(false));
+            Result.Success<bool, Error>(false), TimeProvider.System);
 
         await _writeContext.SaveChangesAsync();
 
@@ -402,10 +402,10 @@ public class WalletVerificationIntegrationTests
         // UnitOfWork and Repository are disposed when context is disposed
         #pragma warning disable CA2000 // Dispose objects before losing scope
         var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
-        var repository = new AxonPrincipalWriteRepository(context, unitOfWork);
+        var repository = new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
         #pragma warning restore CA2000
 
-        var service = new WalletVerificationService(repository, unitOfWork, _logger);
+        var service = new WalletVerificationService(repository, unitOfWork, TimeProvider.System, _logger);
 
         return (service, context);
     }

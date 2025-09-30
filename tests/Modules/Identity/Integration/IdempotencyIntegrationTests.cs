@@ -295,7 +295,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         var wallet = TestDataFixtures.CreateW1Main();
         var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, wallet.Id);
 
-        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal, CancellationToken.None);
         await WalletRepository.AddAsync(wallet, CancellationToken.None);
@@ -338,7 +338,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         var wallet = TestDataFixtures.CreateW1Main();
         var pendingOwnership = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
 
-        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal, CancellationToken.None);
         await WalletRepository.AddAsync(wallet, CancellationToken.None);
@@ -499,7 +499,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         var wallet = TestDataFixtures.CreateW1Main();
         var pendingOwnership = TestDataFixtures.CreatePendingSigningOwnership(principal.Id, wallet.Id);
 
-        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.AddAsync(principal, CancellationToken.None);
         await WalletRepository.AddAsync(wallet, CancellationToken.None);

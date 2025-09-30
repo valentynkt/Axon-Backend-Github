@@ -1,0 +1,809 @@
+# Axon Library Capabilities Map
+# Comprehensive mapping of library features, use cases, and integration patterns
+# Version: 1.0
+# Last Updated: 2025-09-30
+
+# ═══════════════════════════════════════════════════════════
+#                    CORE ARCHITECTURE LIBRARIES
+# ═══════════════════════════════════════════════════════════
+
+core_libraries:
+  mediatr:
+    name: MediatR
+    version: "12.x"
+    category: architecture
+    purpose: "CQRS mediator pattern implementation"
+    nuget_package: MediatR
+    documentation: "Docs/Libraries/MediatR/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      request_response:
+        - "IRequest<TResponse> interface"
+        - "IRequestHandler<TRequest, TResponse>"
+        - "Async pipeline behavior"
+        - "Unit return type for void operations"
+
+      notifications:
+        - "INotification interface"
+        - "INotificationHandler<TNotification>"
+        - "Multiple handlers per notification"
+        - "Domain events dispatch"
+
+      pipeline_behaviors:
+        - "Logging behavior"
+        - "Validation behavior"
+        - "Transaction behavior"
+        - "Performance monitoring"
+
+    use_cases:
+      - "Command handlers (write operations)"
+      - "Query handlers (read operations)"
+      - "Domain event handlers"
+      - "Cross-cutting concerns (validation, logging)"
+
+    when_to_use:
+      - "Every command/query in Application layer"
+      - "Domain event propagation"
+      - "Request pipeline processing"
+
+    integration_points:
+      - "FastEndpoints (ISender injection)"
+      - "Domain layer (event dispatch)"
+      - "FluentValidation (pipeline behavior)"
+
+    code_example: |
+      // Command
+      public sealed record CreateUserCommand(string Email) : ICommand<User>;
+
+      // Handler
+      public sealed class CreateUserHandler
+          : IRequestHandler<CreateUserCommand, Result<User, Error>>
+      {
+          public async Task<Result<User, Error>> Handle(
+              CreateUserCommand cmd,
+              CancellationToken ct)
+          {
+              // Business logic
+          }
+      }
+
+  fastendpoints:
+    name: FastEndpoints
+    version: "5.x"
+    category: api
+    purpose: "Minimal API endpoints without controllers"
+    nuget_package: FastEndpoints
+    documentation: "Docs/Libraries/FastEndpoints/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      endpoint_definition:
+        - "Endpoint<TRequest, TResponse> base class"
+        - "Configure() for routing/auth"
+        - "HandleAsync() for logic"
+        - "Built-in model binding"
+
+      validation:
+        - "Validator<TRequest> integration"
+        - "FluentValidation support"
+        - "Automatic validation execution"
+        - "Error response formatting"
+
+      authentication:
+        - "JWT Bearer support"
+        - "AllowAnonymous()"
+        - "Policies()"
+        - "Claims access"
+
+      response_handling:
+        - "SendOkAsync()"
+        - "SendResultAsync()"
+        - "SendErrorsAsync()"
+        - "Custom status codes"
+
+    use_cases:
+      - "HTTP REST endpoints"
+      - "Request/response handling"
+      - "Authentication/authorization"
+      - "API versioning"
+
+    when_to_use:
+      - "All HTTP endpoints (replaces controllers)"
+      - "OpenAPI/Swagger generation"
+      - "Request validation"
+
+    integration_points:
+      - "MediatR (ISender for commands/queries)"
+      - "FluentValidation (request validation)"
+      - "JWT Bearer auth"
+
+    code_example: |
+      public sealed class GetUserEndpoint
+          : Endpoint<GetUserRequest, UserResponse>
+      {
+          public override void Configure()
+          {
+              Get("/api/v1/users/{id}");
+              Policies("UserPolicy");
+          }
+
+          public override async Task HandleAsync(
+              GetUserRequest req,
+              CancellationToken ct)
+          {
+              var query = new GetUserQuery(req.Id);
+              var result = await _sender.Send(query, ct);
+
+              await result.Match(
+                  onSuccess: user => SendOkAsync(user, ct),
+                  onFailure: error => SendResultAsync(Results.Problem(error.ToProblem())));
+          }
+      }
+
+  fluentvalidation:
+    name: FluentValidation
+    version: "11.x"
+    category: validation
+    purpose: "Fluent API for request/command validation"
+    nuget_package: FluentValidation
+    documentation: "Docs/Libraries/FluentValidation/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      rule_builders:
+        - "NotEmpty() / NotNull()"
+        - "EmailAddress()"
+        - "Length(min, max)"
+        - "Must(predicate) - custom validation"
+        - "GreaterThan() / LessThan()"
+        - "Matches(regex)"
+        - "IsInEnum()"
+
+      advanced_features:
+        - "Conditional validation (When/Unless)"
+        - "Nested object validation"
+        - "Collection validation"
+        - "Custom validators"
+        - "Async validation rules"
+
+      error_handling:
+        - "Custom error messages"
+        - "Error codes"
+        - "Localization support"
+
+    use_cases:
+      - "HTTP request validation"
+      - "Command validation"
+      - "Input sanitization"
+      - "Business rule pre-checks"
+
+    when_to_use:
+      - "Every FastEndpoints request"
+      - "Command objects"
+      - "Input that comes from outside system"
+
+    integration_points:
+      - "FastEndpoints (Validator<T>)"
+      - "MediatR (pipeline behavior)"
+
+    code_example: |
+      public sealed class CreateUserRequestValidator
+          : Validator<CreateUserRequest>
+      {
+          public CreateUserRequestValidator()
+          {
+              RuleFor(x => x.Email)
+                  .NotEmpty()
+                  .EmailAddress()
+                  .WithMessage("Valid email required");
+
+              RuleFor(x => x.WalletAddress)
+                  .NotEmpty()
+                  .Length(32, 44)
+                  .When(x => x.Type == PrincipalType.Human);
+          }
+      }
+
+# ═══════════════════════════════════════════════════════════
+#                    TESTING LIBRARIES
+# ═══════════════════════════════════════════════════════════
+
+testing_libraries:
+  nunit:
+    name: NUnit
+    version: "4.x"
+    category: testing
+    purpose: "Testing framework for unit and integration tests"
+    nuget_package: NUnit
+    documentation: "Docs/Libraries/NUnit/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      test_attributes:
+        - "[Test] - Single test method"
+        - "[TestCase] - Parameterized tests"
+        - "[TestFixture] - Test class"
+        - "[SetUp] / [TearDown] - Per-test lifecycle"
+        - "[OneTimeSetUp] / [OneTimeTearDown] - Per-fixture lifecycle"
+
+      assertions:
+        - "Assert.That() - Classic assertions"
+        - "Assert.Multiple() - Multiple assertions"
+        - "Assert.Throws<T>() - Exception testing"
+
+      test_organization:
+        - "Test fixtures"
+        - "Categories"
+        - "Explicit tests"
+        - "Ignore tests"
+
+    use_cases:
+      - "Unit tests (domain logic)"
+      - "Integration tests (database)"
+      - "API tests (endpoints)"
+
+    when_to_use:
+      - "All test projects"
+      - "90%+ code coverage target"
+
+    integration_points:
+      - "Shouldly (assertions)"
+      - "NSubstitute (mocking)"
+      - "Testcontainers (integration tests)"
+
+    code_example: |
+      [TestFixture]
+      public sealed class AxonPrincipalTests
+      {
+          [Test]
+          public void CreateHuman_ShouldReturnHumanPrincipal()
+          {
+              // Act
+              var principal = AxonPrincipal.CreateHuman();
+
+              // Assert
+              principal.Type.ShouldBe(PrincipalType.Human);
+              principal.Id.Value.ShouldNotBe(Guid.Empty);
+          }
+      }
+
+  shouldly:
+    name: Shouldly
+    version: "4.x"
+    category: testing
+    purpose: "Fluent assertion library with readable error messages"
+    nuget_package: Shouldly
+    documentation: "Docs/Libraries/Shouldly/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      assertions:
+        - "value.ShouldBe(expected)"
+        - "value.ShouldNotBe(unexpected)"
+        - "value.ShouldBeNull() / ShouldNotBeNull()"
+        - "collection.ShouldContain(item)"
+        - "collection.ShouldBeEmpty()"
+        - "value.ShouldBeOfType<T>()"
+        - "result.IsSuccess.ShouldBeTrue()"
+
+      advanced:
+        - "ShouldSatisfyAllConditions()"
+        - "Custom error messages"
+        - "Tolerance for numeric comparisons"
+
+    use_cases:
+      - "All test assertions"
+      - "Readable test output"
+      - "Fluent test syntax"
+
+    when_to_use:
+      - "Every test assertion (replaces Assert.That)"
+
+    code_example: |
+      result.IsSuccess.ShouldBeTrue();
+      result.Value.ShouldBe(expected);
+      user.Email.ShouldBe("test@example.com");
+      list.ShouldContain(item);
+      entity.ShouldNotBeNull();
+
+  nsubstitute:
+    name: NSubstitute
+    version: "5.x"
+    category: testing
+    purpose: "Mocking framework for unit tests"
+    nuget_package: NSubstitute
+    documentation: "Docs/Libraries/Moq/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      mock_creation:
+        - "Substitute.For<IInterface>()"
+        - "Partial mocks"
+        - "Multiple interfaces"
+
+      setup_behavior:
+        - "Returns() - Return values"
+        - "ReturnsForAnyArgs() - Ignore arguments"
+        - "Throws() - Exception simulation"
+        - "DoesNotReturn() - Never returns"
+
+      verification:
+        - "Received() - Verify call"
+        - "DidNotReceive() - Verify no call"
+        - "Received(n) - Verify call count"
+
+    use_cases:
+      - "Unit test isolation"
+      - "Repository mocking"
+      - "Service mocking"
+      - "External dependency simulation"
+
+    when_to_use:
+      - "Unit tests with dependencies"
+      - "Handler testing"
+      - "Service layer testing"
+
+    code_example: |
+      var mockRepo = Substitute.For<IAxonPrincipalRepository>();
+      mockRepo.GetByIdAsync(Arg.Any<AxonUserId>(), Arg.Any<CancellationToken>())
+          .Returns(Task.FromResult(testPrincipal));
+
+      // Test
+      var result = await handler.Handle(command, CancellationToken.None);
+
+      // Verify
+      await mockRepo.Received(1).GetByIdAsync(userId, Arg.Any<CancellationToken>());
+
+  testcontainers:
+    name: Testcontainers
+    version: "3.x"
+    category: testing
+    purpose: "Docker containers for integration testing"
+    nuget_package: Testcontainers
+    documentation: "Integration test infrastructure"
+
+    capabilities:
+      container_types:
+        - "PostgreSQL container"
+        - "Redis container"
+        - "Custom containers"
+
+      lifecycle:
+        - "StartAsync() - Start container"
+        - "StopAsync() - Stop container"
+        - "DisposeAsync() - Cleanup"
+
+      configuration:
+        - "Port mapping"
+        - "Environment variables"
+        - "Wait strategies"
+
+    use_cases:
+      - "Integration tests with real database"
+      - "Cache testing"
+      - "Message queue testing"
+
+    when_to_use:
+      - "Integration test base classes"
+      - "Repository testing"
+      - "End-to-end tests"
+
+    code_example: |
+      [OneTimeSetUp]
+      public async Task OneTimeSetUp()
+      {
+          _postgres = new PostgreSqlBuilder()
+              .WithImage("postgres:16")
+              .Build();
+
+          await _postgres.StartAsync();
+
+          var connString = _postgres.GetConnectionString();
+          _context = CreateDbContext(connString);
+      }
+
+# ═══════════════════════════════════════════════════════════
+#                    EXTERNAL INTEGRATION LIBRARIES
+# ═══════════════════════════════════════════════════════════
+
+external_libraries:
+  dynamic_auth:
+    name: Dynamic.xyz Authentication
+    version: "custom"
+    category: authentication
+    purpose: "Wallet-based JWT authentication via Dynamic.xyz"
+    documentation: "Docs/Libraries/dynamic_auth/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      jwt_validation:
+        - "Bearer token validation"
+        - "JWT signature verification"
+        - "Claims extraction"
+        - "Token expiration check"
+
+      wallet_verification:
+        - "Wallet ownership proof"
+        - "Signature verification"
+        - "Embedded wallet support"
+
+    use_cases:
+      - "User authentication"
+      - "Wallet ownership verification"
+      - "JWT token exchange"
+
+    when_to_use:
+      - "All authenticated endpoints"
+      - "Identity module operations"
+
+    integration_points:
+      - "ASP.NET Core authentication"
+      - "JWT Bearer middleware"
+      - "Identity module"
+
+    code_example: |
+      // Token exchange
+      var result = await _dynamicAuth.ValidateJwtAsync(bearerToken, ct);
+
+      // Wallet verification
+      var isValid = await _dynamicAuth.VerifyWalletSignatureAsync(
+          walletAddress,
+          signature,
+          message,
+          ct);
+
+  helius:
+    name: Helius
+    version: "custom"
+    category: blockchain
+    purpose: "Solana RPC and webhook services"
+    documentation: "Docs/Libraries/Helius/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      rpc_methods:
+        - "getTransaction()"
+        - "getAccountInfo()"
+        - "getBalance()"
+        - "getTokenAccounts()"
+
+      webhooks:
+        - "Transaction notifications"
+        - "Account change notifications"
+        - "Token transfer events"
+
+    use_cases:
+      - "Wallet verification"
+      - "Transaction monitoring"
+      - "Token balance queries"
+
+    when_to_use:
+      - "Blockchain data needs"
+      - "Wallet ownership verification"
+      - "Transaction history"
+
+    integration_points:
+      - "Identity module (wallet verification)"
+      - "HttpClient with Polly"
+
+    code_example: |
+      var balance = await _helius.GetBalanceAsync(walletAddress, ct);
+      var txn = await _helius.GetTransactionAsync(signature, ct);
+
+  openai:
+    name: OpenAI
+    version: "custom"
+    category: ai
+    purpose: "OpenAI API integration for chat functionality"
+    documentation: "Docs/Libraries/OpenAI/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      chat_completion:
+        - "GPT-4 / GPT-3.5 models"
+        - "Streaming responses"
+        - "Function calling"
+        - "Token counting"
+
+      models:
+        - "gpt-4-turbo"
+        - "gpt-3.5-turbo"
+        - "Custom fine-tuned models"
+
+    use_cases:
+      - "AI-powered chat responses"
+      - "Message generation"
+      - "Conversation context"
+
+    when_to_use:
+      - "Chat module AI features"
+      - "Message processing"
+
+    integration_points:
+      - "Chat module"
+      - "HttpClient with Polly"
+      - "Token budget management"
+
+    code_example: |
+      var response = await _openAi.CreateChatCompletionAsync(
+          messages: conversationHistory,
+          model: "gpt-4-turbo",
+          temperature: 0.7,
+          ct);
+
+# ═══════════════════════════════════════════════════════════
+#                    OBSERVABILITY & RESILIENCE LIBRARIES
+# ═══════════════════════════════════════════════════════════
+
+infrastructure_libraries:
+  opentelemetry:
+    name: OpenTelemetry
+    version: "1.x"
+    category: observability
+    purpose: "Distributed tracing, metrics, and logging"
+    nuget_package: OpenTelemetry
+    documentation: "Docs/Libraries/OpenTelemetry/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      tracing:
+        - "ActivitySource for custom spans"
+        - "Automatic instrumentation"
+        - "Span attributes"
+        - "Trace context propagation"
+
+      metrics:
+        - "Counter metrics"
+        - "Histogram metrics"
+        - "Gauge metrics"
+        - "Custom dimensions"
+
+      exporters:
+        - "Console exporter"
+        - "OTLP exporter"
+        - "Prometheus exporter"
+
+    use_cases:
+      - "Request tracing"
+      - "Performance monitoring"
+      - "Error tracking"
+      - "Distributed system observability"
+
+    when_to_use:
+      - "Production environments"
+      - "Performance debugging"
+      - "System health monitoring"
+
+    integration_points:
+      - "ASP.NET Core middleware"
+      - "Entity Framework Core"
+      - "HttpClient"
+
+    code_example: |
+      using var activity = _activitySource.StartActivity("ProcessCommand");
+      activity?.SetTag("command.type", command.GetType().Name);
+      activity?.SetTag("user.id", userId);
+
+  polly:
+    name: Polly
+    version: "8.x"
+    category: resilience
+    purpose: "Resilience patterns (retry, circuit breaker, timeout)"
+    nuget_package: Polly
+    documentation: "Docs/Libraries/Polly/IMPLEMENTATION_GUIDE.md"
+
+    capabilities:
+      policies:
+        - "Retry with exponential backoff"
+        - "Circuit breaker"
+        - "Timeout"
+        - "Bulkhead isolation"
+        - "Fallback"
+
+      resilience_pipeline:
+        - "Chained policies"
+        - "Policy registry"
+        - "Async support"
+
+    use_cases:
+      - "External API calls"
+      - "Database retry logic"
+      - "Service degradation"
+      - "Fault tolerance"
+
+    when_to_use:
+      - "All external HTTP calls"
+      - "Dynamic.xyz API calls"
+      - "Helius RPC calls"
+      - "OpenAI API calls"
+
+    integration_points:
+      - "HttpClient factory"
+      - "External service clients"
+
+    code_example: |
+      var retryPolicy = Policy
+          .Handle<HttpRequestException>()
+          .WaitAndRetryAsync(3, retryAttempt =>
+              TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+
+      var result = await retryPolicy.ExecuteAsync(() =>
+          _httpClient.GetAsync(url, ct));
+
+# ═══════════════════════════════════════════════════════════
+#                    DOMAIN & VALUE OBJECT LIBRARIES
+# ═══════════════════════════════════════════════════════════
+
+domain_libraries:
+  csharpfunctionalextensions:
+    name: CSharpFunctionalExtensions
+    version: "2.x"
+    category: functional_programming
+    purpose: "Result<T, E> pattern for error handling"
+    nuget_package: CSharpFunctionalExtensions
+    documentation: "BuildingBlocks/Core/Result pattern"
+
+    capabilities:
+      result_creation:
+        - "Result.Success<T, E>(value)"
+        - "Result.Failure<T, E>(error)"
+
+      result_operations:
+        - "Bind() - Chain operations"
+        - "Map() - Transform success value"
+        - "Match() - Pattern matching"
+        - "Tap() - Side effects"
+
+      result_checking:
+        - "IsSuccess / IsFailure"
+        - "Value property"
+        - "Error property"
+
+    use_cases:
+      - "Domain operation error handling"
+      - "Command/query results"
+      - "Validation results"
+
+    when_to_use:
+      - "All domain methods that can fail"
+      - "All command/query handlers"
+      - "Repository operations"
+
+  stronglytypedid:
+    name: StronglyTypedId
+    version: "1.x"
+    category: domain_modeling
+    purpose: "Type-safe entity identifiers"
+    nuget_package: StronglyTypedId
+    documentation: "BuildingBlocks/Core/StrongId pattern"
+
+    capabilities:
+      id_generation:
+        - "Template.Guid"
+        - "Template.Int"
+        - "Template.String"
+
+      operations:
+        - "New() - Create new ID"
+        - "From(value) - From existing value"
+        - "Value - Get underlying value"
+
+    use_cases:
+      - "Aggregate root IDs"
+      - "Entity IDs"
+      - "Preventing ID mix-ups"
+
+    when_to_use:
+      - "All aggregate root IDs"
+      - "All entity IDs"
+
+  vogen:
+    name: Vogen
+    version: "4.x"
+    category: domain_modeling
+    purpose: "Value objects with validation"
+    nuget_package: Vogen
+    documentation: "BuildingBlocks/Core/Value objects"
+
+    capabilities:
+      value_object_creation:
+        - "ValueObject attribute"
+        - "Validation on creation"
+        - "Immutability"
+
+      validation:
+        - "Validate(value) method"
+        - "Validation.Ok / Invalid"
+        - "Custom error messages"
+
+    use_cases:
+      - "Email addresses"
+      - "Money/currency"
+      - "Domain-specific value types"
+
+    when_to_use:
+      - "Domain values with validation"
+      - "Immutable value types"
+
+# ═══════════════════════════════════════════════════════════
+#                    LIBRARY DECISION MATRIX
+# ═══════════════════════════════════════════════════════════
+
+decision_matrix:
+  command_or_query:
+    library: MediatR
+    pattern: "Command/Query pattern"
+    when: "Any application-layer operation"
+
+  http_endpoint:
+    library: FastEndpoints
+    pattern: "Endpoint pattern"
+    when: "Exposing HTTP API"
+
+  input_validation:
+    library: FluentValidation
+    pattern: "Validator pattern"
+    when: "Validating requests or commands"
+
+  domain_error:
+    library: CSharpFunctionalExtensions
+    pattern: "Result<T, Error>"
+    when: "Domain operations that can fail"
+
+  entity_id:
+    library: StronglyTypedId
+    pattern: "StrongId<T>"
+    when: "Entity identifiers"
+
+  value_object:
+    library: Vogen
+    pattern: "Value object"
+    when: "Validated immutable values"
+
+  unit_test:
+    library: NUnit + Shouldly
+    pattern: "Unit test"
+    when: "Testing domain logic"
+
+  integration_test:
+    library: NUnit + Testcontainers
+    pattern: "Integration test"
+    when: "Testing with real database"
+
+  external_api:
+    library: HttpClient + Polly
+    pattern: "Resilient HTTP client"
+    when: "Calling external services"
+
+  observability:
+    library: OpenTelemetry
+    pattern: "Distributed tracing"
+    when: "Production monitoring"
+
+# ═══════════════════════════════════════════════════════════
+#                    METADATA
+# ═══════════════════════════════════════════════════════════
+
+metadata:
+  version: "1.0"
+  last_updated: "2025-09-30"
+  total_libraries: 16
+  categories:
+    - architecture
+    - api
+    - validation
+    - testing
+    - authentication
+    - blockchain
+    - ai
+    - observability
+    - resilience
+    - functional_programming
+    - domain_modeling
+
+  usage_notes:
+    - "Load this file when selecting libraries for implementation"
+    - "Reference library capabilities in task instructions"
+    - "Ensure library integration points are considered"
+    - "Follow library-specific patterns from implementation guides"
+
+  library_versions:
+    update_frequency: "Quarterly review"
+    compatibility_check: ".NET 10 Preview compatibility verified"
+    last_review: "2025-09-30"
+
+  references:
+    - "Docs/Libraries/00-INDEX.md"
+    - "Docs/ENGINEERING/guides/architecture/tech-stack.md"
+    - "bmad/axon/data/pattern-catalog.yaml"

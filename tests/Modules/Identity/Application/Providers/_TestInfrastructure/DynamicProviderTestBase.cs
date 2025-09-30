@@ -41,6 +41,7 @@ public abstract class DynamicProviderTestBase
     protected IMemoryCache MemoryCache { get; set; } = null!;
     protected IHttpContextAccessor HttpContextAccessor { get; set; } = null!;
     protected UserManager<AxonUserAuth> UserManager { get; set; } = null!;
+    protected TimeProvider TimeProvider { get; set; } = null!;
     protected ILogger<DynamicAuthenticationProvider> Logger { get; set; } = null!;
 
     // System under test
@@ -58,6 +59,7 @@ public abstract class DynamicProviderTestBase
         WalletVerificationService = Substitute.For<IWalletVerificationService>();
         MemoryCache = Substitute.For<IMemoryCache>();
         HttpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        TimeProvider = Substitute.For<TimeProvider>();
         Logger = Substitute.For<ILogger<DynamicAuthenticationProvider>>();
 
         // Mock UserManager (requires complex setup)
@@ -77,6 +79,7 @@ public abstract class DynamicProviderTestBase
             MemoryCache,
             HttpContextAccessor,
             UserManager,
+            TimeProvider,
             Logger);
     }
 

@@ -72,6 +72,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             WalletRepository,
             _walletOwnershipRepository,
             _autoRevocationService,
+            TimeProvider.System,
             _logger);
 
         await Task.CompletedTask;
@@ -158,7 +159,8 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
 
         var linkResult = principal.LinkWalletOwnership(
             ownership,
-            (_, _, _) => Result.Success<bool, Error>(false));
+            (_, _, _) => Result.Success<bool, Error>(false),
+            TimeProvider.System);
         linkResult.IsSuccess.ShouldBeTrue();
 
         await PrincipalRepository.UpdateAsync(principal);
@@ -285,7 +287,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
             var localWalletOwnershipRepository = new WalletOwnershipRepository(localReadContext);
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
-            using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork);
+            using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork, TimeProvider.System);
             var localAutoRevocationService = Substitute.For<IAutoRevocationService>();
             localAutoRevocationService.ProcessAutoRevocationAsync(
                 Arg.Any<WalletId>(),
@@ -301,6 +303,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
                 localWalletWriteRepository,
                 localWalletOwnershipRepository,
                 localAutoRevocationService,
+                TimeProvider.System,
                 localLogger);
 
             return await localResolutionService.ResolveAsync(
@@ -369,7 +372,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
             var localWalletOwnershipRepository = new WalletOwnershipRepository(localReadContext);
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
-            using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork);
+            using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork, TimeProvider.System);
 
             var localAutoRevocationService = Substitute.For<IAutoRevocationService>();
             localAutoRevocationService.ProcessAutoRevocationAsync(
@@ -385,6 +388,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
                 localWalletWriteRepository,
                 localWalletOwnershipRepository,
                 localAutoRevocationService,
+                TimeProvider.System,
                 Substitute.For<ILogger<PrincipalResolutionService>>());
 
             // Add small random delay to increase chance of race condition
@@ -470,8 +474,8 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             OwnershipStatus.Verified,
             VerificationSource.DynamicAttested); // Higher priority
 
-        olderPrincipal.LinkWalletOwnership(olderOwnership, (_, _, _) => Result.Success<bool, Error>(false));
-        newerPrincipal.LinkWalletOwnership(newerOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        olderPrincipal.LinkWalletOwnership(olderOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        newerPrincipal.LinkWalletOwnership(newerOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(olderPrincipal);
         await PrincipalRepository.UpdateAsync(newerPrincipal);
@@ -531,8 +535,8 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             OwnershipStatus.Verified,
             VerificationSource.DynamicAttested); // Highest priority source
 
-        signingPrincipal.LinkWalletOwnership(signingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
-        watchOnlyPrincipal.LinkWalletOwnership(watchOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        signingPrincipal.LinkWalletOwnership(signingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        watchOnlyPrincipal.LinkWalletOwnership(watchOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(signingPrincipal);
         await PrincipalRepository.UpdateAsync(watchOnlyPrincipal);

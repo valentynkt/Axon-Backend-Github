@@ -278,6 +278,10 @@ namespace Axon.Modules.Chat.Infrastructure.Migrations
 
                             b1.HasKey("ConversationId", "Id");
 
+                            b1.HasIndex("AiResponseId")
+                                .IsUnique()
+                                .HasFilter("\"AiResponseId\" IS NOT NULL");
+
                             b1.HasIndex("ConversationId");
 
                             b1.HasIndex("ConversationId", "Sequence");

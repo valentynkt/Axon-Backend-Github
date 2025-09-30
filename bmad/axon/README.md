@@ -1,6 +1,6 @@
 # Axon Development Orchestrator
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue) ![Status](https://img.shields.io/badge/status-Phase%201%20Complete-brightgreen) ![BMAD](https://img.shields.io/badge/BMAD-6.0.0-purple) ![Progress](https://img.shields.io/badge/progress-12.5%25-orange)
+![Version](https://img.shields.io/badge/version-1.0.0-blue) ![Status](https://img.shields.io/badge/status-Production%20Ready-brightgreen) ![BMAD](https://img.shields.io/badge/BMAD-6.0.0-purple) ![Progress](https://img.shields.io/badge/progress-100%25-success)
 
 **Brownfield-aware AI development with library-first implementation for .NET + Clean Architecture + DDD + CQRS**
 
@@ -81,7 +81,15 @@ Production Code
 
 ---
 
-## 📚 Installation
+## 📚 Documentation
+
+### Getting Started
+
+- **[Quick Start Guide](QUICK-START.md)** ⚡ - Get productive in 10 minutes
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** 🔧 - Common issues and solutions
+- **[#yolo Mode Guide](YOLO-MODE.md)** 🚀 - Fast-track execution for experts
+
+### Installation
 
 ```bash
 # Module is located at:
@@ -96,6 +104,41 @@ Load: bmad/axon/agents/{agent-name}.md
 # To run a workflow:
 Execute: bmad/axon/workflows/{workflow-name}/workflow.yaml
 ```
+
+### 🎯 Claude Code Integration (Slash Commands)
+
+**All Axon agents and workflows are available as Claude Code slash commands!**
+
+```bash
+# Install Claude Code commands (one-time setup):
+Run workflow: bmad/axon/workflows/install-claude-commands/workflow.yaml
+
+# Or load in Claude Code:
+/bmad:axon:workflows:install-claude-commands
+```
+
+**Once installed, access via slash commands:**
+
+```
+# Agents (type / to see all):
+/bmad:axon:agents:axon-story-orchestrator
+/bmad:axon:agents:axon-doc-oracle
+/bmad:axon:agents:axon-archaeologist
+/bmad:axon:agents:axon-library-sage
+/bmad:axon:agents:axon-implementation-surgeon
+/bmad:axon:agents:axon-quality-guardian
+
+# Workflows:
+/bmad:axon:workflows:story-orchestrator
+/bmad:axon:workflows:identity-workflow
+/bmad:axon:workflows:chat-workflow
+# ... and 6 more workflows
+```
+
+**Installation creates:**
+- `.claude/commands/bmad/axon/agents/` - 6 agent commands
+- `.claude/commands/bmad/axon/workflows/` - 9 workflow commands
+- `.claude/commands/bmad/axon/README.md` - Usage guide
 
 ---
 

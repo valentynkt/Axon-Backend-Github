@@ -58,7 +58,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         {
             var linkResult = principals[i].LinkWalletOwnership(
                 pendingOwnerships[i],
-                (_, _, _) => Result.Success<bool, Error>(false)); // Allow multiple pending
+                (_, _, _) => Result.Success<bool, Error>(false),
+                TimeProvider.System); // Allow multiple pending
 
             linkResult.IsSuccess.ShouldBeTrue($"Principal {i} should be able to add pending ownership");
         }
@@ -74,7 +75,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         var winnerOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(principals[0].Id, contestedWallet.Id);
         var verificationResult = principals[0].LinkWalletOwnership(
             winnerOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         verificationResult.IsSuccess.ShouldBeTrue("Winner should successfully verify ownership");
 
@@ -124,7 +126,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         foreach (var competitor in competitors)
         {
             var pendingOwnership = TestDataFixtures.CreatePendingSigningOwnership(competitor.Id, wallet.Id);
-            competitor.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+            competitor.LinkWalletOwnership(pendingOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
             await PrincipalRepository.UpdateAsync(competitor, CancellationToken.None);
         }
         await UnitOfWork.SaveChangesAsync(CancellationToken.None);
@@ -136,7 +138,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             var winnerOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(winner.Id, wallet.Id);
             var verificationResult = winner.LinkWalletOwnership(
                 winnerOwnership,
-                (walletId, accessMode, status) => CheckExistingOwnershipAsync(walletId, accessMode, status).GetAwaiter().GetResult());
+                (walletId, accessMode, status) => CheckExistingOwnershipAsync(walletId, accessMode, status).GetAwaiter().GetResult(),
+                TimeProvider.System);
 
             verificationResult.IsSuccess.ShouldBeTrue("Winner verification should succeed");
 
@@ -190,10 +193,10 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         var pendingB1 = TestDataFixtures.CreatePendingSigningOwnership(principalB.Id, wallet1.Id);
         var pendingB2 = TestDataFixtures.CreatePendingSigningOwnership(principalB.Id, wallet2.Id);
 
-        principalA.LinkWalletOwnership(pendingA1, (_, _, _) => Result.Success<bool, Error>(false));
-        principalA.LinkWalletOwnership(pendingA2, (_, _, _) => Result.Success<bool, Error>(false));
-        principalB.LinkWalletOwnership(pendingB1, (_, _, _) => Result.Success<bool, Error>(false));
-        principalB.LinkWalletOwnership(pendingB2, (_, _, _) => Result.Success<bool, Error>(false));
+        principalA.LinkWalletOwnership(pendingA1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalA.LinkWalletOwnership(pendingA2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalB.LinkWalletOwnership(pendingB1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principalB.LinkWalletOwnership(pendingB2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principalA, CancellationToken.None);
         await PrincipalRepository.UpdateAsync(principalB, CancellationToken.None);
@@ -203,7 +206,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
         var verifiedA1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, wallet1.Id);
         var verificationResult = principalA.LinkWalletOwnership(
             verifiedA1,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         verificationResult.IsSuccess.ShouldBeTrue("Principal A should verify wallet1");
         await PrincipalRepository.UpdateAsync(principalA, CancellationToken.None);
@@ -260,7 +264,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
 
                 using var separateContext = CreateConcurrentDbContext();
                 var separateUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(separateContext);
-                using var repo = new AxonPrincipalWriteRepository(separateContext, separateUnitOfWork);
+                using var repo = new AxonPrincipalWriteRepository(separateContext, separateUnitOfWork, TimeProvider.System);
 
                 var freshPrincipal = await repo.GetByIdAsync(principal.Id, CancellationToken.None);
                 var ownership = TestDataFixtures.CreateVerifiedSigningOwnership(principal.Id, hotWallet.Id);
@@ -268,7 +272,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
                 var linkResult = freshPrincipal!.LinkWalletOwnership(
                     ownership,
                     (walletId, accessMode, status) => CheckExistingOwnershipWithContextAsync(
-                        separateContext, walletId, accessMode, status).GetAwaiter().GetResult());
+                        separateContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 if (linkResult.IsSuccess)
                 {
@@ -277,8 +282,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
                     // Process auto-revocation if needed
                     if (ownership.Status == OwnershipStatus.Verified && ownership.AccessMode == AccessMode.Signing)
                     {
-                        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<AutoRevocationService>.Instance;
-                        var autoRevocationService = new AutoRevocationService(separateContext, logger);
+                        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<AutoRevocationService>>();
+                        var autoRevocationService = new AutoRevocationService(separateContext, TimeProvider.System, logger);
                         await autoRevocationService.ProcessAutoRevocationAsync(
                             hotWallet.Id,
                             principal.Id,
@@ -333,12 +338,13 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             {
                 // Transaction 1: A→wallet1, then A→wallet2
                 var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
-                using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1);
+                using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1, TimeProvider.System);
                 var principal = await repo1.GetByIdAsync(principalA.Id, CancellationToken.None);
 
                 var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, wallet1.Id);
                 principal!.LinkWalletOwnership(ownership1, (walletId, accessMode, status) =>
-                    CheckExistingOwnershipWithContextAsync(context1, walletId, accessMode, status).GetAwaiter().GetResult());
+                    CheckExistingOwnershipWithContextAsync(context1, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 await repo1.UpdateAsync(principal, CancellationToken.None);
                 await context1.SaveChangesAsync();
@@ -347,7 +353,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
 
                 var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalA.Id, wallet2.Id);
                 principal.LinkWalletOwnership(ownership2, (walletId, accessMode, status) =>
-                    CheckExistingOwnershipWithContextAsync(context1, walletId, accessMode, status).GetAwaiter().GetResult());
+                    CheckExistingOwnershipWithContextAsync(context1, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 await repo1.UpdateAsync(principal, CancellationToken.None);
                 await context1.SaveChangesAsync();
@@ -356,12 +363,13 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             {
                 // Transaction 2: B→wallet2, then B→wallet1 (reverse order)
                 var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
-                using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
+                using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
                 var principal = await repo2.GetByIdAsync(principalB.Id, CancellationToken.None);
 
                 var ownership2 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, wallet2.Id);
                 principal!.LinkWalletOwnership(ownership2, (walletId, accessMode, status) =>
-                    CheckExistingOwnershipWithContextAsync(context2, walletId, accessMode, status).GetAwaiter().GetResult());
+                    CheckExistingOwnershipWithContextAsync(context2, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 await repo2.UpdateAsync(principal, CancellationToken.None);
                 await context2.SaveChangesAsync();
@@ -370,7 +378,8 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
 
                 var ownership1 = TestDataFixtures.CreateVerifiedSigningOwnership(principalB.Id, wallet1.Id);
                 principal.LinkWalletOwnership(ownership1, (walletId, accessMode, status) =>
-                    CheckExistingOwnershipWithContextAsync(context2, walletId, accessMode, status).GetAwaiter().GetResult());
+                    CheckExistingOwnershipWithContextAsync(context2, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 await repo2.UpdateAsync(principal, CancellationToken.None);
                 await context2.SaveChangesAsync();

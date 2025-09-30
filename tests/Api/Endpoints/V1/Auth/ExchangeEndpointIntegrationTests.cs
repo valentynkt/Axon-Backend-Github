@@ -185,7 +185,7 @@ public class ExchangeEndpointIntegrationTests
             OwnershipStatus.Verified,
             VerificationSource.DynamicAttested);
 
-        existingPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+        existingPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         _dbContext.AxonPrincipals.Add(existingPrincipal);
         _dbContext.Wallets.Add(conflictWallet);

@@ -46,12 +46,12 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         principal2.ShouldNotBeNull();
 
         // Modify and save first principal
-        principal1.UpdateRiskTier(RiskTier.Medium);
+        principal1.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
 
         // Try to modify and save second principal
-        principal2.UpdateRiskTier(RiskTier.High);
+        principal2.UpdateRiskTier(RiskTier.High, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(principal2);
 
         // Act & Assert: In-memory database may not enforce concurrency, so we handle both cases
@@ -82,8 +82,8 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         var ownership1 = CreateTestOwnership(principal.Id, eth.Id);
         var ownership2 = CreateTestOwnership(principal.Id, polygon.Id);
 
-        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
-        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal);
         await UnitOfWork.SaveChangesAsync();
@@ -97,18 +97,18 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         // Create a second context for concurrent update simulation
         using var context2 = CreateConcurrentDbContext();
         using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
-        using var repository2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
+        using var repository2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
 
         var principal2 = await repository2.GetByIdAsync(principal.Id);
         principal2.ShouldNotBeNull();
 
         // Context 1: Add BSC ownership and chain default
         var ownership3 = CreateTestOwnership(principal1.Id, bsc.Id);
-        principal1.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false));
-        principal1.ApplyChainDefaultsBatch(new[] { ("56", bsc.Id) });
+        principal1.LinkWalletOwnership(ownership3, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        principal1.ApplyChainDefaultsBatch(new[] { ("56", bsc.Id) }, TimeProvider.System);
 
         // Context 2: Update existing chain defaults
-        principal2.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        principal2.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) }, TimeProvider.System);
 
         // Save context 1 first
         await PrincipalRepository.UpdateAsync(principal1);
@@ -157,10 +157,10 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
 
         // Remove BSC ownership and add Avalanche ownership
         var bscOwnership = reloadedPrincipal.WalletOwnerships.First(wo => wo.WalletId == bsc.Id);
-        reloadedPrincipal.RemoveWalletOwnership(bsc.Id);
+        reloadedPrincipal.RemoveWalletOwnership(bsc.Id, TimeProvider.System);
 
         var avalancheOwnership = CreateTestOwnership(reloadedPrincipal.Id, newWallet.Id);
-        reloadedPrincipal.LinkWalletOwnership(avalancheOwnership, (_, _, _) => Result.Success<bool, Error>(false));
+        reloadedPrincipal.LinkWalletOwnership(avalancheOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
@@ -192,7 +192,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
             "https://app.dynamic.xyz/test",
             "existing-user");
 
-        var addResult = reloadedPrincipal.AddCredential(duplicateCredential, (_, _, _) => Result.Success<bool, Error>(false));
+        var addResult = reloadedPrincipal.AddCredential(duplicateCredential, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         // Assert: Should succeed (idempotent behavior - duplicate credential is updated, not rejected)
         addResult.IsSuccess.ShouldBeTrue();
@@ -217,7 +217,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
             ("137", polygon.Id)
         };
 
-        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(chainMappings);
+        var batchResult = reloadedPrincipal.ApplyChainDefaultsBatch(chainMappings, TimeProvider.System);
         batchResult.IsSuccess.ShouldBeTrue();
         batchResult.Value.ShouldBe(2); // Should apply 2 defaults
 
@@ -269,7 +269,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
 
         // Principal1 gets verified signing ownership
         var ownership1 = CreateTestOwnership(principal1.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+        principal1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(principal1);
         await UnitOfWork.SaveChangesAsync();
@@ -279,7 +279,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal2.ShouldNotBeNull();
 
         var ownership2 = CreateTestOwnership(principal2.Id, sharedWallet.Id, AccessMode.Signing, OwnershipStatus.Verified);
-        reloadedPrincipal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+        reloadedPrincipal2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(reloadedPrincipal2);
 
@@ -304,10 +304,10 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
 
         // Simulate a scenario where one part succeeds and another would fail
         // Update risk tier (this should succeed)
-        reloadedPrincipal.UpdateRiskTier(RiskTier.High);
+        reloadedPrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
 
         // Add chain defaults (this should succeed)
-        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) }, TimeProvider.System);
 
         // Record initial state
         var initialOwnershipCount = reloadedPrincipal.WalletOwnerships.Count;
@@ -345,7 +345,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         // Add chain defaults
-        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) }, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 
@@ -400,7 +400,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         // Add chain defaults
-        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) });
+        reloadedPrincipal.ApplyChainDefaultsBatch(new[] { ("1", eth.Id), ("137", polygon.Id) }, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 
@@ -486,7 +486,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
         reloadedPrincipal.ShouldNotBeNull();
 
         // Act: Update principal without adding any navigation properties
-        reloadedPrincipal.UpdateRiskTier(RiskTier.Medium);
+        reloadedPrincipal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
         await PrincipalRepository.UpdateAsync(reloadedPrincipal);
         await UnitOfWork.SaveChangesAsync();
 
@@ -526,7 +526,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
                 wallet.Id,
                 i % 3 == 0 ? AccessMode.WatchOnly : AccessMode.Signing);
 
-            reloadedPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+            reloadedPrincipal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
         }
 
         // Act: Update with many navigation properties

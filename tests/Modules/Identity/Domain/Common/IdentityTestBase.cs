@@ -63,7 +63,7 @@ public abstract class IdentityTestBase
         var principal = CreatePrincipal(type);
         if (riskTier != RiskTier.Low) // Default is Low
         {
-            var result = principal.UpdateRiskTier(riskTier);
+            var result = principal.UpdateRiskTier(riskTier, TimeProvider.System);
             if (result.IsFailure)
                 throw new InvalidOperationException($"Failed to set risk tier: {result.Error}");
         }

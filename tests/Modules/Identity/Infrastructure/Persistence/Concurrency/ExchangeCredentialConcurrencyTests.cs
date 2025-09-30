@@ -72,7 +72,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
             {
                 using var concurrentContext = CreateConcurrentDbContext();
                 using var concurrentUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
-                using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork);
+                using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork, TimeProvider.System);
 
                 try
                 {
@@ -139,7 +139,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
             {
                 using var concurrentContext = CreateConcurrentDbContext();
                 using var concurrentUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
-                using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork);
+                using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork, TimeProvider.System);
 
                 try
                 {
@@ -158,7 +158,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
                         OwnershipStatus.Verified,
                         VerificationSource.DynamicAttested);
 
-                    principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false));
+                    principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
                     await concurrentPrincipalRepo.AddAsync(principal);
                     await concurrentUnitOfWork.SaveChangesAsync();
@@ -216,7 +216,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
             {
                 using var concurrentContext = CreateConcurrentDbContext();
                 using var concurrentUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
-                using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork);
+                using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork, TimeProvider.System);
 
                 try
                 {
@@ -277,7 +277,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
         {
             using var context1 = CreateConcurrentDbContext();
             using var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
-            using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1);
+            using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1, TimeProvider.System);
 
             try
             {
@@ -286,12 +286,12 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
 
                 // Link wallet1 first, then wallet2
                 var ownership1 = CreateTestOwnership(p1.Id, wallet1.Id);
-                p1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+                p1.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
                 await Task.Delay(10); // Small delay to encourage deadlock
 
                 var ownership2 = CreateTestOwnership(p1.Id, wallet2.Id, AccessMode.WatchOnly);
-                p1.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+                p1.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
                 await repo1.UpdateAsync(p1);
                 await unitOfWork1.SaveChangesAsync();
@@ -307,7 +307,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
         {
             using var context2 = CreateConcurrentDbContext();
             using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
-            using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
+            using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
 
             try
             {
@@ -316,12 +316,12 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
 
                 // Link wallet2 first, then wallet1 (opposite order)
                 var ownership2 = CreateTestOwnership(p2.Id, wallet2.Id, AccessMode.WatchOnly);
-                p2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false));
+                p2.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
                 await Task.Delay(10); // Small delay to encourage deadlock
 
                 var ownership1 = CreateTestOwnership(p2.Id, wallet1.Id, AccessMode.WatchOnly);
-                p2.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false));
+                p2.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
                 await repo2.UpdateAsync(p2);
                 await unitOfWork2.SaveChangesAsync();

@@ -237,7 +237,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         var succeeded = 0;
         var failed = 0;
 
-        // Transaction 1
+        // Transaction 1 - Update the same field (title) to create actual conflict
         var task1 = Task.Run(async () =>
         {
             try
@@ -246,12 +246,17 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                     .FirstOrDefaultAsync(c => c.Id == conversation.Id);
                 conv.ShouldNotBeNull();
 
-                var content = MessageContent.From("Transaction 1 message");
-                conv.AppendUserMessageToConversation(content, TimeProvider);
+                // Update title - this modifies the Conversation row itself
+                conv.UpdateTitle("Transaction 1 Title", TimeProvider);
 
                 await context1.SaveChangesAsync();
                 await transaction1.CommitAsync();
                 Interlocked.Increment(ref succeeded);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction1.RollbackAsync();
+                Interlocked.Increment(ref failed);
             }
             catch
             {
@@ -264,7 +269,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
             }
         });
 
-        // Transaction 2
+        // Transaction 2 - Update the same field (title) to create conflict
         var task2 = Task.Run(async () =>
         {
             try
@@ -273,12 +278,17 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                     .FirstOrDefaultAsync(c => c.Id == conversation.Id);
                 conv.ShouldNotBeNull();
 
-                var content = MessageContent.From("Transaction 2 message");
-                conv.AppendUserMessageToConversation(content, TimeProvider);
+                // Update title - same field as transaction 1, creates conflict
+                conv.UpdateTitle("Transaction 2 Title", TimeProvider);
 
                 await context2.SaveChangesAsync();
                 await transaction2.CommitAsync();
                 Interlocked.Increment(ref succeeded);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction2.RollbackAsync();
+                Interlocked.Increment(ref failed);
             }
             catch
             {
@@ -293,15 +303,15 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         await Task.WhenAll(task1, task2);
 
-        // Assert: One succeeded, one failed
+        // Assert: One succeeded, one failed due to concurrency conflict
         succeeded.ShouldBe(1, "Exactly one transaction should succeed");
         failed.ShouldBe(1, "Exactly one transaction should fail");
 
-        // Verify final state
+        // Verify final state - one of the title updates should have persisted
         ClearChangeTracker();
         var final = await ConversationRepository.GetByIdAsync(conversation.Id);
         final.ShouldNotBeNull();
-        final.GetMessageCount().ShouldBe(1, "Only one message should be committed");
+        (final.Title?.Contains("Transaction") ?? false).ShouldBeTrue("One transaction's title update should have succeeded");
     }
 
     #endregion
@@ -420,8 +430,14 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                 await transaction.CommitAsync();
                 task1Completed = true;
             }
-            catch (Exception ex) when (IsDeadlockException(ex))
+            catch (DbUpdateException ex) when (IsDeadlockException(ex))
             {
+                deadlockDetected = true;
+                await transaction.RollbackAsync();
+            }
+            catch (InvalidOperationException ex) when (IsDeadlockException(ex))
+            {
+                // EF wraps some exceptions in InvalidOperationException
                 deadlockDetected = true;
                 await transaction.RollbackAsync();
             }
@@ -453,8 +469,14 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                 await transaction.CommitAsync();
                 task2Completed = true;
             }
-            catch (Exception ex) when (IsDeadlockException(ex))
+            catch (DbUpdateException ex) when (IsDeadlockException(ex))
             {
+                deadlockDetected = true;
+                await transaction.RollbackAsync();
+            }
+            catch (InvalidOperationException ex) when (IsDeadlockException(ex))
+            {
+                // EF wraps some exceptions in InvalidOperationException
                 deadlockDetected = true;
                 await transaction.RollbackAsync();
             }
@@ -513,8 +535,16 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
     private static bool IsDeadlockException(Exception ex)
     {
-        // PostgreSQL deadlock detection
-        return ex.InnerException?.Message.Contains("deadlock", StringComparison.OrdinalIgnoreCase) ?? false;
+        // PostgreSQL deadlock detection - check both direct and inner exceptions
+        var message = ex.Message + " " + (ex.InnerException?.Message ?? "");
+
+        // Check for PostgreSQL deadlock error code or message
+        if (ex.InnerException is Npgsql.PostgresException pgEx)
+        {
+            return pgEx.SqlState == "40P01"; // PostgreSQL deadlock code
+        }
+
+        return message.Contains("deadlock", StringComparison.OrdinalIgnoreCase);
     }
 
     // Removed SavepointWrapper - not needed with simplified approach

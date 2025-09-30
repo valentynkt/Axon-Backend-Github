@@ -55,13 +55,14 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
             {
                 // Principal A tries to verify the wallet
                 using var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
-                using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1);
+                using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1, TimeProvider.System);
                 var principal1 = await repo1.GetByIdAsync(principalA.Id, CancellationToken.None);
 
                 var linkResult = principal1!.LinkWalletOwnership(
                     ownershipA,
                     (walletId, accessMode, status) =>
-                        CheckExistingOwnershipAsync(context1, walletId, accessMode, status).GetAwaiter().GetResult());
+                        CheckExistingOwnershipAsync(context1, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 if (linkResult.IsSuccess)
                 {
@@ -77,13 +78,14 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
             {
                 // Principal B tries to verify the same wallet
                 using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
-                using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2);
+                using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
                 var principal2 = await repo2.GetByIdAsync(principalB.Id, CancellationToken.None);
 
                 var linkResult = principal2!.LinkWalletOwnership(
                     ownershipB,
                     (walletId, accessMode, status) =>
-                        CheckExistingOwnershipAsync(context2, walletId, accessMode, status).GetAwaiter().GetResult());
+                        CheckExistingOwnershipAsync(context2, walletId, accessMode, status).GetAwaiter().GetResult(),
+                    TimeProvider.System);
 
                 if (linkResult.IsSuccess)
                 {
@@ -208,8 +210,8 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         var pendingOwnershipB = TestDataFixtures.CreatePendingSigningOwnership(loserPrincipalB.Id, contestedWallet.Id);
 
         // Link pending ownerships first
-        loserPrincipalA.LinkWalletOwnership(pendingOwnershipA, (_, _, _) => Result.Success<bool, Error>(false));
-        loserPrincipalB.LinkWalletOwnership(pendingOwnershipB, (_, _, _) => Result.Success<bool, Error>(false));
+        loserPrincipalA.LinkWalletOwnership(pendingOwnershipA, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+        loserPrincipalB.LinkWalletOwnership(pendingOwnershipB, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(loserPrincipalA, CancellationToken.None);
         await PrincipalRepository.UpdateAsync(loserPrincipalB, CancellationToken.None);
@@ -219,7 +221,8 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         var winnerOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(winnerPrincipal.Id, contestedWallet.Id);
         var linkResult = winnerPrincipal.LinkWalletOwnership(
             winnerOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         linkResult.IsSuccess.ShouldBeTrue("Winner should successfully verify ownership");
 
@@ -259,7 +262,8 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         var verifiedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(existingVerifiedPrincipal.Id, wallet.Id);
         var linkVerifiedResult = existingVerifiedPrincipal.LinkWalletOwnership(
             verifiedOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         linkVerifiedResult.IsSuccess.ShouldBeTrue("Should be able to add verified ownership to empty wallet");
         await PrincipalRepository.UpdateAsync(existingVerifiedPrincipal, CancellationToken.None);
@@ -269,7 +273,8 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
         var pendingOwnership = TestDataFixtures.CreatePendingSigningOwnership(newPendingPrincipal.Id, wallet.Id);
         var linkResult = newPendingPrincipal.LinkWalletOwnership(
             pendingOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         // Assert: Should be rejected due to existing verified ownership
         linkResult.IsFailure.ShouldBeTrue("Adding pending ownership should fail when verified ownership exists");
@@ -307,7 +312,8 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
 
         var linkResult = principal.LinkWalletOwnership(
             revokedOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         linkResult.IsSuccess.ShouldBeTrue();
         await PrincipalRepository.UpdateAsync(principal, CancellationToken.None);
@@ -356,14 +362,16 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
 
         var revokedLinkResult = revokedPrincipal.LinkWalletOwnership(
             revokedOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
         revokedLinkResult.IsSuccess.ShouldBeTrue("Should be able to link revoked ownership");
 
         // Create verified ownership for competing principal
         var verifiedOwnership = TestDataFixtures.CreateVerifiedSigningOwnership(competingPrincipal.Id, wallet.Id);
         competingPrincipal.LinkWalletOwnership(
             verifiedOwnership,
-            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult());
+            (walletId, accessMode, status) => CheckExistingOwnershipAsync(DbContext, walletId, accessMode, status).GetAwaiter().GetResult(),
+            TimeProvider.System);
 
         await PrincipalRepository.UpdateAsync(revokedPrincipal, CancellationToken.None);
         await PrincipalRepository.UpdateAsync(competingPrincipal, CancellationToken.None);

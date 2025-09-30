@@ -32,6 +32,7 @@ public class WalletAuthenticationProviderTests
     private IWalletWriteRepository _walletRepo = null!;
     private UserManager<AxonUserAuth> _userManager = null!;
     private IChallengeValidationService _challengeValidationService = null!;
+    private TimeProvider _timeProvider = null!;
     private ILogger<Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider> _logger = null!;
     private Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider _provider = null!;
 
@@ -50,6 +51,7 @@ public class WalletAuthenticationProviderTests
         _walletOwnershipRepo = Substitute.For<IWalletOwnershipRepository>();
         _walletRepo = Substitute.For<IWalletWriteRepository>();
         _challengeValidationService = Substitute.For<IChallengeValidationService>();
+        _timeProvider = Substitute.For<TimeProvider>();
         _logger = Substitute.For<ILogger<Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider>>();
 
         // Setup UserManager mock
@@ -64,6 +66,7 @@ public class WalletAuthenticationProviderTests
             _walletRepo,
             _userManager,
             _challengeValidationService,
+            _timeProvider,
             _logger);
     }
 

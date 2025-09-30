@@ -6,6 +6,7 @@ using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.Events;
 using Axon.Modules.Identity.Domain.ValueObjects;
+using Axon.Modules.Identity.Infrastructure.Persistence.Configurations;
 using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
@@ -107,7 +108,15 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
         // Base class already calls HasDefaultSchema(ModuleName.ToLowerInvariant())
         // No need to duplicate schema configuration
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityWriteDbContext).Assembly);
+
+        // CRITICAL: Explicitly ignore AxonUserAuth entity - it belongs to IdentityContext only
+        // AxonUserAuth is managed by ASP.NET Core Identity and uses IdentityContext
+        modelBuilder.Ignore<AxonUserAuth>();
+
+        // Apply configurations EXCEPT AxonUserAuthConfiguration (which is for IdentityContext only)
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(IdentityWriteDbContext).Assembly,
+            t => t != typeof(AxonUserAuthConfiguration));
 
         // Child entities are now configured as owned types in AxonPrincipalConfiguration
         // They automatically inherit concurrency control from the parent aggregate

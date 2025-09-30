@@ -15,10 +15,12 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincipal, AxonUserId>, IAxonPrincipalWriteRepository
 {
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
+    private readonly TimeProvider _timeProvider;
 
-    public AxonPrincipalWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork) : base(context)
+    public AxonPrincipalWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork, TimeProvider timeProvider) : base(context)
     {
         _unitOfWork = unitOfWork;
+        _timeProvider = timeProvider;
     }
 
     public IWriteUnitOfWork<IdentityModule> UnitOfWork => _unitOfWork;
@@ -121,7 +123,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         foreach (var principal in principalsWithPendingOwnership)
         {
             // Use the aggregate method to revoke pending ownerships
-            var revokeResult = principal.RevokePendingOwnershipsForWallet(walletId, "Auto-revoked due to exclusivity constraint");
+            var revokeResult = principal.RevokePendingOwnershipsForWallet(walletId, _timeProvider, "Auto-revoked due to exclusivity constraint");
             if (revokeResult.IsSuccess)
             {
                 revokedCount += revokeResult.Value;

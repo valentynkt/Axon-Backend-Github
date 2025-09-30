@@ -73,12 +73,12 @@ public abstract class IdentityDbInvariantsTestBase
 
         DbContext = new IdentityWriteDbContext(options);
         UnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(DbContext);
-        PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork);
+        PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork, TimeProvider.System);
         WalletRepository = new WalletWriteRepository(DbContext, UnitOfWork);
 
         // Create AutoRevocationService with DbContext as IIdentityWriteDbContext
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<AutoRevocationService>.Instance;
-        AutoRevocationService = new AutoRevocationService(DbContext, logger);
+        AutoRevocationService = new AutoRevocationService(DbContext, TimeProvider.System, logger);
 
         // Ensure database is created and migrated
         await DbContext.Database.EnsureCreatedAsync();

@@ -61,7 +61,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         // Assert: Should violate unique constraint on ai_response_id
         await AssertPostgreSQLConstraintViolation(
             async () => await UnitOfWork.SaveChangesAsync(),
-            "ai_response" // Expected constraint name pattern
+            "IX_Messages_AiResponseId" // Expected constraint name
         );
     }
 

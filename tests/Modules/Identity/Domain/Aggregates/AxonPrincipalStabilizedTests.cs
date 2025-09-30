@@ -50,10 +50,10 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         // Arrange
         var principal = CreatePrincipal(type);
         if (current != RiskTier.Low)
-            principal.UpdateRiskTier(current);
+            principal.UpdateRiskTier(current, TimeProvider.System);
 
         // Act
-        var result = principal.UpdateRiskTier(newTier);
+        var result = principal.UpdateRiskTier(newTier, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBe(shouldSucceed);
@@ -68,11 +68,11 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
     {
         // Arrange
         var principal = CreatePrincipal();
-        principal.UpdateRiskTier(RiskTier.Medium);
+        principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
         var eventCount = principal.DomainEvents.Count;
 
         // Act
-        var result = principal.UpdateRiskTier(RiskTier.Medium);
+        var result = principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -87,7 +87,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var ownership = CreateOwnership(principal.Id);
 
         // Act
-        var result = principal.LinkWalletOwnership(ownership, NoConflictResolver);
+        var result = principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -102,7 +102,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var ownership = CreateOwnership(principal.Id, status: OwnershipStatus.Verified, accessMode: AccessMode.Signing);
 
         // Act
-        var result = principal.LinkWalletOwnership(ownership, ConflictResolver);
+        var result = principal.LinkWalletOwnership(ownership, ConflictResolver, TimeProvider.System);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -115,11 +115,11 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         // Arrange
         var principal = CreatePrincipal();
         var ownership = CreateOwnership(principal.Id);
-        principal.LinkWalletOwnership(ownership, NoConflictResolver);
+        principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
         var count = principal.WalletOwnerships.Count;
 
         // Act
-        var result = principal.LinkWalletOwnership(ownership, NoConflictResolver);
+        var result = principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -134,7 +134,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var credential = CreateCredential(principal.Id);
 
         // Act
-        var result = principal.AddCredential(credential, NoCredentialConflict);
+        var result = principal.AddCredential(credential, NoCredentialConflict, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -149,7 +149,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var credential = CreateCredential(principal.Id);
 
         // Act
-        var result = principal.AddCredential(credential, CredentialConflict);
+        var result = principal.AddCredential(credential, CredentialConflict, TimeProvider.System);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -162,11 +162,11 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         // Arrange
         var principal = CreatePrincipal();
         var credential = CreateCredential(principal.Id);
-        principal.AddCredential(credential, NoCredentialConflict);
+        principal.AddCredential(credential, NoCredentialConflict, TimeProvider.System);
         var count = principal.Credentials.Count;
 
         // Act
-        var result = principal.AddCredential(credential, NoCredentialConflict);
+        var result = principal.AddCredential(credential, NoCredentialConflict, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -180,10 +180,10 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var principal = CreatePrincipal();
         var walletId = WalletId.New();
         var ownership = WalletOwnership.Create(principal.Id, walletId, AccessMode.Signing, OwnershipStatus.Verified);
-        principal.LinkWalletOwnership(ownership, NoConflictResolver);
+        principal.LinkWalletOwnership(ownership, NoConflictResolver, TimeProvider.System);
 
         // Act
-        var result = principal.ApplyChainDefault( TestConstants.SolanaChain, walletId);
+        var result = principal.ApplyChainDefault( TestConstants.SolanaChain, walletId, TimeProvider.System);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -197,7 +197,7 @@ public class AxonPrincipalStabilizedTests : IdentityTestBase
         var walletId = WalletId.New();
 
         // Act
-        var result = principal.ApplyChainDefault( TestConstants.SolanaChain, walletId);
+        var result = principal.ApplyChainDefault( TestConstants.SolanaChain, walletId, TimeProvider.System);
 
         // Assert
         result.IsFailure.ShouldBeTrue();

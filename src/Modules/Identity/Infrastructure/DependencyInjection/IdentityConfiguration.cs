@@ -53,20 +53,18 @@ public static class IdentityConfiguration
             options.Stores.ProtectPersonalData = false; // Wallet addresses are public anyway
 
             // Token providers
-            options.Tokens.ProviderMap.Add(
-                "AxonTOTP",
-                new TokenProviderDescriptor(typeof(TotpSecurityStampBasedTokenProvider<AxonUserAuth>)));
+            // Note: ProviderMap configuration removed - AddDefaultTokenProviders() handles TOTP registration
+            // Custom providers are registered below with AddTokenProvider<>()
             options.Tokens.ProviderMap.Add(
                 "AxonChallenge",
                 new TokenProviderDescriptor(typeof(ChallengeTokenProvider)));
-            options.Tokens.AuthenticatorTokenProvider = "AxonTOTP";
         })
         .AddEntityFrameworkStores<IdentityContext>()
         .AddUserStore<AxonUserStore>()
         .AddUserManager<UserManager<AxonUserAuth>>()
         .AddSignInManager<SignInManager<AxonUserAuth>>()
-        .AddDefaultTokenProviders()
-        .AddTokenProvider<ChallengeTokenProvider>("AxonChallenge");
+        .AddDefaultTokenProviders() // Includes TOTP and other standard providers
+        .AddTokenProvider<ChallengeTokenProvider>("AxonChallenge"); // Custom challenge provider only
 
         // Replace claims transformation with custom claims principal factory
         // This adds claims at authentication time instead of per-request transformation

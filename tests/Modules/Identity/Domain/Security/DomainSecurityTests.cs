@@ -32,7 +32,7 @@ public class DomainSecurityTests
         public void DomainErrors_ShouldNotExposePrincipalIds()
         {
             // Act - When operations fail and generate domain errors
-            var invalidWalletResult = _principal.ApplyChainDefault( "solana-mainnet", WalletId.New());
+            var invalidWalletResult = _principal.ApplyChainDefault( "solana-mainnet", WalletId.New(), TimeProvider.System);
 
             // Assert - Then error messages should not contain principal IDs
             invalidWalletResult.IsFailure.ShouldBeTrue();
@@ -53,7 +53,7 @@ public class DomainSecurityTests
             var nonExistentWalletId = WalletId.New();
 
             // Act - When operation fails with wallet reference
-            var result = _principal.ApplyChainDefault( "ethereum-mainnet", nonExistentWalletId);
+            var result = _principal.ApplyChainDefault( "ethereum-mainnet", nonExistentWalletId, TimeProvider.System);
 
             // Assert - Then error should not expose wallet ID
             result.IsFailure.ShouldBeTrue();
@@ -68,10 +68,11 @@ public class DomainSecurityTests
         public void DomainErrors_ShouldProvideGenericMessages()
         {
             // Act - When various operations fail
-            var walletNotOwnedResult = _principal.ApplyChainDefault( "solana-mainnet", WalletId.New());
+            var walletNotOwnedResult = _principal.ApplyChainDefault( "solana-mainnet", WalletId.New(), TimeProvider.System);
             var conflictResult = _principal.LinkWalletOwnership(
                 WalletOwnership.Create(_principal.Id, _walletId, AccessMode.Signing, OwnershipStatus.Verified),
-                (wId, mode, status) => Result.Success<bool, Error>(true) // Simulate conflict
+                (wId, mode, status) => Result.Success<bool, Error>(true), // Simulate conflict
+                TimeProvider.System
             );
 
             // Assert - Then errors should have generic, safe messages
@@ -91,7 +92,7 @@ public class DomainSecurityTests
             var servicePrincipal = AxonPrincipal.CreateService();
 
             // Act - When validation fails
-            var result = servicePrincipal.UpdateRiskTier(RiskTier.High);
+            var result = servicePrincipal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
 
             // Assert - Then error should not leak internal structure
             result.IsFailure.ShouldBeTrue();
@@ -117,10 +118,11 @@ public class DomainSecurityTests
             // Act - When operations fail
             var results = new[]
             {
-                _principal.ApplyChainDefault( "test-chain", sensitiveWalletId),
+                _principal.ApplyChainDefault( "test-chain", sensitiveWalletId, TimeProvider.System),
                 _principal.LinkWalletOwnership(
                     WalletOwnership.Create(sensitivePrincipalId, sensitiveWalletId, AccessMode.Signing, OwnershipStatus.Verified),
-                    (wId, mode, status) => Result.Success<bool, Error>(false)
+                    (wId, mode, status) => Result.Success<bool, Error>(false),
+                    TimeProvider.System
                 )
             };
 
@@ -147,9 +149,9 @@ public class DomainSecurityTests
             // Arrange - Given various error scenarios
             var testScenarios = new[]
             {
-                () => _principal.ApplyChainDefault( "test", WalletId.New()),
-                () => _principal.UpdateRiskTier(_principal.RiskTier), // No-op, should succeed
-                () => AxonPrincipal.CreateService().UpdateRiskTier(RiskTier.High), // Should fail
+                () => _principal.ApplyChainDefault( "test", WalletId.New(), TimeProvider.System),
+                () => _principal.UpdateRiskTier(_principal.RiskTier, TimeProvider.System), // No-op, should succeed
+                () => AxonPrincipal.CreateService().UpdateRiskTier(RiskTier.High, TimeProvider.System), // Should fail
             };
 
             // Act & Assert - When errors occur, codes should be consistent
@@ -176,7 +178,8 @@ public class DomainSecurityTests
             var ownership = WalletOwnership.Create(_principal.Id, _walletId, AccessMode.Signing, OwnershipStatus.Verified);
             _principal.LinkWalletOwnership(
                 ownership,
-                (wId, mode, status) => Result.Success<bool, Error>(false)
+                (wId, mode, status) => Result.Success<bool, Error>(false),
+                TimeProvider.System
             );
 
             var maliciousChainIds = new[]
@@ -194,7 +197,7 @@ public class DomainSecurityTests
             {
                 Should.NotThrow(() =>
                 {
-                    var result = _principal.ApplyChainDefault( maliciousChainId, _walletId);
+                    var result = _principal.ApplyChainDefault( maliciousChainId, _walletId, TimeProvider.System);
                     // Operation should either succeed or fail gracefully without exceptions
                 });
             }
@@ -208,13 +211,14 @@ public class DomainSecurityTests
 
             // Act & Assert - When using edge case inputs
             Should.Throw<ArgumentNullException>(() =>
-                _principal.LinkWalletOwnership(nullOwnership, (wId, mode, status) => Result.Success<bool, Error>(false))
+                _principal.LinkWalletOwnership(nullOwnership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System)
             );
 
             Should.Throw<ArgumentNullException>(() =>
                 _principal.LinkWalletOwnership(
                     WalletOwnership.Create(_principal.Id, _walletId),
-                    null!
+                    null!,
+                    TimeProvider.System
                 )
             );
         }
@@ -227,11 +231,12 @@ public class DomainSecurityTests
         public void DomainEvents_ShouldNotContainSensitiveInformation()
         {
             // Act - When performing operations that generate domain events
-            _principal.UpdateRiskTier(RiskTier.High);
+            _principal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
             var ownership = WalletOwnership.Create(_principal.Id, _walletId, AccessMode.Signing, OwnershipStatus.Verified);
             _principal.LinkWalletOwnership(
                 ownership,
-                (wId, mode, status) => Result.Success<bool, Error>(false)
+                (wId, mode, status) => Result.Success<bool, Error>(false),
+                TimeProvider.System
             );
 
             // Assert - Then domain events should not leak sensitive data
@@ -259,9 +264,9 @@ public class DomainSecurityTests
             var initialEventCount = _principal.DomainEvents.Count;
 
             // Act - When performing state-changing operations
-            _principal.UpdateRiskTier(RiskTier.Medium); // Should raise event
-            _principal.UpdateRiskTier(RiskTier.Medium); // No-op, should not raise event
-            _principal.UpdateRiskTier(RiskTier.High);   // Should raise event
+            _principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System); // Should raise event
+            _principal.UpdateRiskTier(RiskTier.Medium, TimeProvider.System); // No-op, should not raise event
+            _principal.UpdateRiskTier(RiskTier.High, TimeProvider.System);   // Should raise event
 
             // Assert - Then domain events should be raised for actual changes
             // Note: Version is now managed by PostgreSQL's xmin system column,
@@ -285,9 +290,9 @@ public class DomainSecurityTests
         {
             // Act - When performing multiple state changes
             var ownership = WalletOwnership.Create(_principal.Id, _walletId, AccessMode.Signing, OwnershipStatus.Verified);
-            _principal.LinkWalletOwnership(ownership, (wId, mode, status) => Result.Success<bool, Error>(false));
-            _principal.UpdateRiskTier(RiskTier.High);
-            _principal.ApplyChainDefault( "solana-mainnet", _walletId);
+            _principal.LinkWalletOwnership(ownership, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            _principal.UpdateRiskTier(RiskTier.High, TimeProvider.System);
+            _principal.ApplyChainDefault( "solana-mainnet", _walletId, TimeProvider.System);
 
             // Assert - Then all state should remain consistent
             _principal.WalletOwnerships.Count.ShouldBe(1);
@@ -311,9 +316,9 @@ public class DomainSecurityTests
             var ownership2 = WalletOwnership.Create(_principal.Id, wallet2, AccessMode.WatchOnly, OwnershipStatus.Verified);
 
             // Act - When performing operations in sequence
-            var result1 = _principal.LinkWalletOwnership(ownership1, (wId, mode, status) => Result.Success<bool, Error>(false));
-            var result2 = _principal.LinkWalletOwnership(ownership2, (wId, mode, status) => Result.Success<bool, Error>(false));
-            var result3 = _principal.ApplyChainDefault( "solana-mainnet", wallet1);
+            var result1 = _principal.LinkWalletOwnership(ownership1, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            var result2 = _principal.LinkWalletOwnership(ownership2, (_, _, _) => Result.Success<bool, Error>(false), TimeProvider.System);
+            var result3 = _principal.ApplyChainDefault( "solana-mainnet", wallet1, TimeProvider.System);
 
             // Assert - Then all operations should succeed and maintain consistency
             result1.IsSuccess.ShouldBeTrue();

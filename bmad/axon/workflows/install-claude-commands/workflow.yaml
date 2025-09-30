@@ -1,0 +1,57 @@
+# Install Claude Code Commands - Workflow Configuration
+name: install-claude-commands
+description: "Installs Axon agents and workflows as Claude Code slash commands by copying files from bmad/axon/ to .claude/commands/bmad/axon/ with absolute path resolution"
+author: "Valik"
+
+# Critical variables
+config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+
+# Source and target paths
+source_agents: "{project-root}/bmad/axon/agents"
+source_workflows: "{project-root}/bmad/axon/workflows"
+target_base: "{project-root}/.claude/commands/bmad/axon"
+target_agents: "{target_base}/agents"
+target_workflows: "{target_base}/workflows"
+
+# Module path and component files
+installed_path: "{project-root}/bmad/axon/workflows/install-claude-commands"
+template: false # This is an action workflow - no template needed
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Agent files to install (6 agents)
+agents:
+  - axon-story-orchestrator.md
+  - axon-doc-oracle.md
+  - axon-archaeologist.md
+  - axon-library-sage.md
+  - axon-implementation-surgeon.md
+  - axon-quality-guardian.md
+
+# Workflow files to install (9 workflows)
+workflows:
+  - story-implementation
+  - story-orchestrator
+  - story-refactoring
+  - story-bugfix
+  - identity-workflow
+  - chat-workflow
+  - api-workflow
+  - pre-flight-validation
+  - doc-sync
+
+# Required tools
+required_tools:
+  - file_operations: "For creating directories and copying files"
+  - path_resolution: "For replacing {project-root} with absolute paths"
+
+# Metadata
+metadata:
+  workflow_type: action
+  complexity: medium
+  estimated_time: "5-10 minutes"
+  idempotent: true # Can be run multiple times safely

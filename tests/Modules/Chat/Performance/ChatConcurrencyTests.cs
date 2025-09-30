@@ -7,6 +7,8 @@ using Axon.Modules.Chat.Application.Contracts.Persistence;
 using Axon.Modules.Chat.Application.Services.Orchestration;
 using Axon.Modules.Chat.Application.Tests.Common;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
+using Axon.Modules.Chat.Domain.Entities;
+using Axon.Modules.Chat.Domain.Tests.Extensions;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
@@ -39,6 +41,12 @@ public class ChatConcurrencyTests : ApplicationTestBase
         _mockLogger = Substitute.For<ILogger<MessageProcessingOrchestrator>>();
 
         SetupRepositoryMocks();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        (_mockRepository as IDisposable)?.Dispose();
     }
 
     #region Concurrent Message Processing Tests
