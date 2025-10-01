@@ -205,6 +205,7 @@ public abstract class PrincipalResolutionTestBase
                 ProviderType.Dynamic,
                 Arg.Any<string>(),
                 Arg.Any<string>(),
+                Arg.Any<AxonUserId?>(),
                 Arg.Any<CancellationToken>())
             .Returns(isTaken);
     }

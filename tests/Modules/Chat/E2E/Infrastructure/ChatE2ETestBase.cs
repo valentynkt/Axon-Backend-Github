@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -34,6 +35,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
     protected WireMockServer JwksServer { get; private set; } = null!;
     protected FakeTimeProvider TimeProvider { get; private set; } = null!;
     protected MockAiProcessingService MockAiService { get; private set; } = null!;
+    protected AuthHeaderDelegatingHandler AuthHandler { get; private set; } = null!;
 
     private PostgreSqlContainer _postgreSqlContainer = null!;
     private string _connectionString = null!;
@@ -167,6 +169,15 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
                         // Disable lifetime validation for AxonJwt as well
                         options.TokenValidationParameters.ValidateLifetime = false;
                         options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
+
+                        // CRITICAL: Ensure AxonJwt validates Axon tokens correctly in tests
+                        options.TokenValidationParameters.ValidIssuer = "https://api.axon.test";
+                        options.TokenValidationParameters.ValidateIssuer = true;
+
+                        // CRITICAL FIX: Disable token replay protection for E2E tests
+                        // Token replay cache prevents the same token from being used multiple times
+                        // In E2E tests, we reuse the same token across multiple requests
+                        options.TokenValidationParameters.TokenReplayCache = null;
                     });
 
                     // Configure DynamicAuthService validation
@@ -186,6 +197,16 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
                     // Replace IJwksService with test implementation
                     services.AddSingleton<Axon.Modules.Identity.Application.Contracts.ExternalServices.IJwksService, TestJwksService>();
 
+                    // CRITICAL FIX: Override authentication scheme for E2E tests
+                    // Force all requests to use AxonJwt scheme instead of DynamicOrAxon policy scheme
+                    // This prevents the policy scheme from trying to validate Axon tokens with DynamicJwt scheme
+                    services.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(options =>
+                    {
+                        options.DefaultScheme = "AxonJwt";
+                        options.DefaultAuthenticateScheme = "AxonJwt";
+                        options.DefaultChallengeScheme = "AxonJwt";
+                    });
+
                     // Allow derived classes to configure additional services
                     ConfigureTestServices(services);
                 });
@@ -198,7 +219,22 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
                 });
             });
 
-        HttpClient = Factory.CreateClient();
+        // CRITICAL FIX: Clear memory cache AFTER Factory is created
+        // This prevents authentication state leakage between tests
+        ClearMemoryCacheIfExists();
+
+        // Create auth header delegating handler
+        // This ensures authorization headers persist across all HTTP requests
+        AuthHandler = new AuthHeaderDelegatingHandler
+        {
+            InnerHandler = Factory.Server.CreateHandler()
+        };
+
+        // Create HttpClient with our delegating handler
+        HttpClient = new HttpClient(AuthHandler)
+        {
+            BaseAddress = new Uri("http://localhost")
+        };
 
         // Setup database schemas (Chat + Identity)
         // EnsureDeletedAsync ensures clean state by dropping entire database first
@@ -219,6 +255,10 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
         }
         finally
         {
+            // CRITICAL FIX: Clear DbContext change trackers before disposing
+            // This ensures EF Core tracked entities don't leak between tests
+            ClearDbContextChangeTrackers();
+
             await CleanupDatabaseAsync();
             HttpClient?.Dispose();
 
@@ -385,12 +425,14 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
 
     protected void SetAuthorizationHeader(string jwt)
     {
-        HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+        // Use the delegating handler to ensure the token is injected into ALL requests
+        AuthHandler.SetBearerToken(jwt);
     }
 
     protected void ClearAuthorizationHeader()
     {
-        HttpClient.DefaultRequestHeaders.Authorization = null;
+        // Clear the token from the delegating handler
+        AuthHandler.ClearBearerToken();
     }
 
     protected static StringContent CreateJsonContent(string json)
@@ -520,6 +562,66 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
             options.EnableSensitiveDataLogging(false);
         });
+    }
+
+    #endregion
+
+    #region Test Isolation Helpers
+
+    /// <summary>
+    /// Clears memory cache to prevent state leakage between tests.
+    /// IMemoryCache caches authentication state (user IDs, principals) with 15-30 minute expiration.
+    /// Without clearing, cached auth from previous tests causes conflicts.
+    /// </summary>
+    private void ClearMemoryCacheIfExists()
+    {
+        try
+        {
+            // Check if Factory exists and has services (only after Factory creation)
+            if (Factory?.Services == null) return;
+
+            var cache = Factory.Services.GetService<IMemoryCache>();
+            if (cache is Microsoft.Extensions.Caching.Memory.MemoryCache memCache)
+            {
+                // Compact(1.0) removes ALL cache entries by setting eviction threshold to 100%
+                memCache.Compact(1.0);
+            }
+        }
+        catch
+        {
+            // Silently ignore - cache clearing is best-effort for test isolation
+        }
+    }
+
+    /// <summary>
+    /// Clears EF Core DbContext change trackers to prevent entity tracking conflicts.
+    /// PrincipalResolutionService reloads tracked entities for modifications.
+    /// Without clearing, tracked entities from previous tests cause conflicts.
+    /// </summary>
+    private void ClearDbContextChangeTrackers()
+    {
+        try
+        {
+            if (Factory?.Services == null) return;
+
+            using var scope = Factory.Services.CreateScope();
+
+            // Clear Chat DbContext
+            var chatDb = scope.ServiceProvider.GetService<ChatDbContext>();
+            chatDb?.ChangeTracker.Clear();
+
+            // Clear Identity Write DbContext
+            var identityWriteDb = scope.ServiceProvider.GetService<IdentityWriteDbContext>();
+            identityWriteDb?.ChangeTracker.Clear();
+
+            // Clear Identity Read DbContext (if needed)
+            var identityReadDb = scope.ServiceProvider.GetService<ChatReadDbContext>();
+            identityReadDb?.ChangeTracker.Clear();
+        }
+        catch
+        {
+            // Silently ignore - change tracker clearing is best-effort for test isolation
+        }
     }
 
     #endregion

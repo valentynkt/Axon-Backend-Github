@@ -128,6 +128,10 @@ public class PrincipalResolutionServiceTests
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
             .Returns(new List<WalletOwnershipWithPrincipal> { ownershipWithPrincipal });
 
+        // Mock GetByIdAsync to return tracked principal for credential updates
+        _principalWriteRepository.GetByIdAsync(existingPrincipal.Id, Arg.Any<CancellationToken>())
+            .Returns(existingPrincipal);
+
         // Act
         var result = await _service.ResolveAsync(
             _dynamicProvider, issuer, subject,
@@ -171,6 +175,12 @@ public class PrincipalResolutionServiceTests
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
             .Returns(new List<WalletOwnershipWithPrincipal> { ownershipA, ownershipB });
+
+        // Mock GetByIdAsync for winner principal (for credential updates) and loser principals (for revocation)
+        _principalWriteRepository.GetByIdAsync(principalB.Id, Arg.Any<CancellationToken>())
+            .Returns(principalB);
+        _principalWriteRepository.GetByIdAsync(principalA.Id, Arg.Any<CancellationToken>())
+            .Returns(principalA);
 
         // Act
         var result = await _service.ResolveAsync(
@@ -257,6 +267,10 @@ public class PrincipalResolutionServiceTests
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(newWallet.Id, Arg.Any<CancellationToken>())
             .Returns(new List<WalletOwnershipWithPrincipal> { raceOwnershipWithPrincipal });
 
+        // Mock GetByIdAsync to return tracked principal (for race condition resolution path)
+        _principalWriteRepository.GetByIdAsync(racingPrincipal.Id, Arg.Any<CancellationToken>())
+            .Returns(racingPrincipal);
+
         // Act
         var result = await _service.ResolveAsync(
             _dynamicProvider, issuer, subject,
@@ -299,6 +313,10 @@ public class PrincipalResolutionServiceTests
 
         _ownershipRepository.FindActiveOwnershipsByWalletAsync(existingWallet.Id, Arg.Any<CancellationToken>())
             .Returns(new List<WalletOwnershipWithPrincipal> { watchOnlyOwnershipWithPrincipal, verifiedOwnershipWithPrincipal });
+
+        // Mock GetByIdAsync to return tracked principal for credential updates
+        _principalWriteRepository.GetByIdAsync(verifiedSigningPrincipal.Id, Arg.Any<CancellationToken>())
+            .Returns(verifiedSigningPrincipal);
 
         // Act
         var result = await _service.ResolveAsync(

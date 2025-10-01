@@ -74,8 +74,8 @@ public class ChatResilienceTests : ApplicationTestBase
     {
         // Arrange: Database connection fails
         SetupSuccessfulMcpAndAi();
-        _mockRepository
-            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
+        _mockRepository.UnitOfWork
+            .SaveChangesAsync(Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Database connection timeout"));
 
         // Act

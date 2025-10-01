@@ -119,11 +119,13 @@ public class AuthMeE2ETests : E2ETestBase
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
         var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         // Act: Call /auth/me with If-None-Match header
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         SetIfNoneMatchHeader(initialETag);
         var conditionalResponse = await HttpClient.GetAsync("/api/v1/auth/me");
@@ -139,14 +141,16 @@ public class AuthMeE2ETests : E2ETestBase
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
         var (axonToken, _) = await SetupCredentialOnlyPrincipal(validJwt);
 
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         // Modify principal by adding a wallet
-        var (updatedAxonToken, _) = await AddWalletToPrincipal(validJwt);
+        var (updatedAxonToken, _) = await AddWalletToPrincipal();
 
         // Act: Call /auth/me with old ETag using updated token
+        ClearAllHeaders();
         SetAuthorizationHeader(updatedAxonToken);
         SetIfNoneMatchHeader(initialETag);
         var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
@@ -203,7 +207,7 @@ public class AuthMeE2ETests : E2ETestBase
         var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
 
         // Modify state by adding wallet
-        var (axonToken2, _) = await AddWalletToPrincipal(validJwt);
+        var (axonToken2, _) = await AddWalletToPrincipal();
 
         // Get updated state
         SetAuthorizationHeader(axonToken2);
@@ -211,7 +215,7 @@ public class AuthMeE2ETests : E2ETestBase
         var etag2 = AuthMeResponseValidator.ValidateAndExtractETag(response2);
 
         // Modify state again by adding second wallet
-        var (axonToken3, _) = await AddSecondWalletToPrincipal(validJwt);
+        var (axonToken3, _) = await AddSecondWalletToPrincipal();
 
         // Get final state
         SetAuthorizationHeader(axonToken3);
@@ -269,6 +273,7 @@ public class AuthMeE2ETests : E2ETestBase
         var (axonToken, _) = await SetupPrincipalWithMultipleWallets(validJwt);
 
         // Get initial state
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
@@ -283,6 +288,7 @@ public class AuthMeE2ETests : E2ETestBase
         await ChangeDefaultWalletForPrincipal(validJwt);
 
         // Get updated state - use same token as default change doesn't affect token
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var updatedETag = AuthMeResponseValidator.ValidateAndExtractETag(updatedResponse);
@@ -305,15 +311,16 @@ public class AuthMeE2ETests : E2ETestBase
     [Test]
     public async Task AuthMe_InvalidJWT_ShouldReturn401()
     {
-        // Arrange: Use expired JWT
-        var expiredJwt = JwtTestTokenFactory.CreateExpiredJwt();
+        // Arrange: Use JWT with invalid issuer (test cannot use expired JWT because ValidateLifetime=false in test setup)
+        var invalidIssuerJwt = JwtTestTokenFactory.CreateInvalidIssuerJwt();
 
         // Act: Call /auth/me with invalid token
-        SetAuthorizationHeader(expiredJwt);
+        ClearAllHeaders();
+        SetAuthorizationHeader(invalidIssuerJwt);
         var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return 401 Unauthorized
-        // Note: JWT middleware rejects expired tokens at middleware level (before endpoint),
+        // Note: JWT middleware rejects invalid tokens at middleware level (before endpoint),
         // so the response may not have a JSON body like endpoint-level errors.
         // The important validation is the 401 status code.
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -379,6 +386,7 @@ public class AuthMeE2ETests : E2ETestBase
         var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
         // Act: Measure initial response time
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         var startTime1 = DateTime.UtcNow;
         var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
@@ -388,6 +396,7 @@ public class AuthMeE2ETests : E2ETestBase
         var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
 
         // Act: Measure cached response time
+        ClearAllHeaders();
         SetAuthorizationHeader(axonToken);
         SetIfNoneMatchHeader(etag1);
         var startTime2 = DateTime.UtcNow;
@@ -413,6 +422,7 @@ public class AuthMeE2ETests : E2ETestBase
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
 
+        ClearAllHeaders();
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -428,6 +438,9 @@ public class AuthMeE2ETests : E2ETestBase
         // Read context might not immediately see writes from write context due to transaction isolation
         await Task.Delay(100);
 
+        // Clear headers after setup to prevent pollution
+        ClearAllHeaders();
+
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
@@ -441,6 +454,7 @@ public class AuthMeE2ETests : E2ETestBase
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
 
+        ClearAllHeaders();
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -454,21 +468,36 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Allow database transaction to commit before subsequent reads
         await Task.Delay(100);
+
+        // Clear headers after setup to prevent pollution
+        ClearAllHeaders();
 
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
     /// <summary>
-    /// Adds a wallet to an existing principal.
+    /// Adds a wallet to an existing principal by creating a NEW JWT with one wallet FOR THE SAME SUBJECT.
     /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task<(string AccessToken, string PrincipalId)> AddWalletToPrincipal(string jwt)
+    /// <param name="subject">The Dynamic subject ID to use (must match the existing principal)</param>
+    private async Task<(string AccessToken, string PrincipalId)> AddWalletToPrincipal(string subject = TestDataFixtures.DynA_Subject)
     {
+        // Create NEW JWT with ONE wallet (W1) to add to the principal
+        // This is necessary because exchange endpoint processes wallets from the JWT
+        // CRITICAL: Must use the SAME subject as the existing principal!
+        var jwtWithOneWallet = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets(
+            subject: subject,
+            wallets: new List<(string, string, string?, string?)>
+            {
+                (TestDataFixtures.W1MainAddress, TestDataFixtures.SolanaMainnetChain, "Phantom", "phantom")
+            });
+
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
 
-        SetAuthorizationHeader(jwt);
+        ClearAllHeaders();
+        SetAuthorizationHeader(jwtWithOneWallet);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -481,21 +510,37 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Allow database transaction to commit before subsequent reads
         await Task.Delay(100);
+
+        // Clear headers after setup to prevent pollution
+        ClearAllHeaders();
 
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
     /// <summary>
-    /// Adds a second wallet to an existing principal.
+    /// Adds a second wallet to an existing principal by creating a NEW JWT with two wallets FOR THE SAME SUBJECT.
     /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
     /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task<(string AccessToken, string PrincipalId)> AddSecondWalletToPrincipal(string jwt)
+    /// <param name="subject">The Dynamic subject ID to use (must match the existing principal)</param>
+    private async Task<(string AccessToken, string PrincipalId)> AddSecondWalletToPrincipal(string subject = TestDataFixtures.DynA_Subject)
     {
+        // Create NEW JWT with TWO wallets (W1 and W2) to add to the principal
+        // This is necessary because exchange endpoint processes wallets from the JWT
+        // CRITICAL: Must use the SAME subject as the existing principal!
+        var jwtWithTwoWallets = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets(
+            subject: subject,
+            wallets: new List<(string, string, string?, string?)>
+            {
+                (TestDataFixtures.W1MainAddress, TestDataFixtures.SolanaMainnetChain, "Phantom", "phantom"),
+                (TestDataFixtures.W2MainAddress, TestDataFixtures.SolanaMainnetChain, "Phantom", "phantom")
+            });
+
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
 
-        SetAuthorizationHeader(jwt);
+        ClearAllHeaders();
+        SetAuthorizationHeader(jwtWithTwoWallets);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -508,6 +553,9 @@ public class AuthMeE2ETests : E2ETestBase
 
         // Allow database transaction to commit before subsequent reads
         await Task.Delay(100);
+
+        // Clear headers after setup to prevent pollution
+        ClearAllHeaders();
 
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
@@ -522,7 +570,7 @@ public class AuthMeE2ETests : E2ETestBase
         // For now, we'll use the exchange endpoint which typically creates verified wallets
         // Note: Both method calls already include 50ms delays internally
         await SetupCredentialOnlyPrincipal(jwt);
-        return await AddWalletToPrincipal(jwt);
+        return await AddWalletToPrincipal();
     }
 
     /// <summary>

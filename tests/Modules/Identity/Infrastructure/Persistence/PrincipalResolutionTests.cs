@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Npgsql;
 using Axon.Modules.Identity.Application.Common.Models;
 using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Services;
@@ -306,13 +307,48 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
                 TimeProvider.System,
                 localLogger);
 
-            return await localResolutionService.ResolveAsync(
+            var result = await localResolutionService.ResolveAsync(
                 provider,
                 issuer,
                 $"concurrent-user-{index}",
                 chainId,
                 address,
                 CancellationToken.None);
+
+            // CRITICAL: Must call SaveChanges to persist the principal/ownership
+            // The service doesn't call SaveChanges because it's designed for MediatR pipeline
+            if (result.IsSuccess)
+            {
+                try
+                {
+                    await localUnitOfWork.SaveChangesAsync();
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+                {
+                    // Race condition: Another thread created verified+signing ownership for same wallet
+                    // Re-query to get the winner by finding the wallet and its ownership
+                    localReadContext.ChangeTracker.Clear();
+                    
+                    var wallet = await localWalletReadRepository.FindWalletAsync(
+                        chainId, address, CancellationToken.None);
+                    
+                    if (wallet != null)
+                    {
+                        var ownerships = await localWalletOwnershipRepository.FindActiveOwnershipsByWalletAsync(
+                            wallet.Id, CancellationToken.None);
+
+                        if (ownerships.Any())
+                        {
+                            var winner = ownerships.First(o => o.Ownership.Status == OwnershipStatus.Verified && 
+                                                               o.Ownership.AccessMode == AccessMode.Signing);
+                            return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
+                                winner.Principal, ResolutionPath.Wallet, WasAutoLinked: false));
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         // Act - Run concurrent resolutions
@@ -394,13 +430,22 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
             // Add small random delay to increase chance of race condition
             await Task.Delay(Random.Shared.Next(10, 50));
 
-            return await localResolutionService.ResolveAsync(
+            var result = await localResolutionService.ResolveAsync(
                 provider,
                 issuer,
                 $"ownership-race-{index}",
                 chainId,
                 address,
                 CancellationToken.None);
+
+            // CRITICAL: Must call SaveChanges to persist the principal/ownership
+            // The service doesn't call SaveChanges because it's designed for MediatR pipeline
+            if (result.IsSuccess)
+            {
+                await localUnitOfWork.SaveChangesAsync();
+            }
+
+            return result;
         }
 
         // Act

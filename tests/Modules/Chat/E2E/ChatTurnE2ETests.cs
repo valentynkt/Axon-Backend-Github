@@ -17,6 +17,8 @@ namespace Axon.Modules.Chat.E2E;
 /// Tests the complete chat flow: new conversations, continuing conversations,
 /// authentication integration, and error scenarios.
 /// Covers the most critical 80% of chat functionality.
+/// NOTE: Test isolation is achieved through IMemoryCache clearing and DbContext change tracker clearing
+/// in ChatE2ETestBase SetUp/TearDown, not through InstancePerTestCase (which conflicts with OneTimeSetUp).
 /// </summary>
 [TestFixture]
 public class ChatTurnE2ETests : ChatE2ETestBase
@@ -138,6 +140,13 @@ public class ChatTurnE2ETests : ChatE2ETestBase
 
         SetAuthorizationHeader(axonToken);
         var secondResponse = await PostChatTurnAsync(secondRequest);
+
+        // DEBUG: Log response if not 200
+        if (secondResponse.StatusCode != HttpStatusCode.OK)
+        {
+            var errorBody = await secondResponse.Content.ReadAsStringAsync();
+            Console.WriteLine($"ERROR RESPONSE: Status={secondResponse.StatusCode}, Body={errorBody}");
+        }
 
         // Assert: Should use same conversation ID
         secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);

@@ -209,6 +209,10 @@ public abstract class E2ETestBase : IAsyncDisposable
                 });
             });
 
+        // CRITICAL FIX: Clear memory cache AFTER Factory is created
+        // This prevents authentication state leakage between tests
+        ClearMemoryCacheIfExists();
+
         HttpClient = Factory.CreateClient();
 
         // Ensure database is migrated and clean
@@ -229,6 +233,10 @@ public abstract class E2ETestBase : IAsyncDisposable
         }
         finally
         {
+            // CRITICAL FIX: Clear DbContext change trackers before disposing
+            // This ensures EF Core tracked entities don't leak between tests
+            ClearDbContextChangeTrackers();
+
             await CleanupDatabaseAsync();
             HttpClient?.Dispose();
 
@@ -393,6 +401,22 @@ public abstract class E2ETestBase : IAsyncDisposable
     }
 
     /// <summary>
+    /// Clears the If-None-Match header.
+    /// </summary>
+    protected void ClearIfNoneMatchHeader()
+    {
+        HttpClient.DefaultRequestHeaders.IfNoneMatch.Clear();
+    }
+
+    /// <summary>
+    /// Clears all request headers to prevent pollution between requests.
+    /// </summary>
+    protected void ClearAllHeaders()
+    {
+        HttpClient.DefaultRequestHeaders.Clear();
+    }
+
+    /// <summary>
     /// Creates a JSON content for POST requests.
     /// </summary>
     protected static StringContent CreateJsonContent(string json)
@@ -494,6 +518,66 @@ public abstract class E2ETestBase : IAsyncDisposable
             });
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         });
+    }
+
+    #endregion
+
+    #region Test Isolation Helpers
+
+    /// <summary>
+    /// Clears memory cache to prevent state leakage between tests.
+    /// IMemoryCache caches authentication state (user IDs, principals) with 15-30 minute expiration.
+    /// Without clearing, cached auth from previous tests causes conflicts.
+    /// </summary>
+    private void ClearMemoryCacheIfExists()
+    {
+        try
+        {
+            // Check if Factory exists and has services (only after Factory creation)
+            if (Factory?.Services == null) return;
+
+            var cache = Factory.Services.GetService<IMemoryCache>();
+            if (cache is Microsoft.Extensions.Caching.Memory.MemoryCache memCache)
+            {
+                // Compact(1.0) removes ALL cache entries by setting eviction threshold to 100%
+                memCache.Compact(1.0);
+            }
+        }
+        catch
+        {
+            // Silently ignore - cache clearing is best-effort for test isolation
+        }
+    }
+
+    /// <summary>
+    /// Clears EF Core DbContext change trackers to prevent entity tracking conflicts.
+    /// PrincipalResolutionService reloads tracked entities for modifications.
+    /// Without clearing, tracked entities from previous tests cause conflicts.
+    /// </summary>
+    private void ClearDbContextChangeTrackers()
+    {
+        try
+        {
+            if (Factory?.Services == null) return;
+
+            using var scope = Factory.Services.CreateScope();
+
+            // Clear Identity Write DbContext
+            var identityWriteDb = scope.ServiceProvider.GetService<IdentityWriteDbContext>();
+            identityWriteDb?.ChangeTracker.Clear();
+
+            // Clear Identity Read DbContext (if needed)
+            var identityReadDb = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>();
+            identityReadDb?.ChangeTracker.Clear();
+
+            // Clear Identity Context
+            var identityContext = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+            identityContext?.ChangeTracker.Clear();
+        }
+        catch
+        {
+            // Silently ignore - change tracker clearing is best-effort for test isolation
+        }
     }
 
     #endregion
