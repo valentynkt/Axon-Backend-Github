@@ -39,6 +39,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
     private readonly IMemoryCache _memoryCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly UserManager<AxonUserAuth> _userManager;
+    private readonly IIdentityWriteDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DynamicAuthenticationProvider> _logger;
 
@@ -55,6 +56,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         IMemoryCache memoryCache,
         IHttpContextAccessor httpContextAccessor,
         UserManager<AxonUserAuth> userManager,
+        IIdentityWriteDbContext dbContext,
         TimeProvider timeProvider,
         ILogger<DynamicAuthenticationProvider> logger)
     {
@@ -67,6 +69,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -163,11 +166,15 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             // Step 5: Persist changes
             // Note: New principals are already added to DbContext by PrincipalResolutionService.CreateNewPrincipalWithRaceProtectionAsync()
             // We only need to update existing principals for credential/wallet changes
-            // SaveChanges will be called by MediatR's UnitOfWorkBehavior to commit all changes atomically
             if (!isNewPrincipal)
             {
                 await _principalRepo.UpdateAsync(principal, cancellationToken);
             }
+
+            // Explicitly commit changes before returning to ensure read queries see latest data
+            // This is critical for E2E tests and immediate subsequent /auth/me calls
+            // where Read context (separate connection) must see committed writes
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             // Step 6: Warm caches with all relevant IDs for optimal cache hits
             await WarmUserContextCaches(dynamicUserData.AxonUserId, principal.Id, identityUser.Id);

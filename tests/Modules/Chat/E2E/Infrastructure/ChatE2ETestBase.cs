@@ -136,14 +136,15 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
                     // Replace TimeProvider with deterministic one
                     services.AddSingleton<TimeProvider>(TimeProvider);
 
-                    // Replace AI Processing Service with mock (must match application's Scoped lifetime)
+                    // Replace AI Processing Service with mock
+                    // CRITICAL: Must be Singleton so all scopes get the same instance and configuration changes are visible
                     var aiServiceDescriptor = services.FirstOrDefault(d =>
                         d.ServiceType == typeof(Axon.Modules.Chat.Application.Contracts.AI.IAiProcessingService));
                     if (aiServiceDescriptor != null)
                     {
                         services.Remove(aiServiceDescriptor);
                     }
-                    services.AddScoped<Axon.Modules.Chat.Application.Contracts.AI.IAiProcessingService>(sp => MockAiService);
+                    services.AddSingleton<Axon.Modules.Chat.Application.Contracts.AI.IAiProcessingService>(MockAiService);
 
                     // Post-configure JWT authentication for tests
                     services.PostConfigure<JwtBearerOptions>("DynamicJwt", options =>

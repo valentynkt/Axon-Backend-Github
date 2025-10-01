@@ -1,6 +1,8 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Extensions;
+using BuildingBlocks.Web.ProblemDetails;
 using CSharpFunctionalExtensions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace BuildingBlocks.Web.Endpoints.Base;
@@ -24,7 +26,7 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
         try
         {
             var result = await ExecuteAsync(req, ct);
-            
+
             if (result.IsSuccess)
             {
                 LogRequestCompleted();
@@ -34,7 +36,7 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
                 {
                     Logger.LogError("CRITICAL: result.Value is NULL despite IsSuccess=true. Type: {Type}",
                         typeof(TResponse).Name);
-                    await HttpContext.SendProblemDetailsAsync(
+                    await SendProblemDetailsAsync(
                         Error.Internal("Response is null", "NULL_RESPONSE"), ct);
                     return;
                 }
@@ -50,8 +52,8 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
                     result.Error.Code,
                     result.Error.Message,
                     HttpContext.TraceIdentifier);
-                    
-                await HttpContext.SendProblemDetailsAsync(result.Error, ct);
+
+                await SendProblemDetailsAsync(result.Error, ct);
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -62,13 +64,33 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
         catch (Exception ex)
         {
             LogRequestFailed(ex);
-            await HttpContext.SendProblemDetailsAsync(
+            await SendProblemDetailsAsync(
                 Error.Internal(
                     $"An unexpected error occurred: {ex.Message}",
                     "UNEXPECTED_ERROR",
                     ex),
                 ct);
         }
+    }
+
+    /// <summary>
+    /// Sends a problem details response and marks response as handled to prevent auto-204.
+    /// CRITICAL: Must set Response property to prevent FastEndpoints from sending 204 NoContent.
+    /// </summary>
+    private async Task SendProblemDetailsAsync(Error error, CancellationToken ct)
+    {
+        var problemDetails = error.ToProblemDetails(
+            instance: HttpContext.Request.Path,
+            traceId: HttpContext.TraceIdentifier);
+
+        HttpContext.Response.StatusCode = problemDetails.Status ?? 500;
+        HttpContext.Response.ContentType = "application/problem+json";
+
+        // CRITICAL: Set Response to the problemDetails object to prevent FastEndpoints from
+        // seeing null Response and sending 204 NoContent after HandleAsync completes
+        Response = (TResponse)(object)problemDetails;
+
+        await HttpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken: ct);
     }
 
     /// <summary>

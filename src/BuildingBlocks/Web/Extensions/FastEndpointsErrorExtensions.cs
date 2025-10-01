@@ -27,13 +27,17 @@ public static class FastEndpointsErrorExtensions
         var problemDetails = error.ToProblemDetails(
             instance: httpContext.Request.Path,
             traceId: httpContext.TraceIdentifier);
-            
+
         httpContext.Response.StatusCode = problemDetails.Status ?? 500;
         httpContext.Response.ContentType = "application/problem+json";
-        
-        await httpContext.Response.WriteAsJsonAsync(
-            problemDetails,
-            cancellationToken: cancellationToken);
+
+        // CRITICAL: Check if response has already started to avoid writing multiple times
+        if (!httpContext.Response.HasStarted)
+        {
+            await httpContext.Response.WriteAsJsonAsync(
+                problemDetails,
+                cancellationToken: cancellationToken);
+        }
     }
     
     /// <summary>

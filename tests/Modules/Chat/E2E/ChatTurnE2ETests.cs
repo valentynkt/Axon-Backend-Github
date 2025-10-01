@@ -521,12 +521,6 @@ public class ChatTurnE2ETests : ChatE2ETestBase
         return exchangeResponse.AccessToken;
     }
 
-    private void SetupMockAiService()
-    {
-        // Configure mock for successful AI responses (default behavior)
-        MockAiService.ConfigureBehavior(MockAiProcessingService.MockBehavior.Success);
-    }
-
     private void SetupMockAiServiceFailure()
     {
         // Configure mock to simulate AI service failure

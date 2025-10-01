@@ -424,6 +424,10 @@ public class AuthMeE2ETests : E2ETestBase
         exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
         exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
 
+        // Allow database transaction to commit before subsequent reads
+        // Read context might not immediately see writes from write context due to transaction isolation
+        await Task.Delay(100);
+
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
@@ -447,6 +451,9 @@ public class AuthMeE2ETests : E2ETestBase
         exchangeResponse.ShouldNotBeNull();
         exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
         exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
+
+        // Allow database transaction to commit before subsequent reads
+        await Task.Delay(100);
 
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
@@ -472,6 +479,9 @@ public class AuthMeE2ETests : E2ETestBase
         exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
         exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
 
+        // Allow database transaction to commit before subsequent reads
+        await Task.Delay(100);
+
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
@@ -496,6 +506,9 @@ public class AuthMeE2ETests : E2ETestBase
         exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
         exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
 
+        // Allow database transaction to commit before subsequent reads
+        await Task.Delay(100);
+
         return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
@@ -507,6 +520,7 @@ public class AuthMeE2ETests : E2ETestBase
     {
         // This would require a specific API or test setup to create pending wallets
         // For now, we'll use the exchange endpoint which typically creates verified wallets
+        // Note: Both method calls already include 50ms delays internally
         await SetupCredentialOnlyPrincipal(jwt);
         return await AddWalletToPrincipal(jwt);
     }
