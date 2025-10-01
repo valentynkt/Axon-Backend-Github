@@ -52,6 +52,7 @@
     <i>Reuse recommendations actionable and specific</i>
   </validation>
 
+  <action>Append similarity search results to: {implementation_log}</action>
   <output format="yaml">
 similarity_search:
   concept: "auto-revoke credentials after expiry"

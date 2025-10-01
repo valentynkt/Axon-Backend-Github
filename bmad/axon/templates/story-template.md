@@ -11,6 +11,17 @@
 
 ---
 
+## File Location
+
+This story will be saved as:
+- `Docs/PROCESS/active-stories/{{story_id}}/story.md`
+
+Workflow artifacts (3-file model):
+- `implementation.log` - Living progress document with full timeline
+- `decisions.yaml` - Structured learning log (created at completion)
+
+---
+
 ## User Story
 
 **As a** {{role}}

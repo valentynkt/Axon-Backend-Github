@@ -2059,7 +2059,7 @@ installer_path: "{project-root}/bmad/axon/_module-installer"
 # Integration with BMM
 bmm_integration:
   enabled: true
-  tech_spec_default_path: "{project-root}/Docs/BMAD"
+  tech_spec_default_path: "{project-root}/Docs/PROCESS/research"
   handoff_format: "tech-spec.md"
 
 # Axon project paths

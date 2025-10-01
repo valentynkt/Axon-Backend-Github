@@ -15,9 +15,9 @@
 
   <flow>
     <step n="1" title="Locate Story Artifacts">
-      <action>Read story file: Docs/PROCESS/active-stories/{story-id}/{story-id}.md</action>
-      <action>Read decision log: Docs/PROCESS/active-stories/decisions/{story-id}-decisions.yaml</action>
-      <action>Read routing decision: Docs/PROCESS/active-stories/routing-decisions/{story-id}-routing.yaml</action>
+      <action>Read story file: {story_workspace}/story.md</action>
+      <action>Read implementation log: {story_workspace}/implementation.log</action>
+      <action>Read decision log: {story_workspace}/decisions.yaml (if exists)</action>
       <action>Handle missing files gracefully (not all may exist yet)</action>
     </step>
 
@@ -91,9 +91,10 @@ Key Decisions:
   </validation>
 
   <references>
-    <i>Story location: Docs/PROCESS/active-stories/{story-id}/</i>
-    <i>Decision log: Docs/PROCESS/active-stories/decisions/{story-id}-decisions.yaml</i>
-    <i>Routing log: Docs/PROCESS/active-stories/routing-decisions/{story-id}-routing.yaml</i>
+    <i>Story workspace: {story_workspace}/</i>
+    <i>Story file: {story_workspace}/story.md</i>
+    <i>Implementation log: {story_workspace}/implementation.log</i>
+    <i>Decision log: {story_workspace}/decisions.yaml</i>
   </references>
 </task>
 ```

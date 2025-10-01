@@ -28,7 +28,10 @@
     <ItemGroup>
         <ProjectReference Include="..\..\..\..\src\Modules\Chat\Application\Axon.Modules.Chat.Application.csproj" />
         <ProjectReference Include="..\..\..\..\src\Modules\Chat\Domain\Axon.Modules.Chat.Domain.csproj" />
+        <ProjectReference Include="..\..\..\..\src\Modules\Chat\Infrastructure\Axon.Modules.Chat.Infrastructure.csproj" />
+        <ProjectReference Include="..\..\..\..\tests\BuildingBlocks\Testing\BuildingBlocks.Testing.csproj" />
         <ProjectReference Include="..\Application\Axon.Modules.Chat.Application.Tests.csproj" />
+        <ProjectReference Include="..\Domain\Axon.Modules.Chat.Domain.Tests.csproj" />
     </ItemGroup>
 
     <ItemGroup>

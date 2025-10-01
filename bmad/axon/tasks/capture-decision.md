@@ -37,7 +37,7 @@
     </step>
 
     <step n="4" title="Save Decision Log">
-      <action>Write to: Docs/PROCESS/active-stories/decisions/{story-id}-decisions.yaml</action>
+      <action>Write to: {story_workspace}/decisions.yaml</action>
       <action>Validate YAML syntax</action>
     </step>
 
@@ -45,7 +45,7 @@
       <output format="yaml">
 decision_capture_result:
   story_id: {story-id}
-  decision_log_path: Docs/PROCESS/active-stories/decisions/{story-id}-decisions.yaml
+  decision_log_path: {story_workspace}/decisions.yaml
 
   summary:
     total_decisions: {count}
@@ -89,7 +89,7 @@ decision_capture_result:
 
   <references>
     <i>Template: bmad/axon/templates/decision-log-template.yaml</i>
-    <i>Example: Docs/PROCESS/active-stories/decisions/story-001-decisions.yaml</i>
+    <i>Decision log location: {story_workspace}/decisions.yaml</i>
   </references>
 </task>
 ```

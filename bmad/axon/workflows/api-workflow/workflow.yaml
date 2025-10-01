@@ -128,6 +128,11 @@ variables:
 
 # Workflow configuration
 config_source: "{project-root}/bmad/axon/config.yaml"
+output_folder: "{config_source}:output_folder"
+story_workspace: "{config_source}:story_workspace"
+story_file: "{config_source}:story_file"
+implementation_log: "{config_source}:implementation_log"
+decision_log: "{config_source}:decision_log"
 installed_path: "{project-root}/bmad/axon/workflows/api-workflow"
 instructions: "{installed_path}/instructions.md"
 validation: "{installed_path}/checklist.md"

@@ -36,10 +36,11 @@ required_inputs:
   - story_file: "Story markdown file (story-NNN.md)"
   - tech_spec: "Optional BMM tech-spec reference"
 
-# Output configuration
-default_output_folder: "{output_folder}/active-stories/{{story_id}}"
-decision_log_path: "{default_output_folder}/decisions.yaml"
-implementation_log: "{default_output_folder}/implementation-log.md"
+# Output configuration (3-file model)
+story_workspace: "{output_folder}/{{story_id}}"
+story_file: "{story_workspace}/story.md"
+implementation_log: "{story_workspace}/implementation.log"
+decision_log: "{story_workspace}/decisions.yaml"
 
 # Agent invocations (this workflow coordinates these agents)
 agents_used:

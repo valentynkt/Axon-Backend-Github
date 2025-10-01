@@ -190,7 +190,7 @@ Output:
   - src/Modules/Identity/Domain/Entities/WalletOwnership.cs (updated)
   - tests/Modules/Identity/Domain/WalletOwnershipTests.cs (new)
   - Docs/ENGINEERING/modules/identity/01-domain-model.md (updated)
-  - Docs/PROCESS/active-stories/decisions/story-123-decisions.yaml
+  - Docs/PROCESS/active-stories/STORY-123/decisions.yaml
 ```
 
 ---

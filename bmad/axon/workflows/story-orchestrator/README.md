@@ -152,7 +152,9 @@ story_file: path/to/story-042.md
 
 ### Routing Decision Log
 
-File: `{output_folder}/routing-decisions/{{story_id}}-routing.yaml`
+Appended to: `{story_workspace}/implementation.log`
+
+**Note**: Routing decisions are now part of the story's living timeline (3-file model), not separate files.
 
 ```yaml
 story_id: AXON-042
@@ -213,9 +215,9 @@ Time Breakdown:
 - Total: 60 minutes
 
 Artifacts:
-- Implementation log: Docs/PROCESS/active-stories/AXON-042/implementation-log.md
+- Implementation log: Docs/PROCESS/active-stories/AXON-042/implementation.log
 - Decision log: Docs/PROCESS/active-stories/AXON-042/decisions.yaml
-- Routing decision: Docs/PROCESS/routing-decisions/AXON-042-routing.yaml
+- Routing decision: Docs/PROCESS/active-stories/AXON-042/implementation.log
 
 Next Steps:
 1. Review commit: git log -1
@@ -268,7 +270,7 @@ workflows:
 
 # Output paths
 output_folder: "{project-root}/Docs/PROCESS/active-stories"
-routing_log_folder: "{output_folder}/routing-decisions"
+# Routing decisions now append to implementation.log (3-file model)
 ```
 
 ---
@@ -301,7 +303,7 @@ routing_log_folder: "{output_folder}/routing-decisions"
 
 ### Issue: Routing decision log not saved
 
-**Symptoms**: Cannot find {output_folder}/routing-decisions/{{story_id}}-routing.yaml
+**Symptoms**: Cannot find {output_folder}/STORY-XXX/{{story_id}}-routing.yaml
 **Solution**:
 1. Check output_folder exists
 2. Create routing-decisions directory if missing: `mkdir -p Docs/PROCESS/routing-decisions`

@@ -341,8 +341,11 @@ cat {output_folder}/preflight-package.md
 # Implementation diff
 cat {output_folder}/implementation-diff.md
 
-# Decision log
-cat {output_folder}/decisions/STORY-XXX-decisions.yaml
+# Decision log (3-file model)
+cat {output_folder}/STORY-XXX/decisions.yaml
+
+# Implementation log (full timeline)
+cat {output_folder}/STORY-XXX/implementation.log
 ```
 
 ---

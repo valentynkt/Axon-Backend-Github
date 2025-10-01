@@ -130,13 +130,14 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
     #region Critical: AI Response Idempotency
 
     [Test]
-    public async Task AppendAssistantMessage_SameAiResponseId_ShouldBeIdempotent()
+    public async Task AppendAssistantMessage_SameAiResponseId_EnforcesUniqueness()
     {
         // Arrange: Create conversation with user message
         var conversation = await CreateAndSaveConversationWithUserMessageAsync();
         var aiResponseId = new AiResponseId($"ai-response-{Guid.NewGuid()}");
 
         // Act: Simulate duplicate AI responses (e.g., from retry logic)
+        // This tests database-level idempotency via unique constraint on AiResponseId
         var result = await SimulateConcurrentUpdatesAsync<Conversation, ConversationId>(
             conversation.Id,
             context =>
@@ -156,10 +157,22 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             }
         );
 
-        // Assert: One should succeed, one should fail (idempotency at domain or DB level)
-        AssertOptimisticConcurrencyHandled(result);
+        // Assert: First update succeeds, second fails with unique constraint violation
+        result.FirstUpdateSucceeded.ShouldBeTrue("First update should succeed");
+        result.SecondUpdateFailed.ShouldBeTrue("Second update should fail due to unique constraint");
 
-        // Verify only one AI response was added
+        // Verify it's a constraint violation, not a concurrency exception
+        result.SecondUpdateException.ShouldNotBeNull("Should have exception");
+        var isConstraintViolation = result.SecondUpdateException is DbUpdateException dbEx &&
+            dbEx.InnerException is Npgsql.PostgresException pgEx &&
+            pgEx.SqlState == "23505" && // Unique violation
+            pgEx.ConstraintName == "IX_Messages_AiResponseId";
+
+        isConstraintViolation.ShouldBeTrue(
+            $"Should fail with unique constraint violation on AiResponseId. " +
+            $"Got: {result.SecondUpdateException?.GetType().Name} - {result.SecondUpdateException?.Message}");
+
+        // Verify only one AI response was added (idempotency achieved via DB constraint)
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
         using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);

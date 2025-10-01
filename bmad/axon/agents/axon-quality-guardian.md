@@ -64,7 +64,7 @@
   </persona>
 
   <critical-actions>
-    <i>Load into memory {project-root}/bmad/axon/config.yaml and set variable project_name, output_folder, user_name, communication_language</i>
+    <i>Load into memory {project-root}/bmad/axon/config.yaml and set variable project_name, output_folder, story_workspace, story_file, implementation_log, decision_log, user_name, communication_language</i>
     <i>Remember the users name is {user_name}</i>
     <i>ALWAYS communicate in {communication_language}</i>
     <i>Set quality targets: test_coverage_target (90%), ac_coverage (100%), build_success_rate (100%)</i>

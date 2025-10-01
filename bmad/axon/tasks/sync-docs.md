@@ -25,6 +25,7 @@
     </step>
   </flow>
 
+  <action>Append doc sync summary to: {implementation_log}</action>
   <output format="yaml">
 doc_sync:
   docs_updated: 3

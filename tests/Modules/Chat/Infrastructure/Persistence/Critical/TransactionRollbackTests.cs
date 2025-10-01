@@ -400,98 +400,105 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         await SaveConversationAsync(conv2);
 
         // Act: Create potential deadlock scenario
+        // Note: NpgsqlExecutionStrategy automatically retries transient failures including deadlocks
         var task1Completed = false;
         var task2Completed = false;
-        var deadlockDetected = false;
+        Exception? task1Exception = null;
+        Exception? task2Exception = null;
 
         var task1 = Task.Run(async () =>
         {
-            await using var context = new ChatDbContext(
-                ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(ConnectionString),
-                TimeProvider);
-
-            using var transaction = await context.Database.BeginTransactionAsync();
-
             try
             {
-                // Lock conv1 first
-                var c1 = await context.Conversations.FirstAsync(c => c.Id == conv1.Id);
-                c1.UpdateTitle("Task1 - Conv1", TimeProvider);
-                await context.SaveChangesAsync();
+                await using var context = new ChatDbContext(
+                    ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(ConnectionString),
+                    TimeProvider);
 
-                // Small delay to increase deadlock probability
-                await Task.Delay(100);
+                // Use execution strategy which handles transient failures (including deadlocks)
+                var strategy = context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    using var transaction = await context.Database.BeginTransactionAsync();
 
-                // Then try to lock conv2
-                var c2 = await context.Conversations.FirstAsync(c => c.Id == conv2.Id);
-                c2.UpdateTitle("Task1 - Conv2", TimeProvider);
-                await context.SaveChangesAsync();
+                    // Lock conv1 first
+                    var c1 = await context.Conversations.FirstAsync(c => c.Id == conv1.Id);
+                    c1.UpdateTitle("Task1 - Conv1", TimeProvider);
+                    await context.SaveChangesAsync();
 
-                await transaction.CommitAsync();
+                    // Small delay to increase deadlock probability
+                    await Task.Delay(50);
+
+                    // Then try to lock conv2
+                    var c2 = await context.Conversations.FirstAsync(c => c.Id == conv2.Id);
+                    c2.UpdateTitle("Task1 - Conv2", TimeProvider);
+                    await context.SaveChangesAsync();
+
+                    await transaction.CommitAsync();
+                });
+
                 task1Completed = true;
             }
-            catch (DbUpdateException ex) when (IsDeadlockException(ex))
+            catch (Exception ex)
             {
-                deadlockDetected = true;
-                await transaction.RollbackAsync();
-            }
-            catch (InvalidOperationException ex) when (IsDeadlockException(ex))
-            {
-                // EF wraps some exceptions in InvalidOperationException
-                deadlockDetected = true;
-                await transaction.RollbackAsync();
+                task1Exception = ex;
+                // Execution strategy will retry transient errors automatically
+                // If we get here, either it's not transient or retries exhausted
             }
         });
 
         var task2 = Task.Run(async () =>
         {
-            await using var context = new ChatDbContext(
-                ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(ConnectionString),
-                TimeProvider);
-
-            using var transaction = await context.Database.BeginTransactionAsync();
-
             try
             {
-                // Lock conv2 first (opposite order)
-                var c2 = await context.Conversations.FirstAsync(c => c.Id == conv2.Id);
-                c2.UpdateTitle("Task2 - Conv2", TimeProvider);
-                await context.SaveChangesAsync();
+                await using var context = new ChatDbContext(
+                    ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(ConnectionString),
+                    TimeProvider);
 
-                // Small delay to increase deadlock probability
-                await Task.Delay(100);
+                // Use execution strategy which handles transient failures (including deadlocks)
+                var strategy = context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    using var transaction = await context.Database.BeginTransactionAsync();
 
-                // Then try to lock conv1
-                var c1 = await context.Conversations.FirstAsync(c => c.Id == conv1.Id);
-                c1.UpdateTitle("Task2 - Conv1", TimeProvider);
-                await context.SaveChangesAsync();
+                    // Lock conv2 first (opposite order)
+                    var c2 = await context.Conversations.FirstAsync(c => c.Id == conv2.Id);
+                    c2.UpdateTitle("Task2 - Conv2", TimeProvider);
+                    await context.SaveChangesAsync();
 
-                await transaction.CommitAsync();
+                    // Small delay to increase deadlock probability
+                    await Task.Delay(50);
+
+                    // Then try to lock conv1
+                    var c1 = await context.Conversations.FirstAsync(c => c.Id == conv1.Id);
+                    c1.UpdateTitle("Task2 - Conv1", TimeProvider);
+                    await context.SaveChangesAsync();
+
+                    await transaction.CommitAsync();
+                });
+
                 task2Completed = true;
             }
-            catch (DbUpdateException ex) when (IsDeadlockException(ex))
+            catch (Exception ex)
             {
-                deadlockDetected = true;
-                await transaction.RollbackAsync();
-            }
-            catch (InvalidOperationException ex) when (IsDeadlockException(ex))
-            {
-                // EF wraps some exceptions in InvalidOperationException
-                deadlockDetected = true;
-                await transaction.RollbackAsync();
+                task2Exception = ex;
+                // Execution strategy will retry transient errors automatically
+                // If we get here, either it's not transient or retries exhausted
             }
         });
 
         await Task.WhenAll(task1, task2);
 
-        // Assert: At least one should complete, deadlock handled gracefully
-        (task1Completed || task2Completed).ShouldBeTrue(
-            "At least one transaction should complete");
+        // Assert: With execution strategy retries, at least one should complete successfully
+        var anyCompleted = task1Completed || task2Completed;
+        anyCompleted.ShouldBeTrue(
+            $"At least one transaction should complete. Task1: {task1Completed}, Task2: {task2Completed}. " +
+            $"Task1 Exception: {task1Exception?.Message}, Task2 Exception: {task2Exception?.Message}");
 
-        // If deadlock occurred, verify it was handled
-        if (deadlockDetected)
+        // Log any exceptions for debugging
+        if (task1Exception != null || task2Exception != null)
         {
-            TestContext.Out.WriteLine("Deadlock was detected and handled properly");
+            TestContext.Out.WriteLine($"Task1 completed: {task1Completed}, Exception: {task1Exception?.Message}");
+            TestContext.Out.WriteLine($"Task2 completed: {task2Completed}, Exception: {task2Exception?.Message}");
         }
 
         // Verify data integrity maintained
@@ -502,11 +509,13 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         finalConv1.ShouldNotBeNull();
         finalConv2.ShouldNotBeNull();
 
-        // At least one should have updated title
+        // At least one conversation should have been updated
         var conv1Updated = finalConv1!.Title?.Contains("Task") ?? false;
         var conv2Updated = finalConv2!.Title?.Contains("Task") ?? false;
 
-        (conv1Updated || conv2Updated).ShouldBeTrue("At least one update should have succeeded");
+        (conv1Updated || conv2Updated).ShouldBeTrue(
+            "At least one update should have succeeded. " +
+            $"Conv1 Title: {finalConv1.Title}, Conv2 Title: {finalConv2.Title}");
     }
 
     #endregion

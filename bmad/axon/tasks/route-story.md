@@ -47,29 +47,29 @@
     </step>
 
     <step n="5" title="Generate Routing Decision">
-      <output format="yaml" save-to="Docs/PROCESS/active-stories/routing-decisions/{story-id}-routing.yaml">
-routing_decision:
-  story_id: {story-id}
-  story_title: {title}
-  timestamp: {iso-timestamp}
+      <action>Append routing decision to: {story_workspace}/implementation.log</action>
+      <format>
+## Story Routing (Phase 0)
+**Timestamp**: {iso-timestamp}
+**Story ID**: {story-id}
+**Story Title**: {title}
 
-  detection:
-    story_type: Feature / Refactor / Bugfix
-    story_type_confidence: HIGH / MEDIUM / LOW
-    story_type_keywords: [{keywords-found}]
+### Detection Results
+- **Story Type**: {detected-type} (confidence: {confidence})
+  - Keywords found: {keywords-found}
+- **Module Context**: {detected-module} (confidence: {confidence})
+  - Keywords found: {keywords-found}
 
-    module_context: Identity / Chat / API / Cross-cutting
-    module_confidence: HIGH / MEDIUM / LOW
-    module_keywords: [{keywords-found}]
+### Routing Decision
+- **Selected Workflow**: {workflow-path}
+- **Rationale**: {why-this-workflow}
 
-  routing:
-    workflow: {workflow-path}
-    rationale: "{why-this-workflow}"
+### Next Steps
+1. Load documentation context (Doc Oracle)
+2. Execute workflow: {workflow-name}
 
-  next_steps:
-    - Load documentation context (Doc Oracle)
-    - Execute workflow: {workflow-name}
-      </output>
+---
+      </format>
     </step>
   </flow>
 
@@ -96,7 +96,7 @@ routing_decision:
 
   <references>
     <i>Workflows: bmad/axon/workflows/</i>
-    <i>Routing decisions: Docs/PROCESS/active-stories/routing-decisions/</i>
+    <i>Implementation log: {story_workspace}/implementation.log</i>
   </references>
 </task>
 ```

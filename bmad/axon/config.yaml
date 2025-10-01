@@ -320,14 +320,24 @@ axon_settings:
   parallel_test_generation: true
 
 # ═══════════════════════════════════════════════════════════
-#                OUTPUT CONFIGURATION
+#                OUTPUT CONFIGURATION (3-File Model)
 # ═══════════════════════════════════════════════════════════
 
 output_folder: "{project-root}/Docs/PROCESS/active-stories"
-decision_log_folder: "{output_folder}/decisions"
+
+# Story workspace structure (3-file model)
+story_workspace: "{output_folder}/{story-id}"
+story_file: "{story_workspace}/story.md"
+implementation_log: "{story_workspace}/implementation.log"
+decision_log: "{story_workspace}/decisions.yaml"
+
+# Templates
 story_template_path: "{module_root}/templates/story-template.md"
-story_context_template: "{module_root}/templates/story-context-template.json"
 decision_log_template: "{module_root}/templates/decision-log-template.yaml"
+
+# Legacy paths (REMOVED - no longer needed with 3-file model)
+# decision_log_folder: "{output_folder}/decisions"  # ❌ Replaced by story_workspace
+# story_context_template: # ❌ Merged into implementation.log format
 
 # ═══════════════════════════════════════════════════════════
 #                EXECUTION CONFIGURATION

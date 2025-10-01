@@ -19,6 +19,10 @@ invoked_by: story-orchestrator  # When module = "Identity"
 # Inherit from Axon config
 config_source: "{project-root}/bmad/axon/config.yaml"
 output_folder: "{config_source}:output_folder"
+story_workspace: "{config_source}:story_workspace"
+story_file: "{config_source}:story_file"
+implementation_log: "{config_source}:implementation_log"
+decision_log: "{config_source}:decision_log"
 user_name: "{config_source}:user_name"
 communication_language: "{config_source}:communication_language"
 date: system-generated

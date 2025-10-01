@@ -60,6 +60,7 @@
     </step>
 
     <step n="7" title="Output Test Generation Result">
+      <action>Append test generation summary to: {implementation_log}</action>
       <output format="yaml">
 test_generation_result:
   story_id: {story-id}

@@ -26,13 +26,14 @@
 
 ```
 PROCESS/
-├── 00-PROCESS-README.md (this file)
-├── bmad-workflow.md (methodology explanation)
+├── 00-INDEX.md (this file)
 ├── story-template.md (how to write stories)
+├── bmad/ (BMAD module design specifications)
+├── research/ (BMM research outputs and technical investigations)
 ├── active-stories/ (current sprint stories)
 └── archive/
     ├── completed-epics/ (historical epic documentation)
-    └── qa-gates/ (QA artifacts and assessments)
+    └── dynamic-research/ (legacy research artifacts)
 ```
 
 ---
@@ -41,10 +42,13 @@ PROCESS/
 
 ### Active Development
 - [Active Stories](./active-stories/) - Current sprint user stories
+- [Research](./research/) - BMM technical research outputs
+
+### BMAD Resources
+- [BMAD Design](./bmad/) - Module specifications and architecture
 
 ### Historical Reference
-- [Completed Epics](./archive/completed-epics/) - Past epic documentation
-- [QA Gates](./archive/qa-gates/) - Historical QA assessments and gates
+- [Archive](./archive/) - Completed epics and legacy research
 
 ---
 

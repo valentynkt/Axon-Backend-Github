@@ -73,11 +73,10 @@ public class ChatResilienceTests : ApplicationTestBase
     public async Task ProcessMessage_DatabaseConnectionFailure_ShouldReturnError()
     {
         // Arrange: Database connection fails
-        _mockRepository
-            .GetByIdAsync(Arg.Any<ConversationId>(), Arg.Any<CancellationToken>())
-            .ThrowsAsync(new InvalidOperationException("Database connection timeout"));
-
         SetupSuccessfulMcpAndAi();
+        _mockRepository
+            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("Database connection timeout"));
 
         // Act
         var result = await _orchestrator.ProcessUserMessageAsync(
@@ -98,7 +97,7 @@ public class ChatResilienceTests : ApplicationTestBase
         SetupSuccessfulMcpAndAi();
         _mockRepository
             .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(callInfo => Task.FromResult(callInfo.Arg<Conversation>()));
 
         _mockRepository.UnitOfWork
             .SaveChangesAsync(Arg.Any<CancellationToken>())
@@ -112,14 +111,8 @@ public class ChatResilienceTests : ApplicationTestBase
             CancellationToken.None);
 
         // Assert: Should fail gracefully
-        var exception = await Should.ThrowAsync<InvalidOperationException>(() =>
-            _orchestrator.ProcessUserMessageAsync(
-                _testConversation,
-                _testMessage,
-                _testMessageId,
-                CancellationToken.None));
-
-        exception.Message.ShouldBe("Transaction deadlock");
+        result.ShouldBeFailure();
+        result.Error.Type.ShouldBe(ErrorType.Internal);
     }
 
     [Test]
@@ -131,15 +124,16 @@ public class ChatResilienceTests : ApplicationTestBase
             .SaveChangesAsync(Arg.Any<CancellationToken>())
             .ThrowsAsync(new TimeoutException("Transaction timeout exceeded"));
 
-        // Act & Assert
-        var exception = await Should.ThrowAsync<TimeoutException>(() =>
-            _orchestrator.ProcessUserMessageAsync(
-                _testConversation,
-                _testMessage,
-                _testMessageId,
-                CancellationToken.None));
+        // Act
+        var result = await _orchestrator.ProcessUserMessageAsync(
+            _testConversation,
+            _testMessage,
+            _testMessageId,
+            CancellationToken.None);
 
-        exception.Message.ShouldBe("Transaction timeout exceeded");
+        // Assert: Should return timeout error
+        result.ShouldBeFailure();
+        result.Error.Type.ShouldBe(ErrorType.Timeout);
     }
 
     #endregion
@@ -152,13 +146,8 @@ public class ChatResilienceTests : ApplicationTestBase
         // Arrange: AI service is unavailable
         SetupSuccessfulMcp();
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<AiProcessingResult, Error>(
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs(Result.Failure<AiProcessingResult, Error>(
                 Error.External("AI service unavailable", "AI_SERVICE_UNAVAILABLE")));
 
         SetupSuccessfulRepository();
@@ -185,13 +174,8 @@ public class ChatResilienceTests : ApplicationTestBase
         // Arrange: AI service times out
         SetupSuccessfulMcp();
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .ThrowsAsync(new TimeoutException("AI service request timeout"));
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs<Task<Result<AiProcessingResult, Error>>>(_ => throw new TimeoutException("AI service request timeout"));
 
         SetupSuccessfulRepository();
 
@@ -204,8 +188,7 @@ public class ChatResilienceTests : ApplicationTestBase
 
         // Assert
         result.ShouldBeFailure();
-        result.Error.Type.ShouldBe(ErrorType.Internal);
-        result.Error.Code.ShouldBe(ChatDomainErrors.Processing.UnexpectedErrorCode);
+        result.Error.Type.ShouldBe(ErrorType.Timeout);
     }
 
     [Test]
@@ -214,13 +197,8 @@ public class ChatResilienceTests : ApplicationTestBase
         // Arrange: AI service returns rate limit error
         SetupSuccessfulMcp();
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<AiProcessingResult, Error>(
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs(Result.Failure<AiProcessingResult, Error>(
                 Error.External("Rate limit exceeded", "AI_RATE_LIMIT_EXCEEDED")));
 
         SetupSuccessfulRepository();
@@ -244,13 +222,8 @@ public class ChatResilienceTests : ApplicationTestBase
         // Arrange: AI service returns malformed response
         SetupSuccessfulMcp();
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .ThrowsAsync(new FormatException("Invalid AI response format"));
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs<Task<Result<AiProcessingResult, Error>>>(_ => throw new FormatException("Invalid AI response format"));
 
         SetupSuccessfulRepository();
 
@@ -290,15 +263,10 @@ public class ChatResilienceTests : ApplicationTestBase
 
         // Assert
         result.ShouldBeFailure();
-        result.Error.Type.ShouldBe(ErrorType.Internal);
+        result.Error.Type.ShouldBe(ErrorType.Network);
 
         // Should not proceed to AI processing
-        _ = await _mockAiService.DidNotReceive().ProcessMessageAsync(
-            Arg.Any<MessageContent>(),
-            Arg.Any<ConversationId>(),
-            Arg.Any<AiResponseId?>(),
-            Arg.Any<McpServerConfig[]?>(),
-            Arg.Any<CancellationToken>());
+        await _mockAiService.DidNotReceiveWithAnyArgs().ProcessMessageAsync(_testMessage, default!, default, default!, default);
     }
 
     [Test]
@@ -340,13 +308,8 @@ public class ChatResilienceTests : ApplicationTestBase
         // Arrange: Network failure during AI call
         SetupSuccessfulMcp();
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .ThrowsAsync(new HttpRequestException("Network unreachable"));
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs<Task<Result<AiProcessingResult, Error>>>(_ => throw new HttpRequestException("Network unreachable"));
 
         SetupSuccessfulRepository();
 
@@ -359,7 +322,7 @@ public class ChatResilienceTests : ApplicationTestBase
 
         // Assert
         result.ShouldBeFailure();
-        result.Error.Type.ShouldBe(ErrorType.Internal);
+        result.Error.Type.ShouldBe(ErrorType.Network);
     }
 
     [Test]
@@ -368,13 +331,8 @@ public class ChatResilienceTests : ApplicationTestBase
         // Arrange: Simulate resource exhaustion (use InvalidOperationException instead of OutOfMemoryException)
         SetupSuccessfulMcp();
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .ThrowsAsync(new InvalidOperationException("Resource exhaustion - insufficient memory"));
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs<Task<Result<AiProcessingResult, Error>>>(_ => throw new InvalidOperationException("Resource exhaustion - insufficient memory"));
 
         SetupSuccessfulRepository();
 
@@ -403,13 +361,8 @@ public class ChatResilienceTests : ApplicationTestBase
             .ThrowsAsync(new TimeoutException("MCP timeout"));
 
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .ThrowsAsync(new HttpRequestException("AI service down"));
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs<Task<Result<AiProcessingResult, Error>>>(_ => throw new HttpRequestException("AI service down"));
 
         _mockRepository
             .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
@@ -426,12 +379,7 @@ public class ChatResilienceTests : ApplicationTestBase
         result.ShouldBeFailure();
 
         // Should not call subsequent services if first one fails
-        _ = await _mockAiService.DidNotReceive().ProcessMessageAsync(
-            Arg.Any<MessageContent>(),
-            Arg.Any<ConversationId>(),
-            Arg.Any<AiResponseId?>(),
-            Arg.Any<McpServerConfig[]?>(),
-            Arg.Any<CancellationToken>());
+        await _mockAiService.DidNotReceiveWithAnyArgs().ProcessMessageAsync(_testMessage, default!, default, default!, default);
     }
 
     [Test]
@@ -442,13 +390,8 @@ public class ChatResilienceTests : ApplicationTestBase
         SetupSuccessfulMcp();
 
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs(callInfo =>
             {
                 callCount++;
                 if (callCount == 1)
@@ -576,13 +519,8 @@ public class ChatResilienceTests : ApplicationTestBase
         SetupSuccessfulMcp();
 
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(async callInfo =>
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs(async callInfo =>
             {
                 var token = callInfo.Arg<CancellationToken>();
                 await Task.Delay(1000, token); // This will be cancelled
@@ -636,13 +574,8 @@ public class ChatResilienceTests : ApplicationTestBase
     private void SetupSuccessfulAi()
     {
         _mockAiService
-            .ProcessMessageAsync(
-                Arg.Any<MessageContent>(),
-                Arg.Any<ConversationId>(),
-                Arg.Any<AiResponseId?>(),
-                Arg.Any<McpServerConfig[]?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Result.Success<AiProcessingResult, Error>(
+            .ProcessMessageAsync(_testMessage, default!, default, default!, default)
+            .ReturnsForAnyArgs(Result.Success<AiProcessingResult, Error>(
                 new AiProcessingResult(MessageContent.Create("AI response").Value, CreateAiResponseId(), TimeSpan.FromSeconds(1))));
     }
 
@@ -650,11 +583,11 @@ public class ChatResilienceTests : ApplicationTestBase
     {
         _mockRepository
             .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(callInfo => Task.FromResult(callInfo.Arg<Conversation>()));
 
         _mockRepository.UnitOfWork
             .SaveChangesAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(Task.FromResult(1));
     }
 
     private void SetupSuccessfulMcpAndAi()

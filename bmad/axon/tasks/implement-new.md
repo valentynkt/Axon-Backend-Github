@@ -72,6 +72,7 @@
     </step>
 
     <step n="8" title="Output Implementation Result">
+      <action>Append implementation summary to: {implementation_log}</action>
       <output format="yaml">
 implementation_result:
   story_id: {story-id}

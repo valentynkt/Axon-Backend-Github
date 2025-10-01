@@ -5,7 +5,7 @@
 
 project_name: Axon-Backend
 tech_docs: '{project-root}/Docs/ENGINEERING'
-dev_story_location: '{project-root}/Docs/PROCESS/active-stroies'
+dev_story_location: '{project-root}/Docs/PROCESS/active-stories'
 kb_location: ~/bmad/bmm/kb.md
 desired_mcp_tools:
   - Context 7
@@ -13,4 +13,4 @@ desired_mcp_tools:
 # Core Configuration Values
 user_name: Valik
 communication_language: English
-output_folder: '{project-root}/Docs/BMAD'
+output_folder: '{project-root}/Docs/PROCESS/research'

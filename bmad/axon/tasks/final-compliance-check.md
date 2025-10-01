@@ -33,6 +33,7 @@
     </step>
   </flow>
 
+  <action>Append compliance check summary to: {implementation_log}</action>
   <output format="yaml">
 compliance_check:
   pattern_compliance: 98%  # Target: ≥95%

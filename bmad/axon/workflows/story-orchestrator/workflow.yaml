@@ -44,8 +44,10 @@ routing_logic:
     api: "Module field = 'API' OR story mentions endpoint/FastEndpoints/REST/HTTP"
     cross_cutting: "Module field = 'Cross-cutting' OR affects multiple modules"
 
-# Output configuration (routing decision log)
-default_output_file: "{output_folder}/routing-decisions/{{story_id}}-routing.yaml"
+# Output configuration (3-file model)
+story_workspace: "{output_folder}/{{story_id}}"
+implementation_log: "{story_workspace}/implementation.log"
+# Note: Routing decision now appends to implementation.log, not separate file
 
 # Required tools
 required_tools:

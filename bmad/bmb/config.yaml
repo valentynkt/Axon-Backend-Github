@@ -8,4 +8,4 @@ src_impact: false
 # Core Configuration Values
 user_name: Valik
 communication_language: English
-output_folder: '{project-root}/Docs/BMAD'
+output_folder: '{project-root}/Docs/PROCESS/research'

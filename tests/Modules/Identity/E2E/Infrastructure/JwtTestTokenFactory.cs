@@ -238,12 +238,55 @@ public static class JwtTestTokenFactory
         var rsaKey = new RsaSecurityKey(rsa) { KeyId = kid };
         var credentials = new SigningCredentials(rsaKey, SecurityAlgorithms.RsaSha256);
 
+        // Extract exp and iat claims to set on SecurityTokenDescriptor
+        // This is critical - without this, JwtSecurityTokenHandler will generate its own exp/iat
+        var expClaim = claims.FirstOrDefault(c => c.Type == "exp")?.Value;
+        var iatClaim = claims.FirstOrDefault(c => c.Type == "iat")?.Value;
+
+        DateTime? expires = null;
+        DateTime? issuedAt = null;
+
+        if (!string.IsNullOrEmpty(expClaim) && long.TryParse(expClaim, out var expUnix))
+        {
+            expires = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+        }
+
+        if (!string.IsNullOrEmpty(iatClaim) && long.TryParse(iatClaim, out var iatUnix))
+        {
+            issuedAt = DateTimeOffset.FromUnixTimeSeconds(iatUnix).UtcDateTime;
+        }
+
+        // Fix invalid timestamps for expired tokens where iat > exp
+        // This can happen when CreateExpiredJwt is called with an expiration in the past
+        // but iat is still set to TestTime.AddMinutes(-5)
+        if (expires.HasValue && issuedAt.HasValue && issuedAt.Value >= expires.Value)
+        {
+            // Adjust iat to be before exp (1 hour before exp)
+            issuedAt = expires.Value.AddHours(-1);
+
+            // Update the iat claim in the claims list
+            var iatClaimObj = claims.FirstOrDefault(c => c.Type == "iat");
+            if (iatClaimObj != null)
+            {
+                claims.Remove(iatClaimObj);
+                claims.Add(new Claim("iat",
+                    new DateTimeOffset(issuedAt.Value).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                    ClaimValueTypes.Integer64));
+            }
+        }
+
+        // Set NotBefore to iat (standard practice)
+        DateTime? notBefore = issuedAt;
+
         var tokenHandler = new JwtSecurityTokenHandler();
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
             SigningCredentials = credentials,
-            TokenType = "JWT"
+            TokenType = "JWT",
+            Expires = expires,    // Critical: Honor the exp claim from input
+            IssuedAt = issuedAt,  // Critical: Honor the iat claim from input
+            NotBefore = notBefore // Critical: Set NotBefore to prevent auto-generation (must be < Expires)
         };
 
         var token = tokenHandler.CreateToken(tokenDescriptor);
