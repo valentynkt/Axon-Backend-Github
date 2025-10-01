@@ -88,18 +88,20 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Checks if a credential already exists for any principal.
+    /// Checks if a credential is already taken by another principal.
     /// Used to enforce credential uniqueness across all principals.
     /// </summary>
     /// <param name="providerType">The identity provider type</param>
     /// <param name="issuer">The credential issuer</param>
     /// <param name="subject">The credential subject</param>
+    /// <param name="excludePrincipalId">Principal to exclude from check (when updating existing principal)</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if the credential exists for any principal</returns>
+    /// <returns>True if the credential is taken by another principal, false otherwise</returns>
     Task<bool> IsCredentialTakenAsync(
         ProviderType providerType,
         string issuer,
         string subject,
+        AxonUserId? excludePrincipalId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

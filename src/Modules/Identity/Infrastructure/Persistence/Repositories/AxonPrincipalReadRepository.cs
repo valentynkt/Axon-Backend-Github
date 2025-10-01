@@ -231,13 +231,22 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
         ProviderType providerType,
         string issuer,
         string subject,
+        AxonUserId? excludePrincipalId = null,
         CancellationToken cancellationToken = default)
     {
-        return await _identityDbContext.Set<AxonPrincipal>()
-            .AnyAsync(p => p.Credentials.Any(c =>
+        var query = _identityDbContext.Set<AxonPrincipal>()
+            .Where(p => p.Credentials.Any(c =>
                 c.Provider == providerType.Value &&
                 c.Issuer == issuer &&
-                c.Subject == subject), cancellationToken);
+                c.Subject == subject));
+
+        // Exclude the specified principal from the check (when updating existing principal)
+        if (excludePrincipalId is not null)
+        {
+            query = query.Where(p => p.Id != excludePrincipalId);
+        }
+
+        return await query.AnyAsync(cancellationToken);
     }
 
     public async Task<Dictionary<WalletId, AxonPrincipal>> FindVerifiedSigningOwnersAsync(

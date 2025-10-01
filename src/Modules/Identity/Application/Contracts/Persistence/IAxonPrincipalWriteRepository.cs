@@ -52,12 +52,14 @@ public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal,
     /// <param name="providerType">The identity provider type</param>
     /// <param name="issuer">The credential issuer</param>
     /// <param name="subject">The credential subject</param>
+    /// <param name="excludePrincipalId">Principal to exclude from check (when updating existing principal)</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>True if the credential is already taken, false otherwise</returns>
+    /// <returns>True if the credential is taken by another principal, false otherwise</returns>
     Task<bool> IsCredentialTakenAsync(
         ProviderType providerType,
         string issuer,
         string subject,
+        AxonUserId? excludePrincipalId = null,
         CancellationToken ct = default);
 
     /// <summary>

@@ -185,8 +185,17 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
 
         // Delegate to orchestrator for AI processing
         // The orchestrator will save all changes (user + assistant messages) together atomically
-        return await MessageOrchestrator.ProcessUserMessageAsync(
+        var orchestratorResult = await MessageOrchestrator.ProcessUserMessageAsync(
             conversation, userMessage, userMessageId, cancellationToken);
+
+        // Debug: Check if orchestrator returned null value in success result
+        if (orchestratorResult.IsSuccess && orchestratorResult.Value == null)
+        {
+            _logger.LogError("CRITICAL BUG: Orchestrator returned Success with NULL ProcessMessageResponse for conversation {ConversationId}",
+                conversation.Id.Value);
+        }
+
+        return orchestratorResult;
     }
 
     /// <summary>

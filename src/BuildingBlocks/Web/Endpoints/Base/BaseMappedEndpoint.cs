@@ -57,9 +57,26 @@ public abstract class BaseMappedEndpoint<TRequest, TResponse> : BaseResultEndpoi
         where TCommand : notnull
         where TDomainResult : notnull
     {
-        return await MapRequest<TCommand>(request)
-            .Bind(command => executeOperation(command, cancellationToken))
-            .Bind(domainResult => MapResponse<TDomainResult>(domainResult));
+        var commandResult = MapRequest<TCommand>(request);
+        if (commandResult.IsFailure)
+            return Result.Failure<TResponse, Error>(commandResult.Error);
+
+        var executionResult = await executeOperation(commandResult.Value, cancellationToken);
+        if (executionResult.IsFailure)
+            return Result.Failure<TResponse, Error>(executionResult.Error);
+
+        // Debug: Check if execution result value is null despite success
+        if (executionResult.Value == null)
+        {
+            Logger.LogError("CRITICAL: ExecutionResult.Value is NULL despite IsSuccess=true. Type: {Type}",
+                typeof(TDomainResult).Name);
+            return Result.Failure<TResponse, Error>(
+                Error.Internal(
+                    $"Command execution returned null {typeof(TDomainResult).Name} despite success", 
+                    "NULL_EXECUTION_RESULT"));
+        }
+
+        return MapResponse<TDomainResult>(executionResult.Value);
     }
 
     /// <summary>

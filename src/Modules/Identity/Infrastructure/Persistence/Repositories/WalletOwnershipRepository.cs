@@ -26,10 +26,12 @@ public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
         WalletId walletId,
         CancellationToken cancellationToken = default)
     {
-        // Query principals with their wallet ownerships
+        // Query principals with their wallet ownerships AND credentials
+        // Credentials are needed for HandleCredentialManagement in DynamicAuthenticationProvider
         // Since WalletOwnership is an owned entity, we must query through the aggregate root
         var principals = await _readContext.Principals
             .Include(p => p.WalletOwnerships)
+            .Include(p => p.Credentials)
             .Where(p => p.WalletOwnerships.Any(wo => wo.WalletId == walletId && wo.Status != OwnershipStatus.Revoked))
             .AsNoTracking()
             .ToListAsync(cancellationToken);

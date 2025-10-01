@@ -158,8 +158,20 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
 
         if (verifiedSigning is not null)
         {
+            // Reload principal from write repository to get tracked instance
+            // The principal from ReadContext is AsNoTracking(), but we need a tracked instance
+            // for subsequent credential modifications in DynamicAuthenticationProvider
+            var trackedPrincipal = await _principalWriteRepository.GetByIdAsync(
+                verifiedSigning.Principal.Id, cancellationToken);
+
+            if (trackedPrincipal == null)
+            {
+                return Result.Failure<PrincipalResolutionResult, Error>(
+                    Error.Internal("Failed to reload principal for tracking"));
+            }
+
             return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
-                verifiedSigning.Principal, ResolutionPath.Wallet, WasAutoLinked: false));
+                trackedPrincipal, ResolutionPath.Wallet, WasAutoLinked: false));
         }
 
         // Apply tie-break rules ONLY when no verified+signing exists
@@ -189,8 +201,20 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
             }
         }
 
+        // Reload winner principal from write repository to get tracked instance
+        // The winner.Principal from ReadContext is AsNoTracking(), but we need a tracked instance
+        // for subsequent credential modifications in DynamicAuthenticationProvider
+        var trackedWinnerPrincipal = await _principalWriteRepository.GetByIdAsync(
+            winner.Principal.Id, cancellationToken);
+
+        if (trackedWinnerPrincipal == null)
+        {
+            return Result.Failure<PrincipalResolutionResult, Error>(
+                Error.Internal("Failed to reload winner principal for tracking"));
+        }
+
         return Result.Success<PrincipalResolutionResult, Error>(new PrincipalResolutionResult(
-            winner.Principal, ResolutionPath.Wallet, WasAutoLinked: false));
+            trackedWinnerPrincipal, ResolutionPath.Wallet, WasAutoLinked: false));
     }
 
     private static WalletOwnershipWithPrincipal ApplyTieBreakRules(IEnumerable<WalletOwnershipWithPrincipal> ownerships)

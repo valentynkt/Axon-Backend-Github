@@ -65,13 +65,15 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         var cached = await _cache.GetStringAsync(key, ct);
         if (cached is not null)
         {
-            _logger.LogDebug("Idempotency hit for {Key}", key);
+            _logger.LogDebug("Idempotency hit for {Key}. Cached payload: {CachedPayload}", key, cached);
             var cachedResponse = DeserializeResponse(cached);
             if (cachedResponse is not null)
             {
+                _logger.LogDebug("Successfully deserialized cached response for {Key}. Type: {Type}", key, typeof(TResponse).Name);
                 return cachedResponse;
             }
-            _logger.LogWarning("Failed to deserialize cached response for {Key}, proceeding with handler", key);
+            _logger.LogWarning("Failed to deserialize cached response for {Key}. Type: {Type}. Proceeding with handler. Cached payload: {CachedPayload}",
+                key, typeof(TResponse).Name, cached);
         }
 
         // Execute handler
@@ -185,7 +187,7 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
                 var successEnv = new EnvelopeV2(
                     V: 2,
                     Ok: true,
-                    Type: valueType.FullName,
+                    Type: valueType.AssemblyQualifiedName, // Use assembly-qualified name for proper type resolution
                     Val: valueJson
                 );
                 return JsonSerializer.Serialize(successEnv, JsonOptions);
@@ -203,7 +205,7 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         var fallbackEnv = new EnvelopeV2(
             V: 2,
             Ok: true,
-            Type: typeof(TResponse).FullName,
+            Type: typeof(TResponse).AssemblyQualifiedName, // Use assembly-qualified name for proper type resolution
             Val: fallbackJson
         );
         return JsonSerializer.Serialize(fallbackEnv, JsonOptions);
@@ -225,35 +227,48 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         );
     }
 
-    private static TResponse? DeserializeResponse(string json)
+    private TResponse? DeserializeResponse(string json)
     {
         try
         {
             var env = JsonSerializer.Deserialize<EnvelopeV2>(json, JsonOptions);
             if (env is null || env.V != 2)
             {
+                _logger.LogWarning("Invalid envelope version or null envelope. Attempting direct deserialization. Envelope: {Envelope}", env);
                 // Try fallback to direct deserialization
                 return JsonSerializer.Deserialize<TResponse>(json, JsonOptions);
             }
 
+            _logger.LogDebug("Envelope parsed: V={Version}, Ok={Ok}, Type={Type}, HasValue={HasValue}, HasError={HasError}",
+                env.V, env.Ok, env.Type, env.Val != null, env.Err != null);
+
             // UnitResult<Error>
             if (TryRehydrateUnitResult(env, out var unitResp))
+            {
+                _logger.LogDebug("Successfully rehydrated UnitResult<Error>");
                 return unitResp;
+            }
 
             // Result<TValue, Error>
             if (TryRehydrateResult(env, out var resResp))
+            {
+                _logger.LogDebug("Successfully rehydrated Result<{ValueType}, Error>", typeof(TResponse).GenericTypeArguments.FirstOrDefault()?.Name ?? "Unknown");
                 return resResp;
+            }
 
             // Fallback for direct serialized responses
             if (env.Ok && env.Val is not null)
             {
+                _logger.LogDebug("Attempting direct deserialization of envelope value. Type: {Type}", typeof(TResponse).Name);
                 return JsonSerializer.Deserialize<TResponse>(env.Val, JsonOptions);
             }
 
+            _logger.LogWarning("Could not deserialize response. Envelope.Ok={Ok}, HasValue={HasValue}", env.Ok, env.Val != null);
             return default;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Exception during deserialization of cached response. Type: {Type}", typeof(TResponse).Name);
             // If deserialization fails, return null to force re-execution
             return default;
         }
@@ -346,32 +361,54 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
         Justification = "Result pattern rehydration requires reflection for generic method construction")]
     [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2057:GetType",
         Justification = "Type resolution for deserialization is intentional and safe")]
-    private static bool TryRehydrateResult(EnvelopeV2 env, out TResponse response)
+    private bool TryRehydrateResult(EnvelopeV2 env, out TResponse response)
     {
         response = default!;
         var target = typeof(TResponse);
 
         if (!target.IsGenericType || target.GetGenericTypeDefinition() != typeof(Result<,>))
+        {
+            _logger.LogDebug("TResponse is not a Result<,> type. Type: {Type}", target.Name);
             return false;
+        }
 
         var args = target.GetGenericArguments();
         var valueType = args[0];
         var errorType = args[1];
         if (errorType != typeof(Error))
+        {
+            _logger.LogDebug("Error type is not BuildingBlocks Error. ErrorType: {ErrorType}", errorType.Name);
             return false;
+        }
 
         if (env.Ok)
         {
             if (env.Val is null || string.IsNullOrWhiteSpace(env.Type))
+            {
+                _logger.LogWarning("Envelope is Ok but Val is null or Type is empty. Val: {Val}, Type: {Type}", env.Val, env.Type);
                 return false;
+            }
+
+            _logger.LogDebug("Attempting to rehydrate success result. ValueType: {ValueType}, EnvelopeType: {EnvelopeType}",
+                valueType.Name, env.Type);
 
             var vt = Type.GetType(env.Type, throwOnError: false);
             if (vt is null || !valueType.IsAssignableFrom(vt))
+            {
+                _logger.LogWarning("Type mismatch or type not found. EnvelopeType: {EnvelopeType}, ExpectedType: {ExpectedType}, TypeFound: {TypeFound}",
+                    env.Type, valueType.FullName, vt?.FullName ?? "NULL");
                 return false;
+            }
 
+            _logger.LogDebug("Deserializing value. Type: {Type}, JSON: {Json}", vt.Name, env.Val);
             var value = JsonSerializer.Deserialize(env.Val, vt, JsonOptions);
             if (value is null)
+            {
+                _logger.LogWarning("Deserialization returned null. Type: {Type}, JSON: {Json}", vt.Name, env.Val);
                 return false;
+            }
+
+            _logger.LogDebug("Successfully deserialized value. Creating Result.Success");
 
             // Result.Success<TValue, Error>(value)
             var method = typeof(Result)
@@ -380,9 +417,11 @@ public sealed class IdempotencyBehavior<TRequest, TResponse> : IPipelineBehavior
             var generic = method.MakeGenericMethod(valueType, typeof(Error));
             var res = generic.Invoke(null, new[] { value })!;
             response = (TResponse)res;
+            _logger.LogDebug("Successfully created Result.Success<{ValueType}, Error>", valueType.Name);
         }
         else
         {
+            _logger.LogDebug("Rehydrating failure result");
             var error = RehydrateError(env.Err);
             // Result.Failure<TValue, Error>(error)
             var method = typeof(Result)

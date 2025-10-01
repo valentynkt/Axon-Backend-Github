@@ -112,13 +112,22 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         ProviderType providerType,
         string issuer,
         string subject,
+        AxonUserId? excludePrincipalId = null,
         CancellationToken ct = default)
     {
-        return await DbContext.Set<AxonPrincipal>()
-            .AnyAsync(p => p.Credentials.Any(c =>
+        var query = DbContext.Set<AxonPrincipal>()
+            .Where(p => p.Credentials.Any(c =>
                 c.Provider == providerType.Value &&
                 c.Issuer == issuer &&
-                c.Subject == subject), ct);
+                c.Subject == subject));
+
+        // Exclude the specified principal from the check (when updating existing principal)
+        if (excludePrincipalId is not null)
+        {
+            query = query.Where(p => p.Id != excludePrincipalId);
+        }
+
+        return await query.AnyAsync(ct);
     }
 
     public async Task<int> RevokePendingOwnershipsForWalletAsync(

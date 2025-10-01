@@ -1,6 +1,7 @@
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Web.Endpoints.Base;
 using BuildingBlocks.Web.Extensions;
+using BuildingBlocks.Web.ProblemDetails;
 using CSharpFunctionalExtensions;
 using MediatR;
 
@@ -109,8 +110,23 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
                         result.Error.Code,
                         result.Error.Message,
                         HttpContext.TraceIdentifier);
-                        
+
                     await HttpContext.SendProblemDetailsAsync(result.Error, ct);
+
+                    // CRITICAL: Must set Response to non-null to prevent FastEndpoints auto-204
+                    // Even though SendProblemDetailsAsync wrote to the response stream, FastEndpoints
+                    // checks the Response property after HandleAsync completes. If null, it sends 204 NoContent.
+                    // We create a dummy instance to satisfy FastEndpoints (won't be serialized since response started)
+                    try
+                    {
+                        Response = Activator.CreateInstance<TResponse>();
+                    }
+                    catch
+                    {
+                        // If TResponse doesn't have a parameterless constructor, use unsafe cast
+                        // This is just a marker value and won't actually be serialized
+                        Response = (TResponse)(object)new object();
+                    }
                 }
             }
         }

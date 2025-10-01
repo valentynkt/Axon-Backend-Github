@@ -19,7 +19,26 @@ public static class MapsterResultExtensions
     {
         try
         {
+            // Check if source is null before attempting mapping
+            if (source == null)
+            {
+                return Result.Failure<TDestination, Error>(
+                    Error.Internal(
+                        $"Cannot map null source to {typeof(TDestination).Name}", 
+                        "NULL_SOURCE_OBJECT"));
+            }
+
             var result = source.Adapt<TDestination>();
+            
+            // CRITICAL: Validate mapping result before wrapping in Success
+            if (result == null)
+            {
+                return Result.Failure<TDestination, Error>(
+                    Error.Internal(
+                        $"Mapping from {source.GetType().Name} to {typeof(TDestination).Name} returned null", 
+                        "MAPPING_RETURNED_NULL"));
+            }
+            
             return Result.Success<TDestination, Error>(result);
         }
         catch (Exception ex)

@@ -369,8 +369,9 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             subject,
             DateTime.UtcNow);
 
+        // Check if credential is taken by ANOTHER principal (exclude current principal from check)
         var isTaken = await _principalRepo.IsCredentialTakenAsync(
-            providerType, credential.Issuer, credential.Subject, cancellationToken);
+            providerType, credential.Issuer, credential.Subject, principal.Id, cancellationToken);
 
         var addResult = principal.AddCredential(credential, (provider, iss, subj) =>
             Result.Success<bool, Error>(isTaken), _timeProvider);
