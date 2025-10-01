@@ -181,7 +181,15 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
             }
 
             // Extract user data from JWT claims
+            var claimCount = claimsPrincipal.Claims?.Count() ?? 0;
+            var hasVerifiedCredentials = claimsPrincipal.Claims?.Any(c => c.Type == "verified_credentials") ?? false;
+            _logger.LogInformation("ClaimsPrincipal before normalization: {ClaimCount} claims, has verified_credentials={HasVC}",
+                claimCount, hasVerifiedCredentials);
+
             var userData = _claimNormalizer.NormalizeClaimsPrincipal(claimsPrincipal);
+
+            _logger.LogInformation("After normalization: User={UserId}, Wallets={WalletCount}",
+                userData.AxonUserId, userData.Wallets?.Count ?? 0);
 
             // Cache the validated token data
             var tokenData = new CachedTokenData(claimsPrincipal, userData, DateTimeOffset.UtcNow);
@@ -285,7 +293,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
                 ValidateIssuer = true,
                 ValidIssuer = issuer,
                 ValidateAudience = _validationOptions.ValidateAudience,
-                ValidateLifetime = true,
+                ValidateLifetime = _validationOptions.ValidateLifetime, // Allow disabling for E2E tests
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKeys = securityKeys,
                 ClockSkew = TimeSpan.FromSeconds(_validationOptions.ClockSkewSeconds), // ±60 seconds max (AC3)
@@ -487,11 +495,18 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
 
                 var cacheExpiration = expiresAt.Subtract(DateTimeOffset.UtcNow);
 
-                if (cacheExpiration <= TimeSpan.Zero)
+                // Skip expiration check if lifetime validation is disabled (e.g., for E2E tests)
+                if (_validationOptions.ValidateLifetime && cacheExpiration <= TimeSpan.Zero)
                 {
                     _logger.LogWarning("Attempt to cache expired JWT with jti: {Jti}", jti);
                     return Result.Failure<Unit, Error>(
                         Error.Unauthorized("JWT token has expired", AuthErrors.TokenExpired));
+                }
+
+                // Use a default cache duration if token would be expired (for test scenarios)
+                if (cacheExpiration <= TimeSpan.Zero)
+                {
+                    cacheExpiration = TimeSpan.FromMinutes(_validationOptions.TokenCacheMinutes);
                 }
 
                 // Add buffer time for clock skew (configurable)

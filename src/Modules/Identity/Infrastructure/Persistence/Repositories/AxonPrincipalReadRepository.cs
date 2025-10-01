@@ -86,8 +86,9 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
                         MaxOwnershipUpdated = p.WalletOwnerships
                             .Where(wo => wo.Status == OwnershipStatus.Verified && wo.AccessMode == AccessMode.Signing)
                             .Max(wo => (DateTimeOffset?)wo.UpdatedAt),
-                        MaxChainDefaultUpdated = context.Set<PrincipalChainDefault>()
-                            .Where(cd => cd.PrincipalId == principalId)
+                        // Access PrincipalChainDefaults through the navigation property, not as DbSet
+                        // PrincipalChainDefault is an owned entity type and must be accessed via principal
+                        MaxChainDefaultUpdated = p.PrincipalChainDefaults
                             .Max(cd => (DateTimeOffset?)cd.UpdatedAt)
                     })
                     .FirstOrDefault());

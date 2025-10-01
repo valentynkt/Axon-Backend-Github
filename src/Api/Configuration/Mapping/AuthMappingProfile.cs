@@ -55,6 +55,6 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
                 w.Access,
                 w.IsDefault
             )).ToArray())
-            .Map(dest => dest.ETag, src => $"{src.Profile.AxonId}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}");
+            .Map(dest => dest.ETag, src => src.ETag);
     }
 }

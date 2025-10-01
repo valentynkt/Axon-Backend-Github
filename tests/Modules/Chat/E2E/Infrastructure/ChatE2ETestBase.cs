@@ -1,41 +1,39 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
-using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
+using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.E2E.Infrastructure;
 using Axon.Modules.Identity.Infrastructure.Persistence;
 using Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
-using Microsoft.IdentityModel.Tokens;
 using NUnit.Framework;
 using Testcontainers.PostgreSql;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
 using WireMock.Settings;
-using WireMock.Logging;
 
-namespace Axon.Modules.Identity.E2E.Infrastructure;
+namespace Axon.Modules.Chat.E2E.Infrastructure;
 
 /// <summary>
-/// Base class for E2E tests using real HTTP server, PostgreSQL, and WireMock for external services.
-/// Implements modern ASP.NET Core testing practices with Testcontainers and deterministic time.
+/// Base class for Chat E2E tests using real HTTP server, PostgreSQL, and WireMock.
+/// Sets up both Chat and Identity DbContexts since Chat module requires authentication.
 /// </summary>
-public abstract class E2ETestBase : IAsyncDisposable
+public abstract class ChatE2ETestBase : IAsyncDisposable
 {
     protected WebApplicationFactory<Program> Factory { get; private set; } = null!;
     protected HttpClient HttpClient { get; private set; } = null!;
     protected WireMockServer JwksServer { get; private set; } = null!;
     protected FakeTimeProvider TimeProvider { get; private set; } = null!;
+    protected MockAiProcessingService MockAiService { get; private set; } = null!;
 
     private PostgreSqlContainer _postgreSqlContainer = null!;
     private string _connectionString = null!;
@@ -49,10 +47,10 @@ public abstract class E2ETestBase : IAsyncDisposable
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
-        // Start PostgreSQL container
+        // Start PostgreSQL container (shared across all tests in fixture)
         _postgreSqlContainer = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")
-            .WithDatabase("axon_identity_e2e_test")
+            .WithDatabase("axon_chat_e2e_test")
             .WithUsername("e2e_user")
             .WithPassword("e2e_password")
             .WithCleanUp(true)
@@ -61,7 +59,7 @@ public abstract class E2ETestBase : IAsyncDisposable
         await _postgreSqlContainer.StartAsync();
         _connectionString = _postgreSqlContainer.GetConnectionString();
 
-        // Start WireMock server for JWKS endpoint
+        // Start WireMock server for JWKS endpoint (Dynamic JWT validation)
         JwksServer = WireMockServer.Start(new WireMockServerSettings
         {
             Port = 0, // Use random available port
@@ -86,23 +84,18 @@ public abstract class E2ETestBase : IAsyncDisposable
     [SetUp]
     public async Task SetUpAsync()
     {
-        // Reset disposal flag for new test
         _disposed = false;
-
-        // Initialize deterministic time provider
         TimeProvider = new FakeTimeProvider(TestTime);
+        MockAiService = new MockAiProcessingService();
 
         // Create WebApplicationFactory with test configuration
-        // CA2000 suppressed: Factory is disposed in TearDownAsync
-        #pragma warning disable CA2000 // Dispose objects before losing scope
+        #pragma warning disable CA2000 // Factory disposed in TearDownAsync
         Factory = new WebApplicationFactory<Program>()
-        #pragma warning restore CA2000 // Dispose objects before losing scope
+        #pragma warning restore CA2000
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Testing");
 
-                // CRITICAL FIX: Configure Dynamic Auth settings to OVERRIDE appsettings
-                // AddInMemoryCollection must be LAST to ensure it overrides file-based config
                 builder.ConfigureAppConfiguration((context, config) =>
                 {
                     // Clear and rebuild configuration with test overrides
@@ -118,7 +111,7 @@ public abstract class E2ETestBase : IAsyncDisposable
                         ["ConnectionStrings:DefaultConnection"] = _connectionString,
 
                         // Dynamic JWT configuration
-                        ["Dynamic:Authority"] = "", // Clear Authority to force JwksUri usage
+                        ["Dynamic:Authority"] = "",
                         ["Dynamic:JwksUri"] = $"http://localhost:{JwksServer.Port}/.well-known/jwks.json",
                         ["Dynamic:Issuer"] = TestDataFixtures.DynamicIssuer,
                         ["Dynamic:Audience"] = "axon-api",
@@ -140,29 +133,31 @@ public abstract class E2ETestBase : IAsyncDisposable
                     RemoveDbContextRegistrations(services);
                     RegisterDbContextsWithTestConnectionString(services, _connectionString);
 
-                    // Replace time provider with deterministic one
+                    // Replace TimeProvider with deterministic one
                     services.AddSingleton<TimeProvider>(TimeProvider);
 
-                    // CRITICAL FIX: Post-configure DynamicJwt options to use test issuer and signing keys
-                    // This runs AFTER IdentityApiModule registers JWT authentication
+                    // Replace AI Processing Service with mock (must match application's Scoped lifetime)
+                    var aiServiceDescriptor = services.FirstOrDefault(d =>
+                        d.ServiceType == typeof(Axon.Modules.Chat.Application.Contracts.AI.IAiProcessingService));
+                    if (aiServiceDescriptor != null)
+                    {
+                        services.Remove(aiServiceDescriptor);
+                    }
+                    services.AddScoped<Axon.Modules.Chat.Application.Contracts.AI.IAiProcessingService>(sp => MockAiService);
+
+                    // Post-configure JWT authentication for tests
                     services.PostConfigure<JwtBearerOptions>("DynamicJwt", options =>
                     {
                         options.TokenValidationParameters.ValidIssuer = TestDataFixtures.DynamicIssuer;
-
-                        // Directly provide test RSA keys instead of relying on JWKS discovery
-                        // This ensures signature validation works in tests
-                        var testKeys = JwtTestTokenFactory.GetTestSigningKeys();
-                        options.TokenValidationParameters.IssuerSigningKeys = testKeys;
+                        options.TokenValidationParameters.IssuerSigningKeys = JwtTestTokenFactory.GetTestSigningKeys();
 
                         // CRITICAL FIX: Disable lifetime validation for E2E tests
                         // JWT middleware uses system clock (not FakeTimeProvider), so test tokens from 2024 appear expired in 2025
-                        // NOTE: This means expired token tests (AuthMe_InvalidJWT_ShouldReturn401) cannot validate expiration at middleware level
                         options.TokenValidationParameters.ValidateLifetime = false;
                         options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
 
-                        // Disable JWKS refresh since we're providing keys directly
                         options.RefreshOnIssuerKeyNotFound = false;
-                        options.RequireHttpsMetadata = false; // Allow HTTP for testing
+                        options.RequireHttpsMetadata = false;
                     });
 
                     // Post-configure AxonJwt authentication scheme (for internal tokens)
@@ -173,17 +168,11 @@ public abstract class E2ETestBase : IAsyncDisposable
                         options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
                     });
 
-                    // CRITICAL FIX: Configure DynamicAuthService validation for E2E tests
-                    // This is the SECOND validation layer that runs within DynamicAuthenticationProvider
+                    // Configure DynamicAuthService validation
                     services.PostConfigure<Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration.DynamicValidationOptions>(options =>
                     {
-                        // Ensure test environment mapping is present
                         options.EnvironmentMapping["dyn_test_env_12345"] = "test";
-
-                        // Disable background JWKS refresh during tests
                         options.EnableBackgroundRefresh = false;
-
-                        // Use test-friendly validation settings
                         options.ValidateAudience = true;
                         options.DefaultAllowedAudiences = new List<string> { "axon-api", "axon-web" };
 
@@ -193,11 +182,10 @@ public abstract class E2ETestBase : IAsyncDisposable
                         options.ClockSkewSeconds = 0;
                     });
 
-                    // Replace IJwksService with test implementation that returns test RSA keys
-                    // This prevents DynamicAuthService from fetching production keys on startup
+                    // Replace IJwksService with test implementation
                     services.AddSingleton<Axon.Modules.Identity.Application.Contracts.ExternalServices.IJwksService, TestJwksService>();
 
-                    // Disable authentication for some E2E tests when needed
+                    // Allow derived classes to configure additional services
                     ConfigureTestServices(services);
                 });
 
@@ -205,13 +193,14 @@ public abstract class E2ETestBase : IAsyncDisposable
                 {
                     logging.ClearProviders();
                     logging.AddConsole();
-                    logging.SetMinimumLevel(LogLevel.Warning); // Reduce noise in tests
+                    logging.SetMinimumLevel(LogLevel.Warning);
                 });
             });
 
         HttpClient = Factory.CreateClient();
 
-        // Ensure database is migrated and clean
+        // Setup database schemas (Chat + Identity)
+        // EnsureDeletedAsync ensures clean state by dropping entire database first
         await EnsureDatabaseSetupAsync();
 
         // Allow derived classes to perform additional setup
@@ -262,56 +251,91 @@ public abstract class E2ETestBase : IAsyncDisposable
     #region Database Management
 
     /// <summary>
-    /// Ensures the test database is properly migrated and set up.
+    /// Ensures both Chat and Identity database schemas are properly set up.
+    /// CRITICAL: Chat module requires Identity for authentication, so both must be initialized.
+    ///
+    /// HYBRID APPROACH (matching production):
+    /// - IdentityContext (ASP.NET Identity): EnsureCreatedAsync (not migrated in production)
+    /// - IdentityWriteDbContext (Domain): MigrateAsync (migrated in production)
+    /// - ChatDbContext (Domain): MigrateAsync (migrated in production)
     /// </summary>
     private async Task EnsureDatabaseSetupAsync()
     {
         using var scope = Factory.Services.CreateScope();
 
-        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        // Get all required DbContexts
+        var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
         var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+        var chatDbContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
 
         // Delete entire database to ensure clean state
-        await writeDbContext.Database.EnsureDeletedAsync();
+        await identityWriteDbContext.Database.EnsureDeletedAsync();
 
-        // CRITICAL FIX: IdentityContext (ASP.NET Identity) has NO migrations - use EnsureCreatedAsync()
-        // IdentityWriteDbContext (Axon tables) HAS migrations - use MigrateAsync()
-
-        // Create ASP.NET Identity tables first (no migrations available)
+        // STEP 1: Create ASP.NET Identity schema using EnsureCreatedAsync
+        // IdentityContext is NOT migrated in production (see Program.cs ApplyMigrationsAsync)
+        // so we use EnsureCreatedAsync for test compatibility
         await identityContext.Database.EnsureCreatedAsync();
 
-        // Apply Axon Identity migrations (Principal, Wallet, Credential, etc.)
-        await writeDbContext.Database.MigrateAsync();
+        // STEP 2: Apply Identity domain migrations (Principal, Wallet, etc.)
+        // These ARE migrated in production
+        await identityWriteDbContext.Database.MigrateAsync();
+
+        // STEP 3: Apply Chat migrations (Conversation, Message, etc.)
+        // These ARE migrated in production
+        await chatDbContext.Database.MigrateAsync();
     }
 
     /// <summary>
     /// Cleans up database state between tests.
+    /// Truncates both Chat and Identity tables to ensure test isolation.
+    /// CRITICAL: Must truncate in correct order (children → parents) to avoid FK violations.
     /// </summary>
     private async Task CleanupDatabaseAsync()
     {
         using var scope = Factory.Services.CreateScope();
-        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
-        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+        var chatDbContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
 
         try
         {
-            await writeDbContext.Database.ExecuteSqlRawAsync(@"
+            // CORRECT TRUNCATION ORDER: Children first, then parents
+            // This prevents foreign key constraint violations
+            await chatDbContext.Database.ExecuteSqlRawAsync(@"
+                -- Chat tables (children first)
+                TRUNCATE TABLE chat.""Message"" CASCADE;
+                TRUNCATE TABLE chat.""Conversation"" CASCADE;
+
+                -- Identity tables - CRITICAL ORDER:
+                -- 1. PrincipalChainDefault (references Principal + Wallet)
                 TRUNCATE TABLE identity.""PrincipalChainDefault"" CASCADE;
+
+                -- 2. WalletOwnership (references Principal + Wallet) - MUST come before Wallet/Principal
                 TRUNCATE TABLE identity.""WalletOwnership"" CASCADE;
+
+                -- 3. Credential (references Principal)
                 TRUNCATE TABLE identity.""Credential"" CASCADE;
+
+                -- 4. Wallet (parent table, no dependencies)
                 TRUNCATE TABLE identity.""Wallet"" CASCADE;
+
+                -- 5. Principal (parent table, no dependencies)
                 TRUNCATE TABLE identity.""Principal"" CASCADE;
+
+                -- 6. ASP.NET Identity tables
+                TRUNCATE TABLE identity.""AspNetUserRoles"" CASCADE;
                 TRUNCATE TABLE identity.""AspNetUsers"" CASCADE;
                 TRUNCATE TABLE identity.""AspNetRoles"" CASCADE;
-                TRUNCATE TABLE identity.""AspNetUserRoles"" CASCADE;
             ");
         }
         catch
         {
-            // If truncate fails, recreate database
-            await writeDbContext.Database.EnsureDeletedAsync();
+            // If truncate fails, recreate entire database using same hybrid approach as setup
+            var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+            var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+
+            await identityWriteDbContext.Database.EnsureDeletedAsync();
             await identityContext.Database.EnsureCreatedAsync();
-            await writeDbContext.Database.EnsureCreatedAsync();
+            await identityWriteDbContext.Database.MigrateAsync();
+            await chatDbContext.Database.MigrateAsync();
         }
     }
 
@@ -319,9 +343,6 @@ public abstract class E2ETestBase : IAsyncDisposable
 
     #region WireMock JWKS Setup
 
-    /// <summary>
-    /// Sets up default JWKS endpoint with test keys.
-    /// </summary>
     private void SetupDefaultJwksEndpoint()
     {
         var jwks = JwtTestTokenFactory.CreateTestJwks();
@@ -334,9 +355,6 @@ public abstract class E2ETestBase : IAsyncDisposable
                 .WithBody(jwks));
     }
 
-    /// <summary>
-    /// Simulates JWKS key rotation by updating the endpoint.
-    /// </summary>
     protected void SimulateJwksKeyRotation()
     {
         var rotatedJwks = JwtTestTokenFactory.CreateRotatedTestJwks();
@@ -350,9 +368,6 @@ public abstract class E2ETestBase : IAsyncDisposable
                 .WithBody(rotatedJwks));
     }
 
-    /// <summary>
-    /// Simulates JWKS endpoint failure.
-    /// </summary>
     protected void SimulateJwksEndpointFailure()
     {
         JwksServer.Reset();
@@ -367,34 +382,16 @@ public abstract class E2ETestBase : IAsyncDisposable
 
     #region HTTP Helper Methods
 
-    /// <summary>
-    /// Creates an authenticated HTTP request with Bearer token.
-    /// </summary>
     protected void SetAuthorizationHeader(string jwt)
     {
         HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
     }
 
-    /// <summary>
-    /// Clears the authorization header.
-    /// </summary>
     protected void ClearAuthorizationHeader()
     {
         HttpClient.DefaultRequestHeaders.Authorization = null;
     }
 
-    /// <summary>
-    /// Sets the If-None-Match header for ETag testing.
-    /// </summary>
-    protected void SetIfNoneMatchHeader(string etag)
-    {
-        HttpClient.DefaultRequestHeaders.IfNoneMatch.Clear();
-        HttpClient.DefaultRequestHeaders.IfNoneMatch.Add(new EntityTagHeaderValue($"\"{etag}\""));
-    }
-
-    /// <summary>
-    /// Creates a JSON content for POST requests.
-    /// </summary>
     protected static StringContent CreateJsonContent(string json)
     {
         return new StringContent(json, Encoding.UTF8, "application/json");
@@ -404,17 +401,11 @@ public abstract class E2ETestBase : IAsyncDisposable
 
     #region Time Management
 
-    /// <summary>
-    /// Advances the test time by the specified duration.
-    /// </summary>
     protected void AdvanceTime(TimeSpan duration)
     {
         TimeProvider.Advance(duration);
     }
 
-    /// <summary>
-    /// Sets the test time to a specific moment.
-    /// </summary>
     protected void SetTime(DateTime time)
     {
         TimeProvider.SetUtcNow(time);
@@ -425,10 +416,23 @@ public abstract class E2ETestBase : IAsyncDisposable
     #region DbContext Registration Helpers
 
     /// <summary>
-    /// Removes existing DbContext registrations to prepare for test-specific ones.
+    /// Removes existing DbContext registrations to allow re-registration with test connection string.
     /// </summary>
     private static void RemoveDbContextRegistrations(IServiceCollection services)
     {
+        // Remove Chat DbContexts
+        var chatDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ChatDbContext));
+        if (chatDbContextDescriptor != null)
+        {
+            services.Remove(chatDbContextDescriptor);
+        }
+
+        var chatReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ChatReadDbContext));
+        if (chatReadDbContextDescriptor != null)
+        {
+            services.Remove(chatReadDbContextDescriptor);
+        }
+
         // Remove Identity DbContexts
         var identityWriteDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IdentityWriteDbContext));
         if (identityWriteDbContextDescriptor != null)
@@ -464,6 +468,25 @@ public abstract class E2ETestBase : IAsyncDisposable
     /// </summary>
     private static void RegisterDbContextsWithTestConnectionString(IServiceCollection services, string connectionString)
     {
+        // Register Chat DbContexts with test connection string
+        services.AddDbContext<ChatDbContext>(options =>
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+            });
+        });
+
+        services.AddDbContext<ChatReadDbContext>(options =>
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
+                npgsqlOptions.CommandTimeout(30);
+            });
+            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+        });
+
         // Register Identity DbContexts with test connection string
         services.AddDbContext<IdentityWriteDbContext>(options =>
         {
@@ -485,14 +508,16 @@ public abstract class E2ETestBase : IAsyncDisposable
             options.EnableDetailedErrors();
         });
 
+        // Register IdentityReadDbContext (required by some Identity services)
         services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
-                npgsqlOptions.CommandTimeout(30);
+                npgsqlOptions.CommandTimeout(60);
             });
             options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+            options.EnableSensitiveDataLogging(false);
         });
     }
 

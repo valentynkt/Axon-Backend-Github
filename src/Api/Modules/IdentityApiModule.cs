@@ -181,7 +181,10 @@ public sealed class IdentityApiModule : IApiModule
 
             // Convert Base64 signing key
             var keyBytes = Convert.FromBase64String(axonSigningKey);
-            var key = new SymmetricSecurityKey(keyBytes);
+            var key = new SymmetricSecurityKey(keyBytes)
+            {
+                KeyId = "axon_key_001" // Set KeyId to match token generation
+            };
 
             // Get the TokenReplayCache from DI for replay protection
             var serviceProvider = services.BuildServiceProvider();
@@ -326,6 +329,10 @@ public sealed class IdentityApiModule : IApiModule
                 new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
                     .RequireAuthenticatedUser()
                     .Build();
+
+            // FallbackPolicy - require authentication for all endpoints (secure by default)
+            // Endpoints can opt-out using AllowAnonymous() (e.g., exchange endpoint, health checks)
+            options.FallbackPolicy = options.DefaultPolicy;
         });
     }
 }

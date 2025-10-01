@@ -120,7 +120,7 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
             null, // No previous AI response for new conversation
             _testMcpConfigs,
             cancellationToken);
-        await _mockRepository.Received(1).UpdateAsync(_testConversation, cancellationToken);
+        // Orchestrator saves changes directly without calling UpdateAsync (conversation already tracked)
         await _mockRepository.UnitOfWork.Received(1).SaveChangesAsync(cancellationToken);
 
         _mockTelemetry.Received(1).TrackMessageProcessed(
@@ -331,8 +331,8 @@ public class MessageProcessingOrchestratorTests : ApplicationTestBase
             .Returns(Result.Success<AiProcessingResult, Error>(
                 new AiProcessingResult(assistantContent, aiResponseId, TimeSpan.FromMilliseconds(100))));
 
-        _mockRepository
-            .UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
+        _mockRepository.UnitOfWork
+            .SaveChangesAsync(Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Database error"));
 
         // Act

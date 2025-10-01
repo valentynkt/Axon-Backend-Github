@@ -20,7 +20,7 @@ public abstract class BaseChatCommandEndpoint<TRequest, TResponse, TCommand, TDo
     public override void Configure()
     {
         Post(GetRoute());
-        AllowAnonymous();
+        Policies("DynamicOrAxon");  // Accept both Dynamic and Axon tokens
 
         Summary(s =>
         {

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Axon.Api.Contracts.V1.Chat;
+using Axon.Modules.Chat.E2E.Infrastructure;
 using Axon.Modules.Identity.E2E.Infrastructure;
 using Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,12 +19,34 @@ namespace Axon.Modules.Chat.E2E;
 /// Covers the most critical 80% of chat functionality.
 /// </summary>
 [TestFixture]
-public class ChatTurnE2ETests : E2ETestBase
+public class ChatTurnE2ETests : ChatE2ETestBase
 {
+    /// <summary>
+    /// Tracks which users have been successfully set up to prevent duplicate setup calls
+    /// that could cause 409 Conflict errors due to wallet ownership conflicts.
+    /// </summary>
+    private readonly HashSet<string> _setupCompletedForUsers = new();
+
     protected override void ConfigureTestServices(IServiceCollection services)
     {
-        // Mock AI service for predictable responses
-        SetupMockAiService();
+        // Mock AI service is already configured in ChatE2ETestBase
+        // Default behavior is Success, which is appropriate for most tests
+    }
+
+    protected override Task SetUpDerivedAsync()
+    {
+        // Clear setup tracking at the start of each test
+        // This ensures tests start fresh with no cached setup state
+        _setupCompletedForUsers.Clear();
+
+        // Clear any authorization headers from previous tests
+        // This ensures tests that expect 401 Unauthorized actually get it
+        ClearAuthorizationHeader();
+
+        // Reset mock AI service to default Success behavior
+        MockAiService.Reset();
+
+        return Task.CompletedTask;
     }
 
     #region New Conversation Tests
@@ -33,7 +56,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange: Set up authenticated user
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var request = new ChatTurnRequestDto
         {
@@ -41,8 +64,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Hello, this is my first message!"
         };
 
-        // Act: Send chat turn request
-        SetAuthorizationHeader(validJwt);
+        // Act: Send chat turn request using Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert: Should create new conversation and return assistant response
@@ -66,7 +89,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange: Set up user and long but valid message
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var longMessage = new string('A', 1000); // 1KB message
         var request = new ChatTurnRequestDto
@@ -75,8 +98,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = longMessage
         };
 
-        // Act
-        SetAuthorizationHeader(validJwt);
+        // Act: Use Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert
@@ -94,7 +117,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange: Create initial conversation
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var firstRequest = new ChatTurnRequestDto
         {
@@ -102,7 +125,7 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "First message"
         };
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var firstResponse = await PostChatTurnAsync(firstRequest);
         var firstData = await DeserializeResponseAsync<ChatTurnResponseDto>(firstResponse);
 
@@ -113,7 +136,7 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Second message in same conversation"
         };
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var secondResponse = await PostChatTurnAsync(secondRequest);
 
         // Assert: Should use same conversation ID
@@ -133,7 +156,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var request = new ChatTurnRequestDto
         {
@@ -141,8 +164,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Message to nonexistent conversation"
         };
 
-        // Act
-        SetAuthorizationHeader(validJwt);
+        // Act: Use Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert
@@ -154,7 +177,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange: Create conversation with first user
         var firstUserJwt = JwtTestTokenFactory.CreateValidDynamicJwt("user1");
-        await SetupPrincipalWithWallets(firstUserJwt, "user1");
+        var firstUserAxonToken = await SetupPrincipalWithWallets(firstUserJwt, "user1");
 
         var firstRequest = new ChatTurnRequestDto
         {
@@ -162,13 +185,13 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "First user's message"
         };
 
-        SetAuthorizationHeader(firstUserJwt);
+        SetAuthorizationHeader(firstUserAxonToken);
         var firstResponse = await PostChatTurnAsync(firstRequest);
         var firstData = await DeserializeResponseAsync<ChatTurnResponseDto>(firstResponse);
 
         // Act: Try to access with different user
         var secondUserJwt = JwtTestTokenFactory.CreateValidDynamicJwt("user2");
-        await SetupPrincipalWithWallets(secondUserJwt, "user2");
+        var secondUserAxonToken = await SetupPrincipalWithWallets(secondUserJwt, "user2");
 
         var secondRequest = new ChatTurnRequestDto
         {
@@ -176,7 +199,7 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Second user trying to access first user's conversation"
         };
 
-        SetAuthorizationHeader(secondUserJwt);
+        SetAuthorizationHeader(secondUserAxonToken);
         var response = await PostChatTurnAsync(secondRequest);
 
         // Assert
@@ -253,7 +276,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var request = new ChatTurnRequestDto
         {
@@ -261,8 +284,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = invalidMessage!
         };
 
-        // Act
-        SetAuthorizationHeader(validJwt);
+        // Act: Use Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert
@@ -274,7 +297,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange: Message exceeding limits
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var tooLongMessage = new string('A', 100_000); // 100KB message
         var request = new ChatTurnRequestDto
@@ -283,8 +306,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = tooLongMessage
         };
 
-        // Act
-        SetAuthorizationHeader(validJwt);
+        // Act: Use Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert
@@ -302,7 +325,7 @@ public class ChatTurnE2ETests : E2ETestBase
         SetupMockAiServiceFailure();
 
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var request = new ChatTurnRequestDto
         {
@@ -310,8 +333,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "This will trigger AI service failure"
         };
 
-        // Act
-        SetAuthorizationHeader(validJwt);
+        // Act: Use Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert
@@ -325,7 +348,7 @@ public class ChatTurnE2ETests : E2ETestBase
         SetupMockAiServiceTimeout();
 
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var request = new ChatTurnRequestDto
         {
@@ -333,8 +356,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "This will trigger AI service timeout"
         };
 
-        // Act
-        SetAuthorizationHeader(validJwt);
+        // Act: Use Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await PostChatTurnAsync(request);
 
         // Assert
@@ -353,7 +376,7 @@ public class ChatTurnE2ETests : E2ETestBase
 
         // Arrange: Set up conversation
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         // Create initial conversation
         var firstRequest = new ChatTurnRequestDto
@@ -362,7 +385,7 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Initial message"
         };
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var firstResponse = await PostChatTurnAsync(firstRequest);
         var firstData = await DeserializeResponseAsync<ChatTurnResponseDto>(firstResponse);
 
@@ -376,7 +399,7 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Second message that triggers duplicate AI response"
         };
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var secondResponse = await PostChatTurnAsync(secondRequest);
 
         // Assert: Should handle gracefully (depending on business logic)
@@ -393,7 +416,7 @@ public class ChatTurnE2ETests : E2ETestBase
     {
         // Arrange
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var axonToken = await SetupPrincipalWithWallets(validJwt);
 
         var request = new ChatTurnRequestDto
         {
@@ -401,8 +424,8 @@ public class ChatTurnE2ETests : E2ETestBase
             Message = "Performance test message"
         };
 
-        // Act: Measure response time
-        SetAuthorizationHeader(validJwt);
+        // Act: Measure response time using Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var startTime = DateTime.UtcNow;
         var response = await PostChatTurnAsync(request);
         var duration = DateTime.UtcNow - startTime;
@@ -451,8 +474,19 @@ public class ChatTurnE2ETests : E2ETestBase
         messagesData!.Items.Count.ShouldBe(expectedCount, $"Should have {expectedCount} messages");
     }
 
-    private async Task SetupPrincipalWithWallets(string jwt, string? userId = null)
+    /// <summary>
+    /// Sets up a principal with wallets via the /api/v1/auth/exchange endpoint.
+    /// Idempotent: calling multiple times for the same user will skip re-setup to avoid conflicts.
+    /// CRITICAL: Returns the Axon Access Token which MUST be used for all subsequent chat requests.
+    /// Dynamic JWT tokens cannot be used directly - they must be exchanged first.
+    /// </summary>
+    /// <param name="jwt">Dynamic JWT token for authentication</param>
+    /// <param name="userId">Optional user identifier for tracking (defaults to "default")</param>
+    /// <returns>Axon Access Token to use for authenticated chat requests</returns>
+    private async Task<string> SetupPrincipalWithWallets(string jwt, string? userId = null)
     {
+        var userKey = userId ?? "default";
+
         var requestData = new
         {
             environmentId = TestDataFixtures.MainnetEnvironment,
@@ -467,33 +501,50 @@ public class ChatTurnE2ETests : E2ETestBase
 
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Accept both OK (200) and Conflict (409) - both return a valid Axon token
+        // Conflict means the user already exists, which is fine for idempotent test setup
+        response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Conflict);
+
+        // Only mark as completed if the setup was successful
+        if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict)
+        {
+            _setupCompletedForUsers.Add(userKey);
+        }
+
+        // Extract and return the Axon Access Token from the exchange response
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var exchangeResponse = JsonSerializer.Deserialize<ExchangeResponse>(responseContent, JsonOptions);
+        exchangeResponse.ShouldNotBeNull();
+        exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
+
+        return exchangeResponse.AccessToken;
     }
 
-    private static void SetupMockAiService()
+    private void SetupMockAiService()
     {
-        // This would typically set up a mock AI service response
-        // For now, we assume the AI service is configured in the test environment
-        // to return predictable responses
+        // Configure mock for successful AI responses (default behavior)
+        MockAiService.ConfigureBehavior(MockAiProcessingService.MockBehavior.Success);
     }
 
-    private static void SetupMockAiServiceFailure()
+    private void SetupMockAiServiceFailure()
     {
         // Configure mock to simulate AI service failure
-        // This might involve setting environment variables or
-        // configuring a test-specific AI service implementation
+        MockAiService.ConfigureBehavior(MockAiProcessingService.MockBehavior.Failure);
     }
 
-    private static void SetupMockAiServiceTimeout()
+    private void SetupMockAiServiceTimeout()
     {
         // Configure mock to simulate AI service timeout
-        // This might involve delayed responses or timeout simulation
+        MockAiService.ConfigureBehavior(MockAiProcessingService.MockBehavior.Timeout);
     }
 
-    private static void SetupMockAiServiceWithDuplicateResponseId()
+    private void SetupMockAiServiceWithDuplicateResponseId()
     {
         // Configure mock to return duplicate AI response IDs
-        // This tests the idempotency logic in the message processing
+        // Use a fixed response ID for testing idempotency
+        MockAiService.SetFixedResponseId("duplicate_response_id_for_testing");
+        MockAiService.ConfigureBehavior(MockAiProcessingService.MockBehavior.DuplicateResponseId);
     }
 
     #endregion
@@ -505,6 +556,24 @@ public class ChatTurnE2ETests : E2ETestBase
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true
     };
+
+    #endregion
+
+    #region Response Models
+
+    /// <summary>
+    /// Model for /auth/exchange response containing the Axon Access Token.
+    /// </summary>
+    private sealed class ExchangeResponse
+    {
+        public string AccessToken { get; set; } = string.Empty;
+        public string TokenType { get; set; } = string.Empty;
+        public int ExpiresIn { get; set; }
+        public string AxonUserId { get; set; } = string.Empty;
+        public bool Created { get; set; }
+        public int WalletsLinked { get; set; }
+        public int Conflicts { get; set; }
+    }
 
     #endregion
 }

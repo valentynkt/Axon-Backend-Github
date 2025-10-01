@@ -57,16 +57,12 @@ public sealed class AxonUserStore :
     {
         try
         {
-            // Ensure corresponding AxonPrincipal exists
-            var principal = await _principalRepo.GetByIdAsync(user.AxonPrincipalId, ct);
-            if (principal == null)
-            {
-                // Create new principal if it doesn't exist
-                principal = AxonPrincipal.CreateHuman(user.AxonPrincipalId);
-                await _principalRepo.AddAsync(principal, ct);
-            }
+            // IMPORTANT: The corresponding AxonPrincipal should already exist and be tracked in IdentityWriteDbContext
+            // before calling this method. The caller (GetOrCreateIdentityUserAsync) is responsible for ensuring
+            // the Principal exists. We don't create it here to avoid duplicate Principal creation across different
+            // DbContexts (IdentityWriteDbContext vs IdentityContext) during EF Core ExecutionStrategy retries.
 
-            // Add Identity user
+            // Simply add the Identity user with the FK to the existing Principal
             _dbContext.Set<AxonUserAuth>().Add(user);
             await _dbContext.SaveChangesAsync(ct);
 

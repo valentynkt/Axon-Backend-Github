@@ -282,8 +282,21 @@ public sealed class DynamicClaimNormalizer : IDynamicClaimNormalizer
     {
         var wallets = new List<WalletData>();
 
-        foreach (var verifiedCredentialsValue in claimsMultimap["verified_credentials"])
+        var credentialValues = claimsMultimap["verified_credentials"].ToList();
+        _logger.LogInformation("ResolveWallets: Found {Count} verified_credentials claim values", credentialValues.Count);
+
+        foreach (var verifiedCredentialsValue in credentialValues)
         {
+            _logger.LogInformation("ResolveWallets: Processing verified_credentials value (length {Length}): {ValuePreview}",
+                verifiedCredentialsValue?.Length ?? 0,
+                verifiedCredentialsValue?.Length > 100 ? verifiedCredentialsValue[..100] + "..." : verifiedCredentialsValue);
+
+            if (string.IsNullOrEmpty(verifiedCredentialsValue))
+            {
+                _logger.LogWarning("ResolveWallets: verified_credentials value is null or empty, skipping");
+                continue;  // Skip this value but process others
+            }
+
             foreach (var credential in EnumerateJsonObjects(verifiedCredentialsValue))
             {
                 // Check if this is a blockchain credential by presence of address and chain

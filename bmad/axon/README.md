@@ -105,19 +105,28 @@ Load: bmad/axon/agents/{agent-name}.md
 Execute: bmad/axon/workflows/{workflow-name}/workflow.yaml
 ```
 
-### 🎯 Claude Code Integration (Slash Commands)
+### 🎯 Claude Code Integration (Direct Access & Slash Commands)
 
-**All Axon agents and workflows are available as Claude Code slash commands!**
+**All Axon agents and workflows are available in Claude Code via @mentions and slash commands!**
 
 ```bash
-# Install Claude Code commands (one-time setup):
-Run workflow: bmad/axon/workflows/install-claude-commands/workflow.yaml
+# Install Claude Code integration (one-time setup):
+Run workflow: bmad/axon/workflows/install-axon-claude/workflow.yaml
 
-# Or load in Claude Code:
-/bmad:axon:workflows:install-claude-commands
+# This installs to:
+# - .claude/agents/ (for @agent-name mentions)
+# - .claude/commands/bmad/axon/ (for /slash commands)
 ```
 
-**Once installed, access via slash commands:**
+**Access Methods:**
+
+1. **Direct Agent Mentions** (recommended):
+   ```
+   @axon-story-orchestrator implement-story story-001
+   @axon-doc-oracle find-pattern "error handling"
+   ```
+
+2. **Slash Commands**:
 
 ```
 # Agents (type / to see all):

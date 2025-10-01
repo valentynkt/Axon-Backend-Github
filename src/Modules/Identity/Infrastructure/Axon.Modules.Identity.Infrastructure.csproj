@@ -50,6 +50,10 @@
 
   <ItemGroup>
     <Compile Remove="Persistence\DbContexts\AxonIdentityDbContext.cs" />
+    <Compile Remove="Migrations\20250930031758_SyncSnapshotAfterIgnoreAxonUserAuth.cs" />
+    <Compile Remove="Migrations\20250930031758_SyncSnapshotAfterIgnoreAxonUserAuth.Designer.cs" />
+    <Compile Remove="Migrations\20250929185158_ConfigureOwnedEntityValueGeneration.cs" />
+    <Compile Remove="Migrations\20250929185158_ConfigureOwnedEntityValueGeneration.Designer.cs" />
   </ItemGroup>
 
 </Project>

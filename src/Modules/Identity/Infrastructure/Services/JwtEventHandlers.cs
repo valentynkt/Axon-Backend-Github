@@ -42,8 +42,9 @@ public sealed class JwtEventHandlers
             // Validate security stamp if UserManager is available
             if (_userManager != null)
             {
-                var userId = principal.FindFirst("axon_user_id")?.Value
-                    ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                // Use NameIdentifier (user.Id) for user lookup, not axon_user_id (principal.Id)
+                var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? principal.FindFirst("sub")?.Value;
 
                 if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
                 {

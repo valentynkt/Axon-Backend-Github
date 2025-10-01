@@ -65,28 +65,26 @@ public static class AuthMeResponseValidator
         int expectedWalletCount,
         int expectedDefaultsCount)
     {
-        // Validate principal information
-        responseData.AxonUserId.ShouldBe(expectedPrincipalId);
-        responseData.Email.ShouldNotBeNullOrWhiteSpace("Email should be present");
+        // Validate profile information
+        responseData.Profile.ShouldNotBeNull("Profile should be present");
+        responseData.Profile.AxonId.ShouldBe(expectedPrincipalId, "AxonId should match expected principal ID");
+        responseData.Profile.RiskTier.ShouldNotBeNullOrWhiteSpace("RiskTier should be present");
+
+        // Validate ETag in response body (in addition to header)
+        responseData.ETag.ShouldNotBeNullOrWhiteSpace("ETag should be present in response body");
 
         // Validate wallets array
         responseData.Wallets.ShouldNotBeNull("Wallets array should be present");
         responseData.Wallets.Count.ShouldBe(expectedWalletCount, "Wallet count should match expected");
 
-        // Validate chain defaults
-        responseData.ChainDefaults.ShouldNotBeNull("ChainDefaults should be present");
-        responseData.ChainDefaults.Count.ShouldBe(expectedDefaultsCount, "Chain defaults count should match expected");
+        // Validate default wallet count (wallets with IsDefault=true)
+        var defaultWalletCount = responseData.Wallets.Count(w => w.IsDefault);
+        defaultWalletCount.ShouldBe(expectedDefaultsCount, "Default wallet count should match expected");
 
         // Validate wallet structure if wallets exist
         foreach (var wallet in responseData.Wallets)
         {
             ValidateWalletData(wallet);
-        }
-
-        // Validate chain defaults structure if defaults exist
-        foreach (var chainDefault in responseData.ChainDefaults)
-        {
-            ValidateChainDefaultData(chainDefault);
         }
     }
 
@@ -95,25 +93,14 @@ public static class AuthMeResponseValidator
     /// </summary>
     private static void ValidateWalletData(WalletData wallet)
     {
-        wallet.Id.ShouldNotBeNullOrWhiteSpace("Wallet ID should be present");
-        wallet.ChainId.ShouldNotBeNullOrWhiteSpace("Chain ID should be present");
+        wallet.Chain.ShouldNotBeNullOrWhiteSpace("Chain should be present");
         wallet.Address.ShouldNotBeNullOrWhiteSpace("Wallet address should be present");
-        wallet.AccessMode.ShouldNotBeNullOrWhiteSpace("Access mode should be present");
-        wallet.Status.ShouldNotBeNullOrWhiteSpace("Wallet status should be present");
+        wallet.State.ShouldNotBeNullOrWhiteSpace("Wallet state should be present");
+        wallet.Access.ShouldNotBeNullOrWhiteSpace("Access should be present");
 
-        // Validate enum values
-        wallet.AccessMode.ShouldBeOneOf("Signing", "WatchOnly");
-        wallet.Status.ShouldBeOneOf("Pending", "Verified", "Revoked");
-    }
-
-    /// <summary>
-    /// Validates chain default data structure.
-    /// </summary>
-    private static void ValidateChainDefaultData(ChainDefaultData chainDefault)
-    {
-        chainDefault.ChainId.ShouldNotBeNullOrWhiteSpace("Chain ID should be present");
-        chainDefault.WalletId.ShouldNotBeNullOrWhiteSpace("Wallet ID should be present");
-        chainDefault.Address.ShouldNotBeNullOrWhiteSpace("Default wallet address should be present");
+        // Validate enum values (API returns lowercase)
+        wallet.State.ShouldBeOneOf("pending", "verified", "revoked");
+        wallet.Access.ShouldBeOneOf("signing", "watch_only");
     }
 
     #endregion
@@ -225,42 +212,35 @@ public static class AuthMeResponseValidator
 
     /// <summary>
     /// Data model for /auth/me response structure.
+    /// Matches GetCurrentUserResponseDto from API.
     /// </summary>
     public class AuthMeResponseData
     {
-        public string AxonUserId { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string EnvironmentId { get; set; } = string.Empty;
+        public ProfileData Profile { get; set; } = new();
         public List<WalletData> Wallets { get; set; } = new();
-        public List<ChainDefaultData> ChainDefaults { get; set; } = new();
-        public DateTime? FirstVisitUtc { get; set; }
-        public DateTime? LastVisitUtc { get; set; }
-        public bool IsNewUser { get; set; }
+        public string ETag { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// User profile information nested in response.
+    /// </summary>
+    public class ProfileData
+    {
+        public string AxonId { get; set; } = string.Empty;
+        public string RiskTier { get; set; } = string.Empty;
     }
 
     /// <summary>
     /// Data model for wallet information in /auth/me response.
+    /// Matches WalletInfoDto from API.
     /// </summary>
     public class WalletData
     {
-        public string Id { get; set; } = string.Empty;
-        public string ChainId { get; set; } = string.Empty;
+        public string Chain { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
-        public string AccessMode { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-        public DateTime CreatedAtUtc { get; set; }
-        public DateTime? VerifiedAtUtc { get; set; }
-    }
-
-    /// <summary>
-    /// Data model for chain default information in /auth/me response.
-    /// </summary>
-    public class ChainDefaultData
-    {
-        public string ChainId { get; set; } = string.Empty;
-        public string WalletId { get; set; } = string.Empty;
-        public string Address { get; set; } = string.Empty;
-        public DateTime CreatedAtUtc { get; set; }
+        public string State { get; set; } = string.Empty;
+        public string Access { get; set; } = string.Empty;
+        public bool IsDefault { get; set; }
     }
 
     #endregion
@@ -273,32 +253,32 @@ public static class AuthMeResponseValidator
     public static void AssertWalletPresent(
         AuthMeResponseData responseData,
         string expectedAddress,
-        string expectedChainId,
-        string expectedAccessMode = "Signing",
-        string expectedStatus = "Verified")
+        string expectedChain,
+        string expectedAccess = "signing",
+        string expectedState = "verified")
     {
         ArgumentNullException.ThrowIfNull(responseData);
         var wallet = responseData.Wallets.FirstOrDefault(w => w.Address == expectedAddress);
         wallet.ShouldNotBeNull($"Wallet with address {expectedAddress} should be present");
 
-        wallet.ChainId.ShouldBe(expectedChainId);
-        wallet.AccessMode.ShouldBe(expectedAccessMode);
-        wallet.Status.ShouldBe(expectedStatus);
+        wallet.Chain.ShouldBe(expectedChain);
+        wallet.Access.ShouldBe(expectedAccess);
+        wallet.State.ShouldBe(expectedState);
     }
 
     /// <summary>
-    /// Asserts that the response contains specific chain default information.
+    /// Asserts that the response contains a default wallet for the specified chain.
+    /// Checks that a wallet with IsDefault=true exists for the chain and address.
     /// </summary>
     public static void AssertChainDefaultPresent(
         AuthMeResponseData responseData,
-        string expectedChainId,
+        string expectedChain,
         string expectedAddress)
     {
         ArgumentNullException.ThrowIfNull(responseData);
-        var chainDefault = responseData.ChainDefaults.FirstOrDefault(cd => cd.ChainId == expectedChainId);
-        chainDefault.ShouldNotBeNull($"Chain default for {expectedChainId} should be present");
-
-        chainDefault.Address.ShouldBe(expectedAddress);
+        var defaultWallet = responseData.Wallets
+            .FirstOrDefault(w => w.Chain == expectedChain && w.Address == expectedAddress && w.IsDefault);
+        defaultWallet.ShouldNotBeNull($"Default wallet for chain {expectedChain} with address {expectedAddress} should be present");
     }
 
     /// <summary>

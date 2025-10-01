@@ -28,7 +28,20 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
             if (result.IsSuccess)
             {
                 LogRequestCompleted();
+
+                // Debug: Check if result.Value is null
+                if (result.Value == null)
+                {
+                    Logger.LogError("CRITICAL: result.Value is NULL despite IsSuccess=true. Type: {Type}",
+                        typeof(TResponse).Name);
+                    await HttpContext.SendProblemDetailsAsync(
+                        Error.Internal("Response is null", "NULL_RESPONSE"), ct);
+                    return;
+                }
+
+                Logger.LogInformation("Setting Response to value of type {Type}", result.Value.GetType().Name);
                 Response = result.Value;
+                Logger.LogInformation("Response has been set. Response is null: {IsNull}", Response == null);
             }
             else
             {

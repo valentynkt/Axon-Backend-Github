@@ -1,5 +1,6 @@
 using System.Globalization;
 using Axon.Modules.Identity.Application.Common.Commands;
+using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using global::BuildingBlocks.Core.Abstractions.Authentication;
@@ -38,6 +39,9 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        var handlerCallId = Guid.NewGuid();
+        _logger.LogInformation("HANDLER CALLED: Call ID={CallId}, Command={Command}", handlerCallId, command.GetType().Name);
+
         if (string.IsNullOrWhiteSpace(command.BearerToken))
         {
             _logger.LogWarning("Exchange command received with empty bearer token");
@@ -45,12 +49,31 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
                 Error.Validation("Bearer token is required", "AUTH.TOKEN_REQUIRED"));
         }
 
-        _logger.LogInformation("Starting Dynamic token exchange via orchestrator");
+        _logger.LogInformation("Starting Dynamic token exchange via orchestrator (CallID={CallId})", handlerCallId);
 
         // Delegate EVERYTHING to the orchestrator
-        var exchangeResult = await _orchestrator.ExchangeDynamicTokenAsync(
-            command.BearerToken,
-            cancellationToken);
+        Result<AuthenticationResponse, Error> exchangeResult;
+        try
+        {
+            exchangeResult = await _orchestrator.ExchangeDynamicTokenAsync(
+                command.BearerToken,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CRITICAL: Unhandled exception in ExchangeDynamicTokenAsync - Type: {ExceptionType}, Message: {Message}, StackTrace: {StackTrace}",
+                ex.GetType().FullName, ex.Message, ex.StackTrace);
+
+            // Log inner exception if present
+            if (ex.InnerException != null)
+            {
+                _logger.LogError("Inner Exception - Type: {InnerType}, Message: {InnerMessage}, StackTrace: {InnerStackTrace}",
+                    ex.InnerException.GetType().FullName, ex.InnerException.Message, ex.InnerException.StackTrace);
+            }
+
+            return Result.Failure<ExchangeOutcome, Error>(
+                Error.Internal($"Token exchange failed with exception: {ex.Message}", "AUTH.EXCHANGE_EXCEPTION"));
+        }
 
         if (exchangeResult.IsFailure)
         {

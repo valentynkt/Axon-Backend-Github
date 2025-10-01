@@ -63,7 +63,7 @@ public class AuthenticationOrchestratorTests : AuthenticationOrchestratorTestBas
         result.IsSuccess.ShouldBeTrue();
         result.Value.ShouldSatisfyAllConditions(
             response => response.AccessToken.ShouldNotBeNullOrEmpty(),
-            response => response.UserId.ShouldBe(user.Id),
+            response => response.UserId.ShouldBe(user.AxonPrincipalId.Value),
             response => response.ProviderType.ShouldBe("dynamic"),
             response => response.ExpiresAt.ShouldBeGreaterThan(DateTime.UtcNow),
             response => response.AdditionalData.ShouldNotBeNull()
@@ -166,7 +166,7 @@ public class AuthenticationOrchestratorTests : AuthenticationOrchestratorTestBas
         result.IsSuccess.ShouldBeTrue();
         result.Value.ShouldSatisfyAllConditions(
             response => response.AccessToken.ShouldNotBeNullOrEmpty(),
-            response => response.UserId.ShouldBe(user.Id),
+            response => response.UserId.ShouldBe(user.AxonPrincipalId.Value),
             response => response.ProviderType.ShouldBe("wallet"),
             response => response.ExpiresAt.ShouldBeGreaterThan(DateTime.UtcNow)
         );

@@ -68,10 +68,11 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         result.ShouldBeSuccess();
         result.Value.ShouldNotBeNull();
         result.Value.AssistantMessage.Value.ShouldBe("Assistant response to your message");
-        
+
+        // Verify conversation was added to repository (in-memory, not persisted yet)
         await MockRepository.Received(1).AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>());
-        await MockUnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-        // Verify orchestrator was called at least once (avoid Vogen issues)
+
+        // Verify orchestrator was called - orchestrator handles persistence atomically
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
     }
 
@@ -97,10 +98,11 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
         // Assert
         result.ShouldFailWithErrorType(ErrorType.Internal);
         result.Error.Code.ShouldBe("AI processing failed");
-        
-        // Conversation should still be persisted before orchestrator is called
+
+        // Verify conversation was added to repository (but not persisted due to orchestrator failure)
         await MockRepository.Received(1).AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>());
-        await MockUnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // Verify orchestrator was called (and failed)
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
     }
 
@@ -152,11 +154,10 @@ public class StartConversationHandlerTests : CommandHandlerTestBase<StartConvers
 
     protected override async Task AssertCommandSideEffects(StartConversationCommand command, ProcessMessageResponse result)
     {
-        // Verify the conversation was created and saved (AddAsync, not UpdateAsync)
+        // Verify the conversation was created (AddAsync, not UpdateAsync)
         await MockRepository.Received(1).AddAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>());
-        await MockUnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
 
-        // Verify orchestrator was called at least once (avoid Vogen issues)
+        // Verify orchestrator was called - orchestrator handles persistence atomically
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
 
         // Verify response structure

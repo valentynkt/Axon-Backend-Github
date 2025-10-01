@@ -21,11 +21,11 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_NewPrincipalWithWallets_ShouldReturnCompleteSnapshot()
     {
         // Arrange: Create and exchange to set up principal with wallets
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
+        var (axonToken, principalId) = await SetupPrincipalWithWallets(validJwt);
 
-        // Act: Call /auth/me
-        SetAuthorizationHeader(validJwt);
+        // Act: Call /auth/me using the Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return complete user snapshot
@@ -36,24 +36,24 @@ public class AuthMeE2ETests : E2ETestBase
 
         AuthMeResponseValidator.ValidateAuthMeResponse(
             response,
-            TestDataFixtures.DynA_Subject,
+            principalId, // Use the actual Principal GUID returned from exchange
             expectedWalletCount: 2, // W1 and W2 from setup
             expectedDefaultsCount: 1); // Default should be auto-created
 
-        // Verify specific wallet presence
+        // Verify specific wallet presence (API returns lowercase enum values)
         AuthMeResponseValidator.AssertWalletPresent(
             responseData,
             TestDataFixtures.W1MainAddress,
             TestDataFixtures.SolanaMainnetChain,
-            "Signing",
-            "Verified");
+            "signing",
+            "verified");
 
         AuthMeResponseValidator.AssertWalletPresent(
             responseData,
             TestDataFixtures.W2MainAddress,
             TestDataFixtures.SolanaMainnetChain,
-            "Signing",
-            "Verified");
+            "signing",
+            "verified");
 
         // Verify chain default presence
         AuthMeResponseValidator.AssertChainDefaultPresent(
@@ -66,11 +66,11 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_WithETagHeader_ShouldReturnETagForCaching()
     {
         // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
+        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
-        // Act: Call /auth/me
-        SetAuthorizationHeader(validJwt);
+        // Act: Call /auth/me using the Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should include ETag header
@@ -88,16 +88,16 @@ public class AuthMeE2ETests : E2ETestBase
     {
         // Arrange: Create principal with credential only (no wallets)
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupCredentialOnlyPrincipal(validJwt);
+        var (axonToken, principalId) = await SetupCredentialOnlyPrincipal(validJwt);
 
-        // Act: Call /auth/me
-        SetAuthorizationHeader(validJwt);
+        // Act: Call /auth/me using the Axon Access Token
+        SetAuthorizationHeader(axonToken);
         var response = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: Should return principal with empty wallets and defaults
         AuthMeResponseValidator.ValidateAuthMeResponse(
             response,
-            TestDataFixtures.DynA_Subject,
+            principalId,
             expectedWalletCount: 0,
             expectedDefaultsCount: 0);
 
@@ -105,8 +105,7 @@ public class AuthMeE2ETests : E2ETestBase
         var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions)!;
 
         responseData.Wallets.ShouldBeEmpty("Should have no wallets");
-        responseData.ChainDefaults.ShouldBeEmpty("Should have no chain defaults");
-        responseData.Email.ShouldNotBeNullOrWhiteSpace("Should have email from JWT");
+        responseData.Profile.RiskTier.ShouldNotBeNullOrWhiteSpace("Should have RiskTier");
     }
 
     #endregion
@@ -117,15 +116,15 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_IfNoneMatchWithCurrentETag_ShouldReturn304()
     {
         // Arrange: Set up principal and get initial ETag
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
+        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         // Act: Call /auth/me with If-None-Match header
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         SetIfNoneMatchHeader(initialETag);
         var conditionalResponse = await HttpClient.GetAsync("/api/v1/auth/me");
 
@@ -138,17 +137,17 @@ public class AuthMeE2ETests : E2ETestBase
     {
         // Arrange: Set up principal
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupCredentialOnlyPrincipal(validJwt);
+        var (axonToken, _) = await SetupCredentialOnlyPrincipal(validJwt);
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         // Modify principal by adding a wallet
-        await AddWalletToPrincipal(validJwt);
+        var (updatedAxonToken, _) = await AddWalletToPrincipal(validJwt);
 
-        // Act: Call /auth/me with old ETag
-        SetAuthorizationHeader(validJwt);
+        // Act: Call /auth/me with old ETag using updated token
+        SetAuthorizationHeader(updatedAxonToken);
         SetIfNoneMatchHeader(initialETag);
         var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
 
@@ -169,17 +168,17 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_MultipleRequestsWithoutChanges_ShouldReturnSameETag()
     {
         // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
+        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
         // Act: Make multiple /auth/me requests without data changes
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
 
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var response3 = await HttpClient.GetAsync("/api/v1/auth/me");
 
         // Assert: ETags should be identical
@@ -196,26 +195,26 @@ public class AuthMeE2ETests : E2ETestBase
     {
         // Arrange: Set up initial principal
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupCredentialOnlyPrincipal(validJwt);
+        var (axonToken, _) = await SetupCredentialOnlyPrincipal(validJwt);
 
         // Get initial state
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
         var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
 
         // Modify state by adding wallet
-        await AddWalletToPrincipal(validJwt);
+        var (axonToken2, _) = await AddWalletToPrincipal(validJwt);
 
         // Get updated state
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken2);
         var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
         var etag2 = AuthMeResponseValidator.ValidateAndExtractETag(response2);
 
         // Modify state again by adding second wallet
-        await AddSecondWalletToPrincipal(validJwt);
+        var (axonToken3, _) = await AddSecondWalletToPrincipal(validJwt);
 
         // Get final state
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken3);
         var response3 = await HttpClient.GetAsync("/api/v1/auth/me");
         var etag3 = AuthMeResponseValidator.ValidateAndExtractETag(response3);
 
@@ -233,33 +232,33 @@ public class AuthMeE2ETests : E2ETestBase
     {
         // Arrange: Set up principal with pending wallet
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithPendingWallet(validJwt);
+        var (axonToken, _) = await SetupPrincipalWithPendingWallet(validJwt);
 
         // Get initial state (with pending wallet)
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var pendingResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var pendingETag = AuthMeResponseValidator.ValidateAndExtractETag(pendingResponse);
 
         var pendingContent = await pendingResponse.Content.ReadAsStringAsync();
         var pendingData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(pendingContent, JsonOptions)!;
 
-        pendingData.Wallets.First().Status.ShouldBe("Pending");
+        pendingData.Wallets.First().State.ShouldBe("pending");
 
         // Simulate wallet verification (would normally be done via signature verification)
         await VerifyWalletForPrincipal(validJwt);
 
-        // Get updated state (with verified wallet)
-        SetAuthorizationHeader(validJwt);
+        // Get updated state (with verified wallet) - use same token as status change doesn't affect token
+        SetAuthorizationHeader(axonToken);
         var verifiedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var verifiedETag = AuthMeResponseValidator.ValidateAndExtractETag(verifiedResponse);
 
-        // Assert: ETag should change and wallet status should be updated
+        // Assert: ETag should change and wallet state should be updated
         AuthMeResponseValidator.ValidateETagChanged(pendingETag, verifiedETag);
 
         var verifiedContent = await verifiedResponse.Content.ReadAsStringAsync();
         var verifiedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(verifiedContent, JsonOptions)!;
 
-        verifiedData.Wallets.First().Status.ShouldBe("Verified");
+        verifiedData.Wallets.First().State.ShouldBe("verified");
     }
 
     [Test]
@@ -267,23 +266,24 @@ public class AuthMeE2ETests : E2ETestBase
     {
         // Arrange: Set up principal with multiple wallets
         var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithMultipleWallets(validJwt);
+        var (axonToken, _) = await SetupPrincipalWithMultipleWallets(validJwt);
 
         // Get initial state
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
 
         var initialContent = await initialResponse.Content.ReadAsStringAsync();
         var initialData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(initialContent, JsonOptions)!;
 
-        var initialDefaultAddress = initialData.ChainDefaults.First().Address;
+        var initialDefaultWallet = initialData.Wallets.First(w => w.IsDefault);
+        var initialDefaultAddress = initialDefaultWallet.Address;
 
         // Change default wallet
         await ChangeDefaultWalletForPrincipal(validJwt);
 
-        // Get updated state
-        SetAuthorizationHeader(validJwt);
+        // Get updated state - use same token as default change doesn't affect token
+        SetAuthorizationHeader(axonToken);
         var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
         var updatedETag = AuthMeResponseValidator.ValidateAndExtractETag(updatedResponse);
 
@@ -293,7 +293,8 @@ public class AuthMeE2ETests : E2ETestBase
         var updatedContent = await updatedResponse.Content.ReadAsStringAsync();
         var updatedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(updatedContent, JsonOptions)!;
 
-        var newDefaultAddress = updatedData.ChainDefaults.First().Address;
+        var newDefaultWallet = updatedData.Wallets.First(w => w.IsDefault);
+        var newDefaultAddress = newDefaultWallet.Address;
         newDefaultAddress.ShouldNotBe(initialDefaultAddress, "Default wallet address should change");
     }
 
@@ -356,11 +357,11 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_ResponseTime_ShouldCompleteWithin100ms()
     {
         // Arrange: Set up principal with data
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
+        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
         // Act: Measure response time
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var startTime = DateTime.UtcNow;
         var response = await HttpClient.GetAsync("/api/v1/auth/me");
         var duration = DateTime.UtcNow - startTime;
@@ -374,11 +375,11 @@ public class AuthMeE2ETests : E2ETestBase
     public async Task AuthMe_CachedResponse_ShouldBeFasterThanInitial()
     {
         // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        await SetupPrincipalWithWallets(validJwt);
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
+        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
 
         // Act: Measure initial response time
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         var startTime1 = DateTime.UtcNow;
         var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
         var duration1 = DateTime.UtcNow - startTime1;
@@ -387,7 +388,7 @@ public class AuthMeE2ETests : E2ETestBase
         var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
 
         // Act: Measure cached response time
-        SetAuthorizationHeader(validJwt);
+        SetAuthorizationHeader(axonToken);
         SetIfNoneMatchHeader(etag1);
         var startTime2 = DateTime.UtcNow;
         var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
@@ -405,8 +406,9 @@ public class AuthMeE2ETests : E2ETestBase
     /// <summary>
     /// Sets up a principal with credential and wallets via exchange endpoint.
     /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
+    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task SetupPrincipalWithWallets(string jwt)
+    private async Task<(string AccessToken, string PrincipalId)> SetupPrincipalWithWallets(string jwt)
     {
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
@@ -414,13 +416,23 @@ public class AuthMeE2ETests : E2ETestBase
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Extract and return the Axon Access Token and Principal ID from the response
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var exchangeResponse = JsonSerializer.Deserialize<ExchangeResponse>(responseContent, JsonOptions);
+        exchangeResponse.ShouldNotBeNull();
+        exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
+        exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
+
+        return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
     /// <summary>
     /// Sets up a principal with credential only (no wallets).
     /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
+    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task SetupCredentialOnlyPrincipal(string jwt)
+    private async Task<(string AccessToken, string PrincipalId)> SetupCredentialOnlyPrincipal(string jwt)
     {
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
@@ -428,13 +440,23 @@ public class AuthMeE2ETests : E2ETestBase
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Extract and return the Axon Access Token and Principal ID from the response
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var exchangeResponse = JsonSerializer.Deserialize<ExchangeResponse>(responseContent, JsonOptions);
+        exchangeResponse.ShouldNotBeNull();
+        exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
+        exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
+
+        return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
     /// <summary>
     /// Adds a wallet to an existing principal.
     /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
+    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task AddWalletToPrincipal(string jwt)
+    private async Task<(string AccessToken, string PrincipalId)> AddWalletToPrincipal(string jwt)
     {
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
@@ -442,13 +464,23 @@ public class AuthMeE2ETests : E2ETestBase
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Extract and return the Axon Access Token and Principal ID from the response
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var exchangeResponse = JsonSerializer.Deserialize<ExchangeResponse>(responseContent, JsonOptions);
+        exchangeResponse.ShouldNotBeNull();
+        exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
+        exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
+
+        return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
     /// <summary>
     /// Adds a second wallet to an existing principal.
     /// Note: Exchange endpoint accepts empty body - JWT is extracted from Authorization header.
+    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task AddSecondWalletToPrincipal(string jwt)
+    private async Task<(string AccessToken, string PrincipalId)> AddSecondWalletToPrincipal(string jwt)
     {
         // Exchange endpoint accepts empty body - JWT extracted from Authorization header
         using var content = CreateJsonContent("{}");
@@ -456,25 +488,36 @@ public class AuthMeE2ETests : E2ETestBase
         SetAuthorizationHeader(jwt);
         var response = await HttpClient.PostAsync("/api/v1/auth/exchange", content);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Extract and return the Axon Access Token and Principal ID from the response
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var exchangeResponse = JsonSerializer.Deserialize<ExchangeResponse>(responseContent, JsonOptions);
+        exchangeResponse.ShouldNotBeNull();
+        exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
+        exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
+
+        return (exchangeResponse.AccessToken, exchangeResponse.AxonUserId);
     }
 
     /// <summary>
     /// Sets up a principal with a pending wallet.
+    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task SetupPrincipalWithPendingWallet(string jwt)
+    private async Task<(string AccessToken, string PrincipalId)> SetupPrincipalWithPendingWallet(string jwt)
     {
         // This would require a specific API or test setup to create pending wallets
         // For now, we'll use the exchange endpoint which typically creates verified wallets
         await SetupCredentialOnlyPrincipal(jwt);
-        await AddWalletToPrincipal(jwt);
+        return await AddWalletToPrincipal(jwt);
     }
 
     /// <summary>
     /// Sets up a principal with multiple wallets for default testing.
+    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
-    private async Task SetupPrincipalWithMultipleWallets(string jwt)
+    private async Task<(string AccessToken, string PrincipalId)> SetupPrincipalWithMultipleWallets(string jwt)
     {
-        await SetupPrincipalWithWallets(jwt);
+        return await SetupPrincipalWithWallets(jwt);
     }
 
     /// <summary>
@@ -522,6 +565,20 @@ public class AuthMeE2ETests : E2ETestBase
         public string Code { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public object? Details { get; set; }
+    }
+
+    /// <summary>
+    /// Model for exchange response containing the Axon Access Token.
+    /// </summary>
+    private sealed class ExchangeResponse
+    {
+        public string AccessToken { get; set; } = string.Empty;
+        public string TokenType { get; set; } = string.Empty;
+        public int ExpiresIn { get; set; }
+        public string AxonUserId { get; set; } = string.Empty;
+        public bool Created { get; set; }
+        public int WalletsLinked { get; set; }
+        public int Conflicts { get; set; }
     }
 
     #endregion

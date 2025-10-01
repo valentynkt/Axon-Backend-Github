@@ -30,6 +30,12 @@ public sealed class DynamicValidationOptions
     public bool ValidateAudience { get; set; } = true;
 
     /// <summary>
+    /// Whether to enforce token lifetime validation (default: true)
+    /// Set to false for testing with fixed-time JWT tokens
+    /// </summary>
+    public bool ValidateLifetime { get; set; } = true;
+
+    /// <summary>
     /// Clock skew tolerance in seconds (default: 60, max: 60)
     /// </summary>
     [Range(0, 60)]

@@ -86,14 +86,26 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
         {
             // CRITICAL: For tracked aggregates, ensure UpdatedAt is set to trigger UPDATE
             // This is essential for aggregates with owned entities in separate tables
-            if (aggregate is BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid> auditable)
+            // PostgreSQL's xmin concurrency token only updates when the root table row is modified
+            // If only owned entities change (e.g., PrincipalChainDefaults), xmin won't update
+            // Solution: Always touch UpdatedAt on the root aggregate to force xmin update
+
+            // Try to access UpdatedAt property if it exists (for AuditableDeletableEntity<TId> types)
+            try
             {
+                var updatedAtProperty = entry.Property("UpdatedAt");
+
                 // Set UpdatedAt to now - this ensures an UPDATE is generated even if only children changed
-                auditable.SetUpdatedAtInternal(TimeProvider.System.GetUtcNow());
+                updatedAtProperty.CurrentValue = TimeProvider.System.GetUtcNow();
 
                 // CRITICAL: Explicitly mark UpdatedAt property as modified in EF Core's change tracker
                 // This guarantees EF Core will generate an UPDATE statement for this property
-                entry.Property(nameof(BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid>.UpdatedAt)).IsModified = true;
+                updatedAtProperty.IsModified = true;
+            }
+            catch (ArgumentException)
+            {
+                // UpdatedAt property doesn't exist on this aggregate type - that's okay
+                // Some aggregates may not inherit from AuditableDeletableEntity
             }
 
             // Mark aggregate as Modified to generate UPDATE statement
@@ -102,6 +114,7 @@ public class EfWriteRepository<[DynamicallyAccessedMembers(DynamicallyAccessedMe
             // CRITICAL: Ensure Version property is not modified and preserves its original value
             // This ensures EF Core includes the concurrency check in the WHERE clause
             entry.Property(e => e.Version).IsModified = false;
+            entry.Property(e => e.Version).OriginalValue = aggregate.Version;
         }
 
         return Task.FromResult(aggregate);

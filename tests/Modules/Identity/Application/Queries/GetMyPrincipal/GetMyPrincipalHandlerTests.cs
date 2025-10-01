@@ -138,7 +138,7 @@ public class GetMyPrincipalHandlerRefactoredTests
         // Act
         await _handler.Handle(query, CancellationToken.None);
 
-        // Assert - Verify logger was called with Debug level and correct principal ID
+        // Assert - Verify logger was called with correct levels and messages
         _logger.Received(1).Log(
             LogLevel.Debug,
             Arg.Any<EventId>(),
@@ -147,7 +147,7 @@ public class GetMyPrincipalHandlerRefactoredTests
             Arg.Any<Func<object, Exception?, string>>());
 
         _logger.Received(1).Log(
-            LogLevel.Debug,
+            LogLevel.Information,
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("Successfully retrieved user profile")),
             null,
@@ -168,9 +168,9 @@ public class GetMyPrincipalHandlerRefactoredTests
         // Act
         await _handler.Handle(query, CancellationToken.None);
 
-        // Assert - Verify failure was logged at Debug level with error details
+        // Assert - Verify failure was logged at Warning level with error details
         _logger.Received(1).Log(
-            LogLevel.Debug,
+            LogLevel.Warning,
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("Failed to retrieve user profile") &&
                                 o.ToString()!.Contains(TestPrincipalId.Value.ToString())),

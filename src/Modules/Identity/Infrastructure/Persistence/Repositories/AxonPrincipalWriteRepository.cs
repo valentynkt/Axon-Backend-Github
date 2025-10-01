@@ -50,6 +50,22 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
         string subject,
         CancellationToken ct = default)
     {
+        // CRITICAL: Check ChangeTracker first to prevent duplicate Principal creation during EF Core ExecutionStrategy retries
+        // ExecutionStrategy can retry the entire transaction, including handler execution, without resetting the DbContext.
+        // This causes the handler to create a new Principal instance and call AddAsync again, resulting in duplicate INSERTs.
+        // By checking ChangeTracker first, we return the already-tracked Principal from the first execution attempt.
+        var trackedPrincipal = DbContext.ChangeTracker.Entries<AxonPrincipal>()
+            .FirstOrDefault(e => e.State == Microsoft.EntityFrameworkCore.EntityState.Added &&
+                                e.Entity.Credentials.Any(c =>
+                                    c.Provider == providerType.Value &&
+                                    c.Issuer == issuer &&
+                                    c.Subject == subject))
+            ?.Entity;
+
+        if (trackedPrincipal is not null)
+            return trackedPrincipal;
+
+        // Not in ChangeTracker, query database
         return await GetPrincipalWithIncludes()
             .FirstOrDefaultAsync(p => p.Credentials.Any(c =>
                 c.Provider == providerType.Value &&

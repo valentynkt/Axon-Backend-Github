@@ -143,7 +143,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
-                UserId: authData.User.Id,
+                UserId: authData.User.AxonPrincipalId.Value,
                 ProviderType: "wallet",
                 ExpiresAt: DateTime.UtcNow.AddMinutes(30),
                 AdditionalData: authData.AdditionalClaims);
@@ -230,7 +230,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
-                UserId: authData.User.Id,
+                UserId: authData.User.AxonPrincipalId.Value,
                 ProviderType: "dynamic",
                 ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(30),
                 AdditionalData: additionalData);
@@ -242,9 +242,18 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Dynamic token exchange failed unexpectedly");
+            _logger.LogError(ex, "CRITICAL: Dynamic token exchange failed unexpectedly - Type: {ExceptionType}, Message: {Message}, StackTrace: {StackTrace}",
+                ex.GetType().FullName, ex.Message, ex.StackTrace);
+
+            // Log inner exception if present
+            if (ex.InnerException != null)
+            {
+                _logger.LogError("Inner Exception - Type: {InnerType}, Message: {InnerMessage}, StackTrace: {InnerStackTrace}",
+                    ex.InnerException.GetType().FullName, ex.InnerException.Message, ex.InnerException.StackTrace);
+            }
+
             return Result.Failure<AuthenticationResponse, Error>(
-                Error.Internal("Token exchange failed"));
+                Error.Internal($"Token exchange failed: {ex.Message}"));
         }
     }
 
@@ -312,7 +321,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
-                UserId: authData.User.Id,
+                UserId: authData.User.AxonPrincipalId.Value,
                 ProviderType: providerType,
                 ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(30),
                 AdditionalData: authData.AdditionalClaims);

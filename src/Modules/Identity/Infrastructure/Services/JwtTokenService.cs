@@ -82,6 +82,8 @@ public sealed class JwtTokenService : IJwtTokenService
 
             // Generate token
             var key = GetSigningKey();
+            // Set KeyId to ensure token can be validated
+            key.KeyId = "axon_key_001";
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var now = DateTime.UtcNow;

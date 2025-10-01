@@ -135,7 +135,7 @@ output_folder: '{project-root}/Docs/PROCESS/research'  # Already updated ✅
 
 All workflows need output path updates. Pattern: Replace scattered outputs with 3-file model.
 
-**Note**: There are actually 10 workflow directories (including `install-claude-commands`), but only 9 need output path updates (install-claude-commands doesn't deal with stories).
+**Note**: There are actually 10 workflow directories (including `install-axon-claude`), but only 9 need output path updates (install-axon-claude doesn't deal with stories).
 
 #### 2.1 `workflows/story-orchestrator/workflow.yaml` (line 47)
 
@@ -523,7 +523,7 @@ After migration, verify these outcomes:
 - ✅ Config updated with 3-file variables (story_workspace, implementation_log, decision_log)
 - ✅ Config line 329 removed (story_context_template deleted)
 - ✅ 8 critical tasks updated (route, status, capture, implement, test, sync, compliance, discover)
-- ✅ 9 workflows updated (all except install-claude-commands)
+- ✅ 9 workflows updated (all except install-axon-claude)
 - ✅ 6 agents updated (critical-actions section)
 - ✅ 3 templates updated (story-template note added, story-context-template deleted)
 - ✅ 3 documentation files updated (README, QUICK-START, story-orchestrator/README)

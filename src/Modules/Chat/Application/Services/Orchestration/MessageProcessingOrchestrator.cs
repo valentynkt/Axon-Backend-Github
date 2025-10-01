@@ -104,8 +104,13 @@ public sealed partial class MessageProcessingOrchestrator : IMessageProcessingOr
             var assistantMessage = assistantMessageResult.Value;
 
             // Step 4: Persist changes
-            await _repository.UpdateAsync(conversation, cancellationToken);
+            // No need to call UpdateAsync - the conversation is already tracked by EF Core
+            // Calling UpdateAsync would update the entity's concurrency token incorrectly
+            _logger.LogDebug("About to save conversation {ConversationId}. Version before save: {Version}",
+                conversation.Id.Value, conversation.Version);
             await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);
+            _logger.LogDebug("Saved conversation {ConversationId}. Version after save: {Version}",
+                conversation.Id.Value, conversation.Version);
 
             _logger.LogInformation(
                 "Assistant message {MessageId} appended to conversation {ConversationId}. Prev AI: {Prev} -> New AI: {New}",

@@ -156,9 +156,11 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         result.Value.ConversationId.ShouldBe(command.ConversationId);
         result.Value.ShouldNotBeNull();
         result.Value.AssistantMessage.Value.ShouldBe("Assistant response to your message");
-        
-        await MockRepository.Received(1).UpdateAsync(conversation, Arg.Any<CancellationToken>());
-        await MockUnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // Verify conversation was loaded (not checking UpdateAsync or SaveChangesAsync)
+        // Orchestrator handles persistence atomically
+        await MockRepository.Received(1).GetByIdAsync(command.ConversationId, Arg.Any<CancellationToken>());
+
         // Verify orchestrator was called at least once (cannot verify specific arguments due to Vogen restrictions)
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
     }
@@ -303,9 +305,9 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
         result.ShouldFailWithErrorType(ErrorType.Internal);
         // Fix: The error message is actually the code, and code is the message (based on error output)
         result.Error.Code.ShouldBe("AI processing failed");
-        
-        await MockRepository.Received(1).UpdateAsync(conversation, Arg.Any<CancellationToken>());
-        await MockUnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // Verify conversation was loaded (orchestrator handles persistence, even on failure)
+        await MockRepository.Received(1).GetByIdAsync(command.ConversationId, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -339,16 +341,16 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
             .Returns(userId.Value.ToString());
         MockCurrentUserService.GetAxonUserIdAsync(Arg.Any<CancellationToken>())
             .Returns(userId);
-        SetupRepositoryGetById(command.ConversationId, conversation);
-        MockRepository.UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromException<Conversation>(new InvalidOperationException("Database connection failed")));
+        // Setup repository GetByIdAsync to fail
+        MockRepository.GetByIdAsync(command.ConversationId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<Conversation?>(new InvalidOperationException("Database connection failed")));
 
         // Act & Assert
         var exception = await Should.ThrowAsync<InvalidOperationException>(
             () => ExecuteCommand(command));
-        
+
         exception.Message.ShouldContain("Database connection failed");
-        
+
         // Verify orchestrator was not called when repository fails - use ReceivedCalls() to avoid Vogen issues
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(0);
     }
@@ -402,12 +404,10 @@ public class AppendUserMessageHandlerTests : CommandHandlerTestBase<AppendUserMe
 
     protected override async Task AssertCommandSideEffects(AppendUserMessageCommand command, ProcessMessageResponse result)
     {
-        // Verify the conversation was updated and saved
-        await MockRepository.Received(1).UpdateAsync(Arg.Any<Conversation>(), Arg.Any<CancellationToken>());
-        await MockUnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        // Verify the conversation was loaded from repository
+        await MockRepository.Received(1).GetByIdAsync(command.ConversationId, Arg.Any<CancellationToken>());
 
-        // Verify orchestrator was called - using ReceivedWithAnyArgs to avoid Vogen issues
-        // Verify orchestrator was called at least once (cannot verify specific arguments due to Vogen restrictions)
+        // Verify orchestrator was called - orchestrator handles persistence atomically
         MockOrchestrator.ReceivedCalls().Count().ShouldBe(1);
 
         // Verify response structure

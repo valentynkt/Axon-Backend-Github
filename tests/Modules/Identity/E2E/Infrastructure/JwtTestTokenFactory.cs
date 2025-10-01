@@ -125,6 +125,60 @@ public static class JwtTestTokenFactory
         return CreateValidDynamicJwt(subject: subject, expiration: futureValid, kid: TestKid2);
     }
 
+    /// <summary>
+    /// Creates a valid Dynamic JWT with wallet data in verified_credentials claim.
+    /// </summary>
+    public static string CreateValidDynamicJwtWithWallets(
+        string subject = TestDataFixtures.DynA_Subject,
+        string issuer = TestDataFixtures.DynamicIssuer,
+        string audience = "axon-api",
+        string kid = TestKid1,
+        DateTime? expiration = null,
+        List<(string address, string chain, string? walletName, string? provider)>? wallets = null)
+    {
+        // Build verified_credentials array with wallet data
+        var credentials = wallets ?? DefaultTestWallets();
+        var verifiedCredentials = BuildVerifiedCredentialsJson(credentials);
+
+        var additionalClaims = new Dictionary<string, object>
+        {
+            ["verified_credentials"] = verifiedCredentials,
+            ["environment_id"] = TestDataFixtures.DynamicEnvironmentId
+        };
+
+        return CreateValidDynamicJwt(subject: subject, issuer: issuer, audience: audience,
+                                     kid: kid, expiration: expiration, additionalClaims: additionalClaims);
+    }
+
+    /// <summary>
+    /// Gets default test wallets (W1 and W2 on Solana mainnet).
+    /// </summary>
+    private static List<(string address, string chain, string? walletName, string? provider)> DefaultTestWallets() =>
+        new()
+        {
+            (TestDataFixtures.W1MainAddress, TestDataFixtures.SolanaMainnetChain, "Phantom", "phantom"),
+            (TestDataFixtures.W2MainAddress, TestDataFixtures.SolanaMainnetChain, "Phantom", "phantom")
+        };
+
+    /// <summary>
+    /// Builds verified_credentials JSON array for inclusion in JWT claims.
+    /// </summary>
+    private static string BuildVerifiedCredentialsJson(
+        List<(string address, string chain, string? walletName, string? provider)> wallets)
+    {
+        var credentials = wallets.Select((w, i) => new
+        {
+            format = "blockchain",
+            address = w.address,
+            chain = w.chain,
+            wallet_name = w.walletName,
+            wallet_provider = w.provider,
+            id = $"wallet_{i + 1}"
+        }).ToArray();
+
+        return JsonSerializer.Serialize(credentials, JsonOptions);
+    }
+
     #endregion
 
     #region Wallet Signature Test Data

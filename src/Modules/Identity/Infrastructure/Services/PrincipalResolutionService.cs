@@ -221,18 +221,10 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
         var wallet = await _walletWriteRepository.UpsertWalletAsync(
             chainId, address, cancellationToken);
 
-        // Re-read wallet and re-resolve ownerships
-        var rereadWallet = await _walletReadRepository.FindWalletAsync(
-            chainId, address, cancellationToken);
-
-        if (rereadWallet is null)
-        {
-            return Result.Failure<PrincipalResolutionResult, Error>(
-                Error.Internal("Failed to create or find wallet after upsert"));
-        }
-
+        // Use wallet directly - no need to re-read (eliminates RAW consistency issue)
+        // The wallet is already persisted and has the correct ID after SaveChangesAsync()
         var ownerships = await _ownershipRepository.FindActiveOwnershipsByWalletAsync(
-            rereadWallet.Id, cancellationToken);
+            wallet.Id, cancellationToken);
 
         // Check if another request already created principal during race
         if (ownerships.Any())
@@ -301,8 +293,10 @@ public sealed class PrincipalResolutionService : IPrincipalResolutionService
                 }
             }
 
-            // Now save everything in a single transaction
-            await _principalWriteRepository.UnitOfWork.SaveChangesAsync(cancellationToken);
+            // Note: SaveChanges will be called by MediatR's UnitOfWorkBehavior after the entire command completes
+            // This ensures all changes (Principal + Wallets + Ownerships + IdentityUser) are committed atomically
+            // in a single transaction. Calling SaveChanges here would create a nested transaction and cause
+            // duplicate key violations when the provider tries to add the Principal again.
 
             _logger.LogInformation(
                 "Successfully created principal {PrincipalId} with verified+signing ownership of wallet {WalletId}",

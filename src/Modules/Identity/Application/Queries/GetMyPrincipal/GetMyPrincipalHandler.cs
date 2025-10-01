@@ -41,12 +41,13 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
 
         if (result.IsSuccess)
         {
-            _logger.LogDebug("Successfully retrieved user profile for principal {PrincipalId}", query.PrincipalId.Value);
+            _logger.LogInformation("✅ Successfully retrieved user profile for principal {PrincipalId} - Profile: {AxonId}, Wallets: {WalletCount}, ETag: {ETag}",
+                query.PrincipalId.Value, result.Value.Profile.AxonId, result.Value.Wallets.Count, result.Value.ETag);
         }
         else
         {
-            _logger.LogDebug("Failed to retrieve user profile for principal {PrincipalId}: {Error}",
-                query.PrincipalId.Value, result.Error);
+            _logger.LogWarning("❌ Failed to retrieve user profile for principal {PrincipalId}: {ErrorCode} - {ErrorMessage}",
+                query.PrincipalId.Value, result.Error.Code, result.Error.Message);
         }
 
         return result;

@@ -60,7 +60,6 @@ public static class IdentityConfiguration
                 new TokenProviderDescriptor(typeof(ChallengeTokenProvider)));
         })
         .AddEntityFrameworkStores<IdentityContext>()
-        .AddUserStore<AxonUserStore>()
         .AddUserManager<UserManager<AxonUserAuth>>()
         .AddSignInManager<SignInManager<AxonUserAuth>>()
         .AddDefaultTokenProviders() // Includes TOTP and other standard providers

@@ -108,8 +108,12 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
 
             var dynamicUserData = validationResult.Value;
 
+            _logger.LogDebug("JWT validation successful - User: {UserId}, Wallets count: {WalletCount}",
+                dynamicUserData.AxonUserId, dynamicUserData.Wallets?.Count ?? 0);
+
             // Step 2: Normalize wallets and prepare exchange data
-            var exchangeWallets = NormalizeWallets(dynamicUserData.Wallets);
+            var exchangeWallets = NormalizeWallets(dynamicUserData.Wallets ?? new List<WalletData>());
+            _logger.LogDebug("Wallet normalization complete - Normalized count: {NormalizedCount}", exchangeWallets.Count);
 
             // Extract issuer from token claims
             var rawClaimsResult = await _dynamicAuthService.GetRawClaimsAsync(dynamicRequest.Token, cancellationToken);
@@ -129,13 +133,20 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             );
 
             // Step 3: Process the exchange with full business logic
+            _logger.LogDebug("Starting ProcessExchange for user {UserId} with {WalletCount} wallets",
+                userData.AxonUserId, userData.Wallets.Count);
+
             var exchangeResult = await ProcessExchange(userData, cancellationToken);
             if (exchangeResult.IsFailure)
             {
+                _logger.LogError("ProcessExchange failed: {ErrorCode} - {ErrorMessage}",
+                    exchangeResult.Error.Code, exchangeResult.Error.Message);
                 return Result.Failure<AuthenticationData, Error>(exchangeResult.Error);
             }
 
             var (principal, isNewPrincipal, metrics) = exchangeResult.Value;
+            _logger.LogDebug("ProcessExchange completed - IsNew: {IsNew}, Metrics: Processed={Processed}, Linked={Linked}, Skipped={Skipped}, Conflicts={Conflicts}",
+                isNewPrincipal, metrics.Processed, metrics.Linked, metrics.Skipped, metrics.Conflicts);
 
             // Step 4: Get or create Identity user
             var identityUser = await GetOrCreateIdentityUserAsync(principal, dynamicUserData);
@@ -150,16 +161,13 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             await _userManager.UpdateAsync(identityUser);
 
             // Step 5: Persist changes
-            if (isNewPrincipal)
-            {
-                await _principalRepo.AddAsync(principal, cancellationToken);
-            }
-            else
+            // Note: New principals are already added to DbContext by PrincipalResolutionService.CreateNewPrincipalWithRaceProtectionAsync()
+            // We only need to update existing principals for credential/wallet changes
+            // SaveChanges will be called by MediatR's UnitOfWorkBehavior to commit all changes atomically
+            if (!isNewPrincipal)
             {
                 await _principalRepo.UpdateAsync(principal, cancellationToken);
             }
-
-            await _principalRepo.UnitOfWork.SaveChangesAsync(cancellationToken);
 
             // Step 6: Warm caches with all relevant IDs for optimal cache hits
             await WarmUserContextCaches(dynamicUserData.AxonUserId, principal.Id, identityUser.Id);
@@ -193,9 +201,18 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Dynamic authentication failed unexpectedly");
+            _logger.LogError(ex, "CRITICAL: Dynamic authentication failed unexpectedly - Type: {ExceptionType}, Message: {Message}, StackTrace: {StackTrace}",
+                ex.GetType().FullName, ex.Message, ex.StackTrace);
+
+            // Log inner exception if present
+            if (ex.InnerException != null)
+            {
+                _logger.LogError("Inner Exception - Type: {InnerType}, Message: {InnerMessage}, StackTrace: {InnerStackTrace}",
+                    ex.InnerException.GetType().FullName, ex.InnerException.Message, ex.InnerException.StackTrace);
+            }
+
             return Result.Failure<AuthenticationData, Error>(
-                Error.Internal("Dynamic authentication failed"));
+                Error.Internal($"Dynamic authentication failed: {ex.Message}"));
         }
     }
 
@@ -279,7 +296,13 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             if (createResult.IsFailure)
                 return createResult.Error;
 
-            return (createResult.Value, true);
+            var newPrincipal = createResult.Value;
+
+            // Add to DbContext so it's tracked for SaveChanges by UnitOfWorkBehavior
+            // This handles the no-wallets scenario where PrincipalResolutionService is not called
+            await _principalRepo.AddAsync(newPrincipal, cancellationToken);
+
+            return (newPrincipal, true);
         }
 
         var firstWallet = wallets[0];

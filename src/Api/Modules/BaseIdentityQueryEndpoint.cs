@@ -25,7 +25,9 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
     public override void Configure()
     {
         Get(GetRoute());
-        // Endpoints are secure by default in FastEndpoints - no need to call RequireAuthorization()
+
+        // Authorization is enforced globally via FallbackPolicy (configured in IdentityApiModule)
+        // Derived classes can call Policies() to use specific authorization policies beyond the default
 
         Summary(s =>
         {
@@ -45,6 +47,38 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
 
     public override async Task HandleAsync(TRequest req, CancellationToken ct)
     {
+        // Enforce authentication at endpoint level (defense-in-depth with FallbackPolicy)
+        // Required because FastEndpoints may bypass middleware authorization when Policies() is used
+        if (HttpContext.User.Identity?.IsAuthenticated != true)
+        {
+            await HttpContext.SendProblemDetailsAsync(
+                Error.Unauthorized("Authentication required", "AUTH.UNAUTHENTICATED"),
+                ct);
+            return;
+        }
+
+        // Additional validation: Check token expiration manually using application TimeProvider
+        // This is necessary because JWT middleware may not honor FakeTimeProvider in test environments
+        // In production, this provides defense-in-depth alongside middleware validation
+        var expClaim = HttpContext.User.Claims.FirstOrDefault(c => c.Type == "exp")?.Value;
+        if (!string.IsNullOrEmpty(expClaim) && long.TryParse(expClaim, out var expUnix))
+        {
+            var expDate = DateTimeOffset.FromUnixTimeSeconds(expUnix);
+            var now = HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow();
+
+            if (expDate < now)
+            {
+                Logger.LogWarning(
+                    "Token expired: exp={ExpDate}, now={Now}, traceId={TraceId}",
+                    expDate, now, HttpContext.TraceIdentifier);
+
+                await HttpContext.SendProblemDetailsAsync(
+                    Error.Unauthorized("Token has expired", "AUTH.TOKEN_EXPIRED"),
+                    ct);
+                return;
+            }
+        }
+
         LogRequestReceived();
 
         try
@@ -104,11 +138,14 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
         var queryResult = await ExecuteQuery(request, ct);
         if (queryResult.IsFailure)
             return Result.Failure<TResponse, Error>(queryResult.Error);
-            
+
         var domainResult = await _mediator.Send(queryResult.Value, ct);
         if (domainResult.IsFailure)
             return Result.Failure<TResponse, Error>(domainResult.Error);
-            
+
+        Logger.LogInformation("📦 Domain result received: {DomainResultType} - Mapping to {ResponseType}",
+            typeof(TDomainResult).Name, typeof(TResponse).Name);
+
         // Extract ETag from domain result before mapping
         var etag = ExtractETagFromDomainResult(domainResult.Value);
         if (!string.IsNullOrEmpty(etag))
@@ -116,8 +153,21 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
             // Store ETag in HttpContext.Items for use in HandleSuccessfulResponse
             HttpContext.Items["ETag"] = etag;
         }
-            
-        return MapResponse<TDomainResult>(domainResult.Value);
+
+        var mappingResult = MapResponse<TDomainResult>(domainResult.Value);
+
+        if (mappingResult.IsSuccess)
+        {
+            Logger.LogInformation("✅ Mapping succeeded - Response type: {ResponseType}, Response is null: {IsNull}",
+                typeof(TResponse).Name, mappingResult.Value == null);
+        }
+        else
+        {
+            Logger.LogWarning("❌ Mapping failed - Error: {ErrorCode} - {ErrorMessage}",
+                mappingResult.Error.Code, mappingResult.Error.Message);
+        }
+
+        return mappingResult;
     }
 
     /// <summary>

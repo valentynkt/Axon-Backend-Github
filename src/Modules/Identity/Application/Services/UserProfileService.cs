@@ -172,12 +172,25 @@ public sealed class UserProfileService : IUserProfileService
 
             var walletDict = wallets.ToDictionary(w => w.Id, w => w);
 
+            // Build chain defaults dictionary from the collection (not the computed property)
+            // to avoid EF Core issues with owned entity types
+            // Must force complete materialization to avoid EF Core query translation issues
+            var activeDefaults = new List<(string chainId, WalletId walletId)>();
+            foreach (var pcd in principal.PrincipalChainDefaults)
+            {
+                if (!pcd.IsDeleted)
+                {
+                    activeDefaults.Add((pcd.ChainId, pcd.WalletId));
+                }
+            }
+            var chainDefaultsDict = activeDefaults.ToDictionary(x => x.chainId, x => x.walletId);
+
             foreach (var ownership in verifiedOwnerships)
             {
                 if (walletDict.TryGetValue(ownership.WalletId, out var wallet))
                 {
                     // Check if this wallet is the default for its chain
-                    var isDefault = principal.ChainDefaults.TryGetValue(wallet.ChainId.ToString(), out var defaultWalletId)
+                    var isDefault = chainDefaultsDict.TryGetValue(wallet.ChainId.ToString(), out var defaultWalletId)
                                    && defaultWalletId == wallet.Id;
 
                     walletInfos.Add(new WalletInfo(

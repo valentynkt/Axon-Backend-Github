@@ -1,24 +1,32 @@
-# Install Claude Code Commands - Validation Checklist
+# Install Axon Claude Integration - Validation Checklist
 
 ## 📁 Directory Structure
 
-- [ ] `.claude/commands/bmad/axon/` directory exists
+- [ ] `.claude/agents/` directory exists (for direct agent access)
+- [ ] `.claude/commands/bmad/axon/` directory exists (for command wrappers)
 - [ ] `.claude/commands/bmad/axon/agents/` directory exists
 - [ ] `.claude/commands/bmad/axon/workflows/` directory exists
 - [ ] All directories have proper permissions
 
-## 🤖 Agent Installation
+## 🤖 Agent Installation - Direct Access (.claude/agents/)
 
-- [ ] 6 agent files installed in `.claude/commands/bmad/axon/agents/`
-- [ ] `axon-story-orchestrator.md` present and valid
-- [ ] `axon-doc-oracle.md` present and valid
-- [ ] `axon-archaeologist.md` present and valid
-- [ ] `axon-library-sage.md` present and valid
-- [ ] `axon-implementation-surgeon.md` present and valid
-- [ ] `axon-quality-guardian.md` present and valid
+- [ ] 6 agent files installed in `.claude/agents/`
+- [ ] `axon-story-orchestrator.md` present in `.claude/agents/`
+- [ ] `axon-doc-oracle.md` present in `.claude/agents/`
+- [ ] `axon-archaeologist.md` present in `.claude/agents/`
+- [ ] `axon-library-sage.md` present in `.claude/agents/`
+- [ ] `axon-implementation-surgeon.md` present in `.claude/agents/`
+- [ ] `axon-quality-guardian.md` present in `.claude/agents/`
 - [ ] All agent files have `{project-root}` replaced with absolute paths
 - [ ] All agent files have valid XML structure with `<agent>` tags
 - [ ] Agent personas and commands are intact
+- [ ] Agents accessible via @agent-name mentions in Claude Code
+
+## 🔗 Agent Command Wrappers (.claude/commands/bmad/axon/agents/)
+
+- [ ] 6 agent command wrappers installed in `.claude/commands/bmad/axon/agents/`
+- [ ] All 6 command wrappers identical to `.claude/agents/` versions
+- [ ] Command wrappers accessible via slash commands: `/bmad:axon:agents:*`
 
 ## 🔄 Workflow Installation
 
@@ -70,27 +78,35 @@
 
 ## 🚀 Claude Code Integration
 
+- [ ] Direct agent mentions work: `@axon-story-orchestrator`
 - [ ] Slash commands discoverable in Claude Code (type `/`)
-- [ ] Agent commands appear as `/bmad:axon:agents:*`
+- [ ] Agent slash commands appear as `/bmad:axon:agents:*`
 - [ ] Workflow commands appear as `/bmad:axon:workflows:*`
 - [ ] Commands execute without errors
-- [ ] Agents load personas correctly
+- [ ] Agents load personas correctly from `.claude/agents/`
 - [ ] Workflows load and execute instructions
 
 ## 📊 Final Verification
 
 **Installation Summary:**
-- Total files installed: _____ (expected: 16 = 6 agents + 9 workflows + 1 README)
-- Installation location verified: `.claude/commands/bmad/axon/`
+- Total files installed: _____ (expected: 21 = 6 agents in .claude/agents/ + 6 agent wrappers + 9 workflows + 1 README)
+- Primary agent location: `.claude/agents/` ✅
+- Command wrapper location: `.claude/commands/bmad/axon/` ✅
 - All paths absolute: Yes / No
 - Claude Code integration working: Yes / No
+
+**Access Methods Verified:**
+- [ ] Direct mention works: `@axon-story-orchestrator`
+- [ ] Slash command works: `/bmad:axon:agents:axon-story-orchestrator`
+- [ ] Workflow command works: `/bmad:axon:workflows:story-implementation`
 
 **Issues Found:**
 - [ ] No issues - installation successful ✅
 - [ ] List any issues below:
 
 **Next Steps:**
-- [ ] Test agent invocation: `/bmad:axon:agents:axon-story-orchestrator`
+- [ ] Test direct agent mention: `@axon-story-orchestrator`
+- [ ] Test agent slash command: `/bmad:axon:agents:axon-story-orchestrator`
 - [ ] Test workflow invocation: `/bmad:axon:workflows:story-implementation`
-- [ ] Update Axon module documentation with slash command usage
+- [ ] Update Axon module documentation with both access methods
 - [ ] Document installation process for future modules
