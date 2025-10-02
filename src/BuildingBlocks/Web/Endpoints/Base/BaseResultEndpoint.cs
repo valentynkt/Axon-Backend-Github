@@ -40,17 +40,30 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
                 }
 
                 // Set Response property - FastEndpoints will handle serialization
+                // NOTE: Post-processors run AFTER this, so they can intercept and modify the response
+                // (e.g., ETagPostProcessor can return 304 and clear the body)
                 Response = result.Value;
             }
             else
             {
-                // Log domain error before sending ProblemDetails
-                Logger.LogWarning(
-                    "Request failed with domain error: {ErrorCode} - {ErrorMessage}",
-                    result.Error.Code,
-                    result.Error.Message);
+                // Check if this is a 304 Not Modified response (from ETag matching in service layer)
+                if (result.Error.Metadata?.TryGetValue("IsNotModified", out var isNotModified) == true &&
+                    isNotModified is true &&
+                    result.Error.Metadata.TryGetValue("ETag", out var etagMetadata))
+                {
+                    var etag = etagMetadata?.ToString() ?? string.Empty;
+                    await HandleNotModifiedResponseAsync(etag, ct);
+                }
+                else
+                {
+                    // Log domain error before sending ProblemDetails
+                    Logger.LogWarning(
+                        "Request failed with domain error: {ErrorCode} - {ErrorMessage}",
+                        result.Error.Code,
+                        result.Error.Message);
 
-                await SendProblemDetailsAsync(result.Error, ct);
+                    await SendProblemDetailsAsync(result.Error, ct);
+                }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -87,6 +100,29 @@ public abstract class BaseResultEndpoint<TRequest, TResponse> : BaseEndpoint<TRe
         HttpContext.Response.ContentType = "application/problem+json";
 
         await HttpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// Handles 304 Not Modified responses for ETag-based caching.
+    /// </summary>
+    private Task HandleNotModifiedResponseAsync(string etag, CancellationToken _)
+    {
+        Logger.LogDebug("Returning 304 Not Modified for ETag: {ETag} (traceId={TraceId})",
+            etag, HttpContext.TraceIdentifier);
+
+        // Set headers
+        HttpContext.Response.Headers.ETag = $"\"{etag}\"";
+        HttpContext.Response.Headers.CacheControl = "private, max-age=0, must-revalidate";
+        HttpContext.Response.ContentLength = 0;
+
+        // Set status code
+        HttpContext.Response.StatusCode = StatusCodes.Status304NotModified;
+
+        // CRITICAL: Mark response as started to prevent FastEndpoints from auto-serializing
+        // Since response is started, FastEndpoints won't serialize Response property
+        HttpContext.MarkResponseStart();
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

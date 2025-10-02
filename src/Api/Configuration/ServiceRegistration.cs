@@ -43,8 +43,7 @@ public static class ServiceRegistration
         // Add core framework services
         services.AddControllers();
         services.AddFastEndpoints()
-                // TODO: Register global processors after migration
-                // Global processors will be registered per-endpoint during migration phase
+                // Global processors are registered in Program.cs via UseFastEndpoints configurator
                 .SwaggerDocument(o =>
                 {
                     o.DocumentSettings = s =>

@@ -202,8 +202,20 @@ app.UseWhen(
         appBuilder.UseAuthenticationErrorFormatting();
     });
 
-// Configure FastEndpoints (before MVC controllers)
-app.UseFastEndpoints();
+// Configure FastEndpoints with global processors (before MVC controllers)
+app.UseFastEndpoints(c =>
+{
+    c.Endpoints.Configurator = ep =>
+    {
+        // Pre-processors execute in order: Logging → ETag extraction
+        ep.PreProcessor<BuildingBlocks.Web.Endpoints.Processors.LoggingPreProcessor>(FastEndpoints.Order.Before);
+        ep.PreProcessor<BuildingBlocks.Web.Endpoints.Processors.ETagPreProcessor>(FastEndpoints.Order.Before);
+
+        // Post-processors execute in order: ETag handling → Logging
+        ep.PostProcessor<BuildingBlocks.Web.Endpoints.Processors.ETagPostProcessor>(FastEndpoints.Order.After);
+        ep.PostProcessor<BuildingBlocks.Web.Endpoints.Processors.LoggingPostProcessor>(FastEndpoints.Order.After);
+    };
+});
 
 // Configure MVC controllers
 app.MapControllers();
