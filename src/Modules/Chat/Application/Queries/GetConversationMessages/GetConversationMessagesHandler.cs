@@ -72,10 +72,10 @@ public sealed class GetConversationMessagesHandler : BaseChatQueryHandler<GetCon
             var result = Paged.Create(messages, page, totalCount);
             return Result.Success<Paged<ConversationMessageItem>, Error>(result);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             return Result.Failure<Paged<ConversationMessageItem>, Error>(
-                Error.Internal("Failed to retrieve conversation messages", "Chat.Messages.ListFailed"));
+                Error.Internal("Failed to retrieve conversation messages", "Chat.Messages.ListFailed", ex));
         }
     }
 

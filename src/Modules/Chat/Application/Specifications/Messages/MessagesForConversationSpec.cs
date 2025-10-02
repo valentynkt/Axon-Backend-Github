@@ -31,7 +31,7 @@ public sealed class MessagesForConversationSpec : PagedSpecification<Message, Co
         // Apply ordering and projection in the same chain
         query
             .OrderBy(m => m.CreatedAt)
-            .ThenBy(m => m.Id)
+            .ThenBy(m => m.Id.Value) // Use .Value to access the underlying Guid for ordering
             .Select(m => new ConversationMessageItem(
                 m.Id.Value,
                 m.Role.Value, // Convert MessageRole value object to string

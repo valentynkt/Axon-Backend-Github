@@ -1,9 +1,10 @@
 using Axon.Api.Contracts.V1.Auth;
-using Axon.Api.Modules;
 using Axon.Modules.Identity.Application.Commands.ExchangeCredential;
 using Axon.Modules.Identity.Application.DTOs.Exchange;
 using BuildingBlocks.Core.Diagnostics.Errors;
+using BuildingBlocks.Web.Endpoints.Base;
 using CSharpFunctionalExtensions;
+using FastEndpoints;
 using MediatR;
 
 namespace Axon.Api.Endpoints.V1.Auth;
@@ -13,41 +14,20 @@ namespace Axon.Api.Endpoints.V1.Auth;
 /// NOTE: JWT is provided via Authorization: Bearer <token>. Endpoint is AllowAnonymous
 /// and performs validation manually (does not rely on ASP.NET auth pipeline).
 /// </summary>
-public sealed class ExchangeEndpoint
-    : BaseIdentityCommandEndpoint<
-        ExchangeTokenRequestDto,
-        AuthTokenResponseDto,
-        ExchangeCredentialCommand,
-        ExchangeOutcome>
+public sealed class ExchangeEndpoint : BaseResultEndpoint<ExchangeTokenRequestDto, AuthTokenResponseDto>
 {
+    private readonly IMediator _mediator;
+
     public ExchangeEndpoint(IMediator mediator, ILogger<ExchangeEndpoint> logger)
-        : base(mediator, logger)
+        : base(logger)
     {
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
-
-    protected override string GetRoute() => "/api/v1/auth/exchange";
-    protected override string GetSummary() => "Exchange bearer token for Axon identity and access token";
-    protected override string GetDescription() =>
-        """
-        Validates a bearer token (Dynamic JWT or Axon Access Token) and creates/updates the Axon principal and wallet links.
-
-        **Supported Token Types**:
-        • Dynamic JWT (from Dynamic.xyz authentication)
-        • Axon Access Token (from manual wallet sign-in)
-
-        **Behavior**:
-        • Token is supplied via Authorization: Bearer <token>
-        • Endpoint is AllowAnonymous (token handled as input data)
-        • Idempotent: safe to retry
-        • Returns new Axon JWT access token for subsequent API calls
-        • Rate Limited: configured globally (e.g., 10 req/min/IP)
-        """;
-    protected override string GetSuccessResponse() =>
-        "Returns exchange outcome with wallet processing metrics";
 
     public override void Configure()
     {
-        base.Configure();
+        Post("/api/v1/auth/exchange");
+        AllowAnonymous();
 
         // Apply rate limiting policy for exchange endpoint
         Options(x => x.RequireRateLimiting("AuthExchange"));
@@ -55,9 +35,22 @@ public sealed class ExchangeEndpoint
         // Document responses succinctly
         Summary(s =>
         {
-            s.Summary = GetSummary();
-            s.Description = GetDescription();
-            s.Responses[200] = GetSuccessResponse();
+            s.Summary = "Exchange bearer token for Axon identity and access token";
+            s.Description = """
+                Validates a bearer token (Dynamic JWT or Axon Access Token) and creates/updates the Axon principal and wallet links.
+
+                **Supported Token Types**:
+                • Dynamic JWT (from Dynamic.xyz authentication)
+                • Axon Access Token (from manual wallet sign-in)
+
+                **Behavior**:
+                • Token is supplied via Authorization: Bearer <token>
+                • Endpoint is AllowAnonymous (token handled as input data)
+                • Idempotent: safe to retry
+                • Returns new Axon JWT access token for subsequent API calls
+                • Rate Limited: configured globally (e.g., 10 req/min/IP)
+                """;
+            s.Responses[200] = "Returns exchange outcome with wallet processing metrics";
             s.Responses[400] = "Invalid request parameters";
             s.Responses[401] = "Invalid or missing bearer token";
             s.Responses[409] = "Ownership conflict (wallet already owned by another principal)";
@@ -65,9 +58,11 @@ public sealed class ExchangeEndpoint
             s.Responses[429] = "Too many requests";
             s.Responses[500] = "Internal server error";
         });
+
+        Tags("Authentication");
     }
 
-    protected override Task<Result<ExchangeCredentialCommand, Error>> ExecuteCommand(
+    protected override async Task<Result<AuthTokenResponseDto, Error>> ExecuteAsync(
         ExchangeTokenRequestDto _,
         CancellationToken ct)
     {
@@ -86,8 +81,8 @@ public sealed class ExchangeEndpoint
         if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             Logger.LogWarning("Missing or invalid Authorization header");
-            return Task.FromResult(Result.Failure<ExchangeCredentialCommand, Error>(
-                Error.Unauthorized("Missing or invalid Authorization header", "AUTH.MISSING_TOKEN")));
+            return Result.Failure<AuthTokenResponseDto, Error>(
+                Error.Unauthorized("Missing or invalid Authorization header", "AUTH.MISSING_TOKEN"));
         }
 
         var bearerToken = authHeader["Bearer ".Length..].Trim();
@@ -98,23 +93,21 @@ public sealed class ExchangeEndpoint
 
         // Pass the raw token to the command - let the handler do EVERYTHING else
         var command = new ExchangeCredentialCommand(bearerToken);
-        return Task.FromResult(Result.Success<ExchangeCredentialCommand, Error>(command));
-    }
+        var domainResult = await _mediator.Send(command, ct);
+        if (domainResult.IsFailure)
+            return Result.Failure<AuthTokenResponseDto, Error>(domainResult.Error);
 
-    protected override Task<Result<AuthTokenResponseDto, Error>> MapDomainToResponseAsync(ExchangeOutcome outcome, CancellationToken ct)
-    {
         // Simply map the outcome to response DTO - the outcome already contains everything we need
         var response = new AuthTokenResponseDto(
-            AccessToken:        outcome.AccessToken,
-            TokenType:          outcome.TokenType,
-            ExpiresIn:          outcome.ExpiresIn,
-            AxonUserId:         outcome.AxonUserId.ToString(),
-            Created:            outcome.Created,
-            WalletsLinked:      outcome.WalletsLinked,
-            Conflicts:          outcome.Conflicts
+            AccessToken:        domainResult.Value.AccessToken,
+            TokenType:          domainResult.Value.TokenType,
+            ExpiresIn:          domainResult.Value.ExpiresIn,
+            AxonUserId:         domainResult.Value.AxonUserId.ToString(),
+            Created:            domainResult.Value.Created,
+            WalletsLinked:      domainResult.Value.WalletsLinked,
+            Conflicts:          domainResult.Value.Conflicts
         );
 
-        return Task.FromResult(Result.Success<AuthTokenResponseDto, Error>(response));
+        return Result.Success<AuthTokenResponseDto, Error>(response);
     }
-
 }

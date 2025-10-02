@@ -1,12 +1,14 @@
 using Axon.Api.Contracts.V1.Auth;
-using Axon.Api.Modules;
+using Axon.Api.Modules.Identity.Processors;
 using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 using Axon.Modules.Identity.Application.DTOs.Responses;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
+using BuildingBlocks.Web.Endpoints.Base;
+using BuildingBlocks.Web.Extensions;
 using CSharpFunctionalExtensions;
+using FastEndpoints;
 using MediatR;
-using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 
 namespace Axon.Api.Endpoints.V1.Auth;
@@ -15,53 +17,67 @@ namespace Axon.Api.Endpoints.V1.Auth;
 /// GET /auth/me - Get current user information
 /// Accepts both Dynamic JWT and Axon JWT tokens
 /// </summary>
-public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto, GetMyPrincipalQuery, CurrentUserResult>
+public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto>
 {
+    private readonly IMediator _mediator;
+
     public MeEndpoint(
         IMediator mediator,
         ILogger<MeEndpoint> logger)
-        : base(mediator, logger)
+        : base(logger)
     {
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     public override void Configure()
     {
-        base.Configure();
+        Get("/api/v1/auth/me");
 
         // Require authorization with DynamicOrAxon policy
         Policies("DynamicOrAxon");
 
+        // Add IdentityAuthProcessor for authentication validation
+        PreProcessor<IdentityAuthProcessor<GetCurrentUserRequestDto>>();
+
         // Apply rate limiting for auth endpoints
         Options(x => x.RequireRateLimiting("AuthExchange"));
+
+        Summary(s =>
+        {
+            s.Summary = "Get current user information";
+            s.Description = """
+                Returns information about the currently authenticated user with ETag caching support.
+
+                **Requires**: Valid JWT Access Token in Authorization header
+
+                **Authentication**:
+                - Accepts both Dynamic JWT and Axon JWT tokens
+                - Dynamic tokens can be used directly without exchange
+                - Axon tokens obtained from /auth/exchange endpoint
+
+                **ETag Support**:
+                - Server returns `ETag` header with fingerprint of user data
+                - Client can send `If-None-Match` header to check for changes
+                - Returns `304 Not Modified` if data hasn't changed since provided ETag
+                - Supports client-side caching for improved performance
+                """;
+            s.Responses[200] = "Returns current user information with claims";
+            s.Responses[304] = "Not Modified - Content hasn't changed since last request (ETag match)";
+            s.Responses[400] = "Invalid request parameters";
+            s.Responses[401] = "User not authenticated";
+            s.Responses[403] = "User does not have access to this resource";
+            s.Responses[404] = "Resource not found";
+            s.Responses[500] = "Internal server error";
+        });
+
+        Tags("Authentication");
     }
 
-    protected override string GetRoute() => "/api/v1/auth/me";
-
-    protected override string GetSummary() => "Get current user information";
-
-    protected override string GetDescription() =>
-        """
-        Returns information about the currently authenticated user with ETag caching support.
-
-        **Requires**: Valid JWT Access Token in Authorization header
-
-        **Authentication**:
-        - Accepts both Dynamic JWT and Axon JWT tokens
-        - Dynamic tokens can be used directly without exchange
-        - Axon tokens obtained from /auth/exchange endpoint
-
-        **ETag Support**:
-        - Server returns `ETag` header with fingerprint of user data
-        - Client can send `If-None-Match` header to check for changes
-        - Returns `304 Not Modified` if data hasn't changed since provided ETag
-        - Supports client-side caching for improved performance
-        """;
-
-    protected override string GetSuccessResponse() => "Returns current user information with claims";
-
-    protected override Task<Result<GetMyPrincipalQuery, Error>> ExecuteQuery(GetCurrentUserRequestDto request, CancellationToken ct)
+    protected override async Task<Result<GetCurrentUserResponseDto, Error>> ExecuteAsync(
+        GetCurrentUserRequestDto request,
+        CancellationToken ct)
     {
-        // User is already authenticated via [Authorize] attribute
+        // User is already authenticated via IdentityAuthProcessor
         var principal = HttpContext.User;
 
         // Extract AxonPrincipalId from JWT token with fallback support
@@ -70,14 +86,14 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
 
         if (string.IsNullOrEmpty(axonPrincipalIdClaim) || !Guid.TryParse(axonPrincipalIdClaim, out var principalIdGuid))
         {
-            return Task.FromResult(Result.Failure<GetMyPrincipalQuery, Error>(
-                Error.Unauthorized("Invalid token: missing or invalid user identifier", "AUTH.MISSING_PRINCIPAL_ID")));
+            return Result.Failure<GetCurrentUserResponseDto, Error>(
+                Error.Unauthorized("Invalid token: missing or invalid user identifier", "AUTH.MISSING_PRINCIPAL_ID"));
         }
 
         var axonPrincipalId = new AxonUserId(principalIdGuid);
 
-        // Extract If-None-Match header for ETag support
-        var ifNoneMatch = HttpContext.Request.Headers.IfNoneMatch.FirstOrDefault();
+        // Get client ETag from ETagPreProcessor (stored in HttpContext.Items)
+        var ifNoneMatch = HttpContext.Items["ClientETag"]?.ToString();
 
         Logger.LogDebug("Retrieving user info for AxonPrincipalId: {PrincipalId}",
             axonPrincipalId.Value);
@@ -87,11 +103,14 @@ public sealed class MeEndpoint : BaseIdentityQueryEndpoint<GetCurrentUserRequest
             IfNoneMatch: ifNoneMatch
         );
 
-        return Task.FromResult(Result.Success<GetMyPrincipalQuery, Error>(query));
-    }
+        var domainResult = await _mediator.Send(query, ct);
+        if (domainResult.IsFailure)
+            return Result.Failure<GetCurrentUserResponseDto, Error>(domainResult.Error);
 
-    protected override string? ExtractETagFromDomainResult(CurrentUserResult domainResult)
-    {
-        return domainResult.ETag;
+        // Map domain result to response using Mapster
+        var responseResult = domainResult.Value.AdaptSafely<GetCurrentUserResponseDto>();
+
+        // ETag handling is done automatically by ETagPostProcessor since GetCurrentUserResponseDto implements IHaveETag
+        return responseResult;
     }
 }

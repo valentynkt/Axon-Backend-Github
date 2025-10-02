@@ -1,3 +1,5 @@
+using BuildingBlocks.Web.Contracts;
+
 namespace Axon.Api.Contracts.V1.Auth;
 
 /// <summary>
@@ -8,7 +10,7 @@ public sealed record GetCurrentUserResponseDto(
     UserProfileDto Profile,
     WalletInfoDto[] Wallets,
     string ETag
-);
+) : IHaveETag;
 
 /// <summary>
 /// User profile information

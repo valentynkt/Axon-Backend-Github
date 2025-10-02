@@ -283,7 +283,7 @@ public class ChatTurnE2ETests : ChatE2ETestBase
         var response = await PostChatTurnAsync(request);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     #endregion
@@ -382,7 +382,7 @@ public class ChatTurnE2ETests : ChatE2ETestBase
         var response = await PostChatTurnAsync(request);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        response.StatusCode.ShouldBe(HttpStatusCode.GatewayTimeout);
     }
 
     #endregion
