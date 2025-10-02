@@ -171,6 +171,12 @@ public abstract class E2ETestBase : IAsyncDisposable
                         // Disable lifetime validation for AxonJwt as well
                         options.TokenValidationParameters.ValidateLifetime = false;
                         options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
+
+                        // CRITICAL FIX: Disable token replay cache for E2E tests
+                        // TokenReplayCache prevents the same JWT from being used multiple times
+                        // In E2E tests, we reuse the same token across multiple requests within a single test
+                        // This is safe in tests since we control the token generation and don't need replay protection
+                        options.TokenValidationParameters.TokenReplayCache = null;
                     });
 
                     // CRITICAL FIX: Configure DynamicAuthService validation for E2E tests

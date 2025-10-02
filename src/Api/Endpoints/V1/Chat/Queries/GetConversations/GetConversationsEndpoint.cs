@@ -11,7 +11,7 @@ namespace Axon.Api.Endpoints.V1.Chat.Queries.GetConversations;
 internal sealed class GetConversationsEndpoint(IMediator mediator, ILogger<GetConversationsEndpoint> logger)
     : BaseChatQueryEndpoint<GetConversationsRequestDto, GetConversationsResponseDto, GetConversationsQuery, Paged<ConversationListItem>>(mediator, logger)
 {
-    protected override string GetRoute() => "/api/v1/conversations";
+    protected override string GetRoute() => "/api/v1/chat/conversations";
 
     protected override string GetSummary() => "Get paginated list of conversations";
 

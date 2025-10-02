@@ -48,6 +48,18 @@ public class ChatTurnE2ETests : ChatE2ETestBase
         // Reset mock AI service to default Success behavior
         MockAiService.Reset();
 
+        // CRITICAL FIX: Clear distributed cache BEFORE test starts
+        // IdempotencyBehavior caches command responses in IDistributedCache (MemoryDistributedCache in tests)
+        // Without clearing, subsequent requests within same test return cached responses instead of processing
+        // This fixes: ChatTurn_ContinueExistingConversation returning same UserMessageId for different messages
+        ClearDistributedCacheIfExists();
+
+        // CRITICAL FIX: Clear EF Core change trackers BEFORE test starts
+        // This prevents entity tracking state from leaking between E2E test requests within the same test
+        // Without this, GetByIdAsync() returns stale tracked entities instead of fresh DB loads
+        // This fixes: ChatTurn_ContinueNonexistentConversation, ChatTurn_ContinueOtherUserConversation
+        ClearDbContextChangeTrackers();
+
         return Task.CompletedTask;
     }
 

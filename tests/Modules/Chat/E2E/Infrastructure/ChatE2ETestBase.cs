@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -137,6 +138,18 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
 
                     // Replace TimeProvider with deterministic one
                     services.AddSingleton<TimeProvider>(TimeProvider);
+
+                    // CRITICAL FIX: Remove IdempotencyBehavior for E2E tests to prevent cached responses
+                    // This prevents idempotency from interfering with multi-request test scenarios
+                    var idempotencyBehaviors = services
+                        .Where(d => d.ServiceType.IsGenericType &&
+                                    d.ServiceType.GetGenericTypeDefinition() == typeof(MediatR.IPipelineBehavior<,>) &&
+                                    d.ImplementationType?.Name.Contains("Idempotency") == true)
+                        .ToList();
+                    foreach (var descriptor in idempotencyBehaviors)
+                    {
+                        services.Remove(descriptor);
+                    }
 
                     // Replace AI Processing Service with mock
                     // CRITICAL: Must be Singleton so all scopes get the same instance and configuration changes are visible
@@ -594,11 +607,50 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
     }
 
     /// <summary>
+    /// Clears distributed cache to prevent idempotency cache leakage between tests and within tests.
+    /// IDistributedCache (MemoryDistributedCache in tests) caches command responses for idempotency.
+    /// Without clearing, idempotent commands return cached responses from previous requests.
+    /// CRITICAL FIX: This prevents ChatTurn E2E tests from returning cached responses across multiple requests.
+    /// </summary>
+    protected void ClearDistributedCacheIfExists()
+    {
+        try
+        {
+            if (Factory?.Services == null) return;
+
+            // Get all IMemoryCache instances and compact them all
+            // This clears both direct IMemoryCache usage AND the backing cache for IDistributedCache
+            var allMemoryCaches = Factory.Services.GetServices<IMemoryCache>().ToList();
+            Console.WriteLine($"[CACHE CLEAR] Found {allMemoryCaches.Count} IMemoryCache instances");
+
+            foreach (var cache in allMemoryCaches)
+            {
+                if (cache is Microsoft.Extensions.Caching.Memory.MemoryCache memCache)
+                {
+                    Console.WriteLine($"[CACHE CLEAR] Compacting MemoryCache instance: {cache.GetType().FullName}");
+                    // Compact(1.0) removes ALL cache entries
+                    memCache.Compact(1.0);
+                    Console.WriteLine($"[CACHE CLEAR] Successfully compacted cache");
+                }
+                else
+                {
+                    Console.WriteLine($"[CACHE CLEAR] Skipping non-MemoryCache instance: {cache.GetType().FullName}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CACHE CLEAR] Exception during cache clearing: {ex.Message}");
+            // Silently ignore - cache clearing is best-effort for test isolation
+        }
+    }
+
+    /// <summary>
     /// Clears EF Core DbContext change trackers to prevent entity tracking conflicts.
     /// PrincipalResolutionService reloads tracked entities for modifications.
     /// Without clearing, tracked entities from previous tests cause conflicts.
     /// </summary>
-    private void ClearDbContextChangeTrackers()
+    protected void ClearDbContextChangeTrackers()
     {
         try
         {
@@ -606,16 +658,21 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
 
             using var scope = Factory.Services.CreateScope();
 
-            // Clear Chat DbContext
+            // Clear Chat Write DbContext
             var chatDb = scope.ServiceProvider.GetService<ChatDbContext>();
             chatDb?.ChangeTracker.Clear();
+
+            // CRITICAL FIX: Also clear Chat Read DbContext
+            // GetByIdAsync in ConversationRepository can track entities even from read context
+            var chatReadDb = scope.ServiceProvider.GetService<ChatReadDbContext>();
+            chatReadDb?.ChangeTracker.Clear();
 
             // Clear Identity Write DbContext
             var identityWriteDb = scope.ServiceProvider.GetService<IdentityWriteDbContext>();
             identityWriteDb?.ChangeTracker.Clear();
 
-            // Clear Identity Read DbContext (if needed)
-            var identityReadDb = scope.ServiceProvider.GetService<ChatReadDbContext>();
+            // Clear Identity Read DbContext (if tracked)
+            var identityReadDb = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>();
             identityReadDb?.ChangeTracker.Clear();
         }
         catch

@@ -211,14 +211,34 @@ public abstract class BaseIdentityQueryEndpoint<TRequest, TResponse, TQuery, TDo
     /// </summary>
     private Task HandleNotModifiedResponse(string etag, CancellationToken _)
     {
-        Logger.LogDebug("Returning 304 Not Modified for ETag: {ETag} (traceId={TraceId})", 
+        Logger.LogDebug("Returning 304 Not Modified for ETag: {ETag} (traceId={TraceId})",
             etag, HttpContext.TraceIdentifier);
 
-        HttpContext.Response.StatusCode = StatusCodes.Status304NotModified;
+        // Set headers
         HttpContext.Response.Headers.ETag = $"\"{etag}\"";
         HttpContext.Response.Headers.CacheControl = "private, max-age=0, must-revalidate";
-        
-        // 304 responses must not have a body - framework handles this automatically
+
+        // Set Content-Length to 0 for 304 response (RFC 7232 - no body allowed)
+        HttpContext.Response.ContentLength = 0;
+
+        // Set status code
+        HttpContext.Response.StatusCode = StatusCodes.Status304NotModified;
+
+        // CRITICAL: Set Response property to non-null value to prevent FastEndpoints auto-204
+        // FastEndpoints checks Response after HandleAsync; if null, sends 204 NoContent
+        // Setting to non-null tells FastEndpoints we're handling the response
+        // However, with status 304 and ContentLength=0, FastEndpoints should not serialize this object
+        try
+        {
+            Response = Activator.CreateInstance<TResponse>();
+        }
+        catch
+        {
+            // If TResponse doesn't have a parameterless constructor, use unsafe cast
+            // This is just a marker value to prevent 204, won't be serialized
+            Response = (TResponse)(object)new object();
+        }
+
         return Task.CompletedTask;
     }
 
