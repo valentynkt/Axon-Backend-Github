@@ -165,11 +165,9 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
 
             // Step 5: Persist changes
             // Note: New principals are already added to DbContext by PrincipalResolutionService.CreateNewPrincipalWithRaceProtectionAsync()
-            // We only need to update existing principals for credential/wallet changes
-            if (!isNewPrincipal)
-            {
-                await _principalRepo.UpdateAsync(principal, cancellationToken);
-            }
+            // Existing principals are already tracked by EF Core from ResolveOrCreatePrincipal() or ProcessWalletsBatch()
+            // Changes to tracked entities (credentials, wallets, chain defaults) are automatically detected by EF Core
+            // No need to call UpdateAsync - SaveChangesAsync will persist all tracked changes
 
             // Explicitly commit changes before returning to ensure read queries see latest data
             // This is critical for E2E tests and immediate subsequent /auth/me calls

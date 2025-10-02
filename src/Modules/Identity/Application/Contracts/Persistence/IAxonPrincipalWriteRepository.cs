@@ -98,4 +98,12 @@ public interface IAxonPrincipalWriteRepository : IWriteRepository<AxonPrincipal,
         WalletId walletId,
         AxonUserId excludePrincipalId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets a tracked principal by ID if it's already in the ChangeTracker, otherwise returns null.
+    /// Used to prevent duplicate entity tracking when the same principal is loaded multiple times in a request.
+    /// </summary>
+    /// <param name="principalId">The principal ID to check</param>
+    /// <returns>The tracked principal if found in ChangeTracker, null otherwise</returns>
+    AxonPrincipal? GetTrackedPrincipal(AxonUserId principalId);
 }

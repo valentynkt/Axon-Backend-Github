@@ -50,8 +50,14 @@ public sealed class WalletVerificationService : IWalletVerificationService
         {
             try
             {
-                // Load the principal aggregate
-                var principal = await _principalRepository.GetByIdAsync(principalId, cancellationToken);
+                // CRITICAL: Check ChangeTracker first to prevent duplicate entity tracking
+                // When DynamicAuthenticationProvider calls this service, the principal is already tracked
+                // from ResolveOrCreatePrincipal(). Loading it again would create a second tracked instance
+                // with the same ID, causing EF Core tracking conflict.
+                var trackedPrincipal = _principalRepository.GetTrackedPrincipal(principalId);
+
+                // Load the principal aggregate (use tracked instance if available)
+                var principal = trackedPrincipal ?? await _principalRepository.GetByIdAsync(principalId, cancellationToken);
                 if (principal == null)
                 {
                     return Result.Failure<WalletOwnership, Error>(

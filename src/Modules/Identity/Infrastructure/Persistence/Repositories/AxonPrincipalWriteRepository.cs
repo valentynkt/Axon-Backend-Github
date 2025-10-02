@@ -183,4 +183,12 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
                                                       wo.AccessMode == AccessMode.Signing &&
                                                       !wo.IsDeleted), ct);
     }
+
+    public AxonPrincipal? GetTrackedPrincipal(AxonUserId principalId)
+    {
+        return DbContext.ChangeTracker
+            .Entries<AxonPrincipal>()
+            .FirstOrDefault(e => e.Entity.Id == principalId)
+            ?.Entity;
+    }
 }

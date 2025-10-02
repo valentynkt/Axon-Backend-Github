@@ -231,39 +231,12 @@ public class AuthMeE2ETests : E2ETestBase
 
     #region Cache Invalidation Scenarios
 
-    [Test]
-    public async Task AuthMe_WalletStatusChange_ShouldInvalidateCache()
-    {
-        // Arrange: Set up principal with pending wallet
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        var (axonToken, _) = await SetupPrincipalWithPendingWallet(validJwt);
-
-        // Get initial state (with pending wallet)
-        SetAuthorizationHeader(axonToken);
-        var pendingResponse = await HttpClient.GetAsync("/api/v1/auth/me");
-        var pendingETag = AuthMeResponseValidator.ValidateAndExtractETag(pendingResponse);
-
-        var pendingContent = await pendingResponse.Content.ReadAsStringAsync();
-        var pendingData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(pendingContent, JsonOptions)!;
-
-        pendingData.Wallets.First().State.ShouldBe("pending");
-
-        // Simulate wallet verification (would normally be done via signature verification)
-        await VerifyWalletForPrincipal(validJwt);
-
-        // Get updated state (with verified wallet) - use same token as status change doesn't affect token
-        SetAuthorizationHeader(axonToken);
-        var verifiedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
-        var verifiedETag = AuthMeResponseValidator.ValidateAndExtractETag(verifiedResponse);
-
-        // Assert: ETag should change and wallet state should be updated
-        AuthMeResponseValidator.ValidateETagChanged(pendingETag, verifiedETag);
-
-        var verifiedContent = await verifiedResponse.Content.ReadAsStringAsync();
-        var verifiedData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(verifiedContent, JsonOptions)!;
-
-        verifiedData.Wallets.First().State.ShouldBe("verified");
-    }
+    // NOTE: Test removed because Dynamic-attested wallets are immediately verified (by design).
+    // The exchange endpoint creates wallets with VerificationSource.DynamicAttested,
+    // which means they are verified immediately and never in "pending" state.
+    // This test was written aspirationally before the Dynamic integration was fully implemented.
+    // If we need to test pending→verified transitions, we would need a different endpoint
+    // that creates wallets without Dynamic attestation (e.g., user-initiated wallet adds).
 
     [Test]
     public async Task AuthMe_ChainDefaultChange_ShouldInvalidateCache()
@@ -561,37 +534,12 @@ public class AuthMeE2ETests : E2ETestBase
     }
 
     /// <summary>
-    /// Sets up a principal with a pending wallet.
-    /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
-    /// </summary>
-    private async Task<(string AccessToken, string PrincipalId)> SetupPrincipalWithPendingWallet(string jwt)
-    {
-        // This would require a specific API or test setup to create pending wallets
-        // For now, we'll use the exchange endpoint which typically creates verified wallets
-        // Note: Both method calls already include 50ms delays internally
-        await SetupCredentialOnlyPrincipal(jwt);
-        return await AddWalletToPrincipal();
-    }
-
-    /// <summary>
     /// Sets up a principal with multiple wallets for default testing.
     /// Returns tuple of (Axon Access Token, Principal ID) for use in subsequent requests.
     /// </summary>
     private async Task<(string AccessToken, string PrincipalId)> SetupPrincipalWithMultipleWallets(string jwt)
     {
         return await SetupPrincipalWithWallets(jwt);
-    }
-
-    /// <summary>
-    /// Verifies a wallet for a principal (simulates signature verification).
-    /// </summary>
-    private static async Task VerifyWalletForPrincipal(string jwt)
-    {
-        _ = jwt; // Unused parameter placeholder
-        // This would typically involve a wallet verification endpoint
-        // For testing purposes, we might need to directly call the verification logic
-        // or use a test-specific endpoint
-        await Task.CompletedTask; // Placeholder
     }
 
     /// <summary>
