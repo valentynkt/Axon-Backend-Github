@@ -2,6 +2,8 @@ using Axon.Api.Contracts.V1.Auth;
 using Axon.Api.Modules.Identity.Processors;
 using Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 using Axon.Modules.Identity.Application.DTOs.Responses;
+using Axon.Modules.Identity.Application.Contracts.Services;
+using Axon.Modules.Identity.Domain.ValueObjects;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using BuildingBlocks.Web.Endpoints.Base;
@@ -20,13 +22,16 @@ namespace Axon.Api.Endpoints.V1.Auth;
 public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, GetCurrentUserResponseDto>
 {
     private readonly IMediator _mediator;
+    private readonly IUserProfileService _userProfileService;
 
     public MeEndpoint(
         IMediator mediator,
+        IUserProfileService userProfileService,
         ILogger<MeEndpoint> logger)
         : base(logger)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _userProfileService = userProfileService ?? throw new ArgumentNullException(nameof(userProfileService));
     }
 
     public override void Configure()
@@ -80,30 +85,55 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
         // User is already authenticated via IdentityAuthProcessor
         var principal = HttpContext.User;
 
-        // Extract AxonPrincipalId from JWT token with fallback support
-        var axonPrincipalIdClaim = principal.FindFirst("axon_user_id")?.Value
-            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        if (string.IsNullOrEmpty(axonPrincipalIdClaim) || !Guid.TryParse(axonPrincipalIdClaim, out var principalIdGuid))
-        {
-            return Result.Failure<GetCurrentUserResponseDto, Error>(
-                Error.Unauthorized("Invalid token: missing or invalid user identifier", "AUTH.MISSING_PRINCIPAL_ID"));
-        }
-
-        var axonPrincipalId = new AxonUserId(principalIdGuid);
-
         // Get client ETag from ETagPreProcessor (stored in HttpContext.Items)
         var ifNoneMatch = HttpContext.Items["ClientETag"]?.ToString();
 
-        Logger.LogDebug("Retrieving user info for AxonPrincipalId: {PrincipalId}",
-            axonPrincipalId.Value);
+        // Extract AxonPrincipalId from JWT token with fallback to Dynamic JWT
+        var axonPrincipalIdClaim = principal.FindFirst("axon_user_id")?.Value
+            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        var query = new GetMyPrincipalQuery(
-            PrincipalId: axonPrincipalId,
-            IfNoneMatch: ifNoneMatch
-        );
+        Result<CurrentUserResult, Error> domainResult;
 
-        var domainResult = await _mediator.Send(query, ct);
+        if (!string.IsNullOrEmpty(axonPrincipalIdClaim) && Guid.TryParse(axonPrincipalIdClaim, out var principalIdGuid))
+        {
+            // Path 1: Axon JWT with axon_user_id claim (from /auth/exchange)
+            var axonPrincipalId = new AxonUserId(principalIdGuid);
+
+            Logger.LogDebug("Retrieving user info for AxonPrincipalId: {PrincipalId}", axonPrincipalId.Value);
+
+            var query = new GetMyPrincipalQuery(
+                PrincipalId: axonPrincipalId,
+                IfNoneMatch: ifNoneMatch
+            );
+
+            domainResult = await _mediator.Send(query, ct);
+        }
+        else
+        {
+            // Path 2: Dynamic JWT without axon_user_id (direct Dynamic token)
+            // Extract Dynamic JWT claims
+            var subject = principal.FindFirst("sub")?.Value;
+            var issuer = principal.FindFirst("iss")?.Value;
+
+            if (string.IsNullOrEmpty(subject) || string.IsNullOrEmpty(issuer))
+            {
+                return Result.Failure<GetCurrentUserResponseDto, Error>(
+                    Error.Unauthorized("Invalid token: missing subject or issuer", "AUTH.MISSING_CLAIMS"));
+            }
+
+            Logger.LogDebug("Retrieving user info via Dynamic JWT - Subject: {Subject}, Issuer: {Issuer}",
+                subject, issuer);
+
+            // Use UserProfileService to look up principal by credential
+            // This will return 404 if principal doesn't exist (never exchanged)
+            domainResult = await _userProfileService.GetUserProfileByCredentialAsync(
+                ProviderType.Dynamic,
+                issuer,
+                subject,
+                ifNoneMatch,
+                ct);
+        }
+
         if (domainResult.IsFailure)
             return Result.Failure<GetCurrentUserResponseDto, Error>(domainResult.Error);
 

@@ -22,6 +22,7 @@ public static class ErrorMappingExtensions
         ErrorType.Validation => StatusCodes.Status400BadRequest,
         ErrorType.Serialization => StatusCodes.Status400BadRequest,
         ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
+        ErrorType.NotFound => StatusCodes.Status404NotFound,
         ErrorType.Conflict => StatusCodes.Status409Conflict,
         ErrorType.Concurrency => StatusCodes.Status409Conflict,
         ErrorType.BusinessRule => StatusCodes.Status422UnprocessableEntity,
@@ -47,21 +48,24 @@ public static class ErrorMappingExtensions
     {
         return error.Type switch
         {
-            ErrorType.Validation or ErrorType.Serialization => 
+            ErrorType.Validation or ErrorType.Serialization =>
                 MapValidationError(error),
-                
-            ErrorType.Unauthorized or ErrorType.Security => 
+
+            ErrorType.Unauthorized or ErrorType.Security =>
                 ApiError.Unauthorized(error.Message),
-                
-            ErrorType.Conflict or ErrorType.Concurrency => 
+
+            ErrorType.NotFound =>
+                ApiError.NotFound(error.Message),
+
+            ErrorType.Conflict or ErrorType.Concurrency =>
                 MapConflictError(error),
-                
-            ErrorType.BusinessRule or ErrorType.Aggregate => 
+
+            ErrorType.BusinessRule or ErrorType.Aggregate =>
                 ApiError.BusinessRuleViolation(error.Message, ExtractSafeDetails(error)),
-                
-            ErrorType.RateLimit => 
+
+            ErrorType.RateLimit =>
                 MapRateLimitError(error),
-                
+
             _ => ApiError.InternalError("An internal error occurred")
         };
     }

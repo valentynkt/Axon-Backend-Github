@@ -175,12 +175,13 @@ public sealed class UserProfileService : IUserProfileService
             // Build chain defaults dictionary from the collection (not the computed property)
             // to avoid EF Core issues with owned entity types
             // Must force complete materialization to avoid EF Core query translation issues
+            // IMPORTANT: Normalize chainId to lowercase for case-insensitive comparison
             var activeDefaults = new List<(string chainId, WalletId walletId)>();
             foreach (var pcd in principal.PrincipalChainDefaults)
             {
                 if (!pcd.IsDeleted)
                 {
-                    activeDefaults.Add((pcd.ChainId, pcd.WalletId));
+                    activeDefaults.Add((pcd.ChainId.ToLowerInvariant(), pcd.WalletId));
                 }
             }
             var chainDefaultsDict = activeDefaults.ToDictionary(x => x.chainId, x => x.walletId);

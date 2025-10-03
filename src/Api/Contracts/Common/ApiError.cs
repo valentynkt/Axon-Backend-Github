@@ -58,6 +58,14 @@ public record ApiError
         Create("UNAUTHORIZED", message);
 
     /// <summary>
+    /// Creates a not found error for missing resources.
+    /// </summary>
+    /// <param name="message">Not found error message</param>
+    /// <returns>Not found ApiError</returns>
+    public static ApiError NotFound(string message = "Resource not found") =>
+        Create("NOT_FOUND", message);
+
+    /// <summary>
     /// Creates a wallet ownership conflict error with privacy-safe details.
     /// Only includes chainId and address, never Principal IDs.
     /// </summary>
@@ -65,7 +73,7 @@ public record ApiError
     /// <param name="address">Wallet address</param>
     /// <returns>Wallet ownership conflict ApiError</returns>
     public static ApiError WalletOwnershipConflict(string chainId, string address) =>
-        Create("WALLET_OWNERSHIP_CONFLICT", "wallet already owned", 
+        Create("WALLET_OWNERSHIP_CONFLICT", "wallet already owned",
             new { chainId, address });
 
     /// <summary>
