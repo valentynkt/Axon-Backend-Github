@@ -191,7 +191,7 @@ public sealed class UserProfileService : IUserProfileService
                 if (walletDict.TryGetValue(ownership.WalletId, out var wallet))
                 {
                     // Check if this wallet is the default for its chain
-                    var isDefault = chainDefaultsDict.TryGetValue(wallet.ChainId.ToString(), out var defaultWalletId)
+                    var isDefault = chainDefaultsDict.TryGetValue(wallet.ChainId.ToLowerInvariant(), out var defaultWalletId)
                                    && defaultWalletId == wallet.Id;
 
                     walletInfos.Add(new WalletInfo(

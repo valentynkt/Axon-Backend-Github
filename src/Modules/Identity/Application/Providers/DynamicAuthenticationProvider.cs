@@ -407,7 +407,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
             if (normalizedAddressResult.IsFailure)
                 continue;
 
-            walletSpecs.Add((wallet.Chain, normalizedAddressResult.Value));
+            walletSpecs.Add((chainIdResult.Value.Value, normalizedAddressResult.Value));
         }
 
         var walletLookup = await _walletRepo.EnsureManyByChainAndAddressAsync(walletSpecs, cancellationToken);
@@ -582,6 +582,37 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
 
             if (!createResult.Succeeded)
             {
+                // Check if failure is due to duplicate username (race condition with concurrent request)
+                var isDuplicateUsername = createResult.Errors.Any(e =>
+                    e.Code == "DuplicateUserName" || e.Description.Contains("already taken", StringComparison.OrdinalIgnoreCase));
+
+                if (isDuplicateUsername)
+                {
+                    // Retry fetching by username - the user was likely just created by a concurrent request
+                    // We search by username (not claims) because claims might not be persisted yet
+                    // Add brief delay to allow transaction commit from concurrent request
+                    _logger.LogWarning("Duplicate username detected (race condition). Retrying user fetch by username for Dynamic user {DynamicUserId}",
+                        dynamicUserData.AxonUserId);
+
+                    // Retry with exponential backoff (up to 3 attempts)
+                    for (int attempt = 1; attempt <= 3; attempt++)
+                    {
+                        await Task.Delay(attempt * 50); // 50ms, 100ms, 150ms
+
+                        existingUser = await _userManager.FindByNameAsync(newUser.UserName!);
+
+                        if (existingUser != null)
+                        {
+                            _logger.LogInformation("Successfully retrieved user after race condition on attempt {Attempt} for Dynamic user {DynamicUserId}",
+                                attempt, dynamicUserData.AxonUserId);
+                            return existingUser;
+                        }
+                    }
+
+                    _logger.LogWarning("Failed to retrieve user after {MaxAttempts} retry attempts for Dynamic user {DynamicUserId}",
+                        3, dynamicUserData.AxonUserId);
+                }
+
                 _logger.LogError("Failed to create Identity user: {Errors}",
                     string.Join(", ", createResult.Errors.Select(e => e.Description)));
                 return null;

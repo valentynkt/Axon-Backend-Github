@@ -65,7 +65,8 @@ public sealed class DynamicValidationOptions
     public int TokenCacheMinutes { get; set; } = 5;
 
     /// <summary>
-    /// Replay protection buffer time in minutes (default: 5)
+    /// [UNUSED - MVP] Replay protection buffer time in minutes (default: 5)
+    /// Preserved for future replay protection reactivation
     /// </summary>
     [Range(1, 10)]
     public int ReplayBufferMinutes { get; set; } = 5;

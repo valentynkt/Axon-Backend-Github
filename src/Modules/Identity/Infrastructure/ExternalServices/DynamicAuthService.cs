@@ -153,7 +153,11 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
 
             var claimsPrincipal = validationResult.Value;
 
-            // Check for replay attacks using jti claim
+            // MVP: Replay protection disabled - overengineered for current needs
+            // FUTURE ACTIVATION: Uncomment this section to re-enable JWT replay protection
+            // This prevents the same JWT (identified by 'jti' claim) from being used multiple times
+            // Useful for preventing token replay attacks in high-security scenarios
+            /*
             var jtiClaim = claimsPrincipal.FindFirst(JwtRegisteredClaimNames.Jti);
             if (jtiClaim != null && !string.IsNullOrWhiteSpace(jtiClaim.Value))
             {
@@ -179,6 +183,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
             {
                 _logger.LogDebug("JWT token has no jti claim - replay protection not available");
             }
+            */
 
             // Extract user data from JWT claims
             var claimCount = claimsPrincipal.Claims?.Count() ?? 0;
@@ -465,8 +470,9 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
     }
 
     /// <summary>
-    /// Checks if a JWT token has already been used and marks it as used to prevent replay attacks.
+    /// [CURRENTLY DISABLED - MVP] Checks if a JWT token has already been used and marks it as used to prevent replay attacks.
     /// Implements JWT-specific replay protection to prevent token reuse.
+    /// NOTE: This method is preserved for future use but currently disabled in ValidateTokenWithPartnerContextAsync
     /// </summary>
     /// <param name="jti">The JWT ID (jti claim) to check</param>
     /// <param name="expiresAt">When the token expires</param>
