@@ -39,6 +39,7 @@ public abstract class E2ETestBase : IAsyncDisposable
 
     private PostgreSqlContainer _postgreSqlContainer = null!;
     private string _connectionString = null!;
+    private string _databaseName = null!;
     private bool _disposed;
 
     /// <summary>
@@ -49,10 +50,17 @@ public abstract class E2ETestBase : IAsyncDisposable
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
+        // CRITICAL FIX: Generate unique database name per test fixture to ensure complete isolation
+        // This prevents test fixtures from interfering with each other when running in parallel
+        // Each fixture gets its own database: axon_e2e_authme_abc123, axon_e2e_tokenvalidation_def456, etc.
+        var fixtureTypeName = GetType().Name.ToLowerInvariant().Replace("tests", "").Replace("e2e", "");
+        var fullDatabaseName = $"axon_e2e_{fixtureTypeName}_{Guid.NewGuid():N}";
+        _databaseName = fullDatabaseName.Length > 63 ? fullDatabaseName.Substring(0, 63) : fullDatabaseName;
+
         // Start PostgreSQL container
         _postgreSqlContainer = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")
-            .WithDatabase("axon_identity_e2e_test")
+            .WithDatabase(_databaseName)
             .WithUsername("e2e_user")
             .WithPassword("e2e_password")
             .WithCleanUp(true)
@@ -147,18 +155,32 @@ public abstract class E2ETestBase : IAsyncDisposable
                     // This runs AFTER IdentityApiModule registers JWT authentication
                     services.PostConfigure<JwtBearerOptions>("DynamicJwt", options =>
                     {
+                        // Enable all JWT validations for proper security testing
+                        options.TokenValidationParameters.ValidateIssuer = true;
                         options.TokenValidationParameters.ValidIssuer = TestDataFixtures.DynamicIssuer;
+
+                        options.TokenValidationParameters.ValidateAudience = true;
+                        options.TokenValidationParameters.ValidAudience = "axon-api";
+
+                        options.TokenValidationParameters.ValidateIssuerSigningKey = true;
+                        options.TokenValidationParameters.ValidateLifetime = true; // Re-enabled for real validation
 
                         // Directly provide test RSA keys instead of relying on JWKS discovery
                         // This ensures signature validation works in tests
                         var testKeys = JwtTestTokenFactory.GetTestSigningKeys();
                         options.TokenValidationParameters.IssuerSigningKeys = testKeys;
 
-                        // CRITICAL FIX: Disable lifetime validation for E2E tests
-                        // JWT middleware uses system clock (not FakeTimeProvider), so test tokens from 2024 appear expired in 2025
-                        // NOTE: This means expired token tests (AuthMe_InvalidJWT_ShouldReturn401) cannot validate expiration at middleware level
-                        options.TokenValidationParameters.ValidateLifetime = false;
-                        options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
+                        // HYBRID TIME APPROACH:
+                        // - JWT tokens use real system time (DateTime.UtcNow) for proper middleware validation
+                        // - Application logic uses FakeTimeProvider for deterministic testing
+                        // - This allows real JWT validation while keeping deterministic testing for business logic
+                        // - Default ClockSkew (5 minutes) allows for reasonable clock drift tolerance
+
+                        // CRITICAL FIX: Disable token replay cache for E2E tests
+                        // TokenReplayCache prevents the same JWT from being used multiple times
+                        // In E2E tests, we reuse the same token across multiple requests within a single test
+                        // This is safe in tests since we control the token generation and don't need replay protection
+                        options.TokenValidationParameters.TokenReplayCache = null;
 
                         // Disable JWKS refresh since we're providing keys directly
                         options.RefreshOnIssuerKeyNotFound = false;
@@ -168,9 +190,8 @@ public abstract class E2ETestBase : IAsyncDisposable
                     // Post-configure AxonJwt authentication scheme (for internal tokens)
                     services.PostConfigure<JwtBearerOptions>("AxonJwt", options =>
                     {
-                        // Disable lifetime validation for AxonJwt as well
-                        options.TokenValidationParameters.ValidateLifetime = false;
-                        options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
+                        // HYBRID TIME APPROACH: Re-enable lifetime validation (tokens use real system time)
+                        options.TokenValidationParameters.ValidateLifetime = true;
 
                         // CRITICAL FIX: Disable token replay cache for E2E tests
                         // TokenReplayCache prevents the same JWT from being used multiple times
@@ -193,10 +214,9 @@ public abstract class E2ETestBase : IAsyncDisposable
                         options.ValidateAudience = true;
                         options.DefaultAllowedAudiences = new List<string> { "axon-api", "axon-web" };
 
-                        // CRITICAL FIX: Disable lifetime validation in DynamicAuthService
-                        // This prevents SecurityTokenExpiredException when using test tokens from 2024 in 2025
-                        options.ValidateLifetime = false;
-                        options.ClockSkewSeconds = 0;
+                        // HYBRID TIME APPROACH: Re-enable lifetime validation (tokens use real system time)
+                        options.ValidateLifetime = true;
+                        options.ClockSkewSeconds = 300; // 5 minutes clock skew tolerance (default)
                     });
 
                     // Replace IJwksService with test implementation that returns test RSA keys
@@ -239,11 +259,16 @@ public abstract class E2ETestBase : IAsyncDisposable
         }
         finally
         {
+            // CRITICAL FIX: Clear memory cache before disposing to prevent token validation cache pollution
+            // DynamicAuthService caches validated tokens which can leak between tests
+            ClearMemoryCacheIfExists();
+
             // CRITICAL FIX: Clear DbContext change trackers before disposing
             // This ensures EF Core tracked entities don't leak between tests
             ClearDbContextChangeTrackers();
 
             await CleanupDatabaseAsync();
+
             HttpClient?.Dispose();
 
             if (Factory != null)

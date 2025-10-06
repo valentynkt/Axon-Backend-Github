@@ -32,6 +32,8 @@ public static class JwtTestTokenFactory
 
     /// <summary>
     /// Creates a valid Dynamic JWT with standard claims.
+    /// Uses real system time for JWT timestamps to work with JWT middleware validation.
+    /// Application logic (wallet signatures, etc.) still uses FakeTimeProvider for deterministic testing.
     /// </summary>
     public static string CreateValidDynamicJwt(
         string subject = TestDataFixtures.DynA_Subject,
@@ -41,8 +43,10 @@ public static class JwtTestTokenFactory
         DateTime? expiration = null,
         Dictionary<string, object>? additionalClaims = null)
     {
-        var exp = expiration ?? E2ETestBase.TestTime.AddHours(1);
-        var iat = E2ETestBase.TestTime.AddMinutes(-5);
+        // Use real system time for JWT claims (middleware doesn't respect FakeTimeProvider)
+        // This allows proper JWT validation while keeping deterministic testing for application logic
+        var exp = expiration ?? DateTime.UtcNow.AddHours(1);
+        var iat = DateTime.UtcNow.AddMinutes(-5);
 
         var claims = new List<Claim>
         {
@@ -88,11 +92,12 @@ public static class JwtTestTokenFactory
 
     /// <summary>
     /// Creates an expired JWT for testing TTL validation.
+    /// Token expired 1 hour ago (real system time).
     /// </summary>
     public static string CreateExpiredJwt(
         string subject = TestDataFixtures.DynA_Subject)
     {
-        var expiredTime = E2ETestBase.TestTime.AddHours(-1);
+        var expiredTime = DateTime.UtcNow.AddHours(-1);
         return CreateValidDynamicJwt(subject: subject, expiration: expiredTime);
     }
 
@@ -117,11 +122,12 @@ public static class JwtTestTokenFactory
 
     /// <summary>
     /// Creates a JWT that will be valid after JWKS rotation.
+    /// Token valid for 30 minutes from now (real system time).
     /// </summary>
     public static string CreateFutureValidJwt(
         string subject = TestDataFixtures.DynA_Subject)
     {
-        var futureValid = E2ETestBase.TestTime.AddMinutes(30);
+        var futureValid = DateTime.UtcNow.AddMinutes(30);
         return CreateValidDynamicJwt(subject: subject, expiration: futureValid, kid: TestKid2);
     }
 
@@ -185,40 +191,44 @@ public static class JwtTestTokenFactory
 
     /// <summary>
     /// Creates test data for wallet signature validation.
+    /// NOTE: Wallet signatures use FakeTimeProvider for deterministic testing (unlike JWT timestamps).
     /// </summary>
     public static class WalletSignatureTestData
     {
         /// <summary>
-        /// Valid signed message with current timestamp.
+        /// Valid signed message with current timestamp (uses FakeTimeProvider).
         /// </summary>
         public static (string message, string signature, DateTime issuedAt) CreateValidSignature()
         {
             var message = TestDataFixtures.SignatureTestVectors.ValidMessageContent;
             var signature = TestDataFixtures.SignatureTestVectors.Sig_W1_Msg_V1;
+            // Use FakeTimeProvider for wallet signatures (application logic, not JWT validation)
             var issuedAt = E2ETestBase.TestTime.AddMinutes(-5);
 
             return (message, signature, issuedAt);
         }
 
         /// <summary>
-        /// Expired signed message (TTL exceeded).
+        /// Expired signed message (TTL exceeded, uses FakeTimeProvider).
         /// </summary>
         public static (string message, string signature, DateTime issuedAt) CreateExpiredSignature()
         {
             var message = TestDataFixtures.SignatureTestVectors.ValidMessageContent;
             var signature = TestDataFixtures.SignatureTestVectors.Sig_W1_Expired;
+            // Use FakeTimeProvider for wallet signatures (application logic, not JWT validation)
             var issuedAt = E2ETestBase.TestTime.AddHours(-2); // Expired
 
             return (message, signature, issuedAt);
         }
 
         /// <summary>
-        /// Reused signature for replay detection testing.
+        /// Reused signature for replay detection testing (uses FakeTimeProvider).
         /// </summary>
         public static (string message, string signature, DateTime issuedAt) CreateReusedSignature()
         {
             var message = TestDataFixtures.SignatureTestVectors.ValidMessageContent;
             var signature = TestDataFixtures.SignatureTestVectors.Sig_W1_Msg_V1; // Same as valid
+            // Use FakeTimeProvider for wallet signatures (application logic, not JWT validation)
             var issuedAt = E2ETestBase.TestTime.AddMinutes(-3);
 
             return (message, signature, issuedAt);

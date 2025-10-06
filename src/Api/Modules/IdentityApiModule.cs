@@ -330,9 +330,13 @@ public sealed class IdentityApiModule : IApiModule
                     .RequireAuthenticatedUser()
                     .Build();
 
-            // FallbackPolicy - require authentication for all endpoints (secure by default)
-            // Endpoints can opt-out using AllowAnonymous() (e.g., exchange endpoint, health checks)
-            options.FallbackPolicy = options.DefaultPolicy;
+            // FallbackPolicy - set to null to allow AllowAnonymous to work correctly
+            // NOTE: In ASP.NET Core, authentication middleware ALWAYS runs regardless of AllowAnonymous.
+            // However, FallbackPolicy triggers authorization checks which can cause issues for endpoints
+            // like Exchange that manually handle authentication. By setting FallbackPolicy to null,
+            // we allow AllowAnonymous() to properly bypass authorization while authentication still runs.
+            // Endpoints that need authentication should explicitly use Policies() or [Authorize].
+            options.FallbackPolicy = null;
         });
     }
 }

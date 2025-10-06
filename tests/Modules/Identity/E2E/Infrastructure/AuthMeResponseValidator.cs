@@ -222,6 +222,13 @@ public static class AuthMeResponseValidator
     }
 
     /// <summary>
+    /// Type alias for backward compatibility.
+    /// </summary>
+    public class AuthMeResponse : AuthMeResponseData
+    {
+    }
+
+    /// <summary>
     /// User profile information nested in response.
     /// </summary>
     public class ProfileData

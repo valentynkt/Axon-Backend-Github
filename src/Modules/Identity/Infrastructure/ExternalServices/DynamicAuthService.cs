@@ -114,7 +114,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
         {
             _logger.LogWarning("Token validation attempted with empty token");
             return Result.Failure<DynamicUserData, Error>(
-                Error.Validation("Token is required", AuthErrors.TokenRequired));
+                Error.Unauthorized("Token is required", AuthErrors.TokenRequired));
         }
 
         // Check cache first
@@ -221,7 +221,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
         {
             _logger.LogWarning("GetRawClaimsAsync attempted with empty token");
             return Result.Failure<ClaimsPrincipal, Error>(
-                Error.Validation("Token is required", "AUTH.TOKEN_REQUIRED"));
+                Error.Unauthorized("Token is required", "AUTH.TOKEN_REQUIRED"));
         }
 
         // Check cache first
@@ -262,7 +262,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
             if (!tokenHandler.CanReadToken(token))
             {
                 return Task.FromResult(Result.Failure<ClaimsPrincipal, Error>(
-                    Error.Validation("Invalid JWT token format", "AUTH.INVALID_TOKEN_FORMAT")));
+                    Error.Unauthorized("Invalid JWT token format", "AUTH.INVALID_TOKEN_FORMAT")));
             }
 
             // Read token to check issuer format and kid for rotation support
@@ -273,7 +273,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
             if (!issuer.StartsWith("app.dynamicauth.com/", StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult(Result.Failure<ClaimsPrincipal, Error>(
-                    Error.Validation($"Invalid issuer format: {issuer}", "AUTH.INVALID_ISSUER_FORMAT")));
+                    Error.Unauthorized($"Invalid issuer format: {issuer}", "AUTH.INVALID_ISSUER_FORMAT")));
             }
 
             // Extract and validate environmentId
@@ -282,7 +282,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
             {
                 _logger.LogWarning("Unknown Dynamic environmentId: {EnvironmentId}", environmentId);
                 return Task.FromResult(Result.Failure<ClaimsPrincipal, Error>(
-                    Error.Validation($"Unknown Dynamic environmentId: {environmentId}", "AUTH.UNKNOWN_ENVIRONMENT")));
+                    Error.Unauthorized($"Unknown Dynamic environmentId: {environmentId}", "AUTH.UNKNOWN_ENVIRONMENT")));
             }
 
             // Check kid for rotation support (AC3)
@@ -330,7 +330,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
                 !validated.Header.Alg.Equals(SecurityAlgorithms.RsaSha256, StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult(Result.Failure<ClaimsPrincipal, Error>(
-                    Error.Validation("Token must be signed with RS256", "AUTH.INVALID_ALGORITHM")));
+                    Error.Unauthorized("Token must be signed with RS256", "AUTH.INVALID_ALGORITHM")));
             }
 
             _logger.LogDebug("JWT validated successfully with environment: {Environment}, Kid: {Kid}",
@@ -483,7 +483,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
         {
             _logger.LogWarning("JWT replay check attempted with empty jti");
             return Result.Failure<Unit, Error>(
-                Error.Validation("JWT ID (jti) is required for replay protection", "AUTH.JWT_ID_REQUIRED"));
+                Error.Unauthorized("JWT ID (jti) is required for replay protection", "AUTH.JWT_ID_REQUIRED"));
         }
 
         try

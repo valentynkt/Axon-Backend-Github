@@ -289,7 +289,7 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             if (string.IsNullOrEmpty(subject))
             {
                 return Result.Failure<AuthenticationResponse, Error>(
-                    Error.Validation("No subject found in claims"));
+                    Error.Unauthorized("No subject found in claims"));
             }
 
             var validatedRequest = new ValidatedClaimsRequest(claims, providerType, subject);

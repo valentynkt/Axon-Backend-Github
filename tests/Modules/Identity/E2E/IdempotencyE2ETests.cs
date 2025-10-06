@@ -14,6 +14,7 @@ namespace Axon.Modules.Identity.E2E;
 /// Covers TDD tests 21-22 with real HTTP calls and response validation.
 /// </summary>
 [TestFixture]
+[NonParallelizable] // CRITICAL: Prevent parallel execution to avoid test isolation issues with shared state
 public class IdempotencyE2ETests : E2ETestBase
 {
     #region Test 21: EXCHANGE_idempotent_dynamic (E2E)

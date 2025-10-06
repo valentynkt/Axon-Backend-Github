@@ -46,7 +46,7 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         {
             _logger.LogWarning("Exchange command received with empty bearer token");
             return Result.Failure<ExchangeOutcome, Error>(
-                Error.Validation("Bearer token is required", "AUTH.TOKEN_REQUIRED"));
+                Error.Unauthorized("Bearer token is required", "AUTH.TOKEN_REQUIRED"));
         }
 
         _logger.LogInformation("Starting Dynamic token exchange via orchestrator (CallID={CallId})", handlerCallId);

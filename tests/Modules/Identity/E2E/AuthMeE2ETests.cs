@@ -13,6 +13,7 @@ namespace Axon.Modules.Identity.E2E;
 /// Validates principal data, wallets, chain defaults, and HTTP caching behavior.
 /// </summary>
 [TestFixture]
+[NonParallelizable] // CRITICAL: Prevent parallel execution to avoid test isolation issues with shared state (cache, DbContext)
 public class AuthMeE2ETests : E2ETestBase
 {
     #region Test 23: ME_snapshot_contains_defaults_and_wallets
@@ -365,11 +366,6 @@ public class AuthMeE2ETests : E2ETestBase
         exchangeResponse.ShouldNotBeNull();
         exchangeResponse.AccessToken.ShouldNotBeNullOrWhiteSpace();
         exchangeResponse.AxonUserId.ShouldNotBeNullOrWhiteSpace();
-
-        // Allow database transaction to commit before subsequent reads
-        // Read context might not immediately see writes from write context due to transaction isolation
-        // Increased delay to allow chain defaults to be created (300ms for E2E stability)
-        await Task.Delay(300);
 
         // Clear headers after setup to prevent pollution
         ClearAllHeaders();
