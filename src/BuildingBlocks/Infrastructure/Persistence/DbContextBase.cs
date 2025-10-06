@@ -226,6 +226,16 @@ public abstract class DbContextBase<TModule> : DbContext, IDbContext
                 case EntityState.Modified when entry.Entity is BuildingBlocks.Core.Domain.Entities.Base.AuditableDeletableEntity<Guid> modifiedAuditable:
                     modifiedAuditable.SetUpdatedAtInternal(now);
                     break;
+
+                // Handle owned entities (e.g., WalletOwnership, PrincipalChainDefault)
+                case EntityState.Added when entry.Entity is BuildingBlocks.Core.Domain.Entities.Base.OwnedAuditableEntity addedOwned:
+                    addedOwned.SetCreatedAtInternal(now);
+                    addedOwned.SetUpdatedAtInternal(now);
+                    break;
+
+                case EntityState.Modified when entry.Entity is BuildingBlocks.Core.Domain.Entities.Base.OwnedAuditableEntity modifiedOwned:
+                    modifiedOwned.SetUpdatedAtInternal(now);
+                    break;
             }
         }
 
