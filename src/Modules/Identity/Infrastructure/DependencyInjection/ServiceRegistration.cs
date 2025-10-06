@@ -110,7 +110,7 @@ public static class ServiceRegistration
         services.AddScoped<IWalletReadRepository, WalletReadRepository>();
 
         // Register Wallet Ownership Repository for Story 5.3
-        services.AddScoped<IWalletOwnershipRepository, WalletOwnershipRepository>();
+        services.AddScoped<IWalletOwnershipRepository, WalletOwnershipReadRepository>();
         
         // Register unified DbContext interface
         services.AddScoped<IIdentityDbContext>(provider => provider.GetRequiredService<IdentityDbContext>());

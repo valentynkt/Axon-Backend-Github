@@ -42,7 +42,7 @@ public class BulkOperationPerformanceTests : ChatPerformanceTestBase
             async () =>
             {
                 ClearChangeTracker();
-                var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+                var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
                 loaded.ShouldNotBeNull();
                 loaded.GetMessageCount().ShouldBe(100);
             },
@@ -54,7 +54,7 @@ public class BulkOperationPerformanceTests : ChatPerformanceTestBase
             async () =>
             {
                 ClearChangeTracker();
-                var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+                var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
                 _ = loaded?.GetAllMessages(); // Force message loading
             },
             "Load conversation with messages");
@@ -70,7 +70,7 @@ public class BulkOperationPerformanceTests : ChatPerformanceTestBase
         var initialMemory = GC.GetTotalMemory(true);
 
         ClearChangeTracker();
-        var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
         // Process all messages
@@ -164,7 +164,7 @@ public class BulkOperationPerformanceTests : ChatPerformanceTestBase
             // Load conversation with messages and paginate in memory (for test purposes)
             // Note: Must use repository method to properly load owned Messages collection
             ClearChangeTracker();
-            var conv = await ConversationRepository.GetByIdAsync(conversation.Id);
+            var conv = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
             conv.ShouldNotBeNull();
 
             var messages = conv.GetAllMessages()
@@ -217,7 +217,7 @@ public class BulkOperationPerformanceTests : ChatPerformanceTestBase
 
         foreach (var conv in conversations)
         {
-            await ConversationRepository.AddAsync(conv);
+            await ConversationWriteRepository.AddAsync(conv);
         }
 
         await UnitOfWork.SaveChangesAsync();

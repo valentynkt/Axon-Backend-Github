@@ -10,12 +10,12 @@ using Shouldly;
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// Comprehensive tests for ConversationRepository write operations.
+/// Comprehensive tests for ConversationWriteRepository write operations.
 /// Covers CRUD operations, concurrency handling, business rules, and aggregate consistency.
 /// Follows TDD principles and focuses on high-value scenarios (80/20 rule).
 /// </summary>
 [TestFixture]
-public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
+public sealed class ConversationWriteRepositoryTests : ChatPersistenceTestBase
 {
     #region Basic CRUD Operations (High Priority - 80% Value)
 
@@ -26,14 +26,14 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = CreateTestConversation();
 
         // Act
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         await AssertEntityPersistedAsync<Conversation>();
 
         var savedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
         savedConversation.Id.ShouldBe(conversation.Id);
@@ -50,7 +50,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = scenario.Conversation;
 
         // Act
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
@@ -58,7 +58,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
 
         // Load the conversation with its messages through the aggregate root
         var savedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
 
@@ -83,7 +83,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = await SaveConversationAsync(CreateTestConversation());
 
         // Act
-        var result = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var result = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
 
         // Assert
         result.ShouldNotBeNull();
@@ -98,7 +98,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var nonExistentId = ConversationId.New();
 
         // Act
-        var result = await ConversationRepository.GetByIdAsync(nonExistentId);
+        var result = await ConversationWriteRepository.GetByIdAsync(nonExistentId);
 
         // Assert
         result.ShouldBeNull();
@@ -112,7 +112,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var newTitle = "Updated Title";
 
         ClearChangeTracker();
-        var freshConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var freshConversation = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         freshConversation.ShouldNotBeNull();
 
         // Act - advance time to ensure UpdatedAt will be greater
@@ -120,12 +120,12 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var updateResult = freshConversation.UpdateTitle(newTitle, TimeProvider);
         updateResult.IsSuccess.ShouldBeTrue();
 
-        await ConversationRepository.UpdateAsync(freshConversation);
+        await ConversationWriteRepository.UpdateAsync(freshConversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         var updatedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         updatedConversation.ShouldNotBeNull();
         updatedConversation.Title.ShouldBe(newTitle);
@@ -139,12 +139,12 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = await SaveConversationAsync(CreateTestConversation());
 
         // Act
-        await ConversationRepository.DeleteAsync(conversation);
+        await ConversationWriteRepository.DeleteAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         var deletedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         deletedConversation.ShouldBeNull();
     }
@@ -161,13 +161,13 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = scenario.Conversation;
 
         // Act
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         // Load the conversation with its messages through the aggregate root
         var savedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
 
@@ -202,7 +202,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = await SaveConversationAsync(CreateTestConversation());
 
         ClearChangeTracker();
-        var freshConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var freshConversation = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         freshConversation.ShouldNotBeNull();
 
         // Act - Add new messages
@@ -215,13 +215,13 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
             assistantContent, new AiResponseId(Guid.NewGuid().ToString()), TimeProvider);
         assistantResult.IsSuccess.ShouldBeTrue();
 
-        await ConversationRepository.UpdateAsync(freshConversation);
+        await ConversationWriteRepository.UpdateAsync(freshConversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         // Load the updated conversation with its messages through the aggregate root
         var updatedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         updatedConversation.ShouldNotBeNull();
 
@@ -246,12 +246,12 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var conversation = scenario.Conversation;
 
         // Act
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         var savedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         savedConversation.ShouldNotBeNull();
         savedConversation.Status.ShouldBe(ConversationStatus.Completed);
@@ -266,19 +266,19 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
             CreateTestConversationWithMessages(userMessageCount: 2, assistantMessageCount: 1));
 
         ClearChangeTracker();
-        var freshConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var freshConversation = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         freshConversation.ShouldNotBeNull();
 
         // Act
         var completeResult = freshConversation.Complete(TimeProvider);
         completeResult.IsSuccess.ShouldBeTrue();
 
-        await ConversationRepository.UpdateAsync(freshConversation);
+        await ConversationWriteRepository.UpdateAsync(freshConversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert
         var completedConversation = await QueryFreshAsync(
-            () => ConversationRepository.GetByIdAsync(conversation.Id));
+            () => ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         completedConversation.ShouldNotBeNull();
         completedConversation.Status.ShouldBe(ConversationStatus.Completed);
@@ -299,13 +299,13 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
 
         // Simulate first client: Load entity
         ClearChangeTracker();
-        var conversation1 = await ConversationRepository.GetByIdAsync(conversationId);
+        var conversation1 = await ConversationWriteRepository.GetByIdAsync(conversationId);
         conversation1.ShouldNotBeNull();
         conversation1.Version.ShouldBe(initialVersion);
 
         // Simulate second client: Load entity in a detached state
         ClearChangeTracker();
-        var conversation2 = await ConversationRepository.GetByIdAsync(conversationId);
+        var conversation2 = await ConversationWriteRepository.GetByIdAsync(conversationId);
         conversation2.ShouldNotBeNull();
 
         // Detach conversation2 to simulate it being loaded in a separate context
@@ -317,7 +317,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         // First client updates and saves successfully
         var updateResult1 = conversation1.UpdateTitle("First Update", TimeProvider);
         updateResult1.IsSuccess.ShouldBeTrue();
-        await ConversationRepository.UpdateAsync(conversation1);
+        await ConversationWriteRepository.UpdateAsync(conversation1);
         await UnitOfWork.SaveChangesAsync();
 
         // Clear the tracker to simulate conversation2 coming from a different context
@@ -332,7 +332,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
 
         AssertConcurrencyConflict(async () =>
         {
-            await ConversationRepository.UpdateAsync(conversation2);
+            await ConversationWriteRepository.UpdateAsync(conversation2);
             await UnitOfWork.SaveChangesAsync();
         });
     }
@@ -352,7 +352,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         // Act
         foreach (var conversation in conversations)
         {
-            await ConversationRepository.AddAsync(conversation);
+            await ConversationWriteRepository.AddAsync(conversation);
         }
         await UnitOfWork.SaveChangesAsync();
 
@@ -387,7 +387,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
 
         foreach (var conversation in conversations)
         {
-            await ConversationRepository.AddAsync(conversation);
+            await ConversationWriteRepository.AddAsync(conversation);
         }
         await UnitOfWork.SaveChangesAsync();
 
@@ -413,7 +413,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
     {
         // Act & Assert
         await Should.ThrowAsync<ArgumentNullException>(
-            () => ConversationRepository.AddAsync(null!));
+            () => ConversationWriteRepository.AddAsync(null!));
     }
 
     [Test]
@@ -423,7 +423,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         var defaultId = new ConversationId(Guid.Empty);
 
         // Act
-        var result = await ConversationRepository.GetByIdAsync(defaultId);
+        var result = await ConversationWriteRepository.GetByIdAsync(defaultId);
 
         // Assert
         result.ShouldBeNull();
@@ -441,7 +441,7 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         ClearChangeTracker();
 
         // Load the conversation again to get a detached copy
-        var detachedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var detachedConversation = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         detachedConversation.ShouldNotBeNull();
 
         // Detach it from the context
@@ -452,12 +452,12 @@ public sealed class ConversationRepositoryTests : ChatPersistenceTestBase
         updateResult.IsSuccess.ShouldBeTrue();
 
         // Act - Update the detached entity
-        await ConversationRepository.UpdateAsync(detachedConversation);
+        await ConversationWriteRepository.UpdateAsync(detachedConversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert - Verify it was saved
         ClearChangeTracker();
-        var saved = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var saved = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         saved.ShouldNotBeNull();
         saved.Title.ShouldBe("Updated Title");
         saved.Title.ShouldNotBe(originalTitle);

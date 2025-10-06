@@ -100,7 +100,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         var result = conversation.AppendUserMessageToConversation(content, _timeProvider);
         result.IsSuccess.ShouldBeTrue();
 
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.UpdateAsync(conversation);
         await _setupContext.SaveChangesAsync();
 
@@ -123,7 +123,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -155,7 +155,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         {
             using var context = CreateContext(CreateContextOptions());
             var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-            var repo = new ConversationRepository(context, unitOfWork);
+            var repo = new ConversationWriteRepository(context, unitOfWork);
 
             var conversation = await repo.GetByIdAsync(conv1.Id);
             var result = conversation!.AppendUserMessageToConversation(
@@ -169,7 +169,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         {
             using var context = CreateContext(CreateContextOptions());
             var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-            var repo = new ConversationRepository(context, unitOfWork);
+            var repo = new ConversationWriteRepository(context, unitOfWork);
 
             var conversation = await repo.GetByIdAsync(conv2.Id);
             var result = conversation!.AppendUserMessageToConversation(
@@ -183,7 +183,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         {
             using var context = CreateContext(CreateContextOptions());
             var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-            var repo = new ConversationRepository(context, unitOfWork);
+            var repo = new ConversationWriteRepository(context, unitOfWork);
 
             var conversation = await repo.GetByIdAsync(conv3.Id);
             var result = conversation!.AppendUserMessageToConversation(
@@ -219,7 +219,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.UpdateTitle("Title from User 1", _timeProvider),
             conv2 => conv2.UpdateTitle("Title from User 2", _timeProvider)
@@ -240,7 +240,7 @@ public class ChatConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.Complete(_timeProvider),
             conv2 => conv2.Complete(_timeProvider)

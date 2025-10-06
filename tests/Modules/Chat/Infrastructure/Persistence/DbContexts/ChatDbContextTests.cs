@@ -94,7 +94,7 @@ public class ChatDbContextTests : ChatPersistenceTestBase
 
         // Assert: Timestamps should match TimeProvider time
         var saved = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         saved.ShouldNotBeNull();
 
         saved.CreatedAt.ShouldBe(testTime);
@@ -105,12 +105,12 @@ public class ChatDbContextTests : ChatPersistenceTestBase
         TimeProvider.SetUtcNow(updateTime);
 
         saved.UpdateTitle("Updated Title", TimeProvider);
-        await ConversationRepository.UpdateAsync(saved);
+        await ConversationWriteRepository.UpdateAsync(saved);
         await UnitOfWork.SaveChangesAsync();
 
         // Reload and verify
         var updated = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         updated.ShouldNotBeNull();
 
         updated.CreatedAt.ShouldBe(testTime, "CreatedAt should not change");
@@ -133,7 +133,7 @@ public class ChatDbContextTests : ChatPersistenceTestBase
 
         // Assert: Message timestamps should match TimeProvider
         var saved = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         saved.ShouldNotBeNull();
 
         var message = saved.GetAllMessages().First();
@@ -222,7 +222,7 @@ public class ChatDbContextTests : ChatPersistenceTestBase
         await SaveConversationAsync(conversation);
 
         var loaded = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         // Assert: All strong IDs properly converted and restored
         loaded.ShouldNotBeNull();
@@ -259,7 +259,7 @@ public class ChatDbContextTests : ChatPersistenceTestBase
         await SaveConversationAsync(conversation);
 
         var loaded = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
 
         // Assert: Content preserved exactly
         loaded.ShouldNotBeNull();
@@ -312,13 +312,13 @@ public class ChatDbContextTests : ChatPersistenceTestBase
         await SaveConversationAsync(conversation);
 
         // Act: Soft delete using domain method
-        var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
         // Use the domain method for soft delete
         loaded.SoftDelete();
 
-        await ConversationRepository.UpdateAsync(loaded);
+        await ConversationWriteRepository.UpdateAsync(loaded);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: Record still exists but marked as deleted

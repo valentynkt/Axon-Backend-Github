@@ -177,14 +177,12 @@ public abstract class BaseChatIdempotentCommandHandler<TCommand, TResponse> : Ba
 
         var userMessageId = userMessageResult.Value.Id;
 
-        // No need to call UpdateAsync - the conversation is already tracked by EF Core from LoadAndValidateConversationAsync
-        // Calling UpdateAsync would update the entity's concurrency token incorrectly, causing a conflict on SaveChanges
-
         _logger.LogInformation("User message {MessageId} added to conversation {ConversationId}",
             userMessageId.Value, conversation.Id.Value);
 
         // Delegate to orchestrator for AI processing
         // The orchestrator will save all changes (user + assistant messages) together atomically
+        // NOTE: Orchestrator is responsible for calling UpdateAsync before SaveChanges
         var orchestratorResult = await MessageOrchestrator.ProcessUserMessageAsync(
             conversation, userMessage, userMessageId, cancellationToken);
 

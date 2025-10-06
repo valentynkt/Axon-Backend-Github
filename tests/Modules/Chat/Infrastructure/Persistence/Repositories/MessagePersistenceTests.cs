@@ -119,7 +119,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
 
         // Assert: Sequences are correct
         var saved = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         saved.ShouldNotBeNull();
 
         var messages = saved.GetAllMessages();
@@ -141,7 +141,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
 
         // Act: Load, add more messages, save again
         var loaded = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         loaded.ShouldNotBeNull();
 
         var initialCount = loaded.GetMessageCount();
@@ -157,12 +157,12 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
             loaded.AppendAssistantResponseToConversation(assistantContent, aiResponseId, TimeProvider);
         }
 
-        await ConversationRepository.UpdateAsync(loaded);
+        await ConversationWriteRepository.UpdateAsync(loaded);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: All sequences remain consecutive
         var final = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         final.ShouldNotBeNull();
 
         var allMessages = final.GetAllMessages();
@@ -197,7 +197,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
 
         // Assert: Content saved correctly
         var saved = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         saved.ShouldNotBeNull();
 
         var message = saved.GetAllMessages().First();
@@ -232,18 +232,18 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         await SaveConversationAsync(conversation);
 
         // Act: Soft delete a message using domain method
-        var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
         var messageToDelete = loaded.GetAllMessages().First();
         messageToDelete.SoftDelete();
 
-        await ConversationRepository.UpdateAsync(loaded);
+        await ConversationWriteRepository.UpdateAsync(loaded);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: Message still exists in database but marked as deleted
         var reloaded = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         reloaded.ShouldNotBeNull();
 
         // Domain might filter out soft-deleted messages
@@ -285,7 +285,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
 
         // Assert: Roles alternate correctly
         var saved = await QueryFreshAsync(() =>
-            ConversationRepository.GetByIdAsync(conversation.Id));
+            ConversationWriteRepository.GetByIdAsync(conversation.Id));
         saved.ShouldNotBeNull();
 
         var messages = saved.GetAllMessages();
@@ -330,7 +330,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         await SaveConversationAsync(conversation);
 
         // Act: Query specific messages by sequence
-        var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
         var message3 = loaded.GetMessageBySequence(3);
@@ -360,7 +360,7 @@ public class MessagePersistenceTests : ChatPersistenceTestBase
         await SaveConversationAsync(conversation);
 
         // Act: Get last 3 messages
-        var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loaded.ShouldNotBeNull();
 
         var recentMessages = loaded.GetRecentMessages(3);

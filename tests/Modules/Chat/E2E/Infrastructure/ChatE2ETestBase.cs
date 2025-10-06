@@ -663,7 +663,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             chatDb?.ChangeTracker.Clear();
 
             // CRITICAL FIX: Also clear Chat Read DbContext
-            // GetByIdAsync in ConversationRepository can track entities even from read context
+            // GetByIdAsync in ConversationWriteRepository can track entities even from read context
             var chatReadDb = scope.ServiceProvider.GetService<ChatDbContext>();
             chatReadDb?.ChangeTracker.Clear();
 

@@ -10,14 +10,15 @@ using Microsoft.EntityFrameworkCore;
 namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// Repository implementation for wallet ownership read-only operations supporting deterministic principal resolution.
+/// Read repository for wallet ownership queries supporting deterministic principal resolution.
 /// All ownership modifications must go through the AxonPrincipal aggregate root to maintain DDD boundaries.
+/// Uses AsNoTracking for optimal read performance.
 /// </summary>
-public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
+public sealed class WalletOwnershipReadRepository : IWalletOwnershipRepository
 {
     private readonly IIdentityDbContext _readContext;
 
-    public WalletOwnershipRepository(IIdentityDbContext readContext)
+    public WalletOwnershipReadRepository(IIdentityDbContext readContext)
     {
         _readContext = readContext;
     }

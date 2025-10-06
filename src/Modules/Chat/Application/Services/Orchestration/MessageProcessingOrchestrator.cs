@@ -105,7 +105,9 @@ public sealed partial class MessageProcessingOrchestrator : IMessageProcessingOr
 
             // Step 4: Persist changes
             // No need to call UpdateAsync - the conversation is already tracked by EF Core
-            // Calling UpdateAsync would update the entity's concurrency token incorrectly
+            // - NEW conversations are tracked from AddAsync
+            // - EXISTING conversations are tracked from GetByIdAsync (write repository uses tracking)
+            // EF Core's change tracking automatically detects modifications to tracked entities
             _logger.LogDebug("About to save conversation {ConversationId}. Version before save: {Version}",
                 conversation.Id.Value, conversation.Version);
             await _repository.UnitOfWork.SaveChangesAsync(cancellationToken);

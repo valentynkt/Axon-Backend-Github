@@ -87,7 +87,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.Complete(_timeProvider),
             conv2 => conv2.Complete(_timeProvider)
@@ -99,7 +99,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         // Verify conversation is completed
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -118,7 +118,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.Complete(_timeProvider),
             conv2 =>
@@ -148,7 +148,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.UpdateTitle("Admin: Better Title", _timeProvider),
             conv2 =>
@@ -165,7 +165,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         // Verify only one change was applied
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -189,7 +189,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.UpdateTitle("Admin 1: Technical Discussion", _timeProvider),
             conv2 => conv2.UpdateTitle("Admin 2: Customer Support", _timeProvider)
@@ -201,7 +201,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         // Verify first title was applied
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -224,7 +224,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -258,7 +258,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         {
             using var context = CreateContext(CreateContextOptions());
             using var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-            using var repo = new ConversationRepository(context, unitOfWork);
+            using var repo = new ConversationWriteRepository(context, unitOfWork);
 
             try
             {
@@ -281,7 +281,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         {
             using var context = CreateContext(CreateContextOptions());
             using var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-            using var repo = new ConversationRepository(context, unitOfWork);
+            using var repo = new ConversationWriteRepository(context, unitOfWork);
 
             try
             {
@@ -306,7 +306,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
             await Task.Delay(10); // Small delay to ensure different timing
             using var context = CreateContext(CreateContextOptions());
             using var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-            using var repo = new ConversationRepository(context, unitOfWork);
+            using var repo = new ConversationWriteRepository(context, unitOfWork);
 
             try
             {
@@ -340,7 +340,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         // Verify final state integrity
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var finalState = await verifyRepo.GetByIdAsync(conversationId);
         finalState.ShouldNotBeNull();
@@ -367,7 +367,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         conversationResult.IsSuccess.ShouldBeTrue();
 
         var conversation = conversationResult.Value;
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.AddAsync(conversation);
         await _setupContext.SaveChangesAsync();
 
@@ -382,7 +382,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         var result = conversation.AppendUserMessageToConversation(content, _timeProvider);
         result.IsSuccess.ShouldBeTrue();
 
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.UpdateAsync(conversation);
         await _setupContext.SaveChangesAsync();
 
@@ -408,7 +408,7 @@ public class StateTransitionConcurrencyTests : ConcurrencyTestBase<ChatDbContext
         var responseId2 = new AiResponseId(Guid.NewGuid().ToString());
         conversation.AppendAssistantResponseToConversation(assistantContent2, responseId2, _timeProvider);
 
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.UpdateAsync(conversation);
         await _setupContext.SaveChangesAsync();
 

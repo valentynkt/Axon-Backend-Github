@@ -90,7 +90,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -110,7 +110,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Verify sequence integrity is maintained
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -143,7 +143,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -175,7 +175,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Verify only one AI response was added (idempotency achieved via DB constraint)
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -197,7 +197,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -219,7 +219,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Verify only one response was added
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -249,7 +249,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             {
                 using var context = CreateContext(CreateContextOptions());
                 using var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                using var repo = new ConversationRepository(context, unitOfWork);
+                using var repo = new ConversationWriteRepository(context, unitOfWork);
 
                 try
                 {
@@ -297,7 +297,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Verify sequence integrity
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversationId);
         updated.ShouldNotBeNull();
@@ -327,7 +327,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.Complete(_timeProvider),
             conv2 =>
@@ -343,7 +343,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Verify final state
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
 
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
@@ -363,7 +363,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         conversationResult.IsSuccess.ShouldBeTrue();
 
         var conversation = conversationResult.Value;
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.AddAsync(conversation);
         await _setupContext.SaveChangesAsync();
 
@@ -378,7 +378,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         var result = conversation.AppendUserMessageToConversation(content, _timeProvider);
         result.IsSuccess.ShouldBeTrue();
 
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.UpdateAsync(conversation);
         await _setupContext.SaveChangesAsync();
 
@@ -396,7 +396,7 @@ public class MessageAppendConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             assistantContent, responseId, _timeProvider);
         assistantResult.IsSuccess.ShouldBeTrue();
 
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.UpdateAsync(conversation);
         await _setupContext.SaveChangesAsync();
 

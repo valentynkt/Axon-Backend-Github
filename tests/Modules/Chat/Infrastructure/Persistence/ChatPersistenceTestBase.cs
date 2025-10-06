@@ -34,7 +34,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
 {
     protected ChatDbContext DbContext { get; set; } = null!;
     protected ChatDbContext ReadDbContext { get; set; } = null!;
-    protected IConversationRepository ConversationRepository { get; set; } = null!;
+    protected IConversationRepository ConversationWriteRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
     protected ITestDataVerificationRepository VerificationRepository { get; set; } = null!;
@@ -60,7 +60,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatDbContext(readOptions, TimeProvider);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
-        ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
+        ConversationWriteRepository = new ConversationWriteRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
         VerificationRepository = new TestDataVerificationRepository(ReadDbContext, DbContext);
@@ -90,7 +90,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
 
             // Ensure resources are cleaned up even if child cleanup fails
             UnitOfWork?.Dispose();
-            ConversationRepository?.Dispose();
+            ConversationWriteRepository?.Dispose();
             await DbContext.DisposeAsync();
             await ReadDbContext.DisposeAsync();
         }
@@ -217,7 +217,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
     /// </summary>
     protected async Task<Conversation> SaveConversationAsync(Conversation conversation)
     {
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
         return conversation;
     }
@@ -281,7 +281,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
     protected async Task AssertConversationCompletelyLoadedAsync(ConversationId conversationId)
     {
         DbContext.ChangeTracker.Clear();
-        var conversation = await ConversationRepository.GetByIdAsync(conversationId);
+        var conversation = await ConversationWriteRepository.GetByIdAsync(conversationId);
 
         conversation.ShouldNotBeNull();
         conversation.GetAllMessages().ShouldNotBeNull();
@@ -389,7 +389,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
     {
         // Dispose existing contexts and repositories
         UnitOfWork?.Dispose();
-        ConversationRepository?.Dispose();
+        ConversationWriteRepository?.Dispose();
         DbContext?.Dispose();
         ReadDbContext?.Dispose();
 
@@ -406,7 +406,7 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatDbContext(readOptions, TimeProvider);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
-        ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
+        ConversationWriteRepository = new ConversationWriteRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
     }

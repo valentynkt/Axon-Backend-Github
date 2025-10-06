@@ -81,7 +81,7 @@ public static class ServiceRegistration
         });
 
         // Register Repository and DbContext interfaces
-        services.AddScoped<IConversationRepository, ConversationRepository>();
+        services.AddScoped<IConversationRepository, ConversationWriteRepository>();
         services.AddScoped<IConversationReadRepository, ConversationReadRepository>();
         services.AddScoped<IMessageReadRepository, MessageReadRepository>();
         services.AddScoped<IChatDbContext>(provider => provider.GetRequiredService<ChatDbContext>());

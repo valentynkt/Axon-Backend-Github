@@ -28,8 +28,8 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         var conv2 = TestDataFixtures.CreateConversationWithUserMessage(timeProvider: TimeProvider);
 
         // Act: Save both conversations (both have message with sequence 1)
-        await ConversationRepository.AddAsync(conv1);
-        await ConversationRepository.AddAsync(conv2);
+        await ConversationWriteRepository.AddAsync(conv1);
+        await ConversationWriteRepository.AddAsync(conv2);
 
         // Assert: Should succeed (same sequence allowed in different conversations)
         await UnitOfWork.SaveChangesAsync(); // Should not throw
@@ -48,7 +48,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
             aiResponseId: aiResponseId,
             timeProvider: TimeProvider);
 
-        await ConversationRepository.AddAsync(conv1);
+        await ConversationWriteRepository.AddAsync(conv1);
         await UnitOfWork.SaveChangesAsync();
 
         // Act: Try to create second conversation with same AI response ID
@@ -56,7 +56,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
         var content = MessageContent.From("Different response");
         conv2.AppendAssistantResponseToConversation(content, aiResponseId, TimeProvider);
 
-        await ConversationRepository.AddAsync(conv2);
+        await ConversationWriteRepository.AddAsync(conv2);
 
         // Assert: Should violate unique constraint on ai_response_id
         await AssertPostgreSQLConstraintViolation(
@@ -74,7 +74,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
             aiResponseId: aiResponseId,
             timeProvider: TimeProvider);
 
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Act: Simulate retry with same AI response ID (idempotent operation)
@@ -106,7 +106,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
             exchangeCount: 3,
             timeProvider: TimeProvider);
 
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Verify messages exist
@@ -132,7 +132,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
     {
         // Arrange: Create conversation
         var conversation = TestDataFixtures.CreateBasicConversation(timeProvider: TimeProvider);
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Get initial version
@@ -140,14 +140,14 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
 
         // Act: Add a message to the conversation
         // NOTE: Don't clear ChangeTracker - it needs to track original xmin value for concurrency
-        var loadedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loadedConversation = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loadedConversation.ShouldNotBeNull();
 
         var content = MessageContent.From("New message");
         var result = loadedConversation.AppendUserMessageToConversation(content, TimeProvider);
         result.IsSuccess.ShouldBeTrue();
 
-        await ConversationRepository.UpdateAsync(loadedConversation);
+        await ConversationWriteRepository.UpdateAsync(loadedConversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: Version should have changed
@@ -160,7 +160,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
     {
         // Arrange: Create conversation
         var conversation = TestDataFixtures.CreateBasicConversation(timeProvider: TimeProvider);
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Get initial version
@@ -168,13 +168,13 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
 
         // Act: Update title
         // NOTE: Don't clear ChangeTracker - it needs to track original xmin value for concurrency
-        var loadedConversation = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var loadedConversation = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         loadedConversation.ShouldNotBeNull();
 
         var titleResult = loadedConversation.UpdateTitle("New Title", TimeProvider);
         titleResult.IsSuccess.ShouldBeTrue();
 
-        await ConversationRepository.UpdateAsync(loadedConversation);
+        await ConversationWriteRepository.UpdateAsync(loadedConversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Assert: Version should have changed
@@ -194,7 +194,7 @@ public class ChatDbInvariantsTests : ChatDbInvariantsTestBase
             exchangeCount: 5,
             timeProvider: TimeProvider);
 
-        await ConversationRepository.AddAsync(conversation);
+        await ConversationWriteRepository.AddAsync(conversation);
         await UnitOfWork.SaveChangesAsync();
 
         // Act & Assert: Verify sequence integrity

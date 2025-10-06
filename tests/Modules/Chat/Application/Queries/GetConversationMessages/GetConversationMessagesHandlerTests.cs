@@ -30,7 +30,7 @@ namespace Axon.Modules.Chat.Application.Tests.Queries.GetConversationMessages;
 public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConversationMessagesQuery, Paged<ConversationMessageItem>, GetConversationMessagesHandler>
 {
     // Dependencies
-    private IConversationReadRepository _mockConversationRepository = null!;
+    private IConversationReadRepository _mockConversationWriteRepository = null!;
     private IMessageReadRepository _mockMessageRepository = null!;
 
     // Test data
@@ -44,14 +44,14 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     protected override GetConversationMessagesHandler CreateHandler()
     {
         return new GetConversationMessagesHandler(
-            _mockConversationRepository,
+            _mockConversationWriteRepository,
             _mockMessageRepository,
             MockCurrentUserService);
     }
 
     protected override void ConfigureHandlerDependencies()
     {
-        _mockConversationRepository = Substitute.For<IConversationReadRepository>();
+        _mockConversationWriteRepository = Substitute.For<IConversationReadRepository>();
         _mockMessageRepository = Substitute.For<IMessageReadRepository>();
 
         // Setup test data
@@ -75,7 +75,7 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     private void ConfigureDefaultMocks()
     {
         // Default conversation ownership - user owns conversation
-        _mockConversationRepository.AnyAsync(Arg.Any<ISpecification<Conversation>>(), Arg.Any<CancellationToken>())
+        _mockConversationWriteRepository.AnyAsync(Arg.Any<ISpecification<Conversation>>(), Arg.Any<CancellationToken>())
             .Returns(true);
             
         // Default message repository - returns paginated messages
@@ -92,11 +92,11 @@ public class GetConversationMessagesHandlerTests : QueryHandlerTestBase<GetConve
     private void ResetMocks()
     {
         // Clear received calls but keep substitutes
-        _mockConversationRepository.ClearReceivedCalls();
+        _mockConversationWriteRepository.ClearReceivedCalls();
         _mockMessageRepository.ClearReceivedCalls();
         
         // Recreate mocks to ensure clean state
-        _mockConversationRepository = Substitute.For<IConversationReadRepository>();
+        _mockConversationWriteRepository = Substitute.For<IConversationReadRepository>();
         _mockMessageRepository = Substitute.For<IMessageReadRepository>();
         
         ConfigureDefaultMocks();

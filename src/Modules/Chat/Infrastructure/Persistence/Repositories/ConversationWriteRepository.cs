@@ -11,12 +11,17 @@ using Axon.Modules.Chat.Domain.Entities;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 
-public sealed class ConversationRepository : EfWriteRepository<Conversation, ConversationId>, IConversationRepository
+/// <summary>
+/// Write repository for Conversation aggregate.
+/// Handles create, update, delete operations with change tracking.
+/// For read-only queries, use IConversationReadRepository.
+/// </summary>
+public sealed class ConversationWriteRepository : EfWriteRepository<Conversation, ConversationId>, IConversationRepository
 {
     private readonly IWriteUnitOfWork<ChatModule> _unitOfWork;
     private readonly ChatDbContext _chatDbContext;
 
-    public ConversationRepository(ChatDbContext context, IWriteUnitOfWork<ChatModule> unitOfWork) : base(context)
+    public ConversationWriteRepository(ChatDbContext context, IWriteUnitOfWork<ChatModule> unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
         _chatDbContext = context;

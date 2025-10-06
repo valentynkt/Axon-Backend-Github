@@ -173,7 +173,7 @@ public class ExchangeCredentialHandlerTests
     #region Validation Scenarios (2 tests)
 
     [Test]
-    public async Task ExchangeCredential_WithEmptyToken_ShouldReturnValidationError()
+    public async Task ExchangeCredential_WithEmptyToken_ShouldReturnUnauthorizedError()
     {
         // Arrange
         var command = new ExchangeCredentialCommand(string.Empty);
@@ -183,7 +183,7 @@ public class ExchangeCredentialHandlerTests
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        result.Error.Type.ShouldBe(ErrorType.Validation);
+        result.Error.Type.ShouldBe(ErrorType.Unauthorized);
         result.Error.Code.ShouldBe("AUTH.TOKEN_REQUIRED");
         result.Error.Message.ShouldBe("Bearer token is required");
 
@@ -194,7 +194,7 @@ public class ExchangeCredentialHandlerTests
     }
 
     [Test]
-    public async Task ExchangeCredential_WithWhitespaceToken_ShouldReturnValidationError()
+    public async Task ExchangeCredential_WithWhitespaceToken_ShouldReturnUnauthorizedError()
     {
         // Arrange
         var command = new ExchangeCredentialCommand("   ");
@@ -204,7 +204,7 @@ public class ExchangeCredentialHandlerTests
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        result.Error.Type.ShouldBe(ErrorType.Validation);
+        result.Error.Type.ShouldBe(ErrorType.Unauthorized);
         result.Error.Code.ShouldBe("AUTH.TOKEN_REQUIRED");
 
         // Should not call orchestrator

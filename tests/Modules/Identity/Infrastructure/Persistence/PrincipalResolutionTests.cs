@@ -34,7 +34,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
 {
     private PrincipalResolutionService _resolutionService = null!;
     private WalletReadRepository _walletReadRepository = null!;
-    private WalletOwnershipRepository _walletOwnershipRepository = null!;
+    private WalletOwnershipReadRepository _walletOwnershipRepository = null!;
     private AxonPrincipalReadRepository _principalReadRepository = null!;
     private IAutoRevocationService _autoRevocationService = null!;
     private ILogger<PrincipalResolutionService> _logger = null!;
@@ -54,7 +54,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
         _readContext = new IdentityDbContext(readOptions);
 
         _walletReadRepository = new WalletReadRepository(_readContext);
-        _walletOwnershipRepository = new WalletOwnershipRepository(_readContext);
+        _walletOwnershipRepository = new WalletOwnershipReadRepository(_readContext);
         _principalReadRepository = new AxonPrincipalReadRepository(_readContext);
         _autoRevocationService = Substitute.For<IAutoRevocationService>();
         _logger = Substitute.For<ILogger<PrincipalResolutionService>>();
@@ -286,7 +286,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
 
             var localWalletReadRepository = new WalletReadRepository(localReadContext);
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
-            var localWalletOwnershipRepository = new WalletOwnershipRepository(localReadContext);
+            var localWalletOwnershipRepository = new WalletOwnershipReadRepository(localReadContext);
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
             using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork, TimeProvider.System);
             var localAutoRevocationService = Substitute.For<IAutoRevocationService>();
@@ -406,7 +406,7 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
 
             var localWalletReadRepository = new WalletReadRepository(localReadContext);
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
-            var localWalletOwnershipRepository = new WalletOwnershipRepository(localReadContext);
+            var localWalletOwnershipRepository = new WalletOwnershipReadRepository(localReadContext);
             var localPrincipalReadRepository = new AxonPrincipalReadRepository(localReadContext);
             using var localPrincipalWriteRepository = new AxonPrincipalWriteRepository(localWriteContext, localUnitOfWork, TimeProvider.System);
 

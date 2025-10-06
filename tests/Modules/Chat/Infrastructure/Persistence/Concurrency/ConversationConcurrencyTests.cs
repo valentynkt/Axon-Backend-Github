@@ -93,7 +93,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.UpdateTitle("Title from User 1", _timeProvider),
             conv2 => conv2.UpdateTitle("Title from User 2", _timeProvider)
@@ -104,7 +104,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Verify the first update was persisted
         using var verifyContext = CreateContext(CreateContextOptions());
         using var verifyUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(verifyContext);
-        using var verifyRepo = new ConversationRepository(verifyContext, verifyUnitOfWork);
+        using var verifyRepo = new ConversationWriteRepository(verifyContext, verifyUnitOfWork);
         var updated = await verifyRepo.GetByIdAsync(conversation.Id);
         updated.ShouldNotBeNull();
         updated.Title?.ShouldBe("Title from User 1");
@@ -122,7 +122,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -151,7 +151,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.UpdateTitle("Admin Updated Title", _timeProvider),
             conv2 =>
@@ -176,7 +176,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.Complete(_timeProvider),
             conv2 => conv2.UpdateTitle("User still editing", _timeProvider)
@@ -197,7 +197,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 =>
             {
@@ -228,7 +228,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
             context =>
             {
                 var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-                return new ConversationRepository(context, unitOfWork);
+                return new ConversationWriteRepository(context, unitOfWork);
             },
             conv1 => conv1.UpdateTitle("Detached Update 1", _timeProvider),
             conv2 => conv2.UpdateTitle("Detached Update 2", _timeProvider)
@@ -251,7 +251,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Act - Simulate rapid-fire messages from same user (should succeed sequentially)
         using var context = CreateContext(CreateContextOptions());
         using var unitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(context);
-        using var repo = new ConversationRepository(context, unitOfWork);
+        using var repo = new ConversationWriteRepository(context, unitOfWork);
 
         var loaded = await repo.GetByIdAsync(conversationId);
         loaded.ShouldNotBeNull();
@@ -296,7 +296,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
 
         using var staleContext = CreateContext(CreateContextOptions());
         using var staleUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(staleContext);
-        using var staleRepo = new ConversationRepository(staleContext, staleUnitOfWork);
+        using var staleRepo = new ConversationWriteRepository(staleContext, staleUnitOfWork);
 
         await staleRepo.UpdateAsync(staleConversation);
 
@@ -329,7 +329,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
 
         var conversation = conversationResult.Value;
         // Use the existing unitOfWork and don't dispose it here
-        using var repository = new ConversationRepository(_setupContext, _unitOfWork);
+        using var repository = new ConversationWriteRepository(_setupContext, _unitOfWork);
         await repository.AddAsync(conversation);
         await _setupContext.SaveChangesAsync();
 
@@ -346,7 +346,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         result.IsSuccess.ShouldBeTrue();
 
         // Use the existing unitOfWork and don't dispose it here
-        using (var repository = new ConversationRepository(_setupContext, _unitOfWork))
+        using (var repository = new ConversationWriteRepository(_setupContext, _unitOfWork))
         {
             await repository.UpdateAsync(conversation);
             await _setupContext.SaveChangesAsync();
@@ -367,7 +367,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         assistantResult.IsSuccess.ShouldBeTrue();
 
         // Use the existing unitOfWork and don't dispose it here
-        using (var repository = new ConversationRepository(_setupContext, _unitOfWork))
+        using (var repository = new ConversationWriteRepository(_setupContext, _unitOfWork))
         {
             await repository.UpdateAsync(conversation);
             await _setupContext.SaveChangesAsync();
@@ -403,7 +403,7 @@ public class ConversationConcurrencyTests : ConcurrencyTestBase<ChatDbContext>
         // Load conversation in a temporary context and immediately detach
         using var tempContext = CreateContext(CreateContextOptions());
         using var tempUnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(tempContext);
-        using var tempRepo = new ConversationRepository(tempContext, tempUnitOfWork);
+        using var tempRepo = new ConversationWriteRepository(tempContext, tempUnitOfWork);
 
         var loaded = await tempRepo.GetByIdAsync(id);
         loaded.ShouldNotBeNull();

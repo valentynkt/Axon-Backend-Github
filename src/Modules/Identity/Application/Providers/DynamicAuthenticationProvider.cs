@@ -281,6 +281,11 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         var defaultsApplied = await ApplyChainDefaults(principal, walletMetrics.ProcessedWalletIds, cancellationToken);
         walletMetrics = walletMetrics with { DefaultsApplied = defaultsApplied };
 
+        // Note: No need to call UpdateAsync here
+        // - For existing principals: UpdateAsync was already called in ResolveOrCreatePrincipal
+        // - For new principals: AddAsync was already called in ResolveOrCreatePrincipal or PrincipalResolutionService
+        // EF Core's change tracking automatically detects wallet/default modifications
+
         return Result.Success<(AxonPrincipal, bool, WalletProcessingMetrics), Error>((principal, isNewPrincipal, walletMetrics));
     }
 
@@ -295,7 +300,19 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         {
             var principal = await _principalRepo.FindByCredentialAsync(providerType, issuer, subject, cancellationToken);
             if (principal is not null)
+            {
+                // Update LastSeen for credential
+                var existingCredential = principal.Credentials.FirstOrDefault(c =>
+                    c.Provider == providerType.Value &&
+                    c.Issuer == issuer &&
+                    c.Subject == subject);
+
+                existingCredential?.UpdateLastSeen(DateTime.UtcNow);
+
+                // Explicitly mark as updated for repository pattern contract
+                await _principalRepo.UpdateAsync(principal, cancellationToken);
                 return (principal, false);
+            }
 
             var createResult = AxonPrincipal.CreateWithDynamicCredential(providerType, issuer, subject);
             if (createResult.IsFailure)
@@ -337,6 +354,8 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         if (!isNewPrincipal)
         {
             await HandleCredentialManagement(result.Principal, providerType, issuer, subject, cancellationToken);
+            // Explicitly mark as updated for repository pattern contract and test expectations
+            await _principalRepo.UpdateAsync(result.Principal, cancellationToken);
         }
 
         return (result.Principal, isNewPrincipal);

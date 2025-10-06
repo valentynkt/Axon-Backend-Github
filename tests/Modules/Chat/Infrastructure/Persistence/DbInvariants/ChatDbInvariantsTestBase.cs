@@ -27,7 +27,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
 {
     protected ChatDbContext DbContext { get; set; } = null!;
     protected ChatDbContext ReadDbContext { get; set; } = null!;
-    protected IConversationRepository ConversationRepository { get; set; } = null!;
+    protected IConversationRepository ConversationWriteRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
     protected ITestDataVerificationRepository VerificationRepository { get; set; } = null!;
@@ -80,7 +80,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
         ReadDbContext = new ChatDbContext(readOptions, TimeProvider);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
-        ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
+        ConversationWriteRepository = new ConversationWriteRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
         MessageReadRepository = new MessageReadRepository(ReadDbContext);
         VerificationRepository = new TestDataVerificationRepository(ReadDbContext, DbContext);
@@ -106,7 +106,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
             await CleanupDatabaseAsync();
 
             UnitOfWork?.Dispose();
-            ConversationRepository?.Dispose();
+            ConversationWriteRepository?.Dispose();
             await DbContext.DisposeAsync();
             await ReadDbContext.DisposeAsync();
         }

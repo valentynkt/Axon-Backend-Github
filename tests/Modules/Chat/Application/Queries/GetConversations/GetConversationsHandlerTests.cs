@@ -29,7 +29,7 @@ namespace Axon.Modules.Chat.Application.Tests.Queries.GetConversations;
 public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversationsQuery, Paged<ConversationListItem>, GetConversationsHandler>
 {
     // Dependencies
-    private IConversationReadRepository _mockConversationRepository = null!;
+    private IConversationReadRepository _mockConversationWriteRepository = null!;
 
     // Test data
     private AxonUserId _testAxonUserId;
@@ -41,13 +41,13 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     protected override GetConversationsHandler CreateHandler()
     {
         return new GetConversationsHandler(
-            _mockConversationRepository,
+            _mockConversationWriteRepository,
             MockCurrentUserService);
     }
 
     protected override void ConfigureHandlerDependencies()
     {
-        _mockConversationRepository = Substitute.For<IConversationReadRepository>();
+        _mockConversationWriteRepository = Substitute.For<IConversationReadRepository>();
 
         // Setup test data
         _testAxonUserId = AxonUserId.New();
@@ -69,10 +69,10 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     private void ConfigureDefaultMocks()
     {
         // Default conversation repository - returns paginated conversations
-        _mockConversationRepository.ListAsync(Arg.Any<ISpecification<Conversation, ConversationListItem>>(), Arg.Any<CancellationToken>())
+        _mockConversationWriteRepository.ListAsync(Arg.Any<ISpecification<Conversation, ConversationListItem>>(), Arg.Any<CancellationToken>())
             .Returns(callInfo => GetPaginatedConversations());
             
-        _mockConversationRepository.CountAsync(Arg.Any<ISpecification<Conversation>>(), Arg.Any<CancellationToken>())
+        _mockConversationWriteRepository.CountAsync(Arg.Any<ISpecification<Conversation>>(), Arg.Any<CancellationToken>())
             .Returns(_testConversations.Count);
     }
     
@@ -95,10 +95,10 @@ public class GetConversationsHandlerTests : QueryHandlerTestBase<GetConversation
     private void ResetMocks()
     {
         // Clear received calls but keep substitutes
-        _mockConversationRepository.ClearReceivedCalls();
+        _mockConversationWriteRepository.ClearReceivedCalls();
         
         // Recreate mocks to ensure clean state
-        _mockConversationRepository = Substitute.For<IConversationReadRepository>();
+        _mockConversationWriteRepository = Substitute.For<IConversationReadRepository>();
         
         ConfigureDefaultMocks();
     }

@@ -49,7 +49,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         try
         {
             // Load conversation in transaction
-            var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+            var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
             loaded.ShouldNotBeNull();
 
             // Add first message - should succeed locally
@@ -64,7 +64,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
             result2.IsSuccess.ShouldBeTrue();
 
             // Update and save changes
-            await ConversationRepository.UpdateAsync(loaded);
+            await ConversationWriteRepository.UpdateAsync(loaded);
             await UnitOfWork.SaveChangesAsync();
 
             // Simulate failure by forcing a constraint violation
@@ -82,7 +82,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         // Assert: Verify no changes were persisted
         ClearChangeTracker();
-        var afterRollback = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var afterRollback = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         afterRollback.ShouldNotBeNull();
 
         var finalSnapshot = _snapshotTool.CaptureConversation(afterRollback);
@@ -110,7 +110,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         try
         {
-            var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+            var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
             loaded.ShouldNotBeNull();
 
             // Change 1: Update title
@@ -129,7 +129,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
             aiResult.IsSuccess.ShouldBeTrue();
 
             // Save changes
-            await ConversationRepository.UpdateAsync(loaded);
+            await ConversationWriteRepository.UpdateAsync(loaded);
             await UnitOfWork.SaveChangesAsync();
 
             // Simulate business rule violation that requires rollback
@@ -142,7 +142,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         // Assert: All changes rolled back atomically
         ClearChangeTracker();
-        var afterRollback = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var afterRollback = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         afterRollback.ShouldNotBeNull();
 
         afterRollback.Title.ShouldBe(initialTitle, "Title should be restored");
@@ -168,11 +168,11 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         try
         {
             // Outer transaction operation
-            var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+            var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
             loaded.ShouldNotBeNull();
 
             loaded.UpdateTitle("Outer Transaction Title", TimeProvider);
-            await ConversationRepository.UpdateAsync(loaded);
+            await ConversationWriteRepository.UpdateAsync(loaded);
             await UnitOfWork.SaveChangesAsync();
 
             // Create savepoint for inner transaction
@@ -184,7 +184,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                 var userContent = MessageContent.From("Inner transaction message");
                 loaded.AppendUserMessageToConversation(userContent, TimeProvider);
 
-                await ConversationRepository.UpdateAsync(loaded);
+                await ConversationWriteRepository.UpdateAsync(loaded);
                 await UnitOfWork.SaveChangesAsync();
 
                 // Force inner failure
@@ -204,7 +204,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         // Assert: Everything rolled back
         ClearChangeTracker();
-        var final = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var final = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         final.ShouldNotBeNull();
 
         final.Title.ShouldNotBe("Outer Transaction Title");
@@ -309,7 +309,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         // Verify final state - one of the title updates should have persisted
         ClearChangeTracker();
-        var final = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var final = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         final.ShouldNotBeNull();
         (final.Title?.Contains("Transaction") ?? false).ShouldBeTrue("One transaction's title update should have succeeded");
     }
@@ -332,7 +332,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         {
             using var transaction = await DbContext.Database.BeginTransactionAsync();
 
-            var loaded = await ConversationRepository.GetByIdAsync(conversation.Id);
+            var loaded = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
             loaded.ShouldNotBeNull();
 
             // Step 1: Add messages (succeeds)
@@ -351,7 +351,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                 }
             }
 
-            await ConversationRepository.UpdateAsync(loaded);
+            await ConversationWriteRepository.UpdateAsync(loaded);
             await UnitOfWork.SaveChangesAsync();
 
             // Step 2: Try to complete (will fail due to business rules if we break them)
@@ -365,7 +365,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
                 throw new InvalidOperationException("Operation failed - rollback required");
             }
 
-            await ConversationRepository.UpdateAsync(loaded);
+            await ConversationWriteRepository.UpdateAsync(loaded);
             await UnitOfWork.SaveChangesAsync();
 
             await transaction.CommitAsync();
@@ -380,7 +380,7 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
         operationCompleted.ShouldBeFalse("Operation should have failed");
 
         ClearChangeTracker();
-        var final = await ConversationRepository.GetByIdAsync(conversation.Id);
+        var final = await ConversationWriteRepository.GetByIdAsync(conversation.Id);
         final.ShouldNotBeNull();
         final.GetMessageCount().ShouldBe(0, "No messages should be persisted after failed transaction");
     }
@@ -503,8 +503,8 @@ public class TransactionRollbackTests : ChatPersistenceTestBase
 
         // Verify data integrity maintained
         ClearChangeTracker();
-        var finalConv1 = await ConversationRepository.GetByIdAsync(conv1.Id);
-        var finalConv2 = await ConversationRepository.GetByIdAsync(conv2.Id);
+        var finalConv1 = await ConversationWriteRepository.GetByIdAsync(conv1.Id);
+        var finalConv2 = await ConversationWriteRepository.GetByIdAsync(conv2.Id);
 
         finalConv1.ShouldNotBeNull();
         finalConv2.ShouldNotBeNull();
