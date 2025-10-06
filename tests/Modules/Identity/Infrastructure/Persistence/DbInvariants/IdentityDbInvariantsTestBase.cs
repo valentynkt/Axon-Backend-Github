@@ -29,10 +29,10 @@ namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.DbInvariants;
 /// </summary>
 public abstract class IdentityDbInvariantsTestBase
 {
-    protected IdentityWriteDbContext DbContext { get; set; } = null!;
+    protected IdentityDbContext DbContext { get; set; } = null!;
     protected AxonPrincipalWriteRepository PrincipalRepository { get; set; } = null!;
     protected WalletWriteRepository WalletRepository { get; set; } = null!;
-    protected EfUnitOfWork<IdentityWriteDbContext, IdentityModule> UnitOfWork { get; set; } = null!;
+    protected EfUnitOfWork<IdentityDbContext, IdentityModule> UnitOfWork { get; set; } = null!;
     protected AutoRevocationService AutoRevocationService { get; set; } = null!;
 
     private PostgreSqlContainer _postgreSqlContainer = null!;
@@ -66,17 +66,17 @@ public abstract class IdentityDbInvariantsTestBase
     [SetUp]
     public async Task SetUpBase()
     {
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
+        var options = new DbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(_connectionString)
             .EnableSensitiveDataLogging()
             .Options;
 
-        DbContext = new IdentityWriteDbContext(options);
-        UnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(DbContext);
+        DbContext = new IdentityDbContext(options);
+        UnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(DbContext);
         PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork, TimeProvider.System);
         WalletRepository = new WalletWriteRepository(DbContext, UnitOfWork);
 
-        // Create AutoRevocationService with DbContext as IIdentityWriteDbContext
+        // Create AutoRevocationService with DbContext as IIdentityDbContext
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<AutoRevocationService>.Instance;
         AutoRevocationService = new AutoRevocationService(DbContext, TimeProvider.System, logger);
 
@@ -252,14 +252,14 @@ public abstract class IdentityDbInvariantsTestBase
     /// <summary>
     /// Creates a separate DbContext for concurrent transaction testing.
     /// </summary>
-    protected IdentityWriteDbContext CreateConcurrentDbContext()
+    protected IdentityDbContext CreateConcurrentDbContext()
     {
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
+        var options = new DbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(_connectionString)
             .EnableSensitiveDataLogging()
             .Options;
 
-        return new IdentityWriteDbContext(options);
+        return new IdentityDbContext(options);
     }
 
     /// <summary>
@@ -267,8 +267,8 @@ public abstract class IdentityDbInvariantsTestBase
     /// Useful for testing race conditions and exclusivity constraints.
     /// </summary>
     protected async Task<(Exception? Exception1, Exception? Exception2)> ExecuteConcurrentOperations(
-        Func<IdentityWriteDbContext, Task> operation1,
-        Func<IdentityWriteDbContext, Task> operation2)
+        Func<IdentityDbContext, Task> operation1,
+        Func<IdentityDbContext, Task> operation2)
     {
         using var context1 = CreateConcurrentDbContext();
         using var context2 = CreateConcurrentDbContext();

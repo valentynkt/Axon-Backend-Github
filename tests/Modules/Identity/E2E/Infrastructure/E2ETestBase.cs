@@ -307,14 +307,14 @@ public abstract class E2ETestBase : IAsyncDisposable
     {
         using var scope = Factory.Services.CreateScope();
 
-        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
 
         // Delete entire database to ensure clean state
         await writeDbContext.Database.EnsureDeletedAsync();
 
         // CRITICAL FIX: IdentityContext (ASP.NET Identity) has NO migrations - use EnsureCreatedAsync()
-        // IdentityWriteDbContext (Axon tables) HAS migrations - use MigrateAsync()
+        // IdentityDbContext (Axon tables) HAS migrations - use MigrateAsync()
 
         // Create ASP.NET Identity tables first (no migrations available)
         await identityContext.Database.EnsureCreatedAsync();
@@ -329,7 +329,7 @@ public abstract class E2ETestBase : IAsyncDisposable
     private async Task CleanupDatabaseAsync()
     {
         using var scope = Factory.Services.CreateScope();
-        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
 
         try
@@ -485,7 +485,7 @@ public abstract class E2ETestBase : IAsyncDisposable
     private static void RemoveDbContextRegistrations(IServiceCollection services)
     {
         // Remove Identity DbContexts
-        var identityWriteDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IdentityWriteDbContext));
+        var identityWriteDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IdentityDbContext));
         if (identityWriteDbContextDescriptor != null)
         {
             services.Remove(identityWriteDbContextDescriptor);
@@ -497,7 +497,7 @@ public abstract class E2ETestBase : IAsyncDisposable
             services.Remove(identityContextDescriptor);
         }
 
-        var identityReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext));
+        var identityReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityDbContext));
         if (identityReadDbContextDescriptor != null)
         {
             services.Remove(identityReadDbContextDescriptor);
@@ -520,7 +520,7 @@ public abstract class E2ETestBase : IAsyncDisposable
     private static void RegisterDbContextsWithTestConnectionString(IServiceCollection services, string connectionString)
     {
         // Register Identity DbContexts with test connection string
-        services.AddDbContext<IdentityWriteDbContext>(options =>
+        services.AddDbContext<IdentityDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -540,7 +540,7 @@ public abstract class E2ETestBase : IAsyncDisposable
             options.EnableDetailedErrors();
         });
 
-        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>(options =>
+        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -594,11 +594,11 @@ public abstract class E2ETestBase : IAsyncDisposable
             using var scope = Factory.Services.CreateScope();
 
             // Clear Identity Write DbContext
-            var identityWriteDb = scope.ServiceProvider.GetService<IdentityWriteDbContext>();
+            var identityWriteDb = scope.ServiceProvider.GetService<IdentityDbContext>();
             identityWriteDb?.ChangeTracker.Clear();
 
             // Clear Identity Read DbContext (if needed)
-            var identityReadDb = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>();
+            var identityReadDb = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityDbContext>();
             identityReadDb?.ChangeTracker.Clear();
 
             // Clear Identity Context

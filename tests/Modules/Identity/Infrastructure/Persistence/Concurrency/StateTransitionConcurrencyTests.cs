@@ -54,7 +54,7 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
             async context1 =>
             {
                 // Principal A tries to verify the wallet
-                using var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
+                using var unitOfWork1 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context1);
                 using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1, TimeProvider.System);
                 var principal1 = await repo1.GetByIdAsync(principalA.Id, CancellationToken.None);
 
@@ -77,7 +77,7 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
             async context2 =>
             {
                 // Principal B tries to verify the same wallet
-                using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+                using var unitOfWork2 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context2);
                 using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
                 var principal2 = await repo2.GetByIdAsync(principalB.Id, CancellationToken.None);
 
@@ -404,7 +404,7 @@ public class StateTransitionsAndRacesTests : IdentityDbInvariantsTestBase
     /// This is the function passed to LinkWalletOwnership for conflict detection.
     /// </summary>
     private static async Task<Result<bool, Error>> CheckExistingOwnershipAsync(
-        IdentityWriteDbContext context,
+        IdentityDbContext context,
         WalletId walletId,
         AccessMode accessMode,
         OwnershipStatus status)

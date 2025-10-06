@@ -40,11 +40,11 @@ public class Ed25519SignatureVerifierIntegrationTests : IdentityPersistenceTestB
         services.AddLogging(builder => builder.AddConsole());
 
         // Add database context with PostgreSQL
-        services.AddDbContext<IdentityWriteDbContext>(options =>
+        services.AddDbContext<IdentityDbContext>(options =>
         {
             options.UseNpgsql(ConnectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             });
             options.EnableSensitiveDataLogging();
@@ -159,7 +159,7 @@ public class Ed25519SignatureVerifierIntegrationTests : IdentityPersistenceTestB
             tasks.Add(Task.Run(async () =>
             {
                 using var scope = _serviceProvider.CreateScope();
-                var scopedDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+                var scopedDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
                 var scopedVerifier = scope.ServiceProvider.GetRequiredService<IWalletSignatureVerifier>();
 
                 // Start a database transaction
@@ -413,11 +413,11 @@ public class Ed25519SignatureVerifierIntegrationTests : IdentityPersistenceTestB
     {
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddConsole());
-        services.AddDbContext<IdentityWriteDbContext>(options =>
+        services.AddDbContext<IdentityDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             });
         });

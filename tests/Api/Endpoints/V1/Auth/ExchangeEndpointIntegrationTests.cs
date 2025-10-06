@@ -34,7 +34,7 @@ public class ExchangeEndpointIntegrationTests
     private HttpClient _client = null!;
     private ICurrentUserService _mockCurrentUserService = null!;
     private IServiceScope _scope = null!;
-    private IdentityWriteDbContext _dbContext = null!;
+    private IdentityDbContext _dbContext = null!;
 
     [OneTimeSetUp]
     public void OneTimeSetUp()
@@ -65,7 +65,7 @@ public class ExchangeEndpointIntegrationTests
 
         // Get database context for test data setup and verification
         _scope = _factory.Services.CreateScope();
-        _dbContext = _scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        _dbContext = _scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
 
         // Ensure database is clean for each test
         await CleanDatabase();

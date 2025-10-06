@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 using BuildingBlocks.Core.Domain.Events;
@@ -8,39 +9,79 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
-namespace BuildingBlocks.Infrastructure.Persistence.Write;
+namespace BuildingBlocks.Infrastructure.Persistence;
 
 /// <summary>
-/// Base class for write-side DbContexts.
+/// Unified base class for module DbContexts that handle both read and write operations.
+/// Merges capabilities from WriteDbContextBase and ReadDbContextBase into a single,
+/// cohesive abstraction that reflects the unified context pattern adopted in the codebase.
 ///
-/// MIGRATION NOTE: Consider using DbContextBase{TModule} instead, which provides
-/// both write capabilities AND read optimizations (Query{T}(), ExecuteCompiledQueryAsync, etc.).
-/// WriteDbContextBase is kept for backwards compatibility, but DbContextBase is the
-/// recommended choice for new module contexts.
-///
-/// Current usage: Legacy support only. All active module contexts (IdentityDbContext, ChatDbContext)
-/// now inherit from DbContextBase.
+/// Features:
+/// - Transaction management with execution strategies
+/// - Audit trail support (CreatedAt/UpdatedAt)
+/// - Optimistic concurrency with PostgreSQL xmin
+/// - Soft delete query filters
+/// - MassTransit outbox/inbox support
+/// - Read optimization helpers (Query, ExecuteCompiledQueryAsync)
+/// - Configurable command timeout (default 30s)
+/// - Domain event collection (coordinated by Application layer)
 /// </summary>
-public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<TModule>
+public abstract class DbContextBase<TModule> : DbContext, IDbContext
     where TModule : class
 {
-    private readonly ILogger<WriteDbContextBase<TModule>> _logger;
+    private readonly ILogger<DbContextBase<TModule>> _logger;
     private IDbContextTransaction? _currentTransaction;
 
-    protected WriteDbContextBase(
+    protected DbContextBase(
         DbContextOptions options,
-        ILogger<WriteDbContextBase<TModule>>? logger = null) : base(options)
+        ILogger<DbContextBase<TModule>>? logger = null) : base(options)
     {
-        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WriteDbContextBase<TModule>>.Instance;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<DbContextBase<TModule>>.Instance;
+
+        // Keep change tracking enabled for write operations
+        // Use Query<T>() for no-tracking read queries
         ChangeTracker.LazyLoadingEnabled = false;
+
+        // Configure command timeout (default 30s, can be overridden)
+        Database.SetCommandTimeout(CommandTimeout);
     }
 
     public abstract string ModuleName { get; }
+
+    /// <summary>
+    /// Command timeout in seconds. Default is 30 seconds.
+    /// Override in derived class to customize.
+    /// </summary>
+    protected virtual TimeSpan CommandTimeout => TimeSpan.FromSeconds(30);
 
     public bool HasActiveTransaction => _currentTransaction != null;
     public string? CurrentTransactionId => _currentTransaction?.TransactionId.ToString();
 
     public IExecutionStrategy CreateExecutionStrategy() => Database.CreateExecutionStrategy();
+
+    // --------- Read Optimization Helpers ---------
+
+    /// <summary>
+    /// No-tracking queryable for read-only operations.
+    /// Use this for queries that don't need change tracking for better performance.
+    /// </summary>
+    public IQueryable<TEntity> Query<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.NonPublicFields | DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties | DynamicallyAccessedMemberTypes.Interfaces)] TEntity>() where TEntity : class
+        => Set<TEntity>().AsNoTracking();
+
+    /// <summary>
+    /// Execute a compiled query for performance-sensitive read paths.
+    /// Compiled queries are cached and reused, providing significant performance benefits.
+    /// </summary>
+    public Task<TResult> ExecuteCompiledQueryAsync<TResult>(
+        Func<IDbContext, Task<TResult>> compiledQuery,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(compiledQuery);
+        _ = cancellationToken; // Parameter required for interface compatibility
+        return compiledQuery(this);
+    }
+
+    // --------- Model Configuration ---------
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,8 +97,22 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
 
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
         ApplySoftDeleteQueryFilter(modelBuilder);
-        // Removed ApplyVersionConcurrencyToken - redundant as entity configurations already use .IsRowVersion()
+
+        // Apply read optimization indexes (module-specific override available)
+        ConfigureReadOptimizations(modelBuilder);
+
         base.OnModelCreating(modelBuilder);
+    }
+
+    /// <summary>
+    /// Configure read-optimized indexes for query performance.
+    /// Override in derived classes to add module-specific indexes.
+    /// Base implementation is intentionally empty - modules define their own indexes.
+    /// </summary>
+    protected virtual void ConfigureReadOptimizations(ModelBuilder modelBuilder)
+    {
+        // Empty by design - modules override to add their specific read optimization indexes
+        // This prevents conflicts with module-specific index configurations
     }
 
     // --------- Transactions ---------
@@ -152,7 +207,7 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         });
     }
 
-    // --------- SaveChanges ---------
+    // --------- SaveChanges with Audit & Concurrency ---------
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -235,7 +290,13 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     public Task<int> SaveChangesAndDispatchDomainEventsAsync(CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Dispatch must be coordinated by Application layer behaviors.");
 
-    // --------- Hooks & Conventions (kept minimal) ---------
+    // --------- Hooks & Conventions ---------
+
+    /// <summary>
+    /// Virtual hook for module-specific audit logic.
+    /// Called during SaveChangesAsync before persisting changes.
+    /// Override to add custom audit behavior (e.g., using TimeProvider).
+    /// </summary>
     protected virtual void ApplyAuditInformation() { }
 
     private static void ApplySoftDeleteQueryFilter(ModelBuilder modelBuilder)
@@ -255,9 +316,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
             }
         }
     }
-
-    // Removed ApplyVersionConcurrencyToken method - redundant as entity configurations
-    // already configure concurrency using .IsRowVersion() which properly maps to PostgreSQL xmin
 
     public override void Dispose()
     {

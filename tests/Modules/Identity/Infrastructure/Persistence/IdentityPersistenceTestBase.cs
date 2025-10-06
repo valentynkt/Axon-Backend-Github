@@ -28,24 +28,24 @@ namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence;
 /// </summary>
 public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
 {
-    protected IdentityWriteDbContext DbContext { get; set; } = null!;
+    protected IdentityDbContext DbContext { get; set; } = null!;
     protected AxonPrincipalWriteRepository PrincipalRepository { get; set; } = null!;
     protected WalletWriteRepository WalletRepository { get; set; } = null!;
-    protected EfUnitOfWork<IdentityWriteDbContext, IdentityModule> UnitOfWork { get; set; } = null!;
+    protected EfUnitOfWork<IdentityDbContext, IdentityModule> UnitOfWork { get; set; } = null!;
 
     [SetUp]
     public async Task SetUpBase()
     {
-        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>()
+        var options = CreateDbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(ConnectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             })
             .Options;
 
-        DbContext = new IdentityWriteDbContext(options);
-        UnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(DbContext);
+        DbContext = new IdentityDbContext(options);
+        UnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(DbContext);
         PrincipalRepository = new AxonPrincipalWriteRepository(DbContext, UnitOfWork, TimeProvider.System);
         WalletRepository = new WalletWriteRepository(DbContext, UnitOfWork);
 
@@ -322,16 +322,16 @@ public abstract class IdentityPersistenceTestBase : PostgreSqlTestBase
     /// <summary>
     /// Creates a separate DbContext for concurrent transaction testing.
     /// </summary>
-    protected IdentityWriteDbContext CreateConcurrentDbContext()
+    protected IdentityDbContext CreateConcurrentDbContext()
     {
-        var options = CreateDbContextOptionsBuilder<IdentityWriteDbContext>()
+        var options = CreateDbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(ConnectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             })
             .Options;
-        return new IdentityWriteDbContext(options);
+        return new IdentityDbContext(options);
     }
 
     /// <summary>

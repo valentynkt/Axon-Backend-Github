@@ -481,7 +481,7 @@ public class WalletOwnershipPersistenceTests : IdentityPersistenceTestBase
 
         // Create separate contexts for concurrent access
         using var concurrentContext = CreateConcurrentDbContext();
-        using var concurrentUow = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
+        using var concurrentUow = new EfUnitOfWork<IdentityDbContext, IdentityModule>(concurrentContext);
         using var concurrentRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUow, TimeProvider.System);
 
         // Load principal in two separate contexts

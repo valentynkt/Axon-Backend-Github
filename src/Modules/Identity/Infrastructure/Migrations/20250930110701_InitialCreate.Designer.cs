@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Axon.Modules.Identity.Infrastructure.Migrations
 {
-    [DbContext(typeof(IdentityWriteDbContext))]
+    [DbContext(typeof(IdentityDbContext))]
     [Migration("20250930110701_InitialCreate")]
     partial class InitialCreate
     {

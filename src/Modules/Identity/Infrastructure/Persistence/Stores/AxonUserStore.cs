@@ -30,7 +30,7 @@ public sealed class AxonUserStore :
 {
     private readonly IAxonPrincipalWriteRepository _principalRepo;
     private readonly IdentityContext _dbContext;
-    private readonly IIdentityReadDbContext _readDbContext;
+    private readonly IIdentityDbContext _readDbContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AxonUserStore> _logger;
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
@@ -38,7 +38,7 @@ public sealed class AxonUserStore :
     public AxonUserStore(
         IAxonPrincipalWriteRepository principalRepo,
         IdentityContext dbContext,
-        IIdentityReadDbContext readDbContext,
+        IIdentityDbContext readDbContext,
         TimeProvider timeProvider,
         ILogger<AxonUserStore> logger,
         IWriteUnitOfWork<IdentityModule> unitOfWork)

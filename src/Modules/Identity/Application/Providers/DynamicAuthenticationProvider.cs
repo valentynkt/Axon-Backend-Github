@@ -39,7 +39,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
     private readonly IMemoryCache _memoryCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly UserManager<AxonUserAuth> _userManager;
-    private readonly IIdentityWriteDbContext _dbContext;
+    private readonly IIdentityDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DynamicAuthenticationProvider> _logger;
 
@@ -56,7 +56,7 @@ public sealed class DynamicAuthenticationProvider : IAuthenticationProvider
         IMemoryCache memoryCache,
         IHttpContextAccessor httpContextAccessor,
         UserManager<AxonUserAuth> userManager,
-        IIdentityWriteDbContext dbContext,
+        IIdentityDbContext dbContext,
         TimeProvider timeProvider,
         ILogger<DynamicAuthenticationProvider> logger)
     {

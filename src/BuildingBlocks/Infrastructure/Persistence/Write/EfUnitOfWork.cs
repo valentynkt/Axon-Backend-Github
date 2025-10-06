@@ -4,7 +4,7 @@ using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 namespace BuildingBlocks.Infrastructure.Persistence.Write;
 
 public sealed class EfUnitOfWork<TContext, TModule> : IWriteUnitOfWork<TModule>
-    where TContext : IWriteDbContext<TModule>
+    where TContext : IDbContext
     where TModule  : class
 {
     private readonly TContext _db;

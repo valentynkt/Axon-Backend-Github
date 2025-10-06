@@ -51,43 +51,40 @@ public static class ServiceRegistration
             ?? configuration.GetConnectionString("DefaultConnection")
             ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres";
         
-        // Write DbContext
+        // Unified DbContext with both read and write capabilities
         services.AddDbContext<ChatDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-            });
-        });
-        
-        // Read DbContext with read-specific optimizations
-        services.AddDbContext<ChatReadDbContext>(options =>
-        {
-            options.UseNpgsql(connectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "chat");
-                npgsqlOptions.CommandTimeout(30); // 30-second timeout for read operations
+                npgsqlOptions.CommandTimeout(30); // 30-second timeout for operations
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
             });
 
             // Read-specific EF Core optimizations
             options.EnableServiceProviderCaching(true);
-            options.EnableSensitiveDataLogging(false); // Security: disable in production
-            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 
-            // Performance optimizations for read scenarios
+#if DEBUG
+            options.EnableSensitiveDataLogging(true);
+            options.EnableDetailedErrors(true);
+#endif
+
+            // Performance optimizations
             options.ConfigureWarnings(warnings =>
             {
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.DetachedLazyLoadingWarning);
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning);
             });
         });
-        
+
         // Register Repository and DbContext interfaces
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IConversationReadRepository, ConversationReadRepository>();
         services.AddScoped<IMessageReadRepository, MessageReadRepository>();
-        services.AddScoped<IChatReadDbContext>(provider => provider.GetRequiredService<ChatReadDbContext>());
-        services.AddScoped<IChatWriteDbContext>(provider => provider.GetRequiredService<ChatDbContext>());
+        services.AddScoped<IChatDbContext>(provider => provider.GetRequiredService<ChatDbContext>());
         
         // Register module-specific UnitOfWork using the EfUnitOfWork wrapper with correct module type
         services.AddScoped<IWriteUnitOfWork<ChatModule>>(provider =>

@@ -17,14 +17,14 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 /// </summary>
 public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<AxonPrincipal>, IAxonPrincipalReadRepository
 {
-    private readonly IdentityReadDbContext _identityDbContext;
+    private readonly IdentityDbContext _identityDbContext;
 
     /// <summary>
     /// Compiled query for fetching principals by provider type - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ProviderType, int, int, IAsyncEnumerable<AxonPrincipal>> 
+    private static readonly Func<IdentityDbContext, ProviderType, int, int, IAsyncEnumerable<AxonPrincipal>>
         GetByProviderTypeCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ProviderType providerType, int skip, int take) =>
+            (IdentityDbContext context, ProviderType providerType, int skip, int take) =>
                 context.Set<AxonPrincipal>()
                     .Include(p => p.Credentials)
                     .Where(p => p.Credentials.Any(c => c.Provider == providerType.Value))
@@ -36,9 +36,9 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     /// <summary>
     /// Compiled query for counting principals by provider type - optimized for count operations
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ProviderType, Task<int>> 
+    private static readonly Func<IdentityDbContext, ProviderType, Task<int>>
         CountByProviderTypeCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ProviderType providerType) =>
+            (IdentityDbContext context, ProviderType providerType) =>
                 context.Set<AxonPrincipal>()
                     .Where(p => p.Credentials.Any(c => c.Provider == providerType.Value))
                     .Count());
@@ -46,9 +46,9 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     /// <summary>
     /// Compiled query for recently created principals - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, DateTimeOffset, int, IAsyncEnumerable<AxonPrincipal>> 
+    private static readonly Func<IdentityDbContext, DateTimeOffset, int, IAsyncEnumerable<AxonPrincipal>>
         GetRecentlyCreatedCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, DateTimeOffset cutoffDate, int take) =>
+            (IdentityDbContext context, DateTimeOffset cutoffDate, int take) =>
                 context.Set<AxonPrincipal>()
                     .Include(p => p.Credentials)
                     .Where(p => p.CreatedAt >= cutoffDate)
@@ -59,9 +59,9 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     /// <summary>
     /// Compiled query for finding principal by credential - hot path optimization for /auth/me
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, string, string, string, Task<AxonPrincipal?>>
+    private static readonly Func<IdentityDbContext, string, string, string, Task<AxonPrincipal?>>
         FindByCredentialCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, string provider, string issuer, string subject) =>
+            (IdentityDbContext context, string provider, string issuer, string subject) =>
                 context.Set<AxonPrincipal>()
                     .Include(p => p.Credentials)
                     .Include(p => p.PrincipalChainDefaults)
@@ -75,9 +75,9 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
     /// <summary>
     /// Compiled query for getting principal fingerprint data - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, AxonUserId, Task<FingerprintData?>>
+    private static readonly Func<IdentityDbContext, AxonUserId, Task<FingerprintData?>>
         GetPrincipalFingerprintDataCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, AxonUserId principalId) =>
+            (IdentityDbContext context, AxonUserId principalId) =>
                 context.Set<AxonPrincipal>()
                     .Where(p => p.Id == principalId)
                     .Select(p => new FingerprintData
@@ -103,7 +103,7 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
         public DateTimeOffset? MaxChainDefaultUpdated { get; set; }
     }
 
-    public AxonPrincipalReadRepository(IdentityReadDbContext context) : base(context)
+    public AxonPrincipalReadRepository(IdentityDbContext context) : base(context)
     {
         _identityDbContext = context;
     }

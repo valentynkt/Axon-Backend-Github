@@ -14,7 +14,7 @@ public sealed class WalletWriteRepository : EfWriteRepository<Wallet, WalletId>,
 {
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
 
-    public WalletWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork) : base(context)
+    public WalletWriteRepository(IdentityDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork) : base(context)
     {
         _unitOfWork = unitOfWork;
     }

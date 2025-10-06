@@ -3,37 +3,33 @@ using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
 using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
-using Axon.Modules.Identity.Domain.Enums;
-using Axon.Modules.Identity.Domain.Events;
 using Axon.Modules.Identity.Domain.ValueObjects;
 using Axon.Modules.Identity.Infrastructure.Persistence.Configurations;
 using BuildingBlocks.Core.Diagnostics.Exceptions;
 using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
-using BuildingBlocks.Infrastructure.Persistence.Write;
-using BuildingBlocks.Primitives.Ids;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Identity.Infrastructure.Persistence.DbContexts;
 
 /// <summary>
-/// Write-side DbContext for Identity module
+/// Unified DbContext for Identity module - handles both read and write operations.
+/// Inherits from DbContextBase which provides both write capabilities and read optimizations.
 /// </summary>
-public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>, IIdentityWriteDbContext
+public sealed class IdentityDbContext : DbContextBase<IdentityModule>, IIdentityDbContext
 {
-    private readonly ILogger<IdentityWriteDbContext> _logger;
+    private readonly ILogger<IdentityDbContext> _logger;
 
-    public IdentityWriteDbContext(DbContextOptions<IdentityWriteDbContext> options, ILogger<IdentityWriteDbContext>? logger = null)
+    public IdentityDbContext(DbContextOptions<IdentityDbContext> options, ILogger<IdentityDbContext>? logger = null)
         : base(options, logger)
     {
-        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<IdentityWriteDbContext>.Instance;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<IdentityDbContext>.Instance;
     }
 
     public override string ModuleName => "identity";
 
-    // Implement IIdentityWriteDbContext interface
+    // Aggregate roots
     public DbSet<AxonPrincipal> Principals => Set<AxonPrincipal>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
 
@@ -46,44 +42,8 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
     // Keep old property names for compatibility
     public DbSet<AxonPrincipal> AxonPrincipals => Principals;
-    
 
-    /// <summary>
-    /// Override SaveChangesAsync - owned entities now properly configured with ValueGeneratedNever.
-    /// No special handling needed as EF Core will correctly INSERT new owned entities.
-    /// </summary>
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        // Simply delegate to base - owned entities are now correctly configured
-        return await base.SaveChangesAsync(cancellationToken);
-    }
-
-
-    private static void ThrowConcurrencyException(DbUpdateConcurrencyException ex)
-    {
-        var firstEntry = ex.Entries.Count > 0 ? ex.Entries[0] : null;
-        if (firstEntry == null)
-        {
-            throw ex; // Re-throw original if no entries
-        }
-
-        var entityType = firstEntry.Entity.GetType().Name;
-
-        // Use EF Core's metadata to get primary key values
-        var keyValues = firstEntry.Metadata.FindPrimaryKey()?.Properties
-            .Select(p => firstEntry.CurrentValues[p]?.ToString() ?? "null")
-            .ToArray() ?? ["unknown"];
-        var entityId = string.Join(", ", keyValues);
-
-        // With PostgreSQL xmin, version details are managed by the database
-        throw new ConcurrencyException(
-            $"The {entityType} with key [{entityId}] has been modified by another user. Please refresh and try again.",
-            entityType,
-            entityId,
-            "xmin", // Using PostgreSQL xmin for concurrency
-            "xmin");
-    }
-
+    // Query<T>() method now inherited from DbContextBase
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -115,27 +75,54 @@ public sealed class IdentityWriteDbContext : WriteDbContextBase<IdentityModule>,
 
         // Apply configurations EXCEPT AxonUserAuthConfiguration (which is for IdentityContext only)
         modelBuilder.ApplyConfigurationsFromAssembly(
-            typeof(IdentityWriteDbContext).Assembly,
+            typeof(IdentityDbContext).Assembly,
             t => t != typeof(AxonUserAuthConfiguration));
 
         // Child entities are now configured as owned types in AxonPrincipalConfiguration
         // They automatically inherit concurrency control from the parent aggregate
 
+        // Apply read optimizations (indexes for query performance)
+        ConfigureReadOptimizations(modelBuilder);
+    }
+
+    /// <summary>
+    /// Configure read-optimized indexes for query performance.
+    /// These indexes improve performance for common read queries without affecting write operations.
+    /// </summary>
+    private static void ConfigureReadOptimizations(ModelBuilder modelBuilder)
+    {
+        // Only configure indexes for aggregate roots
+        // Skip owned entities as they are configured through their owners
+        var principalEntity = modelBuilder.Model.FindEntityType(typeof(AxonPrincipal));
+        if (principalEntity != null && !principalEntity.IsOwned())
+        {
+            modelBuilder.Entity<AxonPrincipal>()
+                .HasIndex(p => new { p.UpdatedAt, p.Id })
+                .HasDatabaseName("ix_principals_updated_at_id");
+        }
+
+        var walletEntity = modelBuilder.Model.FindEntityType(typeof(Wallet));
+        if (walletEntity != null && !walletEntity.IsOwned())
+        {
+            modelBuilder.Entity<Wallet>()
+                .HasIndex(w => new { w.ChainId, w.UpdatedAt })
+                .HasDatabaseName("ix_wallets_chain_updated");
+        }
     }
 }
 
 /// <summary>
-/// Design-time factory for IdentityWriteDbContext to support EF Core tools (migrations, etc.)
+/// Design-time factory for IdentityDbContext to support EF Core tools (migrations, etc.)
 /// </summary>
-public sealed class IdentityWriteDbContextFactory : DesignTimeDbContextFactoryBase<IdentityWriteDbContext>
+public sealed class IdentityDbContextFactory : DesignTimeDbContextFactoryBase<IdentityDbContext>
 {
-    protected override IdentityWriteDbContext CreateNewInstance(DbContextOptions<IdentityWriteDbContext> options) =>
+    protected override IdentityDbContext CreateNewInstance(DbContextOptions<IdentityDbContext> options) =>
         new(options);
 
-    protected override void ConfigureProvider(DbContextOptionsBuilder<IdentityWriteDbContext> builder, string connectionString) =>
+    protected override void ConfigureProvider(DbContextOptionsBuilder<IdentityDbContext> builder, string connectionString) =>
         builder.UseNpgsql(connectionString, opt =>
         {
-            opt.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+            opt.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
             opt.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
         });
 }

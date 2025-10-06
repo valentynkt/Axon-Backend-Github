@@ -4,8 +4,13 @@ using System.Diagnostics.CodeAnalysis;
 namespace BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 
 /// <summary>
-/// Read-side context port (CQRS). Optimized for queries and composition.
+/// OBSOLETE: Read-side context port (CQRS).
+///
+/// MIGRATION: Use IDbContext directly instead. The CQRS read/write split has been replaced
+/// with unified contexts. Module-specific interfaces (IIdentityDbContext, IChatDbContext)
+/// should inherit directly from IDbContext.
 /// </summary>
+[Obsolete("Use IDbContext instead. IReadDbContext will be removed in a future version.")]
 public interface IReadDbContext<TModule> : IDbContext where TModule : class
 {
     /// <summary>Logical module name (schema/diagnostics separation).</summary>

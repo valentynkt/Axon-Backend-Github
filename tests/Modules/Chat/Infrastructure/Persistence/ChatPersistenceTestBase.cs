@@ -33,7 +33,7 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence;
 public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
 {
     protected ChatDbContext DbContext { get; set; } = null!;
-    protected ChatReadDbContext ReadDbContext { get; set; } = null!;
+    protected ChatDbContext ReadDbContext { get; set; } = null!;
     protected IConversationRepository ConversationRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
@@ -54,11 +54,11 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
             ConnectionString, serviceProvider);
 
         // Setup read DbContext using centralized configuration
-        var readOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatReadDbContext>(
+        var readOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(
             ConnectionString, serviceProvider);
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
-        ReadDbContext = new ChatReadDbContext(readOptions);
+        ReadDbContext = new ChatDbContext(readOptions, TimeProvider);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);
@@ -400,11 +400,11 @@ public abstract class ChatPersistenceTestBase : PostgreSqlTestBase
         var writeOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(
             ConnectionString, serviceProvider);
 
-        var readOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatReadDbContext>(
+        var readOptions = ChatTestServiceProvider.CreateDbContextOptions<ChatDbContext>(
             ConnectionString, serviceProvider);
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
-        ReadDbContext = new ChatReadDbContext(readOptions);
+        ReadDbContext = new ChatDbContext(readOptions, TimeProvider);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);

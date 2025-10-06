@@ -81,14 +81,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             var contextsToRemove = new[]
             {
                 typeof(ChatDbContext),
-                typeof(ChatReadDbContext),
-                typeof(IdentityWriteDbContext),
-                typeof(IdentityReadDbContext),
+                typeof(IdentityDbContext),
+                typeof(IdentityDbContext),
                 typeof(IdentityContext),
                 typeof(DbContextOptions<ChatDbContext>),
-                typeof(DbContextOptions<ChatReadDbContext>),
-                typeof(DbContextOptions<IdentityWriteDbContext>),
-                typeof(DbContextOptions<IdentityReadDbContext>),
+                typeof(DbContextOptions<IdentityDbContext>),
+                typeof(DbContextOptions<IdentityDbContext>),
                 typeof(DbContextOptions<IdentityContext>)
             };
 
@@ -117,20 +115,13 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
-            services.AddDbContext<ChatReadDbContext>(options =>
-            {
-                options.UseNpgsql(_testBase.GetConnectionString());
-                options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-                options.EnableSensitiveDataLogging();
-            }, ServiceLifetime.Scoped);
-
-            services.AddDbContext<IdentityWriteDbContext>(options =>
+            services.AddDbContext<IdentityDbContext>(options =>
             {
                 options.UseNpgsql(_testBase.GetConnectionString());
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
-            services.AddDbContext<IdentityReadDbContext>(options =>
+            services.AddDbContext<IdentityDbContext>(options =>
             {
                 options.UseNpgsql(_testBase.GetConnectionString());
                 options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
@@ -168,7 +159,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 chatContext.Database.Migrate();
 
                 // Create Identity database using migrations
-                var identityContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+                var identityContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
                 identityContext.Database.Migrate();
 
                 // Create IdentityContext database using migrations

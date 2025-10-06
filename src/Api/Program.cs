@@ -315,7 +315,7 @@ namespace Axon.Api
             // Apply migrations for both contexts using existing UseMigration extension
             // This leverages the existing infrastructure in BuildingBlocks
             app.UseMigration<ChatDbContext>();
-            app.UseMigration<IdentityWriteDbContext>();
+            app.UseMigration<IdentityDbContext>();
 
             // Adding await to satisfy async method requirements
             await Task.CompletedTask;

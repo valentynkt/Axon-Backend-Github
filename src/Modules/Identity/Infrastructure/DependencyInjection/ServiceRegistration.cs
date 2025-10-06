@@ -82,8 +82,8 @@ public static class ServiceRegistration
 #endif
         });
 
-        // Write DbContext
-        services.AddDbContext<IdentityWriteDbContext>(options =>
+        // Unified DbContext for both read and write operations
+        services.AddDbContext<IdentityDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -101,32 +101,6 @@ public static class ServiceRegistration
 #endif
         });
         
-        // Read DbContext with read-specific optimizations
-        services.AddDbContext<IdentityReadDbContext>(options =>
-        {
-            options.UseNpgsql(connectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
-                npgsqlOptions.CommandTimeout(60); // 60-second timeout for read operations
-                npgsqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 5,
-                    maxRetryDelay: TimeSpan.FromSeconds(10),
-                    errorCodesToAdd: null);
-            });
-            
-            // Read-specific EF Core optimizations
-            options.EnableServiceProviderCaching(true);
-            options.EnableSensitiveDataLogging(false); // Security: disable in production
-            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-            
-            // Performance optimizations for read scenarios
-            options.ConfigureWarnings(warnings =>
-            {
-                warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.DetachedLazyLoadingWarning);
-                warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning);
-            });
-        });
-        
         // Register Write Repositories
         services.AddScoped<IAxonPrincipalWriteRepository, AxonPrincipalWriteRepository>();
         services.AddScoped<IWalletWriteRepository, WalletWriteRepository>();
@@ -138,15 +112,14 @@ public static class ServiceRegistration
         // Register Wallet Ownership Repository for Story 5.3
         services.AddScoped<IWalletOwnershipRepository, WalletOwnershipRepository>();
         
-        // Register Repository and DbContext interfaces
-        services.AddScoped<IIdentityReadDbContext>(provider => provider.GetRequiredService<IdentityReadDbContext>());
-        services.AddScoped<IIdentityWriteDbContext>(provider => provider.GetRequiredService<IdentityWriteDbContext>());
-        
+        // Register unified DbContext interface
+        services.AddScoped<IIdentityDbContext>(provider => provider.GetRequiredService<IdentityDbContext>());
+
         // Register module-specific UnitOfWork using the EfUnitOfWork wrapper with correct module type
         services.AddScoped<IWriteUnitOfWork<IdentityModule>>(provider =>
         {
-            var context = provider.GetRequiredService<IdentityWriteDbContext>();
-            return new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+            var context = provider.GetRequiredService<IdentityDbContext>();
+            return new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
         });
         
         // Register External Services
@@ -273,7 +246,7 @@ public static class ServiceRegistration
         services.AddScoped<ICurrentUserService, HttpContextUserService>();
 
         // Register BuildingBlocks Infrastructure services (including concurrency handling)
-        services.AddInfrastructure<IdentityWriteDbContext>(configuration);
+        services.AddInfrastructure<IdentityDbContext>(configuration);
 
         return services;
     }

@@ -96,7 +96,7 @@ public class AxonPrincipalPersistenceTests : IdentityPersistenceTestBase
 
         // Create a second context for concurrent update simulation
         using var context2 = CreateConcurrentDbContext();
-        using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+        using var unitOfWork2 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context2);
         using var repository2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
 
         var principal2 = await repository2.GetByIdAsync(principal.Id);

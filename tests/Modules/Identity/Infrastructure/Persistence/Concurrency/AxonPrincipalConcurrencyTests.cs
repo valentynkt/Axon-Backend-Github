@@ -26,16 +26,16 @@ namespace Axon.Modules.Identity.Infrastructure.Tests.Persistence.Concurrency;
 /// wallet ownership changes, and credential management.
 /// </summary>
 [TestFixture]
-public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDbContext>
+public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityDbContext>
 {
-    private IdentityWriteDbContext _setupContext = null!;
-    private EfUnitOfWork<IdentityWriteDbContext, IdentityModule> _unitOfWork = null!;
+    private IdentityDbContext _setupContext = null!;
+    private EfUnitOfWork<IdentityDbContext, IdentityModule> _unitOfWork = null!;
 
     [SetUp]
     public async Task SetUp()
     {
         _setupContext = CreateContext(CreateContextOptions());
-        _unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(_setupContext);
+        _unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(_setupContext);
 
         await _setupContext.Database.EnsureDeletedAsync();
         await _setupContext.Database.MigrateAsync();
@@ -48,25 +48,25 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
         await _setupContext.DisposeAsync();
     }
 
-    protected override DbContextOptions<IdentityWriteDbContext> CreateContextOptions()
+    protected override DbContextOptions<IdentityDbContext> CreateContextOptions()
     {
         var serviceCollection = new ServiceCollection();
         serviceCollection.AddEntityFrameworkNpgsql();
         var serviceProvider = serviceCollection.BuildServiceProvider();
 
-        return CreateDbContextOptionsBuilder<IdentityWriteDbContext>()
+        return CreateDbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(ConnectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly(typeof(IdentityWriteDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             })
             .UseInternalServiceProvider(serviceProvider)
             .Options;
     }
 
-    protected override IdentityWriteDbContext CreateContext(DbContextOptions<IdentityWriteDbContext> options)
+    protected override IdentityDbContext CreateContext(DbContextOptions<IdentityDbContext> options)
     {
-        return new IdentityWriteDbContext(options);
+        return new IdentityDbContext(options);
     }
 
     protected override Task<TId> CreateAndSaveTestAggregateAsync<TAggregate, TId>()
@@ -87,7 +87,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.UpdateRiskTier(RiskTier.High, TimeProvider.System), // Officer 1: High risk
@@ -98,7 +98,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
 
         // Verify the first update was applied
         using var verifyContext = CreateContext(CreateContextOptions());
-        using var verifyUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(verifyContext);
+        using var verifyUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(verifyContext);
         using var verifyRepo = new AxonPrincipalWriteRepository(verifyContext, verifyUnitOfWork, TimeProvider.System);
         var updated = await verifyRepo.GetByIdAsync(principal.Id);
         updated.ShouldNotBeNull();
@@ -130,7 +130,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.AddCredential(
@@ -165,7 +165,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.RemoveWalletOwnership(walletId, TimeProvider.System),
@@ -190,7 +190,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.UpdateWalletOwnershipStatus(walletId, OwnershipStatus.Verified, TimeProvider.System),
@@ -217,7 +217,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.SetChainDefault("1", wallets[0].WalletId, TimeProvider.System), // Device 1: Set first wallet
@@ -241,7 +241,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.LinkWalletOwnership(
@@ -268,7 +268,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.UpdateRiskTier(RiskTier.Medium, TimeProvider.System),
@@ -292,7 +292,7 @@ public class AxonPrincipalConcurrencyTests : ConcurrencyTestBase<IdentityWriteDb
             principal.Id,
             context =>
             {
-                var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 return new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
             },
             p1 => p1.LinkWalletOwnership(

@@ -1,4 +1,4 @@
-using BuildingBlocks.Infrastructure.Persistence.Write;
+using BuildingBlocks.Infrastructure.Persistence;
 using BuildingBlocks.Infrastructure.Persistence.Infrastructure;
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Application.Contracts.Persistence;
@@ -10,7 +10,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
 
-public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDbContext
+/// <summary>
+/// Unified DbContext for Chat module - handles both read and write operations.
+/// Inherits from DbContextBase which provides both write capabilities and read optimizations.
+/// </summary>
+public sealed class ChatDbContext : DbContextBase<ChatModule>, IChatDbContext
 {
     private readonly TimeProvider _timeProvider;
 
@@ -21,11 +25,14 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
         : base(options, logger)
     {
         _timeProvider = timeProvider;
+        // Command timeout and Query<T>() now inherited from DbContextBase
     }
 
     public override string ModuleName => "chat";
 
     public DbSet<Conversation> Conversations => Set<Conversation>();
+
+    // Query<T>() method now inherited from DbContextBase
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +59,39 @@ public sealed class ChatDbContext : WriteDbContextBase<ChatModule>, IChatWriteDb
                 entityType.SetQueryFilter(null);
             }
         }
+
+        // Apply read optimizations (indexes for query performance)
+        ConfigureReadOptimizations(modelBuilder);
+    }
+
+    /// <summary>
+    /// Configure read-optimized indexes for query performance.
+    /// These indexes improve performance for common read queries without affecting write operations.
+    /// Merged from ChatReadDbContext's ConfigureReadModelOptimizations.
+    /// </summary>
+    private static void ConfigureReadOptimizations(ModelBuilder modelBuilder)
+    {
+        // Essential indexes for GetConversations query performance
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => new { c.OwnerId, c.UpdatedAt, c.Id })
+            .HasDatabaseName("ix_conversations_owner_updated_at_id");
+
+        // Title search index for filtering by conversation title
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => c.Title)
+            .HasDatabaseName("ix_conversations_title_search")
+            .HasFilter("\"Title\" IS NOT NULL");
+
+        // Additional composite index for different sorting scenarios
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => new { c.OwnerId, c.Status, c.UpdatedAt })
+            .HasDatabaseName("ix_conversations_owner_status_updated");
+
+        // CreatedAt index for sorting by creation time
+        modelBuilder.Entity<Conversation>()
+            .HasIndex(c => new { c.OwnerId, c.CreatedAt, c.Id })
+            .HasDatabaseName("ix_conversations_owner_created_at_id")
+            .HasFilter("\"Status\" != 'Deleted'");
     }
 
     protected override void ApplyAuditInformation()

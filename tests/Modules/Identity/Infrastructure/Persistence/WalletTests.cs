@@ -84,7 +84,7 @@ public class WalletPersistenceTests : IdentityPersistenceTestBase
             try
             {
                 using var context = CreateConcurrentDbContext();
-                using var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+                using var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
                 using var repository = new WalletWriteRepository(context, unitOfWork);
                 var result = await repository.EnsureManyByChainAndAddressAsync(walletSpecs);
                 // Convert IReadOnlyDictionary to Dictionary for the return type

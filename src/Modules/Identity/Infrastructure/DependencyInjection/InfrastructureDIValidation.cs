@@ -23,11 +23,8 @@ public static class InfrastructureDIValidation
 
         try
         {
-            // Database contexts validation
-            TestServiceResolution<IdentityWriteDbContext>(serviceProvider, errors, "IdentityWriteDbContext - Write database context");
-            TestServiceResolution<IdentityReadDbContext>(serviceProvider, errors, "IdentityReadDbContext - Read database context");
-            TestServiceResolution<IIdentityWriteDbContext>(serviceProvider, errors, "IIdentityWriteDbContext interface");
-            TestServiceResolution<IIdentityReadDbContext>(serviceProvider, errors, "IIdentityReadDbContext interface");
+            // Database context validation
+            TestServiceResolution<IIdentityDbContext>(serviceProvider, errors, "IIdentityDbContext interface");
             
             // Write Repository validation
             TestServiceResolution<IAxonPrincipalWriteRepository>(serviceProvider, errors, "IAxonPrincipalWriteRepository");

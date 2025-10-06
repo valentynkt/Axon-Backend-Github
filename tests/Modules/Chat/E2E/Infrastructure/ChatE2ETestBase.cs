@@ -310,7 +310,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
     ///
     /// HYBRID APPROACH (matching production):
     /// - IdentityContext (ASP.NET Identity): EnsureCreatedAsync (not migrated in production)
-    /// - IdentityWriteDbContext (Domain): MigrateAsync (migrated in production)
+    /// - IdentityDbContext (Domain): MigrateAsync (migrated in production)
     /// - ChatDbContext (Domain): MigrateAsync (migrated in production)
     /// </summary>
     private async Task EnsureDatabaseSetupAsync()
@@ -318,7 +318,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
         using var scope = Factory.Services.CreateScope();
 
         // Get all required DbContexts
-        var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+        var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
         var chatDbContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
 
@@ -383,7 +383,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
         catch
         {
             // If truncate fails, recreate entire database using same hybrid approach as setup
-            var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
+            var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
             var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
 
             await identityWriteDbContext.Database.EnsureDeletedAsync();
@@ -483,14 +483,14 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             services.Remove(chatDbContextDescriptor);
         }
 
-        var chatReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ChatReadDbContext));
+        var chatReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ChatDbContext));
         if (chatReadDbContextDescriptor != null)
         {
             services.Remove(chatReadDbContextDescriptor);
         }
 
         // Remove Identity DbContexts
-        var identityWriteDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IdentityWriteDbContext));
+        var identityWriteDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IdentityDbContext));
         if (identityWriteDbContextDescriptor != null)
         {
             services.Remove(identityWriteDbContextDescriptor);
@@ -502,7 +502,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             services.Remove(identityContextDescriptor);
         }
 
-        var identityReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext));
+        var identityReadDbContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityDbContext));
         if (identityReadDbContextDescriptor != null)
         {
             services.Remove(identityReadDbContextDescriptor);
@@ -533,7 +533,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             });
         });
 
-        services.AddDbContext<ChatReadDbContext>(options =>
+        services.AddDbContext<ChatDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -544,7 +544,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
         });
 
         // Register Identity DbContexts with test connection string
-        services.AddDbContext<IdentityWriteDbContext>(options =>
+        services.AddDbContext<IdentityDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -564,8 +564,8 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             options.EnableDetailedErrors();
         });
 
-        // Register IdentityReadDbContext (required by some Identity services)
-        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>(options =>
+        // Register IdentityDbContext (required by some Identity services)
+        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityDbContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -664,15 +664,15 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
 
             // CRITICAL FIX: Also clear Chat Read DbContext
             // GetByIdAsync in ConversationRepository can track entities even from read context
-            var chatReadDb = scope.ServiceProvider.GetService<ChatReadDbContext>();
+            var chatReadDb = scope.ServiceProvider.GetService<ChatDbContext>();
             chatReadDb?.ChangeTracker.Clear();
 
             // Clear Identity Write DbContext
-            var identityWriteDb = scope.ServiceProvider.GetService<IdentityWriteDbContext>();
+            var identityWriteDb = scope.ServiceProvider.GetService<IdentityDbContext>();
             identityWriteDb?.ChangeTracker.Clear();
 
             // Clear Identity Read DbContext (if tracked)
-            var identityReadDb = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityReadDbContext>();
+            var identityReadDb = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.DbContexts.IdentityDbContext>();
             identityReadDb?.ChangeTracker.Clear();
         }
         catch

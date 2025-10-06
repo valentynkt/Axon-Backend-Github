@@ -18,15 +18,15 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 /// </summary>
 internal sealed class ConversationReadRepository : EfSpecificationReadRepository<Conversation>, IConversationReadRepository
 {
-    private readonly ChatReadDbContext _chatDbContext;
+    private readonly ChatDbContext _chatDbContext;
 
     /// <summary>
     /// Compiled query for fetching conversations by owner with projection - hot path optimization
     /// SQLite-compatible: Using DateTime conversion for ordering to avoid DateTimeOffset ORDER BY issues
     /// </summary>
-    private static readonly Func<ChatReadDbContext, AxonUserId, IAsyncEnumerable<ConversationListItem>>
+    private static readonly Func<ChatDbContext, AxonUserId, IAsyncEnumerable<ConversationListItem>>
         GetConversationsForOwnerCompiled = EF.CompileAsyncQuery(
-            (ChatReadDbContext context, AxonUserId ownerId) =>
+            (ChatDbContext context, AxonUserId ownerId) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active)
                     .Select(c => new ConversationListItem(
@@ -40,9 +40,9 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// <summary>
     /// Compiled query for counting conversations by owner - optimized for count operations
     /// </summary>
-    private static readonly Func<ChatReadDbContext, AxonUserId, Task<int>> 
+    private static readonly Func<ChatDbContext, AxonUserId, Task<int>>
         CountConversationsForOwnerCompiled = EF.CompileAsyncQuery(
-            (ChatReadDbContext context, AxonUserId ownerId) =>
+            (ChatDbContext context, AxonUserId ownerId) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId && c.Status == ConversationStatus.Active)
                     .Count());
@@ -51,9 +51,9 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
     /// Compiled query for title search with count - hot path for filtered queries
     /// EF Core compatible: Using string concatenation instead of interpolation to avoid translation issues
     /// </summary>
-    private static readonly Func<ChatReadDbContext, AxonUserId, string, Task<int>>
+    private static readonly Func<ChatDbContext, AxonUserId, string, Task<int>>
         CountConversationsWithTitleCompiled = EF.CompileAsyncQuery(
-            (ChatReadDbContext context, AxonUserId ownerId, string titleLower) =>
+            (ChatDbContext context, AxonUserId ownerId, string titleLower) =>
                 context.Set<Conversation>()
                     .Where(c => c.OwnerId == ownerId &&
                                c.Status == ConversationStatus.Active &&
@@ -61,7 +61,7 @@ internal sealed class ConversationReadRepository : EfSpecificationReadRepository
                                EF.Functions.Like(c.Title.ToLower(), "%" + titleLower + "%"))
                     .Count());
 
-    public ConversationReadRepository(ChatReadDbContext dbContext) : base(dbContext)
+    public ConversationReadRepository(ChatDbContext dbContext) : base(dbContext)
     {
         _chatDbContext = dbContext;
     }

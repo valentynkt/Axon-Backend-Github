@@ -15,7 +15,7 @@ public sealed class TestDataVerificationRepository : ITestDataVerificationReposi
 {
     private readonly ChatDbContext _context;
 
-    public TestDataVerificationRepository(ChatReadDbContext readContext, ChatDbContext writeContext)
+    public TestDataVerificationRepository(ChatDbContext readContext, ChatDbContext writeContext)
     {
         // We mainly use write context since messages are owned entities and need the aggregate
         // Keep readContext parameter for consistency with base classes even though we don't use it

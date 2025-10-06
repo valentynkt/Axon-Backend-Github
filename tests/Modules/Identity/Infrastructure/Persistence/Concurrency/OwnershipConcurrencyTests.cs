@@ -263,7 +263,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
                 await Task.Delay(Random.Shared.Next(0, 100)); // Random delay to increase contention
 
                 using var separateContext = CreateConcurrentDbContext();
-                var separateUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(separateContext);
+                var separateUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(separateContext);
                 using var repo = new AxonPrincipalWriteRepository(separateContext, separateUnitOfWork, TimeProvider.System);
 
                 var freshPrincipal = await repo.GetByIdAsync(principal.Id, CancellationToken.None);
@@ -337,7 +337,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             async context1 =>
             {
                 // Transaction 1: A→wallet1, then A→wallet2
-                var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
+                var unitOfWork1 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context1);
                 using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1, TimeProvider.System);
                 var principal = await repo1.GetByIdAsync(principalA.Id, CancellationToken.None);
 
@@ -362,7 +362,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
             async context2 =>
             {
                 // Transaction 2: B→wallet2, then B→wallet1 (reverse order)
-                var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+                var unitOfWork2 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context2);
                 using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
                 var principal = await repo2.GetByIdAsync(principalB.Id, CancellationToken.None);
 
@@ -416,7 +416,7 @@ public class ConcurrentOwnershipTests : IdentityDbInvariantsTestBase
     }
 
     private static async Task<Result<bool, Error>> CheckExistingOwnershipWithContextAsync(
-        IdentityWriteDbContext context,
+        IdentityDbContext context,
         WalletId walletId,
         AccessMode accessMode,
         OwnershipStatus status)

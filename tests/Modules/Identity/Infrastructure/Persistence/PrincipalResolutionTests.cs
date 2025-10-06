@@ -38,20 +38,20 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
     private AxonPrincipalReadRepository _principalReadRepository = null!;
     private IAutoRevocationService _autoRevocationService = null!;
     private ILogger<PrincipalResolutionService> _logger = null!;
-    private IdentityReadDbContext _readContext = null!;
+    private IdentityDbContext _readContext = null!;
 
     protected override async Task SetUpDerived()
     {
         // Create read context for read repositories
-        var readOptions = CreateDbContextOptionsBuilder<IdentityReadDbContext>()
+        var readOptions = CreateDbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(ConnectionString, npgsqlOptions =>
             {
-                npgsqlOptions.MigrationsAssembly(typeof(IdentityReadDbContext).Assembly.FullName);
+                npgsqlOptions.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName);
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
             })
             .Options;
 
-        _readContext = new IdentityReadDbContext(readOptions);
+        _readContext = new IdentityDbContext(readOptions);
 
         _walletReadRepository = new WalletReadRepository(_readContext);
         _walletOwnershipRepository = new WalletOwnershipRepository(_readContext);
@@ -277,12 +277,12 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
         {
             // Create separate DbContexts for each concurrent operation
             using var localWriteContext = CreateConcurrentDbContext();
-            using var localReadContext = new IdentityReadDbContext(
-                CreateDbContextOptionsBuilder<IdentityReadDbContext>()
+            using var localReadContext = new IdentityDbContext(
+                CreateDbContextOptionsBuilder<IdentityDbContext>()
                     .UseNpgsql(ConnectionString)
                     .Options);
 
-            using var localUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(localWriteContext);
+            using var localUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(localWriteContext);
 
             var localWalletReadRepository = new WalletReadRepository(localReadContext);
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);
@@ -397,12 +397,12 @@ public class PrincipalResolutionPersistenceTests : IdentityPersistenceTestBase
         async Task<Result<PrincipalResolutionResult, Error>> CreateResolutionTask(int index)
         {
             using var localWriteContext = CreateConcurrentDbContext();
-            using var localReadContext = new IdentityReadDbContext(
-                CreateDbContextOptionsBuilder<IdentityReadDbContext>()
+            using var localReadContext = new IdentityDbContext(
+                CreateDbContextOptionsBuilder<IdentityDbContext>()
                     .UseNpgsql(ConnectionString)
                     .Options);
 
-            using var localUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(localWriteContext);
+            using var localUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(localWriteContext);
 
             var localWalletReadRepository = new WalletReadRepository(localReadContext);
             using var localWalletWriteRepository = new WalletWriteRepository(localWriteContext, localUnitOfWork);

@@ -26,7 +26,7 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.DbInvariants;
 public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
 {
     protected ChatDbContext DbContext { get; set; } = null!;
-    protected ChatReadDbContext ReadDbContext { get; set; } = null!;
+    protected ChatDbContext ReadDbContext { get; set; } = null!;
     protected IConversationRepository ConversationRepository { get; set; } = null!;
     protected IConversationReadRepository ConversationReadRepository { get; set; } = null!;
     protected IMessageReadRepository MessageReadRepository { get; set; } = null!;
@@ -68,7 +68,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
             .Options;
 
         // Setup read DbContext
-        var readOptions = CreateDbContextOptionsBuilder<ChatReadDbContext>()
+        var readOptions = CreateDbContextOptionsBuilder<ChatDbContext>()
             .UseNpgsql(ConnectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsAssembly(typeof(ChatDbContext).Assembly.FullName);
@@ -78,7 +78,7 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
             .Options;
 
         DbContext = new ChatDbContext(writeOptions, TimeProvider);
-        ReadDbContext = new ChatReadDbContext(readOptions);
+        ReadDbContext = new ChatDbContext(readOptions, TimeProvider);
         UnitOfWork = new EfUnitOfWork<ChatDbContext, ChatModule>(DbContext);
         ConversationRepository = new ConversationRepository(DbContext, UnitOfWork);
         ConversationReadRepository = new ConversationReadRepository(ReadDbContext);

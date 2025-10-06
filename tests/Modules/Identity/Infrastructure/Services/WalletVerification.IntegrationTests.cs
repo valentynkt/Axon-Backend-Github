@@ -28,7 +28,7 @@ namespace Axon.Modules.Identity.Infrastructure.Tests.Services;
 public class WalletVerificationIntegrationTests
 {
     private PostgreSqlContainer _postgres = null!;
-    private IdentityWriteDbContext _writeContext = null!;
+    private IdentityDbContext _writeContext = null!;
     private WalletVerificationService _verificationService = null!;
     private ILogger<WalletVerificationService> _logger = null!;
     private IAxonPrincipalWriteRepository _principalRepository = null!;
@@ -56,18 +56,18 @@ public class WalletVerificationIntegrationTests
     [SetUp]
     public async Task SetUp()
     {
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
+        var options = new DbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(_postgres.GetConnectionString())
             .Options;
 
-        _writeContext = new IdentityWriteDbContext(options);
+        _writeContext = new IdentityDbContext(options);
         await _writeContext.Database.EnsureCreatedAsync();
 
         await CreateDatabaseSchema();
 
         _logger = Substitute.For<ILogger<WalletVerificationService>>();
         // Use a real unit of work implementation instead of a mock
-        _unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(_writeContext);
+        _unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(_writeContext);
         _principalRepository = new AxonPrincipalWriteRepository(_writeContext, _unitOfWork, TimeProvider.System);
         _verificationService = new WalletVerificationService(_principalRepository, _unitOfWork, TimeProvider.System, _logger);
     }
@@ -389,19 +389,19 @@ public class WalletVerificationIntegrationTests
         }
     }
 
-    private (WalletVerificationService Service, IdentityWriteDbContext Context) CreateVerificationService()
+    private (WalletVerificationService Service, IdentityDbContext Context) CreateVerificationService()
     {
         // Create a new DbContext for isolated operations
         // Caller is responsible for disposing the returned context, which owns the unitOfWork and repository
-        var options = new DbContextOptionsBuilder<IdentityWriteDbContext>()
+        var options = new DbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(_postgres.GetConnectionString())
             .Options;
 
-        var context = new IdentityWriteDbContext(options);
+        var context = new IdentityDbContext(options);
 
         // UnitOfWork and Repository are disposed when context is disposed
         #pragma warning disable CA2000 // Dispose objects before losing scope
-        var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+        var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
         var repository = new AxonPrincipalWriteRepository(context, unitOfWork, TimeProvider.System);
         #pragma warning restore CA2000
 

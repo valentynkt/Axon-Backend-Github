@@ -14,23 +14,23 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 /// </summary>
 public sealed class WalletReadRepository : EfSpecificationReadRepository<Wallet>, IWalletReadRepository
 {
-    private readonly IdentityReadDbContext _identityDbContext;
+    private readonly IdentityDbContext _identityDbContext;
 
     /// <summary>
     /// Compiled query for checking wallet existence by chain and address - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ChainId, Address, Task<bool>> 
+    private static readonly Func<IdentityDbContext, ChainId, Address, Task<bool>>
         ExistsByChainAndAddressCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ChainId chainId, Address address) =>
+            (IdentityDbContext context, ChainId chainId, Address address) =>
                 context.Set<Wallet>()
                     .Any(w => w.ChainId == chainId.Value && w.Address == address));
 
     /// <summary>
     /// Compiled query for fetching wallets by chain with pagination - hot path optimization
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ChainId, int, int, IAsyncEnumerable<Wallet>> 
+    private static readonly Func<IdentityDbContext, ChainId, int, int, IAsyncEnumerable<Wallet>>
         GetByChainOptimizedCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ChainId chainId, int skip, int take) =>
+            (IdentityDbContext context, ChainId chainId, int skip, int take) =>
                 context.Set<Wallet>()
                     .Where(w => w.ChainId == chainId.Value)
                     .OrderBy(w => w.FirstSeenAt)
@@ -42,14 +42,14 @@ public sealed class WalletReadRepository : EfSpecificationReadRepository<Wallet>
     /// <summary>
     /// Compiled query for counting wallets by chain - optimized for count operations
     /// </summary>
-    private static readonly Func<IdentityReadDbContext, ChainId, Task<int>> 
+    private static readonly Func<IdentityDbContext, ChainId, Task<int>>
         GetCountOptimizedCompiled = EF.CompileAsyncQuery(
-            (IdentityReadDbContext context, ChainId chainId) =>
+            (IdentityDbContext context, ChainId chainId) =>
                 context.Set<Wallet>()
                     .Where(w => w.ChainId == chainId.Value)
                     .Count());
 
-    public WalletReadRepository(IdentityReadDbContext context) : base(context)
+    public WalletReadRepository(IdentityDbContext context) : base(context)
     {
         _identityDbContext = context;
     }

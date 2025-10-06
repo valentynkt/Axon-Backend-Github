@@ -19,9 +19,9 @@ namespace Axon.Modules.Chat.Infrastructure.Persistence.Repositories;
 /// </summary>
 internal sealed class MessageReadRepository : IMessageReadRepository
 {
-    private readonly ChatReadDbContext _dbContext;
+    private readonly ChatDbContext _dbContext;
 
-    public MessageReadRepository(ChatReadDbContext dbContext)
+    public MessageReadRepository(ChatDbContext dbContext)
     {
         _dbContext = dbContext;
     }

@@ -595,7 +595,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
     /// <summary>
     /// Executes command within a specific database context.
     /// </summary>
-    private async Task ExecuteCommandWithContext(ExchangeCredentialCommand command, IdentityWriteDbContext _)
+    private async Task ExecuteCommandWithContext(ExchangeCredentialCommand command, IdentityDbContext _)
     {
         // Implementation would use the specific context for concurrent testing
         var result = await ExecuteExchangeWithIdempotencyCheck(command);

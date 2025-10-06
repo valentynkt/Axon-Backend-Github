@@ -29,12 +29,10 @@ public static class InfrastructureDIValidation
 
         try
         {
-            // Database contexts validation
-            TestServiceResolution<ChatDbContext>(serviceProvider, errors, "ChatDbContext - Write database context");
-            // TestServiceResolution<ChatReadDbContext>(serviceProvider, errors, "ChatReadDbContext - Read database context");
-            TestServiceResolution<IChatWriteDbContext>(serviceProvider, errors, "IChatWriteDbContext interface");
-            // TestServiceResolution<IChatReadDbContext>(serviceProvider, errors, "IChatReadDbContext interface");
-            
+            // Database context validation - unified context
+            TestServiceResolution<ChatDbContext>(serviceProvider, errors, "ChatDbContext - Unified database context");
+            TestServiceResolution<IChatDbContext>(serviceProvider, errors, "IChatDbContext interface");
+
             // Repository validation
             TestServiceResolution<IConversationRepository>(serviceProvider, errors, "IConversationRepository");
             

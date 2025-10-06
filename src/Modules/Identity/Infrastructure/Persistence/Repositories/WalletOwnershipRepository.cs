@@ -15,9 +15,9 @@ namespace Axon.Modules.Identity.Infrastructure.Persistence.Repositories;
 /// </summary>
 public sealed class WalletOwnershipRepository : IWalletOwnershipRepository
 {
-    private readonly IdentityReadDbContext _readContext;
+    private readonly IIdentityDbContext _readContext;
 
-    public WalletOwnershipRepository(IdentityReadDbContext readContext)
+    public WalletOwnershipRepository(IIdentityDbContext readContext)
     {
         _readContext = readContext;
     }

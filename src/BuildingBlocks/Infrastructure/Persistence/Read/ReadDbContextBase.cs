@@ -10,11 +10,17 @@ using Microsoft.Extensions.Logging;
 namespace BuildingBlocks.Infrastructure.Persistence.Read;
 
 /// <summary>
-/// Base class for read-side DbContexts (CQRS).
-/// - No tracking by default
-/// - No lazy loading
-/// - Transaction helpers for edge cases only
+/// OBSOLETE: Base class for read-side DbContexts (CQRS).
+///
+/// MIGRATION: Use DbContextBase{TModule} instead, which provides both read and write capabilities.
+/// The CQRS split pattern (separate read/write contexts) has been replaced with unified contexts
+/// that handle both operations efficiently.
+///
+/// This class is kept for backwards compatibility but is no longer used in the codebase.
+/// All module contexts (IdentityDbContext, ChatDbContext) now inherit from DbContextBase.
 /// </summary>
+[Obsolete("Use DbContextBase<TModule> instead. ReadDbContextBase will be removed in a future version. " +
+          "The CQRS split pattern has been replaced with unified contexts that handle both reads and writes.")]
 public abstract class ReadDbContextBase<TModule> : DbContext, IReadDbContext<TModule>
     where TModule : class
 {

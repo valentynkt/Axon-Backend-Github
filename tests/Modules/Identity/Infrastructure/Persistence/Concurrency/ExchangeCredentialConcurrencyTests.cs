@@ -71,7 +71,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
             tasks.Add(Task.Run(async () =>
             {
                 using var concurrentContext = CreateConcurrentDbContext();
-                using var concurrentUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
+                using var concurrentUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(concurrentContext);
                 using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork, TimeProvider.System);
 
                 try
@@ -138,7 +138,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
             tasks.Add(Task.Run(async () =>
             {
                 using var concurrentContext = CreateConcurrentDbContext();
-                using var concurrentUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
+                using var concurrentUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(concurrentContext);
                 using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork, TimeProvider.System);
 
                 try
@@ -215,7 +215,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
             tasks.Add(Task.Run(async () =>
             {
                 using var concurrentContext = CreateConcurrentDbContext();
-                using var concurrentUnitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(concurrentContext);
+                using var concurrentUnitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(concurrentContext);
                 using var concurrentPrincipalRepo = new AxonPrincipalWriteRepository(concurrentContext, concurrentUnitOfWork, TimeProvider.System);
 
                 try
@@ -276,7 +276,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
         var task1 = Task.Run(async () =>
         {
             using var context1 = CreateConcurrentDbContext();
-            using var unitOfWork1 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context1);
+            using var unitOfWork1 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context1);
             using var repo1 = new AxonPrincipalWriteRepository(context1, unitOfWork1, TimeProvider.System);
 
             try
@@ -306,7 +306,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
         var task2 = Task.Run(async () =>
         {
             using var context2 = CreateConcurrentDbContext();
-            using var unitOfWork2 = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context2);
+            using var unitOfWork2 = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context2);
             using var repo2 = new AxonPrincipalWriteRepository(context2, unitOfWork2, TimeProvider.System);
 
             try
@@ -430,7 +430,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
         var task1 = Task.Run(async () =>
         {
             using var context = CreateConcurrentDbContext();
-            using var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+            using var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
             using var walletRepo = new WalletWriteRepository(context, unitOfWork);
 
             var result = await walletRepo.EnsureManyByChainAndAddressAsync(walletSpecs.Take(10));
@@ -441,7 +441,7 @@ public class ExchangeCredentialConcurrencyPersistenceTests : IdentityPersistence
         var task2 = Task.Run(async () =>
         {
             using var context = CreateConcurrentDbContext();
-            using var unitOfWork = new EfUnitOfWork<IdentityWriteDbContext, IdentityModule>(context);
+            using var unitOfWork = new EfUnitOfWork<IdentityDbContext, IdentityModule>(context);
             using var walletRepo = new WalletWriteRepository(context, unitOfWork);
 
             var result = await walletRepo.EnsureManyByChainAndAddressAsync(walletSpecs.Skip(10));

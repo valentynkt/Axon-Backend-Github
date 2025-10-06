@@ -17,12 +17,12 @@ namespace Axon.Modules.Identity.Application.Services;
 /// </summary>
 public sealed class AutoRevocationService : IAutoRevocationService
 {
-    private readonly IIdentityWriteDbContext _dbContext;
+    private readonly IIdentityDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AutoRevocationService> _logger;
 
     public AutoRevocationService(
-        IIdentityWriteDbContext dbContext,
+        IIdentityDbContext dbContext,
         TimeProvider timeProvider,
         ILogger<AutoRevocationService> logger)
     {

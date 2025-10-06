@@ -17,7 +17,7 @@ public sealed class AxonPrincipalWriteRepository : EfWriteRepository<AxonPrincip
     private readonly IWriteUnitOfWork<IdentityModule> _unitOfWork;
     private readonly TimeProvider _timeProvider;
 
-    public AxonPrincipalWriteRepository(IdentityWriteDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork, TimeProvider timeProvider) : base(context)
+    public AxonPrincipalWriteRepository(IdentityDbContext context, IWriteUnitOfWork<IdentityModule> unitOfWork, TimeProvider timeProvider) : base(context)
     {
         _unitOfWork = unitOfWork;
         _timeProvider = timeProvider;
