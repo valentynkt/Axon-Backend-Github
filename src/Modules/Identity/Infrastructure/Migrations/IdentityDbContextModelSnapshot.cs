@@ -67,6 +67,9 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                     b.HasIndex("Type")
                         .HasDatabaseName("ix_principal_type");
 
+                    b.HasIndex("UpdatedAt", "Id")
+                        .HasDatabaseName("ix_principals_updated_at_id");
+
                     b.ToTable("Principal", "identity");
                 });
 
@@ -132,6 +135,9 @@ namespace Axon.Modules.Identity.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_wallet_chain_addr")
                         .HasFilter("is_deleted = false");
+
+                    b.HasIndex("ChainId", "UpdatedAt")
+                        .HasDatabaseName("ix_wallets_chain_updated");
 
                     b.ToTable("Wallet", "identity");
                 });
