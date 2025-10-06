@@ -1,16 +1,12 @@
-using BuildingBlocks.Web.Contracts;
-
 namespace Axon.Api.Contracts.V1.Auth;
 
 /// <summary>
 /// Response for GET /api/v1/auth/me endpoint per High-Level Flow Architecture
-/// Returns canonical merged view of current user with ETag support
+/// Returns canonical merged view of current user
 /// </summary>
 public sealed record GetCurrentUserResponseDto(
     UserProfileDto Profile,
-    WalletInfoDto[] Wallets,
-    string ETag
-) : IHaveETag;
+    WalletInfoDto[] Wallets);
 
 /// <summary>
 /// User profile information

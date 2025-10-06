@@ -207,12 +207,10 @@ app.UseFastEndpoints(c =>
 {
     c.Endpoints.Configurator = ep =>
     {
-        // Pre-processors execute in order: Logging → ETag extraction
+        // Pre-processors execute in order: Logging
         ep.PreProcessor<BuildingBlocks.Web.Endpoints.Processors.LoggingPreProcessor>(FastEndpoints.Order.Before);
-        ep.PreProcessor<BuildingBlocks.Web.Endpoints.Processors.ETagPreProcessor>(FastEndpoints.Order.Before);
 
-        // Post-processors execute in order: ETag handling → Logging
-        ep.PostProcessor<BuildingBlocks.Web.Endpoints.Processors.ETagPostProcessor>(FastEndpoints.Order.After);
+        // Post-processors execute in order: Logging
         ep.PostProcessor<BuildingBlocks.Web.Endpoints.Processors.LoggingPostProcessor>(FastEndpoints.Order.After);
     };
 });

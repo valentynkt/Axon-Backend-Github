@@ -67,15 +67,6 @@ public interface IAxonPrincipalReadRepository : ISpecificationReadRepository<Axo
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the deterministic fingerprint/ETag for a principal.
-    /// Includes principal.updated_at + max verified and signing ownership.updated_at + max chain_default.updated_at.
-    /// Used for efficient cache validation with If-None-Match header.
-    /// </summary>
-    Task<string> GetPrincipalFingerprintAsync(
-        AxonUserId principalId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Checks if a wallet is already owned by any principal with verified signing ownership.
     /// Used to enforce the global single verified owner rule.
     /// Only returns true for verified signing ownership, not watch-only.

@@ -90,17 +90,10 @@ public sealed class WalletVerificationService : IWalletVerificationService
                     return verifyResult;
                 }
 
-                // IMPORTANT: Do NOT call UpdateAsync() or SaveChangesAsync() here
-                //
-                // Rationale:
-                // 1. The principal is already tracked by EF Core (from GetTrackedPrincipal or GetByIdAsync)
-                // 2. Changes from VerifyWalletOwnership() are automatically detected by EF Core's Change Tracker
-                // 3. The transaction is managed by UnitOfWorkBehavior which calls SaveChangesAsync() at the end
-                // 4. Calling UpdateAsync() on newly created entities (Version = 0) throws validation errors
-                // 5. Calling SaveChangesAsync() here breaks transactional integrity
-                //
-                // This service is ALWAYS called as part of a larger transaction (from ProcessWalletsBatch),
-                // never standalone. All changes will be committed atomically when the transaction completes.
+                // Save changes to persist ownership and trigger unique constraint validation
+                // This enables concurrency control via database constraint (ux_exclusive_signing)
+                // The principal is already tracked by EF Core, so SaveChanges will detect and persist the new ownership
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation(
                     "Successfully verified wallet {WalletId} ownership for principal {PrincipalId}",

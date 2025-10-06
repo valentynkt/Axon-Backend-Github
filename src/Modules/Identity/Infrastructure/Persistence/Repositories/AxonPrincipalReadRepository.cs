@@ -72,37 +72,6 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
                     .AsNoTracking()
                     .FirstOrDefault());
 
-    /// <summary>
-    /// Compiled query for getting principal fingerprint data - hot path optimization
-    /// </summary>
-    private static readonly Func<IdentityDbContext, AxonUserId, Task<FingerprintData?>>
-        GetPrincipalFingerprintDataCompiled = EF.CompileAsyncQuery(
-            (IdentityDbContext context, AxonUserId principalId) =>
-                context.Set<AxonPrincipal>()
-                    .Where(p => p.Id == principalId)
-                    .Select(p => new FingerprintData
-                    {
-                        PrincipalUpdated = p.UpdatedAt ?? DateTimeOffset.MinValue,
-                        MaxOwnershipUpdated = p.WalletOwnerships
-                            .Where(wo => wo.Status == OwnershipStatus.Verified && wo.AccessMode == AccessMode.Signing)
-                            .Max(wo => (DateTimeOffset?)wo.UpdatedAt),
-                        // Access PrincipalChainDefaults through the navigation property, not as DbSet
-                        // PrincipalChainDefault is an owned entity type and must be accessed via principal
-                        MaxChainDefaultUpdated = p.PrincipalChainDefaults
-                            .Max(cd => (DateTimeOffset?)cd.UpdatedAt)
-                    })
-                    .FirstOrDefault());
-
-    /// <summary>
-    /// Data structure for fingerprint computation
-    /// </summary>
-    private sealed class FingerprintData
-    {
-        public DateTimeOffset PrincipalUpdated { get; set; }
-        public DateTimeOffset? MaxOwnershipUpdated { get; set; }
-        public DateTimeOffset? MaxChainDefaultUpdated { get; set; }
-    }
-
     public AxonPrincipalReadRepository(IdentityDbContext context) : base(context)
     {
         _identityDbContext = context;
@@ -178,10 +147,10 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
         CancellationToken cancellationToken = default)
     {
         // Use EF Core to get principal with active wallet ownerships and chain defaults in single query
+        // Note: PrincipalChainDefaults are owned entities - automatically loaded by EF Core
         return await _identityDbContext.Set<AxonPrincipal>()
             .Where(p => p.Id == AxonUserId)
             .Include(p => p.WalletOwnerships.Where(wo => wo.Status == OwnershipStatus.Verified))
-            .Include(p => p.PrincipalChainDefaults)
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
     }
@@ -193,27 +162,6 @@ public sealed class AxonPrincipalReadRepository : EfSpecificationReadRepository<
         CancellationToken cancellationToken = default)
     {
         return await FindByCredentialCompiled(_identityDbContext, providerType.Value, issuer, subject);
-    }
-
-    public async Task<string> GetPrincipalFingerprintAsync(
-        AxonUserId principalId,
-        CancellationToken cancellationToken = default)
-    {
-        var data = await GetPrincipalFingerprintDataCompiled(_identityDbContext, principalId);
-        
-        if (data == null)
-            return string.Empty;
-
-        // Format timestamps as invariant culture strings for deterministic hashing
-        var principalUpdated = data.PrincipalUpdated.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture);
-        var maxOwnershipUpdated = data.MaxOwnershipUpdated?.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) ?? "";
-        var maxChainDefaultUpdated = data.MaxChainDefaultUpdated?.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) ?? "";
-
-        var fingerprint = principalUpdated + maxOwnershipUpdated + maxChainDefaultUpdated;
-
-        // Convert to SHA-256 hash for deterministic ETag
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fingerprint));
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
     public async Task<bool> IsWalletOwnedByVerifiedSigningAsync(

@@ -8,7 +8,7 @@ namespace Axon.Modules.Identity.Application.Tests.Commands.UpdateProfile;
 /// Coverage areas:
 /// - Valid profile updates (email, preferences, etc.)
 /// - Validation of update data
-/// - Concurrency handling with ETag
+/// - Optimistic concurrency handling (database version checks)
 /// - Permission checks
 /// </summary>
 [TestFixture]
@@ -28,7 +28,7 @@ public class UpdateProfileHandlerTests
     }
 
     [Test]
-    public void Handle_WithStaleETag_ShouldReturnConflict()
+    public void Handle_WithStaleVersion_ShouldReturnConcurrencyConflict()
     {
         Assert.Fail("Test not implemented");
     }

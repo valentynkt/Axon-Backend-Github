@@ -69,8 +69,7 @@ public static class OpenApiExamples
                 ["linkedAt"] = new OpenApiString("2025-01-11T12:00:00Z")
             }
         },
-        ["lastLogin"] = new OpenApiString("2025-01-11T12:00:00Z"),
-        ["etag"] = new OpenApiString("W/\"123456789\"")
+        ["lastLogin"] = new OpenApiString("2025-01-11T12:00:00Z")
     };
 
     #endregion

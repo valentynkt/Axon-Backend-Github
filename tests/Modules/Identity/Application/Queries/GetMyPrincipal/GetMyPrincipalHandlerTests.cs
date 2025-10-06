@@ -42,11 +42,11 @@ public class GetMyPrincipalHandlerRefactoredTests
     public async Task Handle_Should_DelegateToUserProfileService()
     {
         // Arrange
-        var query = new GetMyPrincipalQuery(TestPrincipalId, null);
+        var query = new GetMyPrincipalQuery(TestPrincipalId);
         var expectedResult = CreateTestUserResult();
 
         _userProfileService.GetCurrentUserProfileAsync(
-            TestPrincipalId, null, Arg.Any<CancellationToken>())
+            TestPrincipalId, Arg.Any<CancellationToken>())
             .Returns(Result.Success<CurrentUserResult, Error>(expectedResult));
 
         // Act
@@ -57,40 +57,18 @@ public class GetMyPrincipalHandlerRefactoredTests
         result.Value.ShouldBe(expectedResult);
 
         await _userProfileService.Received(1).GetCurrentUserProfileAsync(
-            TestPrincipalId, null, Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task Handle_WithIfNoneMatch_Should_PassETagToService()
-    {
-        // Arrange
-        var ifNoneMatch = "test-etag-123";
-        var query = new GetMyPrincipalQuery(TestPrincipalId, ifNoneMatch);
-        var expectedResult = CreateTestUserResult();
-
-        _userProfileService.GetCurrentUserProfileAsync(
-            TestPrincipalId, ifNoneMatch, Arg.Any<CancellationToken>())
-            .Returns(Result.Success<CurrentUserResult, Error>(expectedResult));
-
-        // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-
-        await _userProfileService.Received(1).GetCurrentUserProfileAsync(
-            TestPrincipalId, ifNoneMatch, Arg.Any<CancellationToken>());
+            TestPrincipalId, Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task Handle_WhenServiceReturnsFailure_Should_ReturnFailure()
     {
         // Arrange
-        var query = new GetMyPrincipalQuery(TestPrincipalId, null);
+        var query = new GetMyPrincipalQuery(TestPrincipalId);
         var expectedError = Error.NotFound("Principal not found");
 
         _userProfileService.GetCurrentUserProfileAsync(
-            TestPrincipalId, null, Arg.Any<CancellationToken>())
+            TestPrincipalId, Arg.Any<CancellationToken>())
             .Returns(Result.Failure<CurrentUserResult, Error>(expectedError));
 
         // Act
@@ -102,37 +80,14 @@ public class GetMyPrincipalHandlerRefactoredTests
     }
 
     [Test]
-    public async Task Handle_WhenServiceReturnsConflict_Should_ReturnConflict()
-    {
-        // Arrange
-        var query = new GetMyPrincipalQuery(TestPrincipalId, "client-etag");
-        var expectedError = Error.Conflict("Content not modified", "NOT_MODIFIED")
-            .WithMetadata("ETag", "server-etag")
-            .WithMetadata("IsNotModified", true);
-
-        _userProfileService.GetCurrentUserProfileAsync(
-            TestPrincipalId, "client-etag", Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<CurrentUserResult, Error>(expectedError));
-
-        // Act
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Type.ShouldBe(ErrorType.Conflict);
-        result.Error.Metadata?.ShouldContainKey("ETag");
-        result.Error.Metadata?.ShouldContainKeyAndValue("IsNotModified", true);
-    }
-
-    [Test]
     public async Task Handle_Should_LogDebugMessages()
     {
         // Arrange
-        var query = new GetMyPrincipalQuery(TestPrincipalId, null);
+        var query = new GetMyPrincipalQuery(TestPrincipalId);
         var expectedResult = CreateTestUserResult();
 
         _userProfileService.GetCurrentUserProfileAsync(
-            TestPrincipalId, null, Arg.Any<CancellationToken>())
+            TestPrincipalId, Arg.Any<CancellationToken>())
             .Returns(Result.Success<CurrentUserResult, Error>(expectedResult));
 
         // Act
@@ -158,11 +113,11 @@ public class GetMyPrincipalHandlerRefactoredTests
     public async Task Handle_WhenServiceFails_Should_LogFailure()
     {
         // Arrange
-        var query = new GetMyPrincipalQuery(TestPrincipalId, null);
+        var query = new GetMyPrincipalQuery(TestPrincipalId);
         var expectedError = Error.NotFound("Principal not found");
 
         _userProfileService.GetCurrentUserProfileAsync(
-            TestPrincipalId, null, Arg.Any<CancellationToken>())
+            TestPrincipalId, Arg.Any<CancellationToken>())
             .Returns(Result.Failure<CurrentUserResult, Error>(expectedError));
 
         // Act
@@ -184,7 +139,6 @@ public class GetMyPrincipalHandlerRefactoredTests
             Profile: new UserProfile(
                 AxonId: TestPrincipalId.Value.ToString(),
                 RiskTier: "low"),
-            Wallets: new List<WalletInfo>().AsReadOnly(),
-            ETag: "test-etag-123");
+            Wallets: new List<WalletInfo>().AsReadOnly());
     }
 }

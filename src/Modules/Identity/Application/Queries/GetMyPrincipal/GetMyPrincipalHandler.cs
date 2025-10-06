@@ -36,13 +36,12 @@ public sealed class GetMyPrincipalHandler : BaseIdentityQueryHandler<GetMyPrinci
         // Delegate to UserProfileService - this handler is now just a thin orchestration layer
         var result = await _userProfileService.GetCurrentUserProfileAsync(
             query.PrincipalId,
-            query.IfNoneMatch,
             cancellationToken);
 
         if (result.IsSuccess)
         {
-            _logger.LogInformation("✅ Successfully retrieved user profile for principal {PrincipalId} - Profile: {AxonId}, Wallets: {WalletCount}, ETag: {ETag}",
-                query.PrincipalId.Value, result.Value.Profile.AxonId, result.Value.Wallets.Count, result.Value.ETag);
+            _logger.LogInformation("✅ Successfully retrieved user profile for principal {PrincipalId} - Profile: {AxonId}, Wallets: {WalletCount}",
+                query.PrincipalId.Value, result.Value.Profile.AxonId, result.Value.Wallets.Count);
         }
         else
         {

@@ -54,7 +54,6 @@ public sealed class AuthMappingProfile : IRegister, IAuthMappingProfile
                 w.State,
                 w.Access,
                 w.IsDefault
-            )).ToArray())
-            .Map(dest => dest.ETag, src => src.ETag);
+            )).ToArray());
     }
 }

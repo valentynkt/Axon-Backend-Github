@@ -27,13 +27,28 @@ public sealed class ConversationRepository : EfWriteRepository<Conversation, Con
     /// <summary>
     /// Override GetByIdAsync to include Messages navigation property via private field.
     /// Uses AsSplitQuery to avoid Cartesian explosion with large message collections.
+    /// CRITICAL FIX: Uses AsNoTracking() to bypass EF Core's identity map and get fresh data from DB.
+    /// This prevents stale owned entities (Messages) from being returned when the same conversation
+    /// is loaded multiple times (e.g., in E2E tests with multiple HTTP requests).
+    /// After loading, we attach the entity to enable change tracking for updates.
     /// </summary>
     public override async Task<Conversation?> GetByIdAsync(ConversationId id, CancellationToken ct = default)
     {
-        return await _chatDbContext.Set<Conversation>()
+        // Use AsNoTracking to get fresh data from DB, avoiding stale cached entities
+        // This is critical for E2E tests where multiple requests operate on same conversation
+        var conversation = await _chatDbContext.Set<Conversation>()
+            .AsNoTracking()
             .AsSplitQuery()
             .Include("_messages")
             .FirstOrDefaultAsync(c => c.Id == id, ct);
+
+        if (conversation == null)
+            return null;
+
+        // Attach to change tracker for updates (this will track both conversation and owned messages)
+        _chatDbContext.Attach(conversation);
+
+        return conversation;
     }
 
     /// <summary>

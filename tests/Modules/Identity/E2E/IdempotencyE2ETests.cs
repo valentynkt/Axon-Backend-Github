@@ -359,10 +359,10 @@ public class IdempotencyE2ETests : E2ETestBase
         var response3 = await HttpClient.PostAsync("/api/v1/auth/exchange", requestPayload);
 
         // Assert: Error responses should be consistent
-        // Note: Invalid issuer returns BadRequest (400) not Unauthorized (401) - both are valid error codes
-        response1.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response2.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response3.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // Invalid issuer is an authentication failure, returns Unauthorized (401)
+        response1.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response2.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        response3.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         var content1 = await response1.Content.ReadAsStringAsync();
         var content2 = await response2.Content.ReadAsStringAsync();

@@ -13,8 +13,8 @@ using Microsoft.Extensions.Logging;
 namespace Axon.Modules.Identity.Application.Services;
 
 /// <summary>
-/// Service responsible for retrieving user profile information including principal data,
-/// wallet information, and ETag-based caching support.
+/// Service responsible for retrieving user profile information including principal data
+/// and wallet information.
 /// Separated from authentication concerns following Single Responsibility Principle.
 /// </summary>
 public sealed class UserProfileService : IUserProfileService
@@ -34,12 +34,11 @@ public sealed class UserProfileService : IUserProfileService
     }
 
     /// <summary>
-    /// Get current user profile by AxonPrincipalId with ETag caching support.
+    /// Get current user profile by AxonPrincipalId.
     /// This is the primary method used by authenticated endpoints.
     /// </summary>
     public async Task<Result<CurrentUserResult, Error>> GetCurrentUserProfileAsync(
         AxonUserId principalId,
-        string? ifNoneMatch = null,
         CancellationToken cancellationToken = default)
     {
         // Step 1: Find principal by ID
@@ -51,19 +50,7 @@ public sealed class UserProfileService : IUserProfileService
                 Error.NotFound(GetMyPrincipalErrorMessages.PrincipalNotFound));
         }
 
-        // Step 2: Generate ETag fingerprint
-        var currentETag = await _principalRepository.GetPrincipalFingerprintAsync(
-            principal.Id,
-            cancellationToken);
-
-        // Step 3: Check If-None-Match header for 304 Not Modified
-        var etagResult = CheckETagMatch(ifNoneMatch, currentETag, principal.Id.Value);
-        if (etagResult.IsFailure)
-        {
-            return Result.Failure<CurrentUserResult, Error>(etagResult.Error);
-        }
-
-        // Step 4: Load full principal snapshot with ownerships
+        // Step 2: Load full principal snapshot with ownerships
         var principalWithOwnerships = await _principalRepository.GetByIdWithActiveOwnershipsAsync(
             principal.Id,
             cancellationToken);
@@ -74,8 +61,8 @@ public sealed class UserProfileService : IUserProfileService
                 Error.NotFound(GetMyPrincipalErrorMessages.PrincipalDataLoadFailed));
         }
 
-        // Step 5: Build CurrentUserResult response
-        var result = await BuildCurrentUserResult(principalWithOwnerships, currentETag, cancellationToken);
+        // Step 3: Build CurrentUserResult response
+        var result = await BuildCurrentUserResult(principalWithOwnerships, cancellationToken);
 
         return Result.Success<CurrentUserResult, Error>(result);
     }
@@ -88,7 +75,6 @@ public sealed class UserProfileService : IUserProfileService
         ProviderType providerType,
         string issuer,
         string subject,
-        string? ifNoneMatch = null,
         CancellationToken cancellationToken = default)
     {
         // Step 1: Find principal by credential
@@ -105,52 +91,11 @@ public sealed class UserProfileService : IUserProfileService
         }
 
         // Delegate to the main method
-        return await GetCurrentUserProfileAsync(principal.Id, ifNoneMatch, cancellationToken);
-    }
-
-    private Result<bool, Error> CheckETagMatch(string? ifNoneMatch, string currentETag, Guid principalId)
-    {
-        if (!string.IsNullOrEmpty(ifNoneMatch))
-        {
-            // Handle both quoted and unquoted ETags as per HTTP spec
-            var ifNoneMatchClean = ifNoneMatch.Trim('"');
-            if (string.Equals(ifNoneMatchClean, currentETag, StringComparison.OrdinalIgnoreCase))
-            {
-                // ETag HIT - client cache is still valid
-                _logger.LogDebug("ETag HIT: Client ETag {ClientETag} matches current ETag {CurrentETag} for principal {PrincipalId}",
-                    ifNoneMatchClean, currentETag, principalId);
-
-                // Record ETag cache hit metric
-                Instrumentation.ETagHits.Add(1, new KeyValuePair<string, object?>("endpoint", "/auth/me"));
-
-                return Result.Failure<bool, Error>(
-                    Error.Conflict(GetMyPrincipalErrorMessages.ContentNotModified, GetMyPrincipalErrorMessages.NotModifiedCode)
-                        .WithMetadata("ETag", currentETag)
-                        .WithMetadata("IsNotModified", true));
-            }
-            else
-            {
-                // ETag MISS - client cache is stale
-                _logger.LogDebug("ETag MISS: Client ETag {ClientETag} does not match current ETag {CurrentETag} for principal {PrincipalId}",
-                    ifNoneMatchClean, currentETag, principalId);
-
-                // Record ETag cache miss metric
-                Instrumentation.ETagMisses.Add(1, new KeyValuePair<string, object?>("endpoint", "/auth/me"));
-            }
-        }
-        else
-        {
-            // No If-None-Match header provided - not counted as miss since no cache was attempted
-            _logger.LogDebug("No If-None-Match header provided, serving fresh content with ETag {CurrentETag} for principal {PrincipalId}",
-                currentETag, principalId);
-        }
-
-        return Result.Success<bool, Error>(true);
+        return await GetCurrentUserProfileAsync(principal.Id, cancellationToken);
     }
 
     private async Task<CurrentUserResult> BuildCurrentUserResult(
         Domain.Aggregates.AxonPrincipal.AxonPrincipal principal,
-        string etag,
         CancellationToken cancellationToken)
     {
         // Build user profile per architecture specification
@@ -206,7 +151,6 @@ public sealed class UserProfileService : IUserProfileService
 
         return new CurrentUserResult(
             Profile: profile,
-            Wallets: walletInfos.AsReadOnly(),
-            ETag: etag);
+            Wallets: walletInfos.AsReadOnly());
     }
 }

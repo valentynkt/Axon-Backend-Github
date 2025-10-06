@@ -6,7 +6,7 @@ namespace Axon.Modules.Identity.E2E.Infrastructure;
 
 /// <summary>
 /// Validator for /auth/me endpoint responses.
-/// Provides structured validation of response format, ETag behavior, and data completeness.
+/// Provides structured validation of response format, and data completeness.
 /// </summary>
 public static class AuthMeResponseValidator
 {
@@ -28,9 +28,6 @@ public static class AuthMeResponseValidator
         // Validate content type
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/json");
 
-        // Validate ETag presence
-        response.Headers.ETag.ShouldNotBeNull("Response should include ETag header");
-
         // Validate response body structure
         var content = response.Content.ReadAsStringAsync().Result;
         var responseData = JsonSerializer.Deserialize<AuthMeResponseData>(content, JsonOptions);
@@ -41,22 +38,7 @@ public static class AuthMeResponseValidator
 
     /// <summary>
     /// Validates a 304 Not Modified response.
-    /// </summary>
-    public static void ValidateNotModifiedResponse(HttpResponseMessage response, string expectedETag)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-        response.StatusCode.ShouldBe(HttpStatusCode.NotModified);
-
-        // 304 responses should have no content
-        var content = response.Content.ReadAsStringAsync().Result;
-        content.ShouldBeEmpty("304 responses should have no content");
-
-        // ETag should still be present
-        response.Headers.ETag.ShouldNotBeNull("304 response should include ETag header");
-        response.Headers.ETag.Tag.ShouldBe($"\"{expectedETag}\"");
-    }
-
-    /// <summary>
+    /// </summary>/// <summary>
     /// Validates user data structure within the response.
     /// </summary>
     private static void ValidateUserData(
@@ -69,9 +51,6 @@ public static class AuthMeResponseValidator
         responseData.Profile.ShouldNotBeNull("Profile should be present");
         responseData.Profile.AxonId.ShouldBe(expectedPrincipalId, "AxonId should match expected principal ID");
         responseData.Profile.RiskTier.ShouldNotBeNullOrWhiteSpace("RiskTier should be present");
-
-        // Validate ETag in response body (in addition to header)
-        responseData.ETag.ShouldNotBeNullOrWhiteSpace("ETag should be present in response body");
 
         // Validate wallets array
         responseData.Wallets.ShouldNotBeNull("Wallets array should be present");
@@ -105,99 +84,6 @@ public static class AuthMeResponseValidator
 
     #endregion
 
-    #region ETag Validation
-
-    /// <summary>
-    /// Validates ETag format and ensures it's not empty.
-    /// </summary>
-    public static string ValidateAndExtractETag(HttpResponseMessage response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-        response.Headers.ETag.ShouldNotBeNull("Response should include ETag header");
-
-        var etagValue = response.Headers.ETag.Tag;
-        etagValue.ShouldNotBeNullOrWhiteSpace("ETag value should not be empty");
-
-        // ETags should be quoted
-        etagValue.ShouldStartWith("\"");
-        etagValue.ShouldEndWith("\"");
-
-        // Extract unquoted value
-        var unquotedEtag = etagValue.Trim('"');
-        unquotedEtag.ShouldNotBeNullOrWhiteSpace("ETag content should not be empty");
-
-        return unquotedEtag;
-    }
-
-    /// <summary>
-    /// Validates that ETags are different (indicating data changed).
-    /// </summary>
-    public static void ValidateETagChanged(string originalETag, string newETag)
-    {
-        newETag.ShouldNotBe(originalETag, "ETag should change when data is modified");
-    }
-
-    /// <summary>
-    /// Validates that ETags are the same (indicating data unchanged).
-    /// </summary>
-    public static void ValidateETagUnchanged(string originalETag, string newETag)
-    {
-        newETag.ShouldBe(originalETag, "ETag should remain the same when data is unchanged");
-    }
-
-    #endregion
-
-    #region Cache Validation
-
-    /// <summary>
-    /// Validates cache headers in the response.
-    /// </summary>
-    public static void ValidateCacheHeaders(HttpResponseMessage response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-        // Check for cache-related headers
-        response.Headers.ETag.ShouldNotBeNull("Response should include ETag for caching");
-
-        // Validate that cache-control headers are appropriate
-        var cacheControl = response.Headers.CacheControl;
-        if (cacheControl != null)
-        {
-            // For /auth/me, we typically want private caching
-            cacheControl.Private.ShouldBeTrue("User data should be private cached");
-        }
-    }
-
-    /// <summary>
-    /// Validates behavior of conditional requests with If-None-Match.
-    /// </summary>
-    public static void ValidateConditionalRequestBehavior(
-        HttpResponseMessage originalResponse,
-        HttpResponseMessage conditionalResponse,
-        bool shouldBeNotModified = true)
-    {
-        ArgumentNullException.ThrowIfNull(conditionalResponse);
-        if (shouldBeNotModified)
-        {
-            conditionalResponse.StatusCode.ShouldBe(HttpStatusCode.NotModified);
-
-            var originalETag = ValidateAndExtractETag(originalResponse);
-            var conditionalETag = ValidateAndExtractETag(conditionalResponse);
-
-            ValidateETagUnchanged(originalETag, conditionalETag);
-        }
-        else
-        {
-            conditionalResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-            var originalETag = ValidateAndExtractETag(originalResponse);
-            var conditionalETag = ValidateAndExtractETag(conditionalResponse);
-
-            ValidateETagChanged(originalETag, conditionalETag);
-        }
-    }
-
-    #endregion
-
     #region JSON Serialization Options
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -218,7 +104,6 @@ public static class AuthMeResponseValidator
     {
         public ProfileData Profile { get; set; } = new();
         public List<WalletData> Wallets { get; set; } = new();
-        public string ETag { get; set; } = string.Empty;
     }
 
     /// <summary>

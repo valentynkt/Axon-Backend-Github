@@ -51,7 +51,7 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
         {
             s.Summary = "Get current user information";
             s.Description = """
-                Returns information about the currently authenticated user with ETag caching support.
+                Returns information about the currently authenticated user.
 
                 **Requires**: Valid JWT Access Token in Authorization header
 
@@ -59,15 +59,8 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
                 - Accepts both Dynamic JWT and Axon JWT tokens
                 - Dynamic tokens can be used directly without exchange
                 - Axon tokens obtained from /auth/exchange endpoint
-
-                **ETag Support**:
-                - Server returns `ETag` header with fingerprint of user data
-                - Client can send `If-None-Match` header to check for changes
-                - Returns `304 Not Modified` if data hasn't changed since provided ETag
-                - Supports client-side caching for improved performance
                 """;
             s.Responses[200] = "Returns current user information with claims";
-            s.Responses[304] = "Not Modified - Content hasn't changed since last request (ETag match)";
             s.Responses[400] = "Invalid request parameters";
             s.Responses[401] = "User not authenticated";
             s.Responses[403] = "User does not have access to this resource";
@@ -85,9 +78,6 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
         // User is already authenticated via IdentityAuthProcessor
         var principal = HttpContext.User;
 
-        // Get client ETag from ETagPreProcessor (stored in HttpContext.Items)
-        var ifNoneMatch = HttpContext.Items["ClientETag"]?.ToString();
-
         // Extract AxonPrincipalId from JWT token with fallback to Dynamic JWT
         var axonPrincipalIdClaim = principal.FindFirst("axon_user_id")?.Value
             ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -101,10 +91,7 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
 
             Logger.LogDebug("Retrieving user info for AxonPrincipalId: {PrincipalId}", axonPrincipalId.Value);
 
-            var query = new GetMyPrincipalQuery(
-                PrincipalId: axonPrincipalId,
-                IfNoneMatch: ifNoneMatch
-            );
+            var query = new GetMyPrincipalQuery(PrincipalId: axonPrincipalId);
 
             domainResult = await _mediator.Send(query, ct);
         }
@@ -130,7 +117,6 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
                 ProviderType.Dynamic,
                 issuer,
                 subject,
-                ifNoneMatch,
                 ct);
         }
 
@@ -140,7 +126,6 @@ public sealed class MeEndpoint : BaseResultEndpoint<GetCurrentUserRequestDto, Ge
         // Map domain result to response using Mapster
         var responseResult = domainResult.Value.AdaptSafely<GetCurrentUserResponseDto>();
 
-        // ETag handling is done automatically by ETagPostProcessor since GetCurrentUserResponseDto implements IHaveETag
         return responseResult;
     }
 }

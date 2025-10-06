@@ -2,12 +2,11 @@ namespace Axon.Modules.Identity.Application.DTOs.Responses;
 
 /// <summary>
 /// Response DTO for GET /auth/me endpoint per High-Level Flow Architecture.
-/// Contains canonical merged view of current user with ETag support.
+/// Contains canonical merged view of current user.
 /// </summary>
 public sealed record CurrentUserResult(
     UserProfile Profile,
-    IReadOnlyList<WalletInfo> Wallets,
-    string ETag);
+    IReadOnlyList<WalletInfo> Wallets);
 
 /// <summary>
 /// User profile information aligned with architecture specification.

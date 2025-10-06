@@ -13,10 +13,5 @@ public sealed class GetMyPrincipalValidator : AbstractValidator<GetMyPrincipalQu
         RuleFor(x => x.PrincipalId)
             .Must(id => id.Value != Guid.Empty)
             .WithMessage("Principal ID cannot be empty");
-
-        RuleFor(x => x.IfNoneMatch)
-            .MaximumLength(64)
-            .WithMessage("If-None-Match header cannot exceed 64 characters")
-            .When(x => !string.IsNullOrEmpty(x.IfNoneMatch));
     }
 }

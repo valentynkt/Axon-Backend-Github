@@ -62,28 +62,6 @@ public class AuthMeE2ETests : E2ETestBase
             TestDataFixtures.SolanaMainnetChain,
             TestDataFixtures.W1MainAddress); // First wallet should be default
     }
-
-    [Test]
-    public async Task AuthMe_WithETagHeader_ShouldReturnETagForCaching()
-    {
-        // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
-        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
-
-        // Act: Call /auth/me using the Axon Access Token
-        SetAuthorizationHeader(axonToken);
-        var response = await HttpClient.GetAsync("/api/v1/auth/me");
-
-        // Assert: Should include ETag header
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var etag = AuthMeResponseValidator.ValidateAndExtractETag(response);
-        etag.ShouldNotBeNullOrWhiteSpace("ETag should be present and non-empty");
-
-        // Validate cache headers
-        AuthMeResponseValidator.ValidateCacheHeaders(response);
-    }
-
     [Test]
     public async Task AuthMe_CredentialOnlyPrincipal_ShouldReturnMinimalSnapshot()
     {
@@ -110,127 +88,6 @@ public class AuthMeE2ETests : E2ETestBase
     }
 
     #endregion
-
-    #region ETag Caching Behavior Tests
-
-    [Test]
-    public async Task AuthMe_IfNoneMatchWithCurrentETag_ShouldReturn304()
-    {
-        // Arrange: Set up principal and get initial ETag
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
-        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
-
-        ClearAllHeaders();
-        SetAuthorizationHeader(axonToken);
-        var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
-        var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
-
-        // Act: Call /auth/me with If-None-Match header
-        ClearAllHeaders();
-        SetAuthorizationHeader(axonToken);
-        SetIfNoneMatchHeader(initialETag);
-        var conditionalResponse = await HttpClient.GetAsync("/api/v1/auth/me");
-
-        // Assert: Should return 304 Not Modified
-        AuthMeResponseValidator.ValidateNotModifiedResponse(conditionalResponse, initialETag);
-    }
-
-    [Test]
-    public async Task AuthMe_IfNoneMatchWithOldETag_ShouldReturn200WithNewData()
-    {
-        // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        var (axonToken, _) = await SetupCredentialOnlyPrincipal(validJwt);
-
-        ClearAllHeaders();
-        SetAuthorizationHeader(axonToken);
-        var initialResponse = await HttpClient.GetAsync("/api/v1/auth/me");
-        var initialETag = AuthMeResponseValidator.ValidateAndExtractETag(initialResponse);
-
-        // Modify principal by adding a wallet
-        var (updatedAxonToken, _) = await AddWalletToPrincipal();
-
-        // Act: Call /auth/me with old ETag using updated token
-        ClearAllHeaders();
-        SetAuthorizationHeader(updatedAxonToken);
-        SetIfNoneMatchHeader(initialETag);
-        var updatedResponse = await HttpClient.GetAsync("/api/v1/auth/me");
-
-        // Assert: Should return 200 with updated data
-        updatedResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var newETag = AuthMeResponseValidator.ValidateAndExtractETag(updatedResponse);
-        AuthMeResponseValidator.ValidateETagChanged(initialETag, newETag);
-
-        // Verify updated content
-        var content = await updatedResponse.Content.ReadAsStringAsync();
-        var responseData = JsonSerializer.Deserialize<AuthMeResponseValidator.AuthMeResponseData>(content, JsonOptions)!;
-
-        responseData.Wallets.Count.ShouldBe(1, "Should now have one wallet");
-    }
-
-    [Test]
-    public async Task AuthMe_MultipleRequestsWithoutChanges_ShouldReturnSameETag()
-    {
-        // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
-        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
-
-        // Act: Make multiple /auth/me requests without data changes
-        SetAuthorizationHeader(axonToken);
-        var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
-
-        SetAuthorizationHeader(axonToken);
-        var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
-
-        SetAuthorizationHeader(axonToken);
-        var response3 = await HttpClient.GetAsync("/api/v1/auth/me");
-
-        // Assert: ETags should be identical
-        var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
-        var etag2 = AuthMeResponseValidator.ValidateAndExtractETag(response2);
-        var etag3 = AuthMeResponseValidator.ValidateAndExtractETag(response3);
-
-        AuthMeResponseValidator.ValidateETagUnchanged(etag1, etag2);
-        AuthMeResponseValidator.ValidateETagUnchanged(etag2, etag3);
-    }
-
-    [Test]
-    public async Task AuthMe_DataChangesBetweenRequests_ShouldUpdateETag()
-    {
-        // Arrange: Set up initial principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
-        var (axonToken, _) = await SetupCredentialOnlyPrincipal(validJwt);
-
-        // Get initial state
-        SetAuthorizationHeader(axonToken);
-        var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
-        var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
-
-        // Modify state by adding wallet
-        var (axonToken2, _) = await AddWalletToPrincipal();
-
-        // Get updated state
-        SetAuthorizationHeader(axonToken2);
-        var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
-        var etag2 = AuthMeResponseValidator.ValidateAndExtractETag(response2);
-
-        // Modify state again by adding second wallet
-        var (axonToken3, _) = await AddSecondWalletToPrincipal();
-
-        // Get final state
-        SetAuthorizationHeader(axonToken3);
-        var response3 = await HttpClient.GetAsync("/api/v1/auth/me");
-        var etag3 = AuthMeResponseValidator.ValidateAndExtractETag(response3);
-
-        // Assert: ETags should change with each modification
-        AuthMeResponseValidator.ValidateETagChanged(etag1, etag2);
-        AuthMeResponseValidator.ValidateETagChanged(etag2, etag3);
-    }
-
-    #endregion
-    
-
     #region Error and Edge Cases
 
     [Test]
@@ -310,37 +167,6 @@ public class AuthMeE2ETests : E2ETestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         duration.TotalMilliseconds.ShouldBeLessThan(200, "/auth/me should complete within 200ms in E2E tests");
     }
-
-    [Test]
-    public async Task AuthMe_CachedResponse_ShouldBeFasterThanInitial()
-    {
-        // Arrange: Set up principal
-        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwtWithWallets();
-        var (axonToken, _) = await SetupPrincipalWithWallets(validJwt);
-
-        // Act: Measure initial response time
-        ClearAllHeaders();
-        SetAuthorizationHeader(axonToken);
-        var startTime1 = DateTime.UtcNow;
-        var response1 = await HttpClient.GetAsync("/api/v1/auth/me");
-        var duration1 = DateTime.UtcNow - startTime1;
-
-        response1.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var etag1 = AuthMeResponseValidator.ValidateAndExtractETag(response1);
-
-        // Act: Measure cached response time
-        ClearAllHeaders();
-        SetAuthorizationHeader(axonToken);
-        SetIfNoneMatchHeader(etag1);
-        var startTime2 = DateTime.UtcNow;
-        var response2 = await HttpClient.GetAsync("/api/v1/auth/me");
-        var duration2 = DateTime.UtcNow - startTime2;
-
-        // Assert: Cached response should be faster (304)
-        response2.StatusCode.ShouldBe(HttpStatusCode.NotModified);
-        duration2.ShouldBeLessThan(duration1, "Cached response should be faster than initial");
-    }
-
     #endregion
 
     #region Helper Methods

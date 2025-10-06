@@ -5,10 +5,9 @@ using BuildingBlocks.Primitives.Ids;
 namespace Axon.Modules.Identity.Application.Queries.GetMyPrincipal;
 
 /// <summary>
-/// Query to get current authenticated user's principal information with ETag support.
-/// Used by GET /auth/me endpoint to provide efficient client-side caching.
+/// Query to get current authenticated user's principal information.
+/// Used by GET /auth/me endpoint.
 /// Simplified to use AxonPrincipalId directly from JWT token for better performance.
 /// </summary>
 public sealed record GetMyPrincipalQuery(
-    AxonUserId PrincipalId,
-    string? IfNoneMatch = null) : IdentityBaseQuery<CurrentUserResult>;
+    AxonUserId PrincipalId) : IdentityBaseQuery<CurrentUserResult>;
