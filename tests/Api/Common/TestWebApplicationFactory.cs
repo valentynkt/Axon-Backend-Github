@@ -20,7 +20,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
 {
     private PostgreSqlTestBase _testBase = null!;
     private Action<IServiceCollection>? _additionalServices;
-    private string _environment = "Test";
+    private string _environment = "Testing";
 
     public TestWebApplicationFactory()
     {

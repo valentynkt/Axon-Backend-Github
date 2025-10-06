@@ -169,6 +169,29 @@ public class AuthMeE2ETests : E2ETestBase
     }
     #endregion
 
+    #region Security Headers Tests
+
+    [Test]
+    public async Task AuthEndpoints_ShouldReturnSecurityHeaders()
+    {
+        // Arrange: Create and exchange to set up principal
+        var validJwt = JwtTestTokenFactory.CreateValidDynamicJwt();
+        var (axonToken, _) = await SetupCredentialOnlyPrincipal(validJwt);
+
+        // Act: Call /auth/me to verify security headers
+        SetAuthorizationHeader(axonToken);
+        var response = await HttpClient.GetAsync("/api/v1/auth/me");
+
+        // Assert: Verify security headers are present
+        response.Headers.ShouldContain(h => h.Key == "X-Content-Type-Options");
+        response.Headers.ShouldContain(h => h.Key == "X-Frame-Options");
+        response.Headers.ShouldContain(h => h.Key == "X-XSS-Protection");
+        response.Headers.ShouldContain(h => h.Key == "Referrer-Policy");
+        response.Headers.ShouldContain(h => h.Key == "X-Correlation-ID");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     /// <summary>

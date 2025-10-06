@@ -30,7 +30,7 @@ public class SmokeTests : IDisposable
     public async Task GET_Me_WithoutAuth_Returns401()
     {
         // Act
-        var response = await _client.GetAsync("/auth/me");
+        var response = await _client.GetAsync("/api/v1/auth/me");
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
