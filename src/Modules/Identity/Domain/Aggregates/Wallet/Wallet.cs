@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Domain.Aggregates.Wallet;
 
 /// <summary>
 /// Wallet aggregate representing a blockchain wallet.
-/// ChainId now contains both chain and network information (e.g., "solana-mainnet", "ethereum-goerli").
+/// ChainId contains chain and network information (e.g., "solana:mainnet", "ethereum:mainnet").
 /// </summary>
 public sealed partial class Wallet : AggregateRoot<WalletId>
 {

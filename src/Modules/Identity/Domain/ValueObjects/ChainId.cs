@@ -17,8 +17,10 @@ namespace Axon.Modules.Identity.Domain.ValueObjects;
 public readonly partial struct ChainId
 {
     // Supported chains (can be extended)
+    // Supports both simple format (e.g., "solana") and compound mainnet format (e.g., "solana:mainnet")
     private static readonly HashSet<string> SupportedChains = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Simple chain identifiers (base chains only)
         "solana",
         "ethereum",
         "polygon",
@@ -27,21 +29,16 @@ public readonly partial struct ChainId
         "base",
         "avalanche",
         "binance",
-        // Compound chain identifiers that tests expect
-        "ethereum-mainnet",
-        "ethereum-goerli",
-        "ethereum-sepolia",
-        "solana-mainnet", 
-        "solana-devnet",
-        "solana-testnet",
-        "polygon-mainnet",
-        "polygon-mumbai",
-        "arbitrum-one",
-        "arbitrum-goerli",
-        "optimism-mainnet",
-        "base-mainnet",
-        "avalanche-mainnet",
-        "binance-mainnet"
+        // Compound mainnet-only identifiers (colon separator)
+        "solana:mainnet",
+        "ethereum:mainnet",
+        "ethereum:1", // Ethereum mainnet alternative
+        "polygon:mainnet",
+        "arbitrum:mainnet",
+        "optimism:mainnet",
+        "base:mainnet",
+        "avalanche:mainnet",
+        "binance:mainnet"
     };
 
     // Vogen will call this before Validate and before storing the value

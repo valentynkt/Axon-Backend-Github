@@ -14,7 +14,7 @@ public interface IPrincipalResolutionService
 {
     /// <summary>
     /// Resolves a principal using the deterministic 2-step resolution algorithm.
-    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// ChainId must be in compound format (e.g., "solana:mainnet") containing all network information.
     /// </summary>
     /// <param name="provider">The identity provider type</param>
     /// <param name="issuer">The issuer of the credential</param>

@@ -222,7 +222,7 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Applies chain defaults for multiple wallet-to-chain mappings in a single optimized operation.
     /// This method is significantly more efficient than calling ApplyChainDefault individually.
-    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// ChainId must be in compound format (e.g., "solana:mainnet") containing all network information.
     /// </summary>
     /// <param name="walletChainMappings">Collection of tuples containing (chainId, walletId) pairs to set as defaults</param>
     /// <param name="timeProvider">Time provider for timestamps.</param>
@@ -317,7 +317,7 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Applies a chain default with verified-first enforcement.
-    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// ChainId must be in compound format (e.g., "solana:mainnet") containing all network information.
     /// </summary>
     public Result<Unit, Error> ApplyChainDefault(string chainId, WalletId walletId, TimeProvider timeProvider)
     {
@@ -334,7 +334,7 @@ public sealed partial class AxonPrincipal
 
     /// <summary>
     /// Sets a wallet as the chain default with verified+signing validation.
-    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// ChainId must be in compound format (e.g., "solana:mainnet") containing all network information.
     /// </summary>
     /// <param name="chainId">The chain ID in compound format.</param>
     /// <param name="walletId">The wallet ID to set as default.</param>
@@ -396,7 +396,7 @@ public sealed partial class AxonPrincipal
     /// <summary>
     /// Clears the chain default for a specific chain.
     /// Used when ownership is revoked or wallet is removed.
-    /// ChainId must be in compound format (e.g., "solana-mainnet") containing all network information.
+    /// ChainId must be in compound format (e.g., "solana:mainnet") containing all network information.
     /// </summary>
     /// <param name="chainId">The chain ID in compound format.</param>
     /// <param name="timeProvider">Time provider for timestamps.</param>

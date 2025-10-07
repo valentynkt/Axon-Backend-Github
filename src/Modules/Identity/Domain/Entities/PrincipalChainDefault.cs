@@ -5,7 +5,7 @@ namespace Axon.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Maps a principal's default wallet per blockchain.
-/// ChainId now contains compound format (e.g., "solana-mainnet") with all network information.
+/// ChainId contains compound format (e.g., "solana:mainnet") with all network information.
 /// This is an owned entity that belongs to the AxonPrincipal aggregate.
 /// </summary>
 public sealed class PrincipalChainDefault : OwnedAuditableEntity
