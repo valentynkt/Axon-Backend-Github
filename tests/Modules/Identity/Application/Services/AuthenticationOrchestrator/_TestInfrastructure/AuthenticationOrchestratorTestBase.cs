@@ -30,7 +30,7 @@ namespace Axon.Modules.Identity.Application.Tests.Services.AuthenticationOrchest
 /// </summary>
 public abstract class AuthenticationOrchestratorTestBase
 {
-    // Core mocks (8 dependencies)
+    // Core mocks (11 dependencies)
     protected IEnumerable<IAuthenticationProvider> Providers { get; set; } = null!;
     protected IAuthenticationProvider DynamicProvider { get; set; } = null!;
     protected IAuthenticationProvider WalletProvider { get; set; } = null!;
@@ -41,6 +41,9 @@ public abstract class AuthenticationOrchestratorTestBase
     protected IChallengeService ChallengeService { get; set; } = null!;
     protected IRefreshTokenProvider RefreshTokenProvider { get; set; } = null!;
     protected IOptions<AuthenticationOptions> AuthOptions { get; set; } = null!;
+    protected IMessageValidator MessageValidator { get; set; } = null!;
+    protected INonceReplayCache NonceCache { get; set; } = null!;
+    protected IWalletSignatureVerifier SignatureVerifier { get; set; } = null!;
 
     // System under test
     protected Application.Services.AuthenticationOrchestrator Orchestrator { get; set; } = null!;
@@ -63,6 +66,9 @@ public abstract class AuthenticationOrchestratorTestBase
         Logger = Substitute.For<ILogger<Application.Services.AuthenticationOrchestrator>>();
         ChallengeService = Substitute.For<IChallengeService>();
         RefreshTokenProvider = Substitute.For<IRefreshTokenProvider>();
+        MessageValidator = Substitute.For<IMessageValidator>();
+        NonceCache = Substitute.For<INonceReplayCache>();
+        SignatureVerifier = Substitute.For<IWalletSignatureVerifier>();
 
         // Setup auth options with defaults
         var authOptions = new AuthenticationOptions
@@ -84,7 +90,10 @@ public abstract class AuthenticationOrchestratorTestBase
             Logger,
             ChallengeService,
             RefreshTokenProvider,
-            AuthOptions);
+            AuthOptions,
+            MessageValidator,
+            NonceCache,
+            SignatureVerifier);
     }
 
     [TearDown]

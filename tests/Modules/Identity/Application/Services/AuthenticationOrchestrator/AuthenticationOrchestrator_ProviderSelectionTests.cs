@@ -118,7 +118,10 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             Logger,
             ChallengeService,
             RefreshTokenProvider,
-            AuthOptions);
+            AuthOptions,
+            MessageValidator,
+            NonceCache,
+            SignatureVerifier);
 
         var request = new WalletAuthenticationRequest(
             ChainId: "solana",
@@ -149,7 +152,10 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             Logger,
             ChallengeService,
             RefreshTokenProvider,
-            AuthOptions);
+            AuthOptions,
+            MessageValidator,
+            NonceCache,
+            SignatureVerifier);
 
         var token = "test-dynamic-token";
 

@@ -1,11 +1,8 @@
 using Axon.Modules.Identity.Application.Common;
-using Axon.Modules.Identity.Application.Common.Models;
-using Axon.Modules.Identity.Application.Contracts.Persistence;
 using Axon.Modules.Identity.Application.Contracts.Providers;
 using Axon.Modules.Identity.Application.Contracts.Services;
 using Axon.Modules.Identity.Application.Providers;
 using Axon.Modules.Identity.Domain.Aggregates.AxonPrincipal;
-using Axon.Modules.Identity.Domain.Aggregates.Wallet;
 using Axon.Modules.Identity.Domain.Entities;
 using Axon.Modules.Identity.Domain.Enums;
 using Axon.Modules.Identity.Domain.ValueObjects;
@@ -27,12 +24,9 @@ namespace Axon.Modules.Identity.Application.Tests.Providers.WalletAuthentication
 public class WalletAuthenticationProviderTests
 {
     private IWalletSignatureVerifier _signatureVerifier = null!;
-    private IAxonPrincipalWriteRepository _principalRepo = null!;
-    private IWalletOwnershipRepository _walletOwnershipRepo = null!;
-    private IWalletWriteRepository _walletRepo = null!;
+    private IPrincipalResolutionService _resolutionService = null!;
     private UserManager<AxonUserAuth> _userManager = null!;
     private IChallengeValidationService _challengeValidationService = null!;
-    private TimeProvider _timeProvider = null!;
     private ILogger<Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider> _logger = null!;
     private Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider _provider = null!;
 
@@ -45,11 +39,8 @@ public class WalletAuthenticationProviderTests
     public void SetUp()
     {
         _signatureVerifier = Substitute.For<IWalletSignatureVerifier>();
-        _principalRepo = Substitute.For<IAxonPrincipalWriteRepository>();
-        _walletOwnershipRepo = Substitute.For<IWalletOwnershipRepository>();
-        _walletRepo = Substitute.For<IWalletWriteRepository>();
+        _resolutionService = Substitute.For<IPrincipalResolutionService>();
         _challengeValidationService = Substitute.For<IChallengeValidationService>();
-        _timeProvider = Substitute.For<TimeProvider>();
         _logger = Substitute.For<ILogger<Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider>>();
 
         // Setup UserManager mock
@@ -59,12 +50,9 @@ public class WalletAuthenticationProviderTests
 
         _provider = new Axon.Modules.Identity.Application.Providers.WalletAuthenticationProvider(
             _signatureVerifier,
-            _principalRepo,
-            _walletOwnershipRepo,
-            _walletRepo,
+            _resolutionService,
             _userManager,
             _challengeValidationService,
-            _timeProvider,
             _logger);
     }
 
@@ -121,18 +109,16 @@ public class WalletAuthenticationProviderTests
         _signatureVerifier.VerifySignature(default!, default!, default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
-        // Setup new wallet scenario
+        // Setup resolution service to create new principal
         var principalId = new AxonUserId(Guid.NewGuid());
         var principal = AxonPrincipal.CreateHuman(principalId);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Created,
+            WasAutoLinked: false);
 
-        _walletRepo.GetByChainAndAddressAsync(AnyChainId(), AnyAddress(), default)
-            .ReturnsForAnyArgs((Wallet?)null);
-
-        _principalRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<AxonPrincipal>()));
-
-        _walletRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<Wallet>()));
+        _resolutionService.ResolveAsync(default!, default!, default!, default!, default!, default)
+            .ReturnsForAnyArgs(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
 
         // Setup identity user
         var user = AxonUserAuth.Create(
@@ -176,30 +162,16 @@ public class WalletAuthenticationProviderTests
         _signatureVerifier.VerifySignature(default!, default!, default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
-        // Setup existing principal scenario
+        // Setup resolution service to return existing principal via wallet
         var principalId = new AxonUserId(Guid.NewGuid());
         var principal = AxonPrincipal.CreateHuman(principalId);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Wallet,
+            WasAutoLinked: false);
 
-        var walletId = new WalletId(Guid.NewGuid());
-        var wallet = Wallet.Create(walletId, TestChainId, Address.Create(TestAddress).Value);
-
-        var ownership = WalletOwnership.Create(
-            principalId,
-            walletId,
-            AccessMode.Signing,
-            OwnershipStatus.Verified,
-            VerificationSource.DirectSignatureMsg);
-
-        var ownershipWithPrincipal = new WalletOwnershipWithPrincipal(ownership, principal);
-
-        _walletRepo.GetByChainAndAddressAsync(AnyChainId(), AnyAddress(), default)
-            .ReturnsForAnyArgs(wallet);
-
-        _walletOwnershipRepo.FindActiveOwnershipsByWalletAsync(default!, default)
-            .ReturnsForAnyArgs(new List<WalletOwnershipWithPrincipal> { ownershipWithPrincipal }.AsReadOnly());
-
-        _principalRepo.GetByIdAsync(default!, default)
-            .ReturnsForAnyArgs(principal);
+        _resolutionService.ResolveAsync(default!, default!, default!, default!, default!, default)
+            .ReturnsForAnyArgs(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
 
         // Setup identity user
         var user = AxonUserAuth.Create(
@@ -221,7 +193,14 @@ public class WalletAuthenticationProviderTests
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        await _principalRepo.DidNotReceive().AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
+        // Verify resolution service was called exactly once
+        await _resolutionService.Received(1).ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -238,18 +217,16 @@ public class WalletAuthenticationProviderTests
         _signatureVerifier.VerifySignature(default!, default!, default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
-        // Setup new wallet scenario
+        // Setup resolution service to create new principal
         var principalId = new AxonUserId(Guid.NewGuid());
         var principal = AxonPrincipal.CreateHuman(principalId);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Created,
+            WasAutoLinked: false);
 
-        _walletRepo.GetByChainAndAddressAsync(AnyChainId(), AnyAddress(), default)
-            .ReturnsForAnyArgs((Wallet?)null);
-
-        _principalRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<AxonPrincipal>()));
-
-        _walletRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<Wallet>()));
+        _resolutionService.ResolveAsync(default!, default!, default!, default!, default!, default)
+            .ReturnsForAnyArgs(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
 
         // Setup identity user
         var identityUser = AxonUserAuth.Create(
@@ -275,7 +252,7 @@ public class WalletAuthenticationProviderTests
     }
 
     [Test]
-    public async Task AuthenticateAsync_WithNewWallet_ShouldCreatePrincipalAndOwnership()
+    public async Task AuthenticateAsync_WithNewWallet_ShouldCallResolutionService()
     {
         // Arrange
         var request = CreateWalletAuthenticationRequest();
@@ -288,15 +265,16 @@ public class WalletAuthenticationProviderTests
         _signatureVerifier.VerifySignature(default!, default!, default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
-        // Setup new wallet scenario
-        _walletRepo.GetByChainAndAddressAsync(AnyChainId(), AnyAddress(), default)
-            .ReturnsForAnyArgs((Wallet?)null);
+        // Setup resolution service to create new principal
+        var principalId = new AxonUserId(Guid.NewGuid());
+        var principal = AxonPrincipal.CreateHuman(principalId);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Created,
+            WasAutoLinked: false);
 
-        _principalRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<AxonPrincipal>()));
-
-        _walletRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<Wallet>()));
+        _resolutionService.ResolveAsync(default!, default!, default!, default!, default!, default)
+            .ReturnsForAnyArgs(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
 
         _userManager.GetUsersForClaimAsync(default!)
             .ReturnsForAnyArgs(Task.FromResult<IList<AxonUserAuth>>(new List<AxonUserAuth>()));
@@ -315,8 +293,13 @@ public class WalletAuthenticationProviderTests
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        await _principalRepo.Received(1).AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>());
-        await _walletRepo.Received(1).AddAsync(Arg.Any<Wallet>(), Arg.Any<CancellationToken>());
+        await _resolutionService.Received(1).ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>());
     }
 
     #endregion
@@ -392,15 +375,16 @@ public class WalletAuthenticationProviderTests
         _signatureVerifier.VerifySignature(default!, default!, default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
-        // Setup new wallet scenario
-        _walletRepo.GetByChainAndAddressAsync(AnyChainId(), AnyAddress(), default)
-            .ReturnsForAnyArgs((Wallet?)null);
+        // Setup resolution service to create new principal
+        var principalId = new AxonUserId(Guid.NewGuid());
+        var principal = AxonPrincipal.CreateHuman(principalId);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Created,
+            WasAutoLinked: false);
 
-        _principalRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<AxonPrincipal>()));
-
-        _walletRepo.AddAsync(default!, default)
-            .ReturnsForAnyArgs(callInfo => Task.FromResult(callInfo.Arg<Wallet>()));
+        _resolutionService.ResolveAsync(default!, default!, default!, default!, default!, default)
+            .ReturnsForAnyArgs(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
 
         // Setup identity user creation to fail
         _userManager.GetUsersForClaimAsync(default!)
@@ -445,69 +429,64 @@ public class WalletAuthenticationProviderTests
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
     }
 
-    private (AxonPrincipal principal, Wallet wallet) SetupExistingPrincipalScenario()
+    private void SetupResolutionServiceWithExistingPrincipal(out AxonPrincipal principal)
     {
         var principalId = new AxonUserId(Guid.NewGuid());
-        var principal = AxonPrincipal.CreateHuman(principalId);
+        principal = AxonPrincipal.CreateHuman(principalId);
 
-        var walletId = new WalletId(Guid.NewGuid());
-        var wallet = Wallet.Create(walletId, TestChainId, Address.Create(TestAddress).Value);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Wallet,
+            WasAutoLinked: false);
 
-        var ownership = WalletOwnership.Create(
-            principalId,
-            walletId,
-            AccessMode.Signing,
-            OwnershipStatus.Verified,
-            VerificationSource.DirectSignatureMsg);
-
-        var ownershipWithPrincipal = new WalletOwnershipWithPrincipal(ownership, principal);
-
-        // Setup wallet lookup to return existing wallet - use Arg.Any to match any arguments
-        _walletRepo.GetByChainAndAddressAsync(Arg.Any<ChainId>(), Arg.Any<Address>(), Arg.Any<CancellationToken>())
-            .Returns(wallet);
-
-        // Setup ownership lookup
-        _walletOwnershipRepo.FindActiveOwnershipsByWalletAsync(Arg.Any<WalletId>(), Arg.Any<CancellationToken>())
-            .Returns(new List<WalletOwnershipWithPrincipal> { ownershipWithPrincipal }.AsReadOnly());
-
-        // Setup principal lookup
-        _principalRepo.GetByIdAsync(Arg.Any<AxonUserId>(), Arg.Any<CancellationToken>())
-            .Returns(principal);
-
-        return (principal, wallet);
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
     }
 
-    private (AxonPrincipal principal, Wallet? wallet) SetupNewPrincipalScenario()
+    private void SetupResolutionServiceWithNewPrincipal(out AxonPrincipal principal)
     {
         var principalId = new AxonUserId(Guid.NewGuid());
-        var principal = AxonPrincipal.CreateHuman(principalId);
+        principal = AxonPrincipal.CreateHuman(principalId);
 
-        // Setup wallet lookup to return null (new wallet scenario) - use Arg.Any to match any arguments
-        _walletRepo.GetByChainAndAddressAsync(Arg.Any<ChainId>(), Arg.Any<Address>(), Arg.Any<CancellationToken>())
-            .Returns((Wallet?)null);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Created,
+            WasAutoLinked: false);
 
-        // Setup principal repo to accept any add
-        _principalRepo.AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
-        // Setup wallet repo to accept any add
-        _walletRepo.AddAsync(Arg.Any<Wallet>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
-        return (principal, null);
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
     }
 
     private void SetupNewWalletScenario()
     {
-        // Wallet/Principal mocks - use Arg.Any to match any arguments
-        _walletRepo.GetByChainAndAddressAsync(Arg.Any<ChainId>(), Arg.Any<Address>(), Arg.Any<CancellationToken>())
-            .Returns((Wallet?)null);
+        // Setup resolution service for new principal
+        var principalId = new AxonUserId(Guid.NewGuid());
+        var principal = AxonPrincipal.CreateHuman(principalId);
+        var resolutionResult = new PrincipalResolutionResult(
+            Principal: principal,
+            Path: ResolutionPath.Created,
+            WasAutoLinked: false);
 
-        _principalRepo.AddAsync(Arg.Any<AxonPrincipal>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
-        _walletRepo.AddAsync(Arg.Any<Wallet>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+        _resolutionService.ResolveAsync(
+            Arg.Any<ProviderType>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<ChainId>(),
+            Arg.Any<Address>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Result.Success<PrincipalResolutionResult, Error>(resolutionResult));
 
         // Identity user mocks - use ReturnsForAnyArgs
         _userManager.GetUsersForClaimAsync(default!)
