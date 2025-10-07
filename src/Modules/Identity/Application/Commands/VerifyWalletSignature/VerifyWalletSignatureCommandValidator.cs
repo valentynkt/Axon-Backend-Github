@@ -10,7 +10,7 @@ namespace Axon.Modules.Identity.Application.Commands.VerifyWalletSignature;
 /// </summary>
 public sealed class VerifyWalletSignatureCommandValidator : AbstractValidator<VerifyWalletSignatureCommand>
 {
-    private static readonly string[] SupportedBlockchains = { "eip155", "solana", "cosmos", "polkadot" };
+    private static readonly string[] SupportedBlockchains = { "ethereum", "solana", "polygon", "arbitrum", "optimism", "base", "avalanche", "binance" };
 
     public VerifyWalletSignatureCommandValidator()
     {
@@ -18,7 +18,7 @@ public sealed class VerifyWalletSignatureCommandValidator : AbstractValidator<Ve
             .NotEmpty()
             .WithMessage("Chain ID is required")
             .Must(BeValidChainIdFormat)
-            .WithMessage("Chain ID must be in format '{blockchain}:{network}' (e.g., 'eip155:1', 'solana:mainnet')");
+            .WithMessage("Chain ID must be in format '{blockchain}:{network}' (e.g., 'ethereum:mainnet', 'solana:mainnet')");
 
         RuleFor(x => x.Address)
             .NotEmpty()
@@ -46,7 +46,7 @@ public sealed class VerifyWalletSignatureCommandValidator : AbstractValidator<Ve
         if (string.IsNullOrWhiteSpace(chainId))
             return false;
 
-        // CAIP-2 format: {blockchain}:{network}
+        // Chain ID format: {blockchain}:{network}
         var parts = chainId.Split(':');
         if (parts.Length != 2)
             return false;

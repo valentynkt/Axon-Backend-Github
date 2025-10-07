@@ -9,7 +9,7 @@ namespace Axon.Modules.Identity.Application.Commands.GenerateChallenge;
 /// </summary>
 public sealed class GenerateChallengeCommandValidator : AbstractValidator<GenerateChallengeCommand>
 {
-    private static readonly string[] SupportedBlockchains = { "eip155", "solana", "cosmos", "polkadot" };
+    private static readonly string[] SupportedBlockchains = { "ethereum", "solana", "polygon", "arbitrum", "optimism", "base", "avalanche", "binance" };
 
     public GenerateChallengeCommandValidator()
     {
@@ -17,7 +17,7 @@ public sealed class GenerateChallengeCommandValidator : AbstractValidator<Genera
             .NotEmpty()
             .WithMessage("Chain ID is required")
             .Must(BeValidChainIdFormat)
-            .WithMessage("Chain ID must be in format '{blockchain}:{network}' (e.g., 'eip155:1', 'solana:mainnet')");
+            .WithMessage("Chain ID must be in format '{blockchain}:{network}' (e.g., 'ethereum:mainnet', 'solana:mainnet')");
 
         RuleFor(x => x.WalletAddress)
             .NotEmpty()
@@ -40,8 +40,8 @@ public sealed class GenerateChallengeCommandValidator : AbstractValidator<Genera
         if (string.IsNullOrWhiteSpace(chainId))
             return false;
 
-        // CAIP-2 format: {blockchain}:{network}
-        // Examples: eip155:1, solana:mainnet, cosmos:cosmoshub-4
+        // Chain ID format: {blockchain}:{network}
+        // Examples: ethereum:mainnet, solana:mainnet, ethereum:1 (mainnet alternative)
         var parts = chainId.Split(':');
         if (parts.Length != 2)
             return false;
