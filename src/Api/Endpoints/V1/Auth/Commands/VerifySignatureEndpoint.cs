@@ -38,7 +38,7 @@ public sealed class VerifySignatureEndpoint : BaseResultEndpoint<VerifySignature
                 Verifies a wallet signature against a challenge message and issues an Axon JWT.
 
                 **Flow:**
-                1. Validates MAC to ensure challenge integrity
+                1. Validates challenge structure and TTL
                 2. Checks replay protection (nonce cache)
                 3. Verifies Ed25519 signature (Solana only in V1)
                 4. Resolves or creates Axon principal
@@ -49,7 +49,7 @@ public sealed class VerifySignatureEndpoint : BaseResultEndpoint<VerifySignature
                 """;
             s.Responses[200] = "Returns access token and user information";
             s.Responses[400] = "Invalid request or expired challenge";
-            s.Responses[401] = "Invalid signature or MAC";
+            s.Responses[401] = "Invalid signature";
             s.Responses[409] = "Replay attempt or ownership conflict";
             s.Responses[422] = "Business rule violation";
             s.Responses[429] = "Rate limit exceeded";
@@ -74,9 +74,7 @@ public sealed class VerifySignatureEndpoint : BaseResultEndpoint<VerifySignature
             ChainId: compoundChainId,
             Address: request.Address.Trim(),
             SignedMessage: request.SignedMessage,
-            Signature: request.Signature,
-            Mac: request.Mac,
-            Mkv: request.Mkv);
+            Signature: request.Signature);
 
         var domainResult = await _mediator.Send(command, ct);
         if (domainResult.IsFailure)
@@ -85,6 +83,7 @@ public sealed class VerifySignatureEndpoint : BaseResultEndpoint<VerifySignature
         // Map domain result to response
         var response = new AuthTokenResponseDto(
             AccessToken: domainResult.Value.AccessToken,
+            RefreshToken: domainResult.Value.RefreshToken,
             TokenType: domainResult.Value.TokenType,
             ExpiresIn: domainResult.Value.ExpiresIn,
             AxonUserId: domainResult.Value.AxonUserId,

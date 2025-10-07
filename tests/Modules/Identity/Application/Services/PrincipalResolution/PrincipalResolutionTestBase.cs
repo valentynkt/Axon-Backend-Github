@@ -59,6 +59,7 @@ public abstract class PrincipalResolutionTestBase
         // Setup mock orchestrator to return valid AuthenticationResponse with AdditionalData
         var mockResponse = new AuthenticationResponse(
             AccessToken: "mock-access-token",
+            RefreshToken: null,
             UserId: Guid.NewGuid(),
             ProviderType: "dynamic",
             ExpiresAt: DateTime.UtcNow.AddHours(1),

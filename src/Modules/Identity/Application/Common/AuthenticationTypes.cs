@@ -12,9 +12,7 @@ public sealed record AuthenticationChallenge(
     long Exp,
     string Nonce,
     string Aud,
-    string Message,
-    string Mac,
-    string Mkv);
+    string Message);
 
 /// <summary>
 /// Axon JWT token response

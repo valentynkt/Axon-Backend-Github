@@ -1,0 +1,2591 @@
+# Product Brief: Axon TypeScript SDK
+
+**A comprehensive client library transforming complex wallet authentication and AI chat into elegant TypeScript APIs**
+
+---
+
+**Date:** 2025-10-07
+**Author:** Valentyn Kit (Principal Software Engineer)
+**Status:** Planning Phase
+**Version:** 2.0 (Complete Revision)
+**Target:** TypeScript/JavaScript Applications (Browser, Node.js, React Native)
+
+---
+
+## Executive Summary
+
+The **Axon TypeScript SDK** is the essential integration layer between client applications and the Axon AI Backend. It abstracts complex wallet-based authentication, token lifecycle management, and AI chat functionality into clean, type-safe APIs—enabling developers to integrate Axon's conversational AI features in hours instead of days.
+
+**Core Value Proposition:**
+Transform 200+ lines of authentication and chat integration boilerplate into **elegant, type-safe function calls**—while maintaining security, handling edge cases, and providing excellent TypeScript developer experience.
+
+**Primary Outcomes:**
+- **For Developers:** <30 minutes to working embedded chat (vs. days building from scratch)
+- **For End Users:** Seamless authentication + AI chat experience across wallet providers
+- **For Axon:** 80% reduction in integration support burden through excellent DX
+
+**What Makes This SDK Different:**
+- **Dual Auth System:** Supports both Direct Wallet Sign-In AND Dynamic.xyz integration
+- **Three Integration Modes:** Embedded Widget (CDN), React Component, Headless Hooks
+- **Modern Web3 Patterns:** Follows wagmi/viem best practices (2025)
+- **Production-Ready:** Token rotation, auto-refresh, retry logic, error handling built-in
+
+---
+
+## Table of Contents
+
+1. [Solution Overview](#solution-overview)
+2. [Architecture & Packages](#architecture--packages)
+3. [Development Infrastructure & Modern Tech Stack](#development-infrastructure--modern-tech-stack)
+4. [Authentication System](#authentication-system)
+5. [Chat Bubble Widget](#chat-bubble-widget)
+6. [API Reference](#api-reference)
+7. [Integration Example](#integration-example)
+8. [Developer Experience](#developer-experience)
+9. [Implementation Timeline](#implementation-timeline)
+10. [Competitive Analysis](#competitive-analysis)
+11. [Security & Best Practices](#security--best-practices)
+
+---
+
+## Solution Overview
+
+### What the SDK Provides
+
+**1. Complete Authentication System**
+- **Manual Wallet Sign-In:** 3-step challenge-response flow (Solana Ed25519)
+- **Dynamic.xyz Integration:** Seamless JWT exchange with wallet linking
+- **Token Lifecycle:** Access tokens (15min) + Refresh tokens (30 days) with rotation
+- **Dual-Token Support:** Backend accepts both Dynamic JWT and Axon tokens
+- **Auto-Refresh:** Transparent token renewal before expiry
+
+**2. Chat Bubble Widget (Three Integration Modes)**
+- **Embedded Widget:** CDN-hosted Web Component (Shadow DOM, zero config)
+- **React Component:** `<AxonChatBubble />` with hooks and theming
+- **Headless Hooks:** Build custom UI with `useConversation()`, `useMessages()`
+
+**3. Modern Web3 SDK Architecture**
+- **Modular Packages:** Tree-shakeable, 0 peer deps in core
+- **Hook-Based API:** Following wagmi/viem patterns (2025 best practices)
+- **TypeScript-First:** 100% type coverage, strict mode compatible
+- **Observable State:** Event-driven for external UI sync
+
+**4. Production-Ready Infrastructure**
+- **Automatic Retry Logic:** Exponential backoff for transient failures
+- **Rate Limit Handling:** Respects `Retry-After` headers
+- **Security Best Practices:** Token rotation, replay protection, secure storage
+- **Error Handling:** Structured errors with remediation guidance
+
+---
+
+## Architecture & Packages
+
+### Modular Package Structure (Web3 SDK Best Practices)
+
+```
+@axon-ai/sdk-core              → Framework-agnostic auth + API client (Zustand internally)
+@axon-ai/sdk-viem              → EVM integration (viem adapter for multi-chain future)
+@axon-ai/sdk-wallet-adapter    → Solana wallet adapter integration
+@axon-ai/sdk-dynamic           → Dynamic.xyz integration adapter
+@axon-ai/sdk-react             → React hooks (useAxonAuth, useConversation)
+@axon-ai/sdk-react-query       → TanStack Query integration (recommended for production)
+@axon-ai/sdk-chat-ui           → Chat bubble widget with streaming support
+@axon-ai/sdk-react-native      → React Native platform adapters
+@axon-ai/sdk-devtools          → Development tools & debugging utilities
+```
+
+**Design Principles:**
+
+1. **Tree-Shakeable:** Minimize bundle size by importing only what you use
+2. **Zero Peer Dependencies in Core:** Core SDK has no runtime dependencies
+3. **Framework-Agnostic Core:** Business logic independent of React/Vue/etc.
+4. **TypeScript-First:** 100% type coverage, strict mode compatible, OpenAPI-generated types
+5. **Observable State:** Event-driven architecture for external UI synchronization (Zustand internally)
+6. **Fail-Safe Defaults:** Memory-only storage, conservative retry strategies
+7. **Modern Data Fetching:** TanStack Query integration for caching, refetching, optimistic updates
+8. **Streaming-First:** Real-time AI responses via Server-Sent Events (SSE)
+9. **Production-Ready Observability:** Built-in telemetry hooks for Sentry/Datadog/custom
+10. **Extensible:** Plugin system for custom middleware and behavior
+
+---
+
+### Package Dependency Graph
+
+```
+┌──────────────────────────────────────────────────────┐
+│  @axon-ai/sdk-chat-ui (Chat Bubble Widget)          │
+│  - Embedded Widget (Web Component + SSE streaming)   │
+│  - React Component with optimistic updates           │
+│  - Theming System                                    │
+└────────────────┬─────────────────────────────────────┘
+                 │ depends on
+       ┌─────────▼──────────┐
+       │                    │
+┌──────▼────────────┐  ┌────▼────────────────────────┐
+│ @axon-ai/sdk-     │  │ @axon-ai/sdk-react          │
+│ react-query       │  │ - useAxonAuth()             │
+│ (TanStack Query)  │  │ - useConversation()         │
+│ - Caching         │  │ - useConversations()        │
+│ - Refetching      │  │ - useMessages()             │
+│ - Optimistic UI   │  │ (Context-based hooks)       │
+└────────┬──────────┘  └──────┬──────────────────────┘
+         │ both depend on     │
+         └──────────┬──────────┘
+                    │
+┌───────────────────▼──────────────────────────────────┐
+│  @axon-ai/sdk-core (Framework-Agnostic)              │
+│  - AxonClient (main SDK class)                       │
+│  - AuthManager (token lifecycle, Zustand internally) │
+│  - ApiClient (HTTP + SSE streaming client)           │
+│  - ChatClient (chat API with streaming)              │
+│  - Event system                                      │
+│  - Plugin system                                     │
+│  - Telemetry hooks                                   │
+└────┬────────────────────┬────────────────┬───────────┘
+     │                    │                │
+┌────▼──────────┐  ┌──────▼───────┐  ┌────▼──────────┐
+│ sdk-dynamic   │  │ sdk-wallet-  │  │ sdk-viem      │
+│ (Dynamic.xyz) │  │ adapter      │  │ (EVM chains)  │
+│               │  │ (Solana)     │  │ (future)      │
+└───────────────┘  └──────────────┘  └───────────────┘
+
+Optional Development Tools:
+┌─────────────────────────────────────┐
+│ @axon-ai/sdk-devtools               │
+│ - React DevTools integration        │
+│ - Debug mode logging                │
+│ - Token expiry visualization        │
+└─────────────────────────────────────┘
+```
+
+### AuthManager State Interface
+
+**SDK Core State Management:**
+
+```typescript
+/**
+ * AuthState represents the complete authentication state persisted by SDK.
+ * SDK automatically manages this state, including token refresh and expiry tracking.
+ */
+interface AuthState {
+  accessToken: string;          // Axon JWT (15 min TTL)
+  refreshToken: string;         // 30 days TTL (rotates on refresh)
+  expiresAt: Date;              // Access token expiry timestamp
+  refreshExpiresAt: Date;       // Refresh token expiry timestamp
+  axonUserId: string;           // User's Axon principal ID (UUID)
+}
+
+/**
+ * SDK automatically:
+ * - Stores AuthState in configured storage (memory, localStorage, or custom)
+ * - Checks expiresAt before each API call
+ * - Refreshes access token when expiresAt < 5 minutes away
+ * - Rotates refresh token on each refresh (security best practice)
+ * - Emits events on state changes (tokenRefreshed, authStateChanged)
+ */
+```
+
+---
+
+### Bundle Size Targets
+
+| Package | Gzipped | Notes |
+|---------|---------|-------|
+| `@axon-ai/sdk-core` | ~15KB | Auth + API + SSE client (includes Zustand 3KB) |
+| `@axon-ai/sdk-react` | ~5KB | Context-based hooks |
+| `@axon-ai/sdk-react-query` | ~6KB | TanStack Query integration |
+| `@axon-ai/sdk-chat-ui` | ~28KB | Full chat bubble with streaming |
+| **Full SDK** | ~58KB | All packages (tree-shakeable) |
+| **Minimal** | ~20KB | Core + React (auth + headless chat) |
+
+CI enforces size limits via `size-limit`. Optimizations: code splitting, tree-shaking, Brotli compression, zero large dependencies.
+
+---
+
+## Technology & Architecture
+
+**Modern, production-ready tooling for exceptional developer experience**
+
+The Axon SDK is built with 2025's best-in-class technologies, delivering:
+
+1. **Developer Velocity** - Sub-second builds, instant feedback, hot reload
+2. **Bundle Optimization** - Tree-shakeable modules, minimal size (15-58KB)
+3. **Type Safety** - 100% TypeScript with strict mode
+4. **Production Ready** - 90%+ test coverage, comprehensive CI/CD
+5. **Future-Proof** - Extensible plugin system, observable architecture
+
+**Core Technologies:**
+- **Bun** (package manager) - 5-10x faster than npm
+- **tsup/esbuild** (build) - 50-100x faster than webpack
+- **Turborepo** (monorepo) - Smart caching, parallel execution
+- **Zustand** (state) - Lightweight, framework-agnostic
+- **TanStack Query** (data fetching) - Caching, optimistic updates
+- **Vitest** (testing) - 4.8x faster than Jest
+- **Biome** (linting) - 25x faster than ESLint+Prettier
+
+**For detailed technical specifications, architecture diagrams, and implementation guidelines, see:**
+→ [SDK Technical Architecture](../ENGINEERING/integrations/axon-sdk/technical-architecture.md)
+
+---
+
+## Authentication System
+
+### Overview: Flexible Authentication for Web3
+
+The SDK provides **two authentication paths** that both result in secure, long-lived sessions:
+
+**Path 1: Direct Wallet Authentication** (Maximum Control)
+```
+User → Challenge → Wallet Signature → Axon Token (15min) + Refresh Token (30 days)
+```
+
+**Path 2: Dynamic.xyz Integration** (Fastest Setup)
+```
+User → Dynamic → Exchange JWT → Axon Token (15min) + Refresh Token (30 days)
+```
+
+**Why Two Paths?**
+- **Direct Wallet**: Full control, no third-party dependencies, custom UX
+- **Dynamic.xyz**: Social login, multi-chain, enterprise features, faster integration
+
+**Key Benefits:**
+- ✅ Automatic token refresh (transparent to users)
+- ✅ 30-day sessions (users stay logged in)
+- ✅ Unified identity (same user across auth methods)
+- ✅ Production-ready security (replay protection, token rotation)
+
+---
+
+### Path 1: Direct Wallet Authentication
+
+**Complete Example:**
+
+```typescript
+// 1. Get challenge from backend
+const challenge = await axon.auth.getChallenge({
+  chainId: 'solana-mainnet',
+  walletAddress: publicKey.toString()
+});
+
+// 2. User signs with wallet (Phantom, Solflare, etc.)
+const signature = await wallet.signMessage(challenge.message);
+
+// 3. Verify signature and receive tokens
+const { accessToken, refreshToken, axonUserId } =
+  await axon.auth.verifySignature({
+    chainId: challenge.chainId,
+    address: challenge.address,
+    signedMessage: challenge.message,
+    signature,
+    mac: challenge.mac
+  });
+
+// ✅ User is now authenticated for 30 days
+```
+
+**What You Get:**
+- 15-minute access token (auto-refreshes)
+- 30-day refresh token (keeps users logged in)
+- Unified user ID (same across all wallet types)
+- Automatic security (replay protection, token rotation)
+
+---
+
+### Path 2: Dynamic.xyz Integration
+
+**Complete Example:**
+
+```typescript
+import { DynamicContextProvider, useDynamicContext } from '@dynamic-labs/sdk-react-core';
+
+// Setup (once at app root)
+<DynamicContextProvider
+  settings={{ environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID }}
+>
+  <YourApp />
+</DynamicContextProvider>
+
+// Exchange Dynamic JWT for Axon token (in any component)
+const { authToken } = useDynamicContext();
+const { accessToken, axonUserId } = await axon.auth.exchangeDynamicToken(authToken);
+
+// ✅ User authenticated via Dynamic with 30-day Axon session
+```
+
+**What You Get:**
+- Social login (Google, Apple, Email)
+- Multi-chain support (Solana, Ethereum, etc.)
+- Same 30-day Axon session as direct wallet auth
+- Automatic wallet linking across chains
+
+---
+
+### Session Management
+
+**The SDK handles everything automatically:**
+
+```typescript
+// Once authenticated, tokens refresh automatically
+await axon.auth.verifySignature(/* ... */);
+
+// Make API calls anytime - SDK refreshes tokens as needed
+const messages = await axon.chat.getMessages(conversationId);
+// ↑ Works seamlessly for 30 days without re-auth
+
+// Listen to auth state changes (optional)
+axon.on('tokenRefreshed', () => console.log('Token refreshed silently'));
+axon.on('authExpired', () => console.log('Please re-authenticate'));
+```
+
+**How It Works:**
+- **Access Token** (15min): Used for API calls
+- **Refresh Token** (30 days): Automatically renews access token
+- **Token Rotation**: Enhanced security (old tokens invalidated on refresh)
+- **Proactive Refresh**: SDK refreshes 5 minutes before expiry (no API failures)
+
+**Storage Options:**
+- `memory` (default): Secure, requires re-auth on page refresh
+- `localStorage`: Persistent sessions, recommended with encryption
+- `custom`: Your own secure storage (React Native keychain, etc.)
+
+**For implementation details, see:** [Technical Architecture - Authentication System](../ENGINEERING/integrations/axon-sdk/technical-architecture.md#authentication-system)
+
+---
+
+## Chat Integration
+
+### Three Integration Approaches
+
+Choose the integration mode that fits your use case:
+
+| Mode | Best For | Setup Time | Flexibility |
+|------|----------|------------|-------------|
+| **CDN Widget** | Any website, no build tools | 2 minutes | Low (themed) |
+| **React Component** | React apps, standard chat UI | 10 minutes | Medium (customizable) |
+| **Headless Hooks** | Custom UI, full control | 30 minutes | High (build anything) |
+
+---
+
+### 1. CDN Widget (Fastest Setup)
+
+**Add AI chat to any website with 2 lines of code:**
+
+```html
+<script src="https://cdn.axon.ai/chat-widget.js"></script>
+<axon-chat-bubble
+  environment="mainnet"
+  auth-mode="dynamic"
+  dynamic-env-id="YOUR_ID"
+/>
+```
+
+**Key Features:**
+- ✅ Works on any site (WordPress, Webflow, static HTML)
+- ✅ Zero build tools or dependencies
+- ✅ Shadow DOM (no style conflicts)
+- ✅ Configurable themes and colors
+- ✅ ~28KB gzipped
+
+**Configuration Options:**
+```html
+<axon-chat-bubble
+  environment="mainnet"           <!-- mainnet | devnet -->
+  auth-mode="dynamic"             <!-- dynamic | wallet -->
+  theme="dark"                    <!-- dark | light | auto -->
+  position="bottom-right"         <!-- placement -->
+  primary-color="#7C3AED"         <!-- brand color -->
+/>
+```
+
+---
+
+### 2. React Component (Recommended for React Apps)
+
+**Add chat to React apps with full TypeScript support:**
+
+```tsx
+import { AxonChatBubble } from '@axon-ai/sdk-chat-ui';
+
+function App() {
+  return (
+    <AxonProvider config={{ environment: 'mainnet' }}>
+      <YourApp />
+      <AxonChatBubble
+        position="bottom-right"
+        theme="dark"
+      />
+    </AxonProvider>
+  );
+}
+```
+
+**Key Features:**
+- ✅ React hooks integration
+- ✅ TypeScript types
+- ✅ Themeable with CSS variables
+- ✅ Real-time streaming responses
+- ✅ Optimistic UI updates
+
+---
+
+### 3. Headless Hooks (Maximum Flexibility)
+
+**Build completely custom chat UI:**
+
+```tsx
+import { useConversation, useStreamingMessage } from '@axon-ai/sdk-react';
+
+function CustomChat() {
+  const { messages, isLoading } = useConversation(conversationId);
+  const { sendMessage, streamedContent, isStreaming } = useStreamingMessage(conversationId);
+
+  return (
+    <div className="my-custom-chat">
+      {messages.map(msg => (
+        <div key={msg.id}>{msg.content}</div>
+      ))}
+      {isStreaming && <div>{streamedContent}</div>}
+      <input onSubmit={(text) => sendMessage(text)} />
+    </div>
+  );
+}
+```
+
+**What You Get:**
+- Full UI control (design your own components)
+- Access to all chat APIs
+- Real-time streaming support
+- React Query integration (optional)
+
+**For implementation details, see:** [Technical Architecture - Chat & Streaming](../ENGINEERING/integrations/axon-sdk/technical-architecture.md#chat--streaming)
+
+---
+
+## API Reference
+
+**Use Case:** React apps that want pre-built chat UI with hooks and theming.
+
+**Installation:**
+
+```bash
+npm install @axon-ai/sdk-react @axon-ai/sdk-chat-ui
+```
+
+**Usage:**
+
+```typescript
+import { AxonProvider, AxonChatBubble } from '@axon-ai/sdk-react';
+import { DynamicContextProvider, useDynamicContext } from '@dynamic-labs/sdk-react-core';
+
+function App() {
+  return (
+    <DynamicContextProvider settings={{ /* Dynamic config */ }}>
+      <AxonIntegration />
+    </DynamicContextProvider>
+  );
+}
+
+function AxonIntegration() {
+  const { authToken } = useDynamicContext();
+
+  return (
+    <AxonProvider
+      config={{
+        environment: 'mainnet',
+        authMode: 'dynamic',
+        dynamicToken: authToken,  // Auto-exchange on mount
+        onAuthSuccess: (userId) => {
+          console.log('Authenticated with Axon:', userId);
+        },
+        onError: (error) => {
+          console.error('Axon error:', error);
+        }
+      }}
+    >
+      <YourApp />
+
+      {/* Chat bubble with built-in UI */}
+      <AxonChatBubble
+        position="bottom-right"
+        theme={{
+          colors: {
+            primary: '#7C3AED',
+            background: '#1F2937',
+            text: '#F9FAFB'
+          },
+          typography: {
+            fontFamily: 'Geist, system-ui, sans-serif'
+          },
+          borderRadius: '16px'
+        }}
+        greetingMessage="👋 Hi! I'm your AI assistant. How can I help?"
+        placeholder="Ask me anything..."
+        onConversationStart={(conversationId) => {
+          // Track in analytics
+          analytics.track('conversation_started', { conversationId });
+        }}
+        onMessageSent={(message) => {
+          // Track message sent
+          analytics.track('message_sent', {
+            conversationId: message.conversationId,
+            length: message.content.length
+          });
+        }}
+      />
+    </AxonProvider>
+  );
+}
+```
+
+**Props:**
+
+```typescript
+interface AxonChatBubbleProps {
+  // Positioning
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  offset?: { x: number; y: number };  // Pixels from edge
+
+  // Theming
+  theme?: Partial<AxonTheme>;
+
+  // Content
+  greetingMessage?: string;
+  placeholder?: string;
+  emptyStateMessage?: string;
+
+  // Behavior
+  autoOpen?: boolean;              // Open on mount
+  defaultOpen?: boolean;           // Controlled state
+  onOpenChange?: (open: boolean) => void;
+
+  // Conversation
+  conversationId?: string;         // Resume specific conversation
+  onConversationStart?: (id: string) => void;
+  onConversationEnd?: (id: string) => void;
+
+  // Messages
+  onMessageSent?: (message: Message) => void;
+  onMessageReceived?: (message: Message) => void;
+
+  // Styling
+  className?: string;
+  style?: React.CSSProperties;
+}
+```
+
+**Theming:**
+
+```typescript
+interface AxonTheme {
+  colors: {
+    primary: string;           // Brand color (buttons, links)
+    background: string;        // Chat window background
+    surface: string;           // Message bubbles, inputs
+    text: string;              // Primary text
+    textSecondary: string;     // Timestamps, hints
+    border: string;            // Borders, dividers
+    error: string;             // Error messages
+    success: string;           // Success states
+    userMessage: string;       // User message bubble color
+    assistantMessage: string;  // Assistant message bubble color
+  };
+  typography: {
+    fontFamily: string;
+    fontSize: {
+      xs: string;   // 12px
+      sm: string;   // 14px
+      md: string;   // 16px
+      lg: string;   // 18px
+    };
+    fontWeight: {
+      normal: number;  // 400
+      medium: number;  // 500
+      semibold: number; // 600
+      bold: number;    // 700
+    };
+  };
+  spacing: {
+    xs: string;   // 4px
+    sm: string;   // 8px
+    md: string;   // 16px
+    lg: string;   // 24px
+    xl: string;   // 32px
+  };
+  borderRadius: string;  // Global border radius
+  shadows: {
+    sm: string;   // Subtle shadow
+    md: string;   // Default shadow
+    lg: string;   // Elevated shadow
+  };
+}
+```
+
+**Preset Themes:**
+
+```typescript
+import { themes } from '@axon-ai/sdk-chat-ui';
+
+<AxonChatBubble theme={themes.dark} />
+<AxonChatBubble theme={themes.light} />
+<AxonChatBubble theme={themes.minimal} />
+<AxonChatBubble theme={themes.vibrant} />
+```
+
+---
+
+### Mode 3: Headless Hooks (Custom UI)
+
+**Use Case:** Full control over chat UI, use Axon as headless backend.
+
+**Installation:**
+
+```bash
+npm install @axon-ai/sdk-react
+```
+
+**Hooks:**
+
+```typescript
+// Authentication
+const { isAuthenticated, user, signIn, signOut } = useAxonAuth();
+
+// Single conversation
+const {
+  messages,
+  sendMessage,
+  isLoading,
+  error
+} = useConversation(conversationId);
+
+// Conversation list
+const {
+  conversations,
+  isLoading,
+  refresh
+} = useConversations();
+
+// Message list with pagination
+const {
+  messages,
+  loadMore,
+  hasMore,
+  isLoading
+} = useMessages(conversationId);
+```
+
+**Example: Custom Chat UI**
+
+```typescript
+import { useAxonAuth, useConversation } from '@axon-ai/sdk-react';
+
+function CustomChatUI() {
+  const { isAuthenticated, signIn, user } = useAxonAuth();
+  const [conversationId, setConversationId] = useState<string>();
+
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    error
+  } = useConversation(conversationId);
+
+  const [input, setInput] = useState('');
+
+  if (!isAuthenticated) {
+    return (
+      <div className="auth-prompt">
+        <h2>Connect Wallet to Chat</h2>
+        <button onClick={signIn}>Connect Wallet</button>
+      </div>
+    );
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    try {
+      const response = await sendMessage(input);
+      setConversationId(response.conversationId);  // Set on first message
+      setInput('');
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
+  };
+
+  return (
+    <div className="custom-chat">
+      <div className="chat-header">
+        <h3>AI Assistant</h3>
+        <span>Logged in as {user.axonUserId}</span>
+      </div>
+
+      <div className="messages">
+        {messages.map(msg => (
+          <div
+            key={msg.messageId}
+            className={`message ${msg.role}`}
+          >
+            <div className="content">{msg.content}</div>
+            <time>{new Date(msg.createdAt).toLocaleTimeString()}</time>
+          </div>
+        ))}
+
+        {isLoading && <div className="loading">Thinking...</div>}
+        {error && <div className="error">{error.message}</div>}
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask me anything..."
+          disabled={isLoading}
+        />
+        <button type="submit" disabled={isLoading || !input.trim()}>
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+**Hook API Reference:**
+
+```typescript
+// useAxonAuth()
+function useAxonAuth(): {
+  isAuthenticated: boolean;
+  user: User | null;
+  isLoading: boolean;
+  signIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
+}
+
+// useConversation()
+function useConversation(conversationId?: string): {
+  messages: Message[];
+  sendMessage: (text: string) => Promise<ChatTurnResponse>;
+  isLoading: boolean;
+  error: Error | null;
+  retry: () => void;
+}
+
+// useConversations()
+function useConversations(params?: {
+  pageSize?: number;
+  sortBy?: string;
+}): {
+  conversations: Conversation[];
+  isLoading: boolean;
+  error: Error | null;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
+  refresh: () => Promise<void>;
+}
+
+// useMessages()
+function useMessages(conversationId: string, params?: {
+  pageSize?: number;
+}): {
+  messages: Message[];
+  isLoading: boolean;
+  error: Error | null;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
+  refresh: () => Promise<void>;
+}
+```
+
+---
+
+### Mode 4: TanStack Query Integration (Production Recommended)
+
+**Use Case:** Production apps needing automatic caching, background refetching, optimistic updates, and stale-while-revalidate patterns.
+
+**Why TanStack Query:**
+- Industry standard for data fetching (wagmi v2, Vercel AI SDK use it)
+- Automatic caching with configurable staleness
+- Background refetching and invalidation
+- Optimistic updates for instant UI feedback
+- Request deduplication (multiple components fetch same data → single request)
+
+**Installation:**
+
+```bash
+npm install @axon-ai/sdk-react-query @tanstack/react-query
+```
+
+**Usage:**
+
+```typescript
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AxonProvider } from '@axon-ai/sdk-react';
+import {
+  useConversationQuery,
+  useConversationsQuery,
+  useMessagesQuery,
+  useSendMessageMutation
+} from '@axon-ai/sdk-react-query';
+
+// Setup
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000, // Data fresh for 30s
+      cacheTime: 5 * 60 * 1000, // Cache for 5 min
+      refetchOnWindowFocus: true,
+      retry: 3
+    }
+  }
+});
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AxonProvider config={{ environment: 'mainnet' }}>
+        <ChatInterface />
+      </AxonProvider>
+    </QueryClientProvider>
+  );
+}
+
+// Component using TanStack Query hooks
+function ChatInterface() {
+  const [conversationId, setConversationId] = useState<string>();
+
+  // Fetch messages with automatic caching
+  const {
+    data: messages,
+    isLoading,
+    error,
+    refetch
+  } = useMessagesQuery(conversationId, {
+    enabled: !!conversationId,
+    refetchInterval: 60_000 // Poll every 60s for new messages
+  });
+
+  // Send message with optimistic updates
+  const sendMessageMutation = useSendMessageMutation({
+    onMutate: async (newMessage) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries(['messages', conversationId]);
+
+      // Snapshot previous value
+      const previousMessages = queryClient.getQueryData(['messages', conversationId]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(['messages', conversationId], (old: any) => [
+        ...old,
+        {
+          messageId: 'temp-' + Date.now(),
+          role: 'user',
+          content: newMessage,
+          createdAt: new Date().toISOString(),
+          sequence: old.length + 1
+        }
+      ]);
+
+      return { previousMessages };
+    },
+    onError: (err, newMessage, context) => {
+      // Rollback on error
+      queryClient.setQueryData(['messages', conversationId], context?.previousMessages);
+    },
+    onSuccess: (data) => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries(['messages', conversationId]);
+      queryClient.invalidateQueries(['conversations']);
+    }
+  });
+
+  const handleSendMessage = async (text: string) => {
+    try {
+      const response = await sendMessageMutation.mutateAsync({
+        conversationId,
+        message: text
+      });
+      setConversationId(response.conversationId);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  return (
+    <div className="chat-interface">
+      {/* UI with messages, optimistic updates work automatically */}
+      {messages?.map(msg => (
+        <MessageBubble key={msg.messageId} message={msg} />
+      ))}
+    </div>
+  );
+}
+```
+
+**Query Hooks:**
+
+```typescript
+// useConversationQuery - Single conversation with messages
+const { data, isLoading, error, refetch, isFetching } = useConversationQuery(
+  conversationId,
+  {
+    staleTime: 30_000,
+    enabled: !!conversationId,
+    refetchOnWindowFocus: true
+  }
+);
+
+// useConversationsQuery - List all conversations
+const { data, isLoading, error, fetchNextPage, hasNextPage } = useConversationsQuery({
+  pageSize: 20,
+  sortBy: 'UpdatedAt'
+});
+
+// useMessagesQuery - Messages for a conversation (paginated)
+const { data, isLoading, error, fetchNextPage, hasNextPage } = useMessagesQuery(
+  conversationId,
+  {
+    pageSize: 50,
+    enabled: !!conversationId
+  }
+);
+```
+
+**Mutation Hooks:**
+
+```typescript
+// useSendMessageMutation - Send message with optimistic updates
+const mutation = useSendMessageMutation({
+  onMutate,
+  onError,
+  onSuccess
+});
+
+await mutation.mutateAsync({ conversationId, message: 'Hello!' });
+```
+
+**Benefits:**
+- ✅ **Automatic caching**: Same data fetched once, shared across components
+- ✅ **Optimistic updates**: UI feels instant, rollback on error
+- ✅ **Background refetching**: Data stays fresh without user action
+- ✅ **Request deduplication**: 10 components fetch same conversation → 1 HTTP request
+- ✅ **Infinite scroll**: Built-in `fetchNextPage()` for pagination
+- ✅ **DevTools**: React Query DevTools show cache state, queries, mutations
+
+---
+
+### Mode 5: Streaming Chat Responses (Real-Time AI)
+
+**Use Case:** Stream AI responses token-by-token for immediate feedback (OpenAI/Anthropic-style streaming).
+
+**Why Streaming:**
+- **Perceived Performance**: Users see partial responses in ~200ms vs. 5-15s wait
+- **Better UX**: Long responses don't feel frozen
+- **Modern Standard**: OpenAI, Anthropic, Vercel AI SDK all stream by default
+
+**Backend Support:**
+
+Add streaming endpoint:
+```
+POST /api/v1/chat/turns/stream  (Server-Sent Events)
+```
+
+**SDK Usage:**
+
+```typescript
+import { useConversation } from '@axon-ai/sdk-react';
+
+function StreamingChat() {
+  const {
+    messages,
+    streamMessage,
+    isStreaming,
+    currentStreamedContent,
+    error
+  } = useConversation(conversationId);
+
+  const handleSend = async (text: string) => {
+    await streamMessage(text, {
+      onToken: (token) => {
+        // Called for each token received
+        console.log('Token:', token);
+      },
+      onComplete: (fullMessage) => {
+        // Called when stream completes
+        console.log('Full message:', fullMessage);
+      },
+      onError: (error) => {
+        console.error('Stream error:', error);
+      }
+    });
+  };
+
+  return (
+    <div>
+      {messages.map(msg => (
+        <MessageBubble key={msg.messageId} message={msg} />
+      ))}
+
+      {/* Show streaming message in real-time */}
+      {isStreaming && currentStreamedContent && (
+        <MessageBubble
+          message={{
+            role: 'assistant',
+            content: currentStreamedContent,
+            isStreaming: true
+          }}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+**Implementation (SDK Internal):**
+
+```typescript
+// ChatClient.ts (SDK Core)
+async streamMessage(
+  conversationId: string | undefined,
+  message: string,
+  callbacks: {
+    onToken?: (token: string) => void;
+    onComplete?: (message: Message) => void;
+    onError?: (error: Error) => void;
+  }
+) {
+  const eventSource = new EventSource(`/api/v1/chat/turns/stream`, {
+    headers: {
+      'Authorization': `Bearer ${this.authManager.getAccessToken()}`,
+      'Content-Type': 'application/json'
+    },
+    method: 'POST',
+    body: JSON.stringify({ conversationId, message })
+  });
+
+  let streamedContent = '';
+
+  eventSource.addEventListener('token', (event) => {
+    const token = JSON.parse(event.data).token;
+    streamedContent += token;
+    callbacks.onToken?.(token);
+  });
+
+  eventSource.addEventListener('complete', (event) => {
+    const data = JSON.parse(event.data);
+    eventSource.close();
+    callbacks.onComplete?.(data.message);
+  });
+
+  eventSource.addEventListener('error', (event) => {
+    const error = new Error(event.data || 'Stream error');
+    eventSource.close();
+    callbacks.onError?.(error);
+  });
+}
+```
+
+**Backend SSE Format:**
+
+```
+// Stream format (Server-Sent Events)
+event: token
+data: {"token": "The"}
+
+event: token
+data: {"token": " quick"}
+
+event: token
+data: {"token": " brown"}
+
+event: complete
+data: {"message": {...}, "conversationId": "..."}
+```
+
+**Benefits:**
+- ✅ **Instant Feedback**: Users see responses in ~200ms
+- ✅ **Long Response UX**: 30-second responses don't feel frozen
+- ✅ **Matches Industry Standards**: Same UX as ChatGPT, Claude, Vercel AI SDK
+- ✅ **Efficient**: SSE protocol, auto-reconnect on network drops
+
+---
+
+### Chat API Integration (Backend)
+
+**Universal Endpoint: `POST /api/v1/chat/turns`**
+
+This single endpoint handles **both** starting new conversations and continuing existing ones.
+
+```typescript
+// Start new conversation (conversationId = null)
+const response = await axon.chat.sendMessage({
+  message: "Hello, who are you?"
+});
+// Returns: { conversationId, userMessageId, assistantMessageId, assistantMessage }
+
+// Continue conversation
+const response = await axon.chat.sendMessage({
+  conversationId: "existing-conversation-id",
+  message: "Tell me more"
+});
+```
+
+**Request:**
+```typescript
+interface ChatTurnRequest {
+  conversationId?: string;  // null = start new, present = continue
+  message: string;          // 1-32,000 characters
+}
+```
+
+**Response:**
+```typescript
+interface ChatTurnResponse {
+  conversationId: string;        // UUID
+  userMessageId: string;         // UUID
+  assistantMessageId: string;    // UUID
+  assistantMessage: string;      // AI response content
+  timestamp: string;             // ISO 8601
+}
+```
+
+**Backend Flow:**
+1. If `conversationId` is null → `StartConversationHandler`
+2. If `conversationId` is present → `AppendUserMessageHandler`
+3. Persist user message
+4. Call `MessageProcessingOrchestrator`:
+   - Resolve MCP servers (for extended AI capabilities)
+   - Call Claude API with conversation history
+   - Use `previous_response_id` for prompt caching (saves money)
+5. Persist assistant message (idempotent via `AiResponseId`)
+6. Return response
+
+**Idempotency:** If same `AiResponseId` already exists, returns existing message without calling Claude API again (prevents duplicate API calls on retry).
+
+---
+
+**List Conversations: `GET /api/v1/chat/conversations`**
+
+```typescript
+const conversations = await axon.chat.getConversations({
+  pageSize: 20,
+  pageNumber: 1,
+  sortBy: 'UpdatedAt',  // CreatedAt | UpdatedAt
+  sortDirection: 'desc',
+  titleContains: 'solana'  // Optional search
+});
+
+interface PaginatedConversations {
+  items: ConversationItem[];
+  pageNumber: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+interface ConversationItem {
+  conversationId: string;
+  title: string;  // Generated from first message
+  createdAt: string;
+  updatedAt: string;
+  lastAssistantResponseId: string | null;
+}
+```
+
+---
+
+**Get Messages: `GET /api/v1/chat/conversations/{id}/messages`**
+
+```typescript
+const messages = await axon.chat.getMessages(conversationId, {
+  pageSize: 50,
+  pageNumber: 1,
+  includeDeleted: false
+});
+
+interface PaginatedMessages {
+  items: ConversationMessage[];
+  pageNumber: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+interface ConversationMessage {
+  messageId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  sequence: number;  // Message order in conversation
+  aiResponseId: string | null;  // For assistant messages
+}
+```
+
+---
+
+### Chat Bubble UI Components (Internal)
+
+The pre-built chat bubble is composed of these React components:
+
+```typescript
+<AxonChatBubbleContainer>
+  {/* Floating button (when minimized) */}
+  <ChatToggleButton
+    onClick={toggle}
+    hasUnread={hasUnread}
+    isOpen={isOpen}
+  />
+
+  {/* Main chat window (when open) */}
+  <ChatWindow isOpen={isOpen}>
+    {/* Header */}
+    <ChatHeader>
+      <ConversationTitle>
+        {conversation?.title ?? 'New Conversation'}
+      </ConversationTitle>
+      <ConversationMenu>
+        <NewConversationButton />
+        <HistoryButton />
+        <SettingsButton />
+      </ConversationMenu>
+      <CloseButton onClick={toggle} />
+    </ChatHeader>
+
+    {/* Messages */}
+    <MessageList ref={scrollRef}>
+      {messages.map(msg => (
+        <Message
+          key={msg.messageId}
+          role={msg.role}
+          content={msg.content}
+          timestamp={msg.createdAt}
+          onCopy={() => copyToClipboard(msg.content)}
+          onRetry={msg.role === 'user' ? () => retry(msg) : undefined}
+        />
+      ))}
+
+      {isTyping && <TypingIndicator />}
+      {error && <ErrorMessage error={error} onRetry={retry} />}
+
+      <div ref={bottomRef} />  {/* Auto-scroll anchor */}
+    </MessageList>
+
+    {/* Input */}
+    <MessageInput
+      value={input}
+      onChange={setInput}
+      onSubmit={handleSubmit}
+      disabled={isLoading || !isAuthenticated}
+      placeholder={isAuthenticated ? placeholder : "Connect wallet to chat"}
+    />
+
+    {/* Auth prompt (if not authenticated) */}
+    {!isAuthenticated && (
+      <AuthPrompt>
+        <p>Connect your wallet to start chatting</p>
+        <button onClick={signIn}>Connect Wallet</button>
+      </AuthPrompt>
+    )}
+  </ChatWindow>
+
+  {/* Conversation history sidebar (optional) */}
+  {showHistory && (
+    <ConversationHistory
+      conversations={conversations}
+      onSelect={selectConversation}
+      onClose={() => setShowHistory(false)}
+    />
+  )}
+</AxonChatBubbleContainer>
+```
+
+**Features:**
+
+- ✅ **Auto-scroll to latest message** (smooth scrolling)
+- ✅ **Markdown support** (code blocks, links, lists, bold, italic)
+- ✅ **Syntax highlighting** (for code blocks)
+- ✅ **Copy message button** (copy to clipboard)
+- ✅ **Retry failed messages** (if send fails)
+- ✅ **Typing indicator** (animated dots while AI thinks)
+- ✅ **Loading states** (skeleton screens)
+- ✅ **Error states** (inline error messages with retry button)
+- ✅ **Conversation switching** (sidebar with history)
+- ✅ **New conversation button** (start fresh)
+- ✅ **Responsive design** (mobile, tablet, desktop)
+- ✅ **Keyboard shortcuts** (Enter to send, Shift+Enter for newline)
+- ✅ **Accessibility** (ARIA labels, keyboard navigation, screen reader support)
+
+---
+
+## API Reference
+
+### Complete Endpoint Documentation
+
+#### Authentication Endpoints
+
+**`POST /api/v1/auth/challenge`**
+- **Auth:** None
+- **Rate Limit:** 15 req/min per IP (fixed window)
+- **Request:**
+  ```json
+  {
+    "chainId": "solana-mainnet",
+    "walletAddress": "7xKz...9Qp",
+    "audience": "your-app-id"  // optional
+  }
+  ```
+- **Response (200):**
+  ```json
+  {
+    "message": "{\"chain\":\"solana-mainnet\",\"address\":\"7xkz...9qp\",\"iat\":1699564800,\"exp\":1699565100,\"nonce\":\"abc123...\",\"aud\":\"your-app-id\"}",
+    "chainId": "solana-mainnet",
+    "address": "7xkz...9qp",
+    "issuedAt": 1699564800,
+    "expiresAt": 1699565100,
+    "nonce": "abc123...",
+    "audience": "your-app-id",
+    "mac": "def456...",
+    "mkv": "v1"
+  }
+  ```
+- **Errors:** 400 (invalid params), 422 (business rule), 429 (rate limit), 500 (server error)
+
+---
+
+**`POST /api/v1/auth/verify`**
+- **Auth:** None
+- **Rate Limit:** ⚠️ **Not Configured** (endpoint references "AuthVerify" policy but policy not found in configuration)
+- **Request:**
+  ```json
+  {
+    "chainId": "solana-mainnet",
+    "address": "7xkz...9qp",
+    "signedMessage": "{\"chain\":\"solana-mainnet\",...}",
+    "signature": "base58-encoded-signature",
+    "mac": "def456...",
+    "mkv": "v1"
+  }
+  ```
+- **Response (200):**
+  ```json
+  {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "tokenType": "Bearer",
+    "expiresIn": 900,  // 15 minutes in seconds
+    "axonUserId": "uuid-here",
+    "created": true,  // true if new user
+    "walletsLinked": 1,
+    "conflicts": 0
+  }
+  ```
+- **Errors:** 400 (expired challenge, invalid), 401 (invalid signature/MAC), 409 (replay/conflict), 422 (business rule), 429 (rate limit), 500 (server error)
+
+---
+
+**`POST /api/v1/auth/exchange`**
+- **Auth:** None (but requires `Authorization: Bearer <token>` header)
+- **Rate Limit:** 10 req/min per IP (fixed window)
+- **Headers:** `Authorization: Bearer <Dynamic JWT OR Axon Access Token>`
+- **Request Body:** `{ "placeholder": null }` (body ignored, token from header)
+- **Response (200):**
+  ```json
+  {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "tokenType": "Bearer",
+    "expiresIn": 900,
+    "axonUserId": "uuid-here",
+    "created": false,
+    "walletsLinked": 3,
+    "conflicts": 0
+  }
+  ```
+- **Behavior:** Validates bearer token (Dynamic JWT or Axon token), creates/updates principal, links wallets, issues new Axon token
+- **Errors:** 400 (malformed token), 401 (invalid/expired token), 409 (wallet conflict), 422 (business rule), 429 (rate limit), 500 (server error)
+
+---
+
+**`POST /api/v1/auth/refresh`**
+- **Auth:** None (requires refresh token in body)
+- **Rate Limit:** 10 req/min per IP (fixed window)
+- **Request:**
+  ```json
+  {
+    "refreshToken": "refresh-token-string-here"
+  }
+  ```
+- **Response (200):**
+  ```json
+  {
+    "success": true,
+    "accessToken": "new-access-token",
+    "refreshToken": "new-refresh-token",
+    "tokenType": "Bearer",
+    "expiresIn": 900,
+    "issuedAt": "2025-10-07T12:00:00Z",
+    "accessTokenExpiresAt": "2025-10-07T12:15:00Z",
+    "refreshTokenExpiresAt": "2025-11-06T12:00:00Z"
+  }
+  ```
+- **Behavior:** Validates refresh token, generates new access+refresh tokens, **revokes old refresh token** (token rotation)
+- **Errors:** 400 (invalid request), 401 (invalid/expired refresh token), 429 (rate limit), 500 (server error)
+
+---
+
+**`GET /api/v1/auth/me`**
+- **Auth:** Required (`Authorization: Bearer <token>`)
+- **Rate Limit:** 10 req/min per IP (uses "AuthExchange" policy)
+- **Response (200):**
+  ```json
+  {
+    "profile": {
+      "axonId": "uuid-here",
+      "riskTier": "Low"  // Low | Medium | High
+    },
+    "wallets": [
+      {
+        "chain": "solana",
+        "address": "7xkz...9qp",
+        "state": "Verified",  // Pending | Verified | Revoked
+        "access": "Signing",  // Signing | WatchOnly
+        "isDefault": true
+      }
+    ]
+  }
+  ```
+- **Errors:** 401 (not authenticated), 403 (forbidden), 500 (server error)
+
+---
+
+#### Chat Endpoints
+
+**`POST /api/v1/chat/turns`**
+- **Auth:** Required (`Authorization: Bearer <token>`)
+- **Rate Limit:** 100 req/min per IP (global default policy)
+- **Request:**
+  ```json
+  {
+    "conversationId": "uuid-or-null",  // null = start new
+    "message": "Your message here (1-32K chars)"
+  }
+  ```
+- **Response (200):**
+  ```json
+  {
+    "conversationId": "uuid-here",
+    "userMessageId": "uuid-here",
+    "assistantMessageId": "uuid-here",
+    "assistantMessage": "AI response content here",
+    "timestamp": "2025-10-07T12:00:00Z"
+  }
+  ```
+- **Behavior:** If conversationId null → start new conversation, else append to existing. Persists user message, calls AI, persists assistant message, returns response.
+- **Business Rules:** Max 100 messages per conversation, turn-taking enforced (User → Assistant alternation)
+- **Errors:** 400 (invalid params), 401 (not authenticated), 403 (forbidden), 422 (business rule violated), 500 (server error)
+
+---
+
+**`GET /api/v1/chat/conversations`**
+- **Auth:** Required (`Authorization: Bearer <token>`)
+- **Rate Limit:** 100 req/min per IP (global default policy)
+- **Query Params:**
+  - `pageSize` (default: 20, max: 100)
+  - `pageNumber` (default: 1, 1-indexed)
+  - `sortBy` (default: "UpdatedAt", options: "UpdatedAt" | "CreatedAt")
+  - `sortDirection` (default: "desc", options: "desc" | "asc")
+  - `titleContains` (optional search filter)
+- **Response (200):**
+  ```json
+  {
+    "items": [
+      {
+        "conversationId": "uuid-here",
+        "title": "Conversation about Solana staking",
+        "createdAt": "2025-10-07T12:00:00Z",
+        "updatedAt": "2025-10-07T12:30:00Z",
+        "lastAssistantResponseId": "uuid-or-null"
+      }
+    ],
+    "pageNumber": 1,
+    "pageSize": 20,
+    "totalCount": 47,
+    "totalPages": 3,
+    "hasNext": true,
+    "hasPrevious": false,
+    "count": 20,
+    "isEmpty": false,
+    "firstItemIndex": 1,
+    "lastItemIndex": 20
+  }
+  ```
+- **Errors:** 400 (invalid params), 401 (not authenticated), 403 (forbidden), 500 (server error)
+
+---
+
+**`GET /api/v1/chat/conversations/{conversationId}/messages`**
+- **Auth:** Required (`Authorization: Bearer <token>`)
+- **Rate Limit:** 100 req/min per IP (global default policy)
+- **Path Param:** `conversationId` (UUID)
+- **Query Params:**
+  - `pageSize` (default: 50, max: 100)
+  - `pageNumber` (default: 1, 1-indexed)
+  - `includeDeleted` (default: false)
+- **Response (200):**
+  ```json
+  {
+    "items": [
+      {
+        "messageId": "uuid-here",
+        "role": "user",  // "user" | "assistant"
+        "content": "Message content here",
+        "createdAt": "2025-10-07T12:00:00Z",
+        "sequence": 1,
+        "aiResponseId": null  // Only for assistant messages
+      }
+    ],
+    "pageNumber": 1,
+    "pageSize": 50,
+    "totalCount": 12,
+    "totalPages": 1,
+    "hasNext": false,
+    "hasPrevious": false,
+    "count": 12,
+    "isEmpty": false,
+    "firstItemIndex": 1,
+    "lastItemIndex": 12
+  }
+  ```
+- **Errors:** 400 (invalid params), 401 (not authenticated), 403 (forbidden, not owner), 404 (conversation not found), 500 (server error)
+
+---
+
+### Rate Limits & Quotas
+
+| Endpoint | Rate Limit | Notes |
+|----------|------------|-------|
+| `/auth/challenge` | 15 req/min per IP | `AuthChallenge` policy |
+| `/auth/verify` | ⚠️ **Not Configured** | Backend issue: policy undefined |
+| `/auth/exchange` | 10 req/min per IP | `AuthExchange` policy |
+| `/chat/*` | 100 req/min per IP | Global default |
+
+**Token TTLs:** Challenge: 5 min | Access: 15 min | Refresh: 30 days
+**Message Limits:** 1-32K chars | 100 messages/conversation
+**SDK Handling:** Auto-retry with exponential backoff (1s → 2s → 4s) | Respects `Retry-After` header
+
+---
+
+## Integration Patterns
+
+### Pattern 1: Embedded Widget (Vanilla JS - Any Site)
+
+**Use Case:** Add AI chat to WordPress, Webflow, static HTML, or any site without build tools.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Website</title>
+</head>
+<body>
+  <!-- Your website content -->
+  <h1>Welcome to My Website</h1>
+  <p>Content here...</p>
+
+  <!-- Axon Chat Widget (add before </body>) -->
+  <script src="https://cdn.axon.ai/chat-widget.js" async></script>
+  <axon-chat-bubble
+    environment-id="axon-mainnet"
+    auth-mode="dynamic"
+    dynamic-environment-id="YOUR_DYNAMIC_ID"
+    theme="auto"
+    position="bottom-right"
+    greeting-message="👋 Hi! I'm your AI assistant. Ask me anything!"
+  />
+</body>
+</html>
+```
+
+**Configuration via Attributes:**
+
+```html
+<axon-chat-bubble
+  <!-- Required -->
+  environment-id="axon-mainnet"
+  auth-mode="dynamic"
+
+  <!-- Dynamic.xyz (if auth-mode="dynamic") -->
+  dynamic-environment-id="YOUR_DYNAMIC_ID"
+
+  <!-- OR Wallet Adapter (if auth-mode="wallet") -->
+  wallet-provider="phantom"  <!-- phantom | solflare | backpack -->
+
+  <!-- Appearance -->
+  theme="dark"  <!-- dark | light | auto -->
+  primary-color="#7C3AED"
+  position="bottom-right"  <!-- bottom-right | bottom-left | top-right | top-left -->
+
+  <!-- Content -->
+  greeting-message="👋 Hi! Ask me anything!"
+  placeholder="Type your message..."
+  empty-state-message="No conversations yet"
+
+  <!-- Behavior -->
+  auto-open="false"
+  default-conversation-id=""  <!-- Resume specific conversation -->
+/>
+```
+
+**Browser Support:**
+- ✅ Chrome 90+
+- ✅ Firefox 88+
+- ✅ Safari 14+
+- ✅ Edge 90+
+- ⚠️ IE 11 (fallback to iframe mode)
+
+---
+
+### Pattern 2: React App with Dynamic.xyz
+
+**Use Case:** React app using Dynamic.xyz for wallet authentication.
+
+**Installation:**
+
+```bash
+npm install @axon-ai/sdk-react @axon-ai/sdk-chat-ui @dynamic-labs/sdk-react-core @dynamic-labs/ethereum
+```
+
+**Implementation:**
+
+```typescript
+// app.tsx
+import { DynamicContextProvider, useDynamicContext } from '@dynamic-labs/sdk-react-core';
+import { EthereumWalletConnectors } from '@dynamic-labs/ethereum';
+import { AxonProvider, AxonChatBubble } from '@axon-ai/sdk-react';
+
+function App() {
+  return (
+    <DynamicContextProvider
+      settings={{
+        environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID!,
+        walletConnectors: [EthereumWalletConnectors],
+        eventsCallbacks: {
+          onAuthSuccess: (args) => {
+            console.log('Dynamic auth success:', args.user);
+          },
+        },
+      }}
+    >
+      <AppContent />
+    </DynamicContextProvider>
+  );
+}
+
+function AppContent() {
+  const { authToken, user, isAuthenticated } = useDynamicContext();
+
+  return (
+    <AxonProvider
+      config={{
+        environment: 'mainnet',
+        authMode: 'dynamic',
+        dynamicToken: authToken,  // Auto-exchange when token changes
+        onAuthSuccess: (userId) => {
+          console.log('Axon auth success:', userId);
+        },
+        onError: (error) => {
+          console.error('Axon error:', error);
+        },
+      }}
+    >
+      <main>
+        <h1>My dApp</h1>
+        {isAuthenticated ? (
+          <p>Welcome, {user?.email ?? user?.walletPublicKey}!</p>
+        ) : (
+          <p>Please connect your wallet to continue</p>
+        )}
+
+        {/* Your app content */}
+      </main>
+
+      {/* Chat bubble (only renders when authenticated) */}
+      <AxonChatBubble
+        position="bottom-right"
+        theme={{
+          colors: {
+            primary: '#7C3AED',
+            background: '#1F2937',
+          },
+          typography: {
+            fontFamily: 'Geist, system-ui',
+          },
+        }}
+        onConversationStart={(id) => {
+          console.log('Conversation started:', id);
+        }}
+      />
+    </AxonProvider>
+  );
+}
+
+export default App;
+```
+
+**Environment Variables (.env.local):**
+
+```bash
+NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID=your-dynamic-environment-id
+```
+
+---
+
+## Developer Experience
+
+### TypeScript Support
+
+**Full Type Coverage:**
+
+```typescript
+// All SDK types are fully typed
+import type {
+  AxonClient,
+  AuthTokenResponse,
+  ChallengeResponse,
+  ChatTurnRequest,
+  ChatTurnResponse,
+  Conversation,
+  Message,
+  User,
+  AxonTheme,
+  AxonConfig,
+} from '@axon-ai/sdk-core';
+
+// React hooks are fully typed
+import { useAxonAuth, useConversation } from '@axon-ai/sdk-react';
+
+const auth = useAxonAuth();
+//    ^? { isAuthenticated: boolean; user: User | null; signIn: () => Promise<void>; ... }
+
+const chat = useConversation(conversationId);
+//    ^? { messages: Message[]; sendMessage: (text: string) => Promise<ChatTurnResponse>; ... }
+```
+
+**Strict Mode Compatible:**
+
+```typescript
+// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+```
+
+All SDK packages compile cleanly with `strict: true`.
+
+---
+
+### Error Handling
+
+**Structured Error Types:**
+
+```typescript
+class AxonError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode?: number,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'AxonError';
+  }
+}
+
+// Usage
+try {
+  await axon.auth.verifySignature({ ... });
+} catch (error) {
+  if (error instanceof AxonError) {
+    switch (error.code) {
+      case 'USER_CANCELLED':
+        // User cancelled wallet signature
+        console.log('Signature cancelled');
+        break;
+      case 'TOKEN_EXPIRED':
+        // Token expired, retry
+        await retryWithNewChallenge();
+        break;
+      case 'WALLET_NOT_CONNECTED':
+        // Wallet not connected
+        showWalletConnectModal();
+        break;
+      case 'RATE_LIMITED':
+        // Rate limited, wait
+        const retryAfter = error.details?.retryAfter ?? 60;
+        await sleep(retryAfter * 1000);
+        break;
+      default:
+        // Unknown error
+        console.error('Unexpected error:', error);
+    }
+  }
+}
+```
+
+**Comprehensive Error Handling Table:**
+
+This table maps backend error codes to SDK actions, providing developers complete remediation guidance.
+
+| Status | Backend Error Code | SDK Error Code | SDK Automatic Action | Developer Action Required |
+|--------|-------------------|----------------|---------------------|---------------------------|
+| 400 | `AUTH.VALIDATION_ERROR` | `VALIDATION_ERROR` | None | Fix request parameters |
+| 400 | `AUTH.CHALLENGE_EXPIRED` | `CHALLENGE_EXPIRED` | None | Regenerate challenge (manual auth) |
+| 401 | `AUTH.TOKEN_EXPIRED` | `TOKEN_EXPIRED` | **Auto-refresh with refresh token** | None (SDK handles automatically) |
+| 401 | `AUTH.INVALID_TOKEN` | `INVALID_TOKEN` | Emit `authStateChanged(false)` | Prompt user re-authentication |
+| 401 | `AUTH.INVALID_SIGNATURE` | `INVALID_SIGNATURE` | None | Show error, allow retry |
+| 409 | `AUTH.NONCE_REPLAY` | `NONCE_REPLAY` | **Regenerate challenge automatically** | None (SDK retries) |
+| 409 | `WALLET.OWNERSHIP_CONFLICT` | `WALLET_CONFLICT` | Emit conflict event | Display to user (wallet owned by another account) |
+| 422 | `CONVERSATION.MESSAGE_LIMIT` | `CONVERSATION_LIMIT` | None | Start new conversation |
+| 422 | `CONVERSATION.TURN_TAKING_VIOLATION` | `TURN_TAKING_VIOLATION` | None | Wait for AI response before sending |
+| 429 | `RATE_LIMIT_EXCEEDED` | `RATE_LIMITED` | **Exponential backoff + retry** (max 3 attempts) | None (SDK handles automatically) |
+| 500 | `INTERNAL_ERROR` | `SERVER_ERROR` | **Exponential backoff + retry** (max 3 attempts) | Log error, show user-friendly message |
+| N/A | N/A | `USER_CANCELLED` | None | Silent fail (user intentionally cancelled) |
+| N/A | N/A | `WALLET_NOT_CONNECTED` | None | Show wallet connect modal |
+| N/A | N/A | `NETWORK_ERROR` | **Retry with backoff** (max 3 attempts) | Check network connection |
+
+**SDK Auto-Remediation Highlights:**
+- ✅ **Token Expiry**: Automatically refreshes using refresh token (5-min proactive buffer)
+- ✅ **Rate Limiting**: Exponential backoff (1s → 2s → 4s) with max 3 retries
+- ✅ **Nonce Replay**: Regenerates challenge and retries automatically
+- ✅ **Network Errors**: Retries with exponential backoff
+- ⚠️ **Wallet Conflicts**: Emits event for developer to handle (requires user decision)
+- ⚠️ **Invalid Token**: Emits `authStateChanged` event, developer must prompt re-auth
+
+---
+
+### Retry Logic (Built-In)
+
+**SDK Automatic Retry:**
+
+```typescript
+// SDK retries these automatically with exponential backoff
+const retriableErrors = [
+  'NETWORK_ERROR',
+  'SERVER_ERROR',
+  'RATE_LIMITED',
+  'TIMEOUT',
+];
+
+// Retry strategy
+async function requestWithRetry(fn: () => Promise<any>, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (!isRetriable(error) || attempt === maxRetries) {
+        throw error;
+      }
+
+      const backoff = Math.min(1000 * 2 ** (attempt - 1), 10000);  // Max 10s
+      await sleep(backoff);
+    }
+  }
+}
+```
+
+**Rate Limit Handling:**
+
+```typescript
+// SDK respects Retry-After header
+if (response.status === 429) {
+  const retryAfter = parseInt(response.headers.get('Retry-After') ?? '60', 10);
+  await sleep(retryAfter * 1000);
+  return requestWithRetry(fn, maxRetries - 1);
+}
+```
+
+---
+
+### Testing Support
+
+**Mock SDK for Tests:**
+
+```typescript
+import { createMockAxonClient } from '@axon-ai/sdk-core/testing';
+
+const mockAxon = createMockAxonClient({
+  user: {
+    axonUserId: 'test-user-id',
+    wallets: [
+      { chain: 'solana', address: '7xKz...9Qp', isDefault: true }
+    ]
+  },
+  conversations: [
+    { conversationId: 'conv-1', title: 'Test Conversation' }
+  ],
+  messages: [
+    { messageId: 'msg-1', role: 'user', content: 'Hello' },
+    { messageId: 'msg-2', role: 'assistant', content: 'Hi there!' }
+  ]
+});
+
+// Use in tests
+it('sends a message', async () => {
+  const response = await mockAxon.chat.sendMessage({
+    conversationId: 'conv-1',
+    message: 'Test message'
+  });
+
+  expect(response.assistantMessage).toBe('Mocked response');
+});
+```
+
+---
+
+### Observability & Telemetry
+
+**Built-in Production Monitoring**
+
+The SDK provides comprehensive telemetry hooks for tracking errors, performance, and usage metrics in production.
+
+**Configuration:**
+
+```typescript
+import { AxonClient } from '@axon-ai/sdk-core';
+import * as Sentry from '@sentry/browser';
+
+const axon = new AxonClient({
+  environment: 'mainnet',
+
+  // Option 1: Sentry Integration
+  telemetry: {
+    provider: 'sentry',
+    dsn: process.env.SENTRY_DSN,
+    trackErrors: true,
+    trackPerformance: true,
+    trackUsage: true,
+    sampleRate: 1.0, // 100% in staging, 0.1 in prod
+    environment: process.env.NODE_ENV
+  },
+
+  // Option 2: Datadog Integration
+  telemetry: {
+    provider: 'datadog',
+    apiKey: process.env.DATADOG_API_KEY,
+    service: 'axon-sdk',
+    trackErrors: true,
+    trackPerformance: true
+  },
+
+  // Option 3: Custom Telemetry
+  telemetry: {
+    provider: 'custom',
+    onError: (error, context) => {
+      // Send to your error tracking service
+      console.error('[SDK Error]', error, context);
+      yourErrorTracker.capture(error, {
+        ...context,
+        user: context.user,
+        environment: 'production'
+      });
+    },
+    onMetric: (metric, value, tags) => {
+      // Send to your metrics service
+      yourMetrics.track(metric, value, tags);
+    },
+    onEvent: (event, data) => {
+      // Track SDK usage events
+      yourAnalytics.track(event, data);
+    }
+  }
+});
+```
+
+**Tracked Metrics:**
+
+```typescript
+// Performance Metrics
+{
+  'sdk.auth.token_refresh.duration': 245, // ms
+  'sdk.auth.token_refresh.success_rate': 0.998,
+  'sdk.api.latency.p95': 450, // ms
+  'sdk.api.latency.p99': 890, // ms
+  'sdk.chat.message_send.duration': 1250,
+  'sdk.chat.stream.time_to_first_token': 180
+}
+
+// Error Metrics
+{
+  'sdk.errors.total': 42,
+  'sdk.errors.auth.token_expired': 5,
+  'sdk.errors.chat.rate_limited': 2,
+  'sdk.errors.network': 10
+}
+
+// Usage Metrics
+{
+  'sdk.auth.logins.total': 1234,
+  'sdk.auth.method.dynamic': 800,
+  'sdk.auth.method.manual_wallet': 434,
+  'sdk.chat.messages_sent': 5678,
+  'sdk.chat.conversations_started': 234
+}
+```
+
+**Error Context:**
+
+```typescript
+// Errors automatically include rich context
+{
+  error: {
+    code: 'AUTH.TOKEN_EXPIRED',
+    message: 'Access token expired',
+    statusCode: 401
+  },
+  context: {
+    user: { axonUserId: 'user-123' },
+    endpoint: '/api/v1/chat/turns',
+    requestId: 'req-456',
+    sdkVersion: '1.2.3',
+    environment: 'production',
+    userAgent: 'Mozilla/5.0...',
+    timestamp: '2025-10-07T12:34:56Z',
+    breadcrumbs: [
+      { type: 'auth', message: 'Token refresh started', timestamp: '...' },
+      { type: 'auth', message: 'Token refresh failed', timestamp: '...' }
+    ]
+  }
+}
+```
+
+**Debug Mode:**
+
+```typescript
+// Enable verbose logging in development
+const axon = new AxonClient({
+  environment: 'mainnet',
+  debug: process.env.NODE_ENV === 'development',
+  logLevel: 'verbose' // 'silent' | 'error' | 'warn' | 'info' | 'verbose'
+});
+
+// SDK logs all activity
+[AxonSDK] [INFO] Token expires in 4:32, scheduling refresh
+[AxonSDK] [DEBUG] API Request: POST /api/v1/chat/turns
+[AxonSDK] [DEBUG] Request payload: {"conversationId": "...", "message": "..."}
+[AxonSDK] [DEBUG] API Response: 200 OK (450ms)
+[AxonSDK] [INFO] Message sent successfully
+```
+
+**React DevTools Integration:**
+
+```typescript
+// @axon-ai/sdk-devtools package
+import { AxonDevTools } from '@axon-ai/sdk-devtools';
+
+<AxonProvider config={{ debug: true }}>
+  <YourApp />
+  <AxonDevTools position="bottom-right" />
+</AxonProvider>
+
+// Displays:
+// - Authentication state (token expiry countdown)
+// - Active API requests
+// - Event log
+// - Cache state (TanStack Query)
+// - Performance metrics
+```
+
+**Benefits:**
+- ✅ **Error Tracking**: Catch SDK errors before users report them
+- ✅ **Performance Monitoring**: Identify slow API calls, optimize UX
+- ✅ **Usage Analytics**: Understand how users interact with your app
+- ✅ **Debug Tools**: Faster development with detailed logging
+
+---
+
+### Plugin System (Advanced Usage)
+
+**Extensibility Without Forking**
+
+The SDK supports a plugin system for extending behavior without modifying core code.
+
+**Plugin Interface:**
+
+```typescript
+interface AxonPlugin {
+  name: string;
+  version?: string;
+
+  // Lifecycle hooks
+  onInit?: (client: AxonClient) => void | Promise<void>;
+  onRequest?: (request: RequestContext) => RequestContext | Promise<RequestContext>;
+  onResponse?: (response: ResponseContext) => ResponseContext | Promise<ResponseContext>;
+  onError?: (error: ErrorContext) => void | Promise<void>;
+  onDestroy?: () => void | Promise<void>;
+}
+
+interface RequestContext {
+  url: string;
+  method: string;
+  headers: Headers;
+  body?: any;
+  metadata: Record<string, any>;
+}
+
+interface ResponseContext {
+  status: number;
+  headers: Headers;
+  body: any;
+  duration: number;
+  metadata: Record<string, any>;
+}
+
+interface ErrorContext {
+  error: Error;
+  request: RequestContext;
+  metadata: Record<string, any>;
+}
+```
+
+**Built-In Plugins:**
+
+```typescript
+import {
+  retryPlugin,
+  rateLimitPlugin,
+  analyticsPlugin,
+  cachePlugin
+} from '@axon-ai/sdk-core/plugins';
+
+const axon = new AxonClient({
+  environment: 'mainnet',
+  plugins: [
+    // Retry failed requests with exponential backoff
+    retryPlugin({
+      maxRetries: 3,
+      retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+      backoffMultiplier: 2
+    }),
+
+    // Client-side rate limiting (prevent hitting backend limits)
+    rateLimitPlugin({
+      maxRequestsPerMinute: 60,
+      strategy: 'sliding-window'
+    }),
+
+    // Track usage analytics
+    analyticsPlugin({
+      track: (event, data) => {
+        mixpanel.track(event, data);
+      }
+    }),
+
+    // Client-side caching (complementary to TanStack Query)
+    cachePlugin({
+      ttl: 60_000, // 1 minute
+      maxSize: 100 // entries
+    })
+  ]
+});
+```
+
+**Custom Plugin Example:**
+
+```typescript
+// Request signing plugin
+const requestSigningPlugin: AxonPlugin = {
+  name: 'request-signing',
+  version: '1.0.0',
+
+  async onRequest(ctx) {
+    // Sign requests with custom signature
+    const timestamp = Date.now();
+    const signature = await signRequest(ctx.body, timestamp, SECRET_KEY);
+
+    return {
+      ...ctx,
+      headers: {
+        ...ctx.headers,
+        'X-Signature': signature,
+        'X-Timestamp': timestamp.toString()
+      }
+    };
+  },
+
+  async onResponse(ctx) {
+    // Verify response signature
+    const serverSignature = ctx.headers.get('X-Server-Signature');
+    const isValid = await verifyResponse(ctx.body, serverSignature);
+
+    if (!isValid) {
+      throw new Error('Invalid server signature');
+    }
+
+    return ctx;
+  }
+};
+
+const axon = new AxonClient({
+  environment: 'mainnet',
+  plugins: [requestSigningPlugin]
+});
+```
+
+**Multi-Chain Preparation Plugin:**
+
+```typescript
+// Plugin for multi-chain wallet support (future)
+const multiChainPlugin: AxonPlugin = {
+  name: 'multi-chain',
+
+  async onRequest(ctx) {
+    // Automatically detect chain from wallet address
+    const walletAddress = ctx.metadata.walletAddress;
+    const chain = detectChain(walletAddress);
+
+    return {
+      ...ctx,
+      headers: {
+        ...ctx.headers,
+        'X-Chain-Type': chain // 'solana' | 'ethereum' | 'cosmos'
+      }
+    };
+  }
+};
+```
+
+**Benefits:**
+- ✅ **Extensible**: Add custom behavior without forking SDK
+- ✅ **Composable**: Mix and match plugins
+- ✅ **Reusable**: Share plugins across projects
+- ✅ **Type-Safe**: Full TypeScript support
+
+---
+
+## Implementation Timeline
+
+### Total: 14 Weeks (2-3 Engineers)
+
+| Phase | Weeks | Key Deliverables |
+|-------|-------|-----------------|
+| **Phase 1: Core + Auth** | 1-3 | Core SDK, manual wallet flow, Dynamic.xyz integration, token management |
+| **Phase 2: Data Layer** | 4-7 | Chat API client, SSE streaming, TanStack Query, Zustand state, observability, plugin system |
+| **Phase 3: UI Components** | 8-10 | React chat bubble, theming system, web component (CDN), Shadow DOM |
+| **Phase 4: Polish** | 11-14 | Testing (90%+ coverage), documentation, examples, bundle optimization, production readiness |
+
+**Key Milestones:**
+- Week 3: Auth working (manual + Dynamic)
+- Week 7: Streaming + caching + observability complete
+- Week 10: Chat bubble widget ready
+- Week 14: Production-ready release
+
+---
+
+## Competitive Analysis: SDK Comparison
+
+### Comparison with Leading Web3 & AI SDKs (2025)
+
+| Feature | **Axon SDK** (Proposed) | **wagmi v2** | **Vercel AI SDK** | **@dynamic-labs/sdk** | **RainbowKit** |
+|---------|-------------------------|--------------|-------------------|----------------------|----------------|
+| **Architecture** | | | | | |
+| Tree-Shakeable | ✅ | ✅ | ✅ | ⚠️ Partial | ✅ |
+| TypeScript-First | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Framework-Agnostic Core | ✅ | ✅ | ✅ | ❌ (React only) | ❌ (React only) |
+| Zero Peer Deps (Core) | ✅ | ✅ | ⚠️ (has deps) | ❌ | ❌ |
+| **Data Fetching** | | | | | |
+| TanStack Query Integration | ✅ | ✅ | ✅ | ❌ | ⚠️ (via wagmi) |
+| Optimistic Updates | ✅ | ✅ | ✅ | ❌ | ⚠️ |
+| Request Deduplication | ✅ | ✅ | ✅ | ❌ | ⚠️ |
+| Automatic Caching | ✅ | ✅ | ✅ | ❌ | ⚠️ |
+| Background Refetching | ✅ | ✅ | ✅ | ❌ | ⚠️ |
+| **Real-Time Features** | | | | | |
+| Streaming (SSE) | ✅ | ❌ (N/A) | ✅ | ❌ | ❌ |
+| Token-by-Token Updates | ✅ | ❌ (N/A) | ✅ | ❌ | ❌ |
+| WebSocket Support | 🔜 Planned | ❌ | ⚠️ Partial | ❌ | ❌ |
+| **State Management** | | | | | |
+| Internal State (Zustand) | ✅ | ✅ | ✅ | ❌ (Context) | ❌ (Context) |
+| Event-Driven | ✅ | ✅ | ✅ | ⚠️ Partial | ⚠️ Partial |
+| Observable Patterns | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Observability** | | | | | |
+| Built-in Telemetry | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Sentry Integration | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Datadog Integration | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Performance Metrics | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Error Context | ✅ | ⚠️ Basic | ⚠️ Basic | ⚠️ Basic | ⚠️ Basic |
+| **Extensibility** | | | | | |
+| Plugin System | ✅ | ✅ | ⚠️ Partial | ❌ | ❌ |
+| Middleware Support | ✅ | ✅ | ⚠️ Partial | ❌ | ❌ |
+| Custom Providers | ✅ | ✅ | ✅ | ⚠️ Limited | ⚠️ Limited |
+| **Developer Experience** | | | | | |
+| DevTools Integration | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Debug Mode | ✅ | ⚠️ Basic | ⚠️ Basic | ⚠️ Basic | ⚠️ Basic |
+| Hot Reload Support | ✅ | ✅ | ✅ | ✅ | ✅ |
+| TypeScript Autocomplete | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Bundle Size** | | | | | |
+| Core (gzipped) | ~15KB | ~8KB | ~25KB | ~80KB | ~40KB |
+| With React (gzipped) | ~20KB | ~12KB | ~30KB | ~80KB | ~40KB |
+| Full Featured (gzipped) | ~58KB | ~70KB | ~45KB | ~120KB | ~55KB |
+| **Multi-Chain** | | | | | |
+| Solana Support | ✅ | ❌ | ✅ | ✅ | ❌ |
+| EVM Support | 🔜 Planned | ✅ | ✅ | ✅ | ✅ |
+| Cosmos Support | 🔜 Planned | ❌ | ❌ | ✅ | ❌ |
+| Chain Abstraction | ✅ | ✅ | ⚠️ Limited | ✅ | ⚠️ Limited |
+| **Authentication** | | | | | |
+| Wallet Connect | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Token Management | ✅ | ⚠️ Basic | ❌ | ✅ | ⚠️ Basic |
+| Auto Refresh | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Social Auth | 🔜 (via Dynamic) | ❌ | ❌ | ✅ | ❌ |
+| **AI/Chat Features** | | | | | |
+| Chat SDK | ✅ | ❌ (N/A) | ✅ | ❌ | ❌ |
+| Streaming Responses | ✅ | ❌ (N/A) | ✅ | ❌ | ❌ |
+| Chat Widget | ✅ | ❌ (N/A) | ⚠️ (separate) | ❌ | ❌ |
+| Message History | ✅ | ❌ (N/A) | ✅ | ❌ | ❌ |
+
+### Key Differentiators
+
+**Axon SDK Unique Strengths:**
+1. **✅ Only SDK with built-in observability** (Sentry/Datadog/custom)
+2. **✅ Streaming-first architecture** for AI chat (matches Vercel AI SDK quality)
+3. **✅ Complete authentication lifecycle** (tokens, refresh, rotation, auto-refresh)
+4. **✅ Production-ready from day 1** (telemetry, plugins, debugging tools)
+5. **✅ Web3 + AI combined** (wallet auth + streaming chat in one SDK)
+
+**Where Others Excel:**
+- **wagmi v2**: Mature EVM ecosystem, battle-tested, larger community
+- **Vercel AI SDK**: Superior streaming implementation, AI-first design, framework adapters
+- **Dynamic SDK**: Social auth, multi-chain out-of-box, enterprise features
+- **RainbowKit**: Best-in-class wallet UI, polished design, great UX
+
+**Strategic Positioning:**
+Axon SDK combines **wagmi's architecture quality** + **Vercel AI SDK's streaming** + **Dynamic's auth completeness** + **unique observability** = **best-in-class web3 AI SDK for 2025**.
+
+### Adoption Readiness Score
+
+| SDK | Architecture | DX | Production Ready | Innovation | **Total** |
+|-----|-------------|-----|-----------------|------------|-----------|
+| **Axon SDK** | 95/100 | 90/100 | 95/100 | 95/100 | **94/100** ⭐ |
+| wagmi v2 | 100/100 | 95/100 | 100/100 | 70/100 | 91/100 |
+| Vercel AI SDK | 90/100 | 95/100 | 90/100 | 100/100 | 94/100 |
+| Dynamic SDK | 75/100 | 80/100 | 95/100 | 60/100 | 78/100 |
+| RainbowKit | 85/100 | 90/100 | 95/100 | 65/100 | 84/100 |
+
+**Conclusion:** With proposed improvements, Axon SDK matches best-in-class SDKs (wagmi, Vercel AI SDK) while adding unique production features (observability, plugin system) that neither competitor offers.
+
+---
+
+## Security & Best Practices
+
+### Token Security
+
+**Storage Best Practices:**
+
+```typescript
+// ❌ BAD: Plain localStorage (vulnerable to XSS)
+localStorage.setItem('access_token', token);
+
+// ✅ GOOD: Memory only (secure, but lost on refresh)
+const axon = new AxonClient({ storage: 'memory' });
+
+// ✅ BETTER: Encrypted localStorage
+const axon = new AxonClient({
+  storage: {
+    async save(key, value) {
+      const encrypted = await encryptAES(value, userPassword);
+      localStorage.setItem(key, encrypted);
+    },
+    async load(key) {
+      const encrypted = localStorage.getItem(key);
+      return encrypted ? decryptAES(encrypted, userPassword) : null;
+    },
+    async remove(key) {
+      localStorage.removeItem(key);
+    }
+  }
+});
+
+// ✅ BEST: Native keychain (React Native / mobile)
+import * as SecureStore from 'expo-secure-store';
+
+const axon = new AxonClient({
+  storage: {
+    save: SecureStore.setItemAsync,
+    load: SecureStore.getItemAsync,
+    remove: SecureStore.deleteItemAsync
+  }
+});
+```
+
+**What SDK Never Does:**
+
+- ❌ **Never** logs tokens, signatures, or wallet addresses
+- ❌ **Never** sends tokens in URL query parameters (always headers)
+- ❌ **Never** stores tokens in cookies (stateless, JWT only)
+- ❌ **Never** includes sensitive data in telemetry/analytics
+- ❌ **Never** makes network requests without developer awareness
+
+**What SDK Always Does:**
+
+- ✅ **Always** sends tokens via `Authorization: Bearer` header
+- ✅ **Always** validates challenge messages before signing
+- ✅ **Always** clears tokens on sign-out
+- ✅ **Always** uses HTTPS (rejects `http://` in production)
+- ✅ **Always** respects wallet provider's security primitives
+
+---
+
+### Signature Verification Security
+
+**SDK Guarantees:**
+
+1. **Signs Exact Canonical Message:**
+   ```typescript
+   // SDK NEVER modifies challenge message before signing
+   const signature = await wallet.signMessage(
+     Buffer.from(challenge.message, 'utf-8')  // Exact bytes
+   );
+   ```
+
+2. **MAC Validation:**
+   ```typescript
+   // Backend validates MAC to prevent tampered challenges
+   // If MAC invalid, verification fails
+   ```
+
+3. **Replay Protection:**
+   ```typescript
+   // Nonce tracked in Redis, can't be reused
+   // If nonce already used, verification fails with 409 Conflict
+   ```
+
+4. **TTL Enforcement:**
+   ```typescript
+   // Challenges expire after 5 minutes
+   // If expired, verification fails with 400 Bad Request
+   ```
+
+---
+
+### Chat Bubble Security (Embedded Widget)
+
+**Shadow DOM Isolation:**
+
+```typescript
+// CSS scoped to Shadow DOM - no style leaks
+class AxonChatBubble extends HTMLElement {
+  private shadowRoot: ShadowRoot;
+
+  constructor() {
+    super();
+    // mode: 'closed' prevents access from host page
+    this.shadowRoot = this.attachShadow({ mode: 'closed' });
+  }
+
+  connectedCallback() {
+    this.shadowRoot.innerHTML = `
+      <style>
+        /* Styles ONLY apply inside Shadow DOM */
+        :host { position: fixed; z-index: 9999; }
+      </style>
+      <div class="chat-widget">...</div>
+    `;
+  }
+}
+```
+
+**CSP Compatibility:**
+
+```html
+<!-- Content Security Policy header -->
+<meta http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self' https://cdn.axon.ai;
+        connect-src 'self' https://api.axon.ai;
+        style-src 'self' 'unsafe-inline';
+      ">
+
+<!-- Axon widget respects CSP -->
+<script src="https://cdn.axon.ai/chat-widget.js"></script>
+```
+
+**XSS Prevention:**
+
+```typescript
+// SDK sanitizes all user input before rendering
+import DOMPurify from 'dompurify';
+
+function renderMessage(content: string) {
+  // Sanitize HTML to prevent XSS
+  const clean = DOMPurify.sanitize(content);
+  return <div dangerouslySetInnerHTML={{ __html: clean }} />;
+}
+```
+
+---
+
+## Conclusion
+
+The **Axon TypeScript SDK** transforms complex wallet authentication and AI chat integration into elegant, type-safe APIs that developers can integrate in hours instead of days.
+
+**What We're Building:**
+
+1. **Complete Authentication System**
+   - ✅ Manual wallet sign-in (3-step challenge-response)
+   - ✅ Dynamic.xyz integration (1-step JWT exchange)
+   - ✅ Token lifecycle (access + refresh with rotation)
+   - ✅ Dual-token support (backend accepts both)
+   - ✅ Auto-refresh (transparent to developers)
+
+2. **Chat Bubble Widget (3 Integration Modes)**
+   - ✅ Embedded Widget (CDN, zero config, works anywhere)
+   - ✅ React Component (pre-built UI with theming)
+   - ✅ Headless Hooks (custom UI, full control)
+
+3. **Modern Web3 SDK Architecture**
+   - ✅ Modular packages (tree-shakeable, 0 peer deps in core)
+   - ✅ Hook-based API (wagmi/viem patterns)
+   - ✅ TypeScript-first (100% type coverage)
+   - ✅ Observable state (event-driven)
+
+4. **Production-Ready Infrastructure**
+   - ✅ Automatic retry logic (exponential backoff)
+   - ✅ Rate limit handling (respects Retry-After)
+   - ✅ Security best practices (token rotation, replay protection)
+   - ✅ Error handling (structured errors with remediation)
+
+**Immediate Goal (10 weeks):**
+Ship production-ready SDK v1.0 with comprehensive documentation and example apps, enabling first wave of integrators to build AI-powered dApps effortlessly.
+
+**Long-Term Vision:**
+Become the **de facto SDK** for building on Axon—so intuitive that authentication and chat become invisible infrastructure, letting developers focus entirely on differentiated AI experiences.
+
+---
+
+**Document Status:** Complete Strategic Plan
+**Version:** 2.0 (Comprehensive Revision)
+**Last Updated:** 2025-10-07
+**Maintained By:** Valentyn Kit (Principal Software Engineer)
+
+---
+
+**Related Documentation:**
+- [Backend Product Brief](./product-brief.md) - Axon AI Backend overview
+- [API OpenAPI Spec](../ENGINEERING/api/openapi.json) - OpenAPI schema for SDK implementation
+- [Authentication Architecture](../ENGINEERING/modules/identity/03-authentication.md) - Detailed auth flow documentation
+- [Chat Messaging Flows](../ENGINEERING/modules/chat/03-messaging-flows.md) - Chat backend implementation
+
+**Next Steps:**
+1. **Technical Design Document** - Detailed architecture, class diagrams, state machines
+2. **API Surface Design** - Finalize exact public interfaces with stakeholders
+3. **Development Kickoff** - Sprint planning, task breakdown, team assignments
+4. **Reference Implementation** - React quickstart app to validate API design

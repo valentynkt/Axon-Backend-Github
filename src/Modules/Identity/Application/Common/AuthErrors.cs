@@ -10,7 +10,6 @@ public static class AuthErrors
     public const string TokenRequired = "AUTH.TOKEN_REQUIRED";
     public const string TokenExpired = "AUTH.TOKEN_EXPIRED";
     public const string TokenInvalid = "AUTH.TOKEN_INVALID";
-    public const string TokenReplayed = "AUTH.TOKEN_REPLAYED";
     public const string TokenMalformed = "AUTH.TOKEN_MALFORMED";
     public const string TokenUnsupportedType = "AUTH.TOKEN_UNSUPPORTED_TYPE";
     public const string TokenInvalidSignature = "AUTH.TOKEN_INVALID_SIGNATURE";
@@ -39,13 +38,7 @@ public static class AuthErrors
     public const string ChallengeInvalidJson = "AUTH.CHALLENGE_INVALID_JSON";
     public const string ChallengeValidationError = "AUTH.CHALLENGE_VALIDATION_ERROR";
 
-    // Replay Protection Errors
-    public const string ReplayCheckError = "AUTH.REPLAY_CHECK_ERROR";
-    public const string ReplayRaceCondition = "AUTH.REPLAY_RACE_CONDITION";
-
-    // MAC and Cryptographic Errors
-    public const string MacInvalid = "AUTH.MAC_INVALID";
-    public const string MacValidationError = "AUTH.MAC_VALIDATION_ERROR";
+    // Cryptographic Errors
     public const string NonceRequired = "AUTH.NONCE_REQUIRED";
 
     // Signature Verification Errors

@@ -39,6 +39,18 @@ public sealed class ConversationWriteRepository : EfWriteRepository<Conversation
     /// </summary>
     public override async Task<Conversation?> GetByIdAsync(ConversationId id, CancellationToken ct = default)
     {
+        // First check if the entity is already tracked in the current context
+        var trackedEntity = _chatDbContext.ChangeTracker
+            .Entries<Conversation>()
+            .FirstOrDefault(e => e.Entity.Id == id)
+            ?.Entity;
+
+        if (trackedEntity != null)
+        {
+            // Entity is already tracked, return it (it may have pending changes)
+            return trackedEntity;
+        }
+
         // Use AsNoTracking to get fresh data from DB, avoiding stale cached entities
         // This is critical for E2E tests where multiple requests operate on same conversation
         var conversation = await _chatDbContext.Set<Conversation>()

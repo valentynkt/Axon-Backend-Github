@@ -1,6 +1,5 @@
 using Axon.Modules.Chat.Application.Common.Models;
 using Axon.Modules.Chat.Domain.Aggregates.Conversation;
-using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,10 +22,4 @@ public interface IChatDbContext : IDbContext
     /// Use this for read-only operations to improve performance.
     /// </summary>
     IQueryable<TEntity> Query<TEntity>() where TEntity : class;
-
-    /// <summary>Collect domain events from tracked aggregates.</summary>
-    new IReadOnlyList<IDomainEvent> GetDomainEvents();
-
-    /// <summary>Clear tracked domain events after publication.</summary>
-    void ClearDomainEvents();
 }

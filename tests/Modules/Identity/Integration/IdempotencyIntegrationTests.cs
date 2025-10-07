@@ -104,6 +104,7 @@ public class IdempotencyIntegrationTests : IdentityDbInvariantsTestBase
         // Configure orchestrator behavior with provided parameters or defaults
         var mockResponse = new AuthenticationResponse(
             AccessToken: "mock-access-token",
+            RefreshToken: null,
             UserId: userId ?? Guid.NewGuid(),
             ProviderType: "dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(15),

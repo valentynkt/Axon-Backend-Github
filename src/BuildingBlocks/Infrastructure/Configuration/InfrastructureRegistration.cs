@@ -1,7 +1,3 @@
-using System.Reflection;
-using BuildingBlocks.Infrastructure.Messaging;
-using BuildingBlocks.Infrastructure.Persistence.Write;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,25 +10,17 @@ namespace BuildingBlocks.Infrastructure.Configuration;
 public static class InfrastructureRegistration
 {
     /// <summary>
-    /// Registers all infrastructure services including messaging with EF Outbox.
+    /// Registers all infrastructure services.
     /// </summary>
-    /// <typeparam name="TDbContext">The DbContext that will host outbox tables</typeparam>
     /// <param name="services">Service collection</param>
-    /// <param name="configuration">Configuration instance</param>
-    /// <param name="configureMessaging">Optional messaging configuration</param>
-    /// <param name="consumerAssemblies">Assemblies to scan for MassTransit consumers</param>
-    public static IServiceCollection AddInfrastructure<TDbContext>(
+    /// <param name="configuration">Configuration instance (reserved for future use)</param>
+    public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration,
-        Action<MassTransitOptions>? configureMessaging = null,
-        params Assembly[] consumerAssemblies)
-        where TDbContext : DbContext
+        IConfiguration? configuration = null)
     {
-        // Register messaging infrastructure with EF Outbox
-        services.AddInfrastructureMessaging<TDbContext>(configuration, configureMessaging, consumerAssemblies);
+        _ = configuration; // Reserved for future infrastructure configuration
 
-
-        // Future: Add other infrastructure services here
+        // Future: Add infrastructure services here
         // - Caching
         // - File storage
         // - Email services

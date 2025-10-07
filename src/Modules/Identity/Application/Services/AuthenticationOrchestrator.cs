@@ -24,7 +24,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     private readonly IJwtTokenService _tokenService;
     private readonly UserManager<AxonUserAuth> _userManager;
     private readonly SignInManager<AxonUserAuth> _signInManager;
-    private readonly IDistributedCache _cache;
     private readonly ILogger<AuthenticationOrchestrator> _logger;
     private readonly IChallengeService _challengeService;
     private readonly IRefreshTokenProvider _refreshTokenProvider;
@@ -35,7 +34,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
         IJwtTokenService tokenService,
         UserManager<AxonUserAuth> userManager,
         SignInManager<AxonUserAuth> signInManager,
-        IDistributedCache cache,
         ILogger<AuthenticationOrchestrator> logger,
         IChallengeService challengeService,
         IRefreshTokenProvider refreshTokenProvider,
@@ -45,7 +43,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _signInManager = signInManager ?? throw new ArgumentNullException(nameof(signInManager));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _challengeService = challengeService ?? throw new ArgumentNullException(nameof(challengeService));
         _refreshTokenProvider = refreshTokenProvider ?? throw new ArgumentNullException(nameof(refreshTokenProvider));
@@ -77,18 +74,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     {
         // Delegate directly to ChallengeService
         return _challengeService.ValidateChallenge(message, expectedChainId, expectedAddress, expectedAudience);
-    }
-
-    /// <summary>
-    /// Checks and marks a nonce as used for replay protection - delegates to ChallengeService
-    /// </summary>
-    public async Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
-        string signedMessage,
-        string mkv,
-        CancellationToken cancellationToken = default)
-    {
-        // Delegate directly to ChallengeService
-        return await _challengeService.CheckAndMarkNonceUsedAsync(signedMessage, mkv, cancellationToken);
     }
 
     /// <summary>
@@ -126,12 +111,13 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var authData = providerResult.Value;
 
             // Generate token using existing TokenService
+            var expiryMinutes = _authOptions.Value.AccessTokenExpirySeconds / 60;
             var tokenResult = await _tokenService.GenerateAccessTokenAsync(
                 authData.User.AxonPrincipalId,
                 ProviderType.From(authData.ProviderType),
                 authData.User.OriginalSubject,
                 authData.User.OriginalIssuer,
-                30, // 30 minutes
+                expiryMinutes,
                 cancellationToken);
 
             if (tokenResult.IsFailure)
@@ -141,11 +127,21 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var accessToken = tokenResult.Value.AccessToken;
 
+            // Generate refresh token for long-lived sessions
+            var refreshToken = await _refreshTokenProvider.GenerateAsync(
+                "RefreshToken",
+                _userManager,
+                authData.User);
+
+            var refreshTokenExpiryDays = _authOptions.Value.RefreshTokenExpirySeconds / 86400.0;
+
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
+                RefreshToken: refreshToken,
                 UserId: authData.User.AxonPrincipalId.Value,
                 ProviderType: "wallet",
-                ExpiresAt: DateTime.UtcNow.AddMinutes(30),
+                ExpiresAt: DateTime.UtcNow.AddMinutes(expiryMinutes),
+                RefreshExpiresAt: DateTime.UtcNow.AddDays(refreshTokenExpiryDays),
                 AdditionalData: authData.AdditionalClaims);
 
             _logger.LogInformation("Wallet authentication successful for principal {PrincipalId} in {Duration}ms",
@@ -196,12 +192,13 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var authData = providerResult.Value;
 
             // Generate Axon token
+            var expiryMinutes = _authOptions.Value.AccessTokenExpirySeconds / 60;
             var tokenResult = await _tokenService.GenerateAccessTokenAsync(
                 authData.User.AxonPrincipalId,
                 ProviderType.From(authData.ProviderType),
                 authData.User.OriginalSubject,
                 authData.User.OriginalIssuer,
-                30, // 30 minutes
+                expiryMinutes,
                 cancellationToken);
 
             if (tokenResult.IsFailure)
@@ -210,6 +207,14 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             }
 
             var accessToken = tokenResult.Value.AccessToken;
+
+            // Generate refresh token for long-lived sessions
+            var refreshToken = await _refreshTokenProvider.GenerateAsync(
+                "RefreshToken",
+                _userManager,
+                authData.User);
+
+            var refreshTokenExpiryDays = _authOptions.Value.RefreshTokenExpirySeconds / 86400.0;
 
             // Ensure we have all the metrics in additional data for the response
             var additionalData = authData.AdditionalClaims ?? new Dictionary<string, object>();
@@ -230,9 +235,11 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
+                RefreshToken: refreshToken,
                 UserId: authData.User.AxonPrincipalId.Value,
                 ProviderType: "dynamic",
-                ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(30),
+                ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(expiryMinutes),
+                RefreshExpiresAt: DateTime.UtcNow.AddDays(refreshTokenExpiryDays),
                 AdditionalData: additionalData);
 
             _logger.LogInformation("Dynamic token exchange successful for principal {PrincipalId} in {Duration}ms",
@@ -304,12 +311,13 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             var authData = providerResult.Value;
 
             // Generate new Axon token
+            var expiryMinutes = _authOptions.Value.AccessTokenExpirySeconds / 60;
             var tokenResult = await _tokenService.GenerateAccessTokenAsync(
                 authData.User.AxonPrincipalId,
                 ProviderType.From(authData.ProviderType),
                 authData.User.OriginalSubject,
                 authData.User.OriginalIssuer,
-                30, // 30 minutes
+                expiryMinutes,
                 cancellationToken);
 
             if (tokenResult.IsFailure)
@@ -319,11 +327,21 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             var accessToken = tokenResult.Value.AccessToken;
 
+            // Generate refresh token for long-lived sessions
+            var refreshToken = await _refreshTokenProvider.GenerateAsync(
+                "RefreshToken",
+                _userManager,
+                authData.User);
+
+            var refreshTokenExpiryDays = _authOptions.Value.RefreshTokenExpirySeconds / 86400.0;
+
             var response = new AuthenticationResponse(
                 AccessToken: accessToken,
+                RefreshToken: refreshToken,
                 UserId: authData.User.AxonPrincipalId.Value,
                 ProviderType: providerType,
-                ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(30),
+                ExpiresAt: authData.TokenExpiresAt ?? DateTime.UtcNow.AddMinutes(expiryMinutes),
+                RefreshExpiresAt: DateTime.UtcNow.AddDays(refreshTokenExpiryDays),
                 AdditionalData: authData.AdditionalClaims);
 
             return Result.Success<AuthenticationResponse, Error>(response);
@@ -382,23 +400,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
     {
         try
         {
-            // Extract JTI for replay protection
-            var jti = _refreshTokenProvider.GetJtiFromToken(refreshToken);
-            if (string.IsNullOrEmpty(jti))
-            {
-                return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Unauthorized("Invalid refresh token"));
-            }
-
-            // Check if refresh token was already used (replay protection)
-            var cacheKey = $"refresh:used:{jti}";
-            var existingValue = await _cache.GetStringAsync(cacheKey, cancellationToken);
-            if (!string.IsNullOrEmpty(existingValue))
-            {
-                return Result.Failure<RefreshTokenResponse, Error>(
-                    Error.Unauthorized("Refresh token already used"));
-            }
-
             // Extract user ID from token for direct lookup (performance optimization)
             var userId = _refreshTokenProvider.GetUserIdFromToken(refreshToken);
             if (userId == null)
@@ -429,12 +430,13 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
             }
 
             // Generate new access token
+            var expiryMinutes = _authOptions.Value.AccessTokenExpirySeconds / 60;
             var tokenResult = await _tokenService.GenerateAccessTokenAsync(
                 validUser.AxonPrincipalId,
                 ProviderType.From(validUser.ProviderType),
                 validUser.OriginalSubject,
                 validUser.OriginalIssuer,
-                30, // 30 minutes
+                expiryMinutes,
                 cancellationToken);
 
             if (tokenResult.IsFailure)
@@ -450,21 +452,15 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
                 _userManager,
                 validUser);
 
-            // Mark old refresh token as used (prevent replay) with sliding expiration
-            var options = new DistributedCacheEntryOptions
-            {
-                SlidingExpiration = TimeSpan.FromDays(30)
-            };
-            await _cache.SetStringAsync(cacheKey, "used", options, cancellationToken);
-
+            var refreshTokenExpiryDays = _authOptions.Value.RefreshTokenExpirySeconds / 86400;
             var response = new RefreshTokenResponse(
                 AccessToken: newAccessToken,
                 RefreshToken: newRefreshToken,
                 TokenType: "Bearer",
-                ExpiresIn: 1800, // 30 minutes in seconds
+                ExpiresIn: _authOptions.Value.AccessTokenExpirySeconds,
                 IssuedAt: DateTimeOffset.UtcNow,
-                AccessTokenExpiresAt: DateTimeOffset.UtcNow.AddMinutes(30),
-                RefreshTokenExpiresAt: DateTimeOffset.UtcNow.AddDays(30));
+                AccessTokenExpiresAt: DateTimeOffset.UtcNow.AddMinutes(expiryMinutes),
+                RefreshTokenExpiresAt: DateTimeOffset.UtcNow.AddDays(refreshTokenExpiryDays));
 
             _logger.LogInformation("Token refreshed successfully for user {UserId}", validUser.Id);
 
@@ -499,19 +495,6 @@ public sealed class AuthenticationOrchestrator : IAuthenticationOrchestrator
 
             // Update security stamp to invalidate all existing tokens
             await _userManager.UpdateSecurityStampAsync(user);
-
-            // Clear distributed cache entries for this user
-            var cacheKeys = new[]
-            {
-                $"user:session:{userId}",
-                $"user:tokens:{userId}",
-                $"user:refresh:{userId}"
-            };
-
-            foreach (var key in cacheKeys)
-            {
-                await _cache.RemoveAsync(key, cancellationToken);
-            }
 
             _logger.LogInformation("Session completely invalidated for user {UserId} using SignInManager", userId);
 

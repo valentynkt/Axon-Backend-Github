@@ -37,7 +37,6 @@ public abstract class AuthenticationOrchestratorTestBase
     protected IJwtTokenService TokenService { get; set; } = null!;
     protected UserManager<AxonUserAuth> UserManager { get; set; } = null!;
     protected SignInManager<AxonUserAuth> SignInManager { get; set; } = null!;
-    protected IDistributedCache Cache { get; set; } = null!;
     protected ILogger<Application.Services.AuthenticationOrchestrator> Logger { get; set; } = null!;
     protected IChallengeService ChallengeService { get; set; } = null!;
     protected IRefreshTokenProvider RefreshTokenProvider { get; set; } = null!;
@@ -61,7 +60,6 @@ public abstract class AuthenticationOrchestratorTestBase
         TokenService = Substitute.For<IJwtTokenService>();
         UserManager = MockUserManager();
         SignInManager = MockSignInManager(UserManager);
-        Cache = Substitute.For<IDistributedCache>();
         Logger = Substitute.For<ILogger<Application.Services.AuthenticationOrchestrator>>();
         ChallengeService = Substitute.For<IChallengeService>();
         RefreshTokenProvider = Substitute.For<IRefreshTokenProvider>();
@@ -83,7 +81,6 @@ public abstract class AuthenticationOrchestratorTestBase
             TokenService,
             UserManager,
             SignInManager,
-            Cache,
             Logger,
             ChallengeService,
             RefreshTokenProvider,
@@ -122,16 +119,6 @@ public abstract class AuthenticationOrchestratorTestBase
                 return Task.FromResult(Result.Success<AxonToken, Error>(axonToken));
             });
 
-        // Default: Cache operations succeed (no-op for most tests)
-        Cache.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<byte[]?>(null)); // Cache miss by default
-
-        Cache.SetAsync(Arg.Any<string>(), Arg.Any<byte[]>(), Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
-        Cache.RemoveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
         // Default: ChallengeService operations succeed
         var challenge = new AuthenticationChallenge(
             ChainId: "solana",
@@ -140,9 +127,7 @@ public abstract class AuthenticationOrchestratorTestBase
             Exp: DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(),
             Nonce: "test-nonce",
             Aud: "test-audience",
-            Message: "test-message",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Message: "test-message");
         ChallengeService.GenerateChallengeAsync(
             Arg.Any<string>(),
             Arg.Any<string>(),

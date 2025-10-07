@@ -2,6 +2,7 @@ namespace Axon.Modules.Identity.Application.Commands.VerifyWalletSignature;
 
 public sealed record VerifyWalletSignatureResult(
     string AccessToken,
+    string? RefreshToken,
     string TokenType,
     long ExpiresIn,
     string AxonUserId,

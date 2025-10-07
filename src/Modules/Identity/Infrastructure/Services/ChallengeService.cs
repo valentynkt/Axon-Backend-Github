@@ -8,7 +8,6 @@ using BuildingBlocks.Core.Diagnostics.Errors;
 using CSharpFunctionalExtensions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -16,13 +15,12 @@ namespace Axon.Modules.Identity.Infrastructure.Services;
 
 /// <summary>
 /// Simplified challenge service using Microsoft Identity's token system and Data Protection API.
-/// Leverages built-in MAC validation and unified TokenReplayCache for production-ready replay protection.
+/// Leverages built-in MAC validation for secure challenge verification.
 /// </summary>
 public sealed class ChallengeService : IChallengeService
 {
     private readonly UserManager<AxonUserAuth> _userManager;
     private readonly ChallengeTokenProvider _tokenProvider;
-    private readonly TokenReplayCache _replayCache;
     private readonly ILogger<ChallengeService> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,12 +31,10 @@ public sealed class ChallengeService : IChallengeService
     public ChallengeService(
         UserManager<AxonUserAuth> userManager,
         ChallengeTokenProvider tokenProvider,
-        TokenReplayCache replayCache,
         ILogger<ChallengeService> logger)
     {
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-        _replayCache = replayCache ?? throw new ArgumentNullException(nameof(replayCache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -101,9 +97,7 @@ public sealed class ChallengeService : IChallengeService
                 Exp: exp,
                 Nonce: nonce,
                 Aud: audience,
-                Message: message,
-                Mac: protectedChallenge,
-                Mkv: "dataprotection_v1"); // Using ITimeLimitedDataProtector with automatic MAC versioning
+                Message: message);
 
             _logger.LogDebug("Generated challenge for wallet {Address} on chain {ChainId}",
                 MaskAddress(walletAddress), chainId);
@@ -227,57 +221,6 @@ public sealed class ChallengeService : IChallengeService
         }
     }
 
-    /// <summary>
-    /// Checks and marks a nonce as used for replay protection using unified TokenReplayCache
-    /// </summary>
-    public async Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
-        string signedMessage,
-        string mkv,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // Extract nonce from signed message
-            var messageData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(signedMessage, JsonOptions);
-            if (messageData == null || !messageData.TryGetValue("nonce", out var nonceElement))
-            {
-                _logger.LogWarning("Invalid message format or missing nonce");
-                return UnitResult.Failure(Error.Validation("Invalid message format"));
-            }
-
-            var nonce = nonceElement.GetString();
-            if (string.IsNullOrEmpty(nonce))
-            {
-                _logger.LogWarning("Empty nonce in message");
-                return UnitResult.Failure(Error.Validation("Missing nonce"));
-            }
-
-            // Check if nonce was already used using unified TokenReplayCache
-            var isReplay = await _replayCache.TryFindNonceAsync(nonce);
-            if (isReplay)
-            {
-                _logger.LogWarning("Nonce replay attempt detected: {NonceHash}", ComputeNonceHash(nonce));
-                return UnitResult.Failure(Error.Unauthorized("Nonce already used"));
-            }
-
-            // Mark nonce as used with automatic expiration
-            var added = await _replayCache.TryAddNonceAsync(nonce, TimeSpan.FromMinutes(5));
-            if (!added)
-            {
-                _logger.LogWarning("Nonce replay detected during add operation: {NonceHash}", ComputeNonceHash(nonce));
-                return UnitResult.Failure(Error.Unauthorized("Nonce already used"));
-            }
-
-            _logger.LogDebug("Nonce marked as used: {NonceHash}", ComputeNonceHash(nonce));
-            return UnitResult.Success<Error>();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to check nonce");
-            return UnitResult.Failure(Error.Internal("Failed to validate nonce"));
-        }
-    }
-
     // Legacy HMAC validation removed - using Data Protection API with built-in MAC validation
 
     private static string MaskAddress(string address)
@@ -285,11 +228,5 @@ public sealed class ChallengeService : IChallengeService
         return address.Length > 8
             ? $"{address[..4]}...{address[^4..]}"
             : address;
-    }
-
-    private static string ComputeNonceHash(string nonce)
-    {
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(nonce));
-        return Convert.ToBase64String(hashBytes)[..12]; // Use first 12 chars for compact logging
     }
 }

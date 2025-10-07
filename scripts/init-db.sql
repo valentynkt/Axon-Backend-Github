@@ -1,14 +1,17 @@
 -- Database initialization script for Axon Backend
 -- This script runs automatically when the database container starts for the first time
 
--- Create the main database if it doesn't exist (though this is usually handled by POSTGRES_DB)
--- SELECT 'CREATE DATABASE axon_chat' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'axon_chat');
+-- Database: axon_db (configured via POSTGRES_DB environment variable)
+-- The database is automatically created by PostgreSQL using the POSTGRES_DB env var
 
--- You can add any initial setup here, such as:
--- Extensions, custom functions, or seed data
+-- Enable required PostgreSQL extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Example: Enable UUID extension if needed in the future
--- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Schemas are managed by EF Core migrations:
+-- - identity: Domain entities (AxonPrincipal, Wallet) + ASP.NET Identity tables
+-- - chat: Domain entities (Conversation, Messages)
+-- - shared: MassTransit outbox/inbox tables (shared across modules)
 
 -- Log that initialization completed
-SELECT 'Database initialization completed' AS status;
+SELECT 'Database initialization completed for axon_db' AS status;

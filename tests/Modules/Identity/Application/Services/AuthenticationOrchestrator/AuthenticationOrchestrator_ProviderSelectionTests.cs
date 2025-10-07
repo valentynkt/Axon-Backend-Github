@@ -57,9 +57,7 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             ChainId: "solana",
             Address: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
             SignedMessage: "test-signed-message",
-            Signature: "test-signature",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Signature: "test-signature");
 
         var authData = CreateAuthenticationData(providerType: "manual");
 
@@ -117,7 +115,6 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             TokenService,
             UserManager,
             SignInManager,
-            Cache,
             Logger,
             ChallengeService,
             RefreshTokenProvider,
@@ -127,9 +124,7 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             ChainId: "solana",
             Address: "test-address",
             SignedMessage: "test-message",
-            Signature: "test-sig",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Signature: "test-sig");
 
         // Act
         var result = await Orchestrator.AuthenticateWithWalletAsync(request, CancellationToken.None);
@@ -151,7 +146,6 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             TokenService,
             UserManager,
             SignInManager,
-            Cache,
             Logger,
             ChallengeService,
             RefreshTokenProvider,
@@ -184,9 +178,7 @@ public class AuthenticationOrchestrator_ProviderSelectionTests : AuthenticationO
             ChainId: "solana",
             Address: "test-address",
             SignedMessage: "test-message",
-            Signature: "test-sig",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Signature: "test-sig");
 
         var walletAuthData = CreateAuthenticationData(providerType: "manual");
 

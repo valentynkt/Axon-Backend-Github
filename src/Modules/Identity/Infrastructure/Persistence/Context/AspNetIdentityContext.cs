@@ -8,12 +8,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
 /// <summary>
-/// Identity-specific DbContext that extends IdentityDbContext for Microsoft Identity Framework integration.
-/// This context manages AxonUserAuth entities and related Identity tables.
+/// ASP.NET Core Identity DbContext that extends IdentityDbContext for Microsoft Identity Framework integration.
+/// This context manages AxonUserAuth entities and related ASP.NET Identity tables (AspNetUsers, AspNetRoles, etc.).
+/// Renamed from "IdentityContext" to "AspNetIdentityContext" to avoid confusion with our domain IdentityDbContext.
 /// </summary>
-public class IdentityContext : IdentityDbContext<AxonUserAuth, IdentityRole<Guid>, Guid>
+public class AspNetIdentityContext : IdentityDbContext<AxonUserAuth, IdentityRole<Guid>, Guid>
 {
-    public IdentityContext(DbContextOptions<IdentityContext> options)
+    public AspNetIdentityContext(DbContextOptions<AspNetIdentityContext> options)
         : base(options)
     {
     }
@@ -70,24 +71,24 @@ public class IdentityContext : IdentityDbContext<AxonUserAuth, IdentityRole<Guid
 }
 
 /// <summary>
-/// Design-time factory for IdentityContext to support EF Core tools (migrations, etc.)
+/// Design-time factory for AspNetIdentityContext to support EF Core tools (migrations, etc.)
 /// </summary>
-public sealed class IdentityContextFactory : IDesignTimeDbContextFactory<IdentityContext>
+public sealed class AspNetIdentityContextFactory : IDesignTimeDbContextFactory<AspNetIdentityContext>
 {
-    public IdentityContext CreateDbContext(string[] args)
+    public AspNetIdentityContext CreateDbContext(string[] args)
     {
-        var optionsBuilder = new DbContextOptionsBuilder<IdentityContext>();
+        var optionsBuilder = new DbContextOptionsBuilder<AspNetIdentityContext>();
 
         // Get connection string from environment or use default
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-            ?? "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
+            ?? "Host=localhost;Database=axon_db;Username=postgres;Password=postgres;Include Error Detail=true";
 
         optionsBuilder.UseNpgsql(connectionString, opt =>
         {
-            opt.MigrationsAssembly(typeof(IdentityContext).Assembly.FullName);
+            opt.MigrationsAssembly(typeof(AspNetIdentityContext).Assembly.FullName);
             opt.MigrationsHistoryTable("__EFMigrationsHistory", "identity");
         });
 
-        return new IdentityContext(optionsBuilder.Options);
+        return new AspNetIdentityContext(optionsBuilder.Options);
     }
 }

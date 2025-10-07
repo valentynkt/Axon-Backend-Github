@@ -1,14 +1,13 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Axon.BuildingBlocks.Core.Primitives.ValueObjects; // MessageContent (Vogen)
 using Axon.Modules.Chat.Application.Contracts.AI;
-using Axon.Modules.Chat.Application.DTOs;
 using Axon.Modules.Chat.Application.DTOs.Configurations;
 using Axon.Modules.Chat.Application.DTOs.Requests;
 using Axon.Modules.Chat.Application.DTOs.Responses;
 using Axon.Modules.Chat.Domain.Errors;
+using Axon.Modules.Chat.Infrastructure.ExternalServices.AI.OpenAI.Models;
 using BuildingBlocks.Core.Diagnostics.Errors;
 using BuildingBlocks.Primitives.Ids;
 using CSharpFunctionalExtensions;
@@ -27,20 +26,27 @@ public sealed class OpenAiMcpClient : IAiClient
     private readonly HttpClient _http;
     private readonly ILogger<OpenAiMcpClient> _logger;
     private readonly OpenAiOptions _options;
+    private readonly IMcpToolBuilder<McpToolDefinition> _toolBuilder;
 
-    // Base address should already be set on the typed HttpClient registration
-    private const string ResponsesApiUrl = "https://api.openai.com/v1/responses";
+    // Shared JSON serializer options for consistent serialization/deserialization
+    // Note: We use explicit [JsonPropertyName] attributes on DTOs, so no naming policy needed
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true, // Allow flexible casing on deserialization
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = false
+    };
 
     public OpenAiMcpClient(
         HttpClient httpClient,
         ILogger<OpenAiMcpClient> logger,
-        IOptions<OpenAiOptions> options)
+        IOptions<OpenAiOptions> options,
+        IMcpToolBuilder<McpToolDefinition> toolBuilder)
     {
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-
-        ConfigureHttpClient();
+        _toolBuilder = toolBuilder ?? throw new ArgumentNullException(nameof(toolBuilder));
     }
 
     public async Task<Result<AiResponse, Error>> ProcessMessageAsync(
@@ -49,26 +55,26 @@ public sealed class OpenAiMcpClient : IAiClient
     {
         try
         {
-            // MessageContent VO already guarantees validity; no string checks here.
-
+            // Build strongly-typed request payload
             var requestPayload = BuildRequestPayload(request);
-
-            // Serialize to JSON
-            var jsonContent = JsonSerializer.Serialize(requestPayload);
 
             _logger.LogDebug("Sending Responses API request (continuation={Continuation})",
                 !string.IsNullOrWhiteSpace(request.PreviousResponseId));
 
+            // Serialize to JSON using shared options
+            var jsonContent = JsonSerializer.Serialize(requestPayload, JsonOptions);
             using var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            var response = await _http.PostAsync(ResponsesApiUrl, content, cancellationToken);
+
+            // Send request to configured endpoint
+            var response = await _http.PostAsync(_options.ResponsesApiPath, content, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                // Try to extract OpenAI error for better diagnostics (still map to our domain errors)
-                var (errCode, errMsg) = TryParseOpenAiError(body);
+                // Parse structured error response
+                var errorDetails = TryParseOpenAiError(body);
                 _logger.LogError("OpenAI error {StatusCode}. Code={ErrCode} Message={ErrMsg}. Raw={Raw}",
-                    (int)response.StatusCode, errCode ?? "-", errMsg ?? "-", body);
+                    (int)response.StatusCode, errorDetails.Code ?? "-", errorDetails.Message ?? "-", body);
 
                 var error = response.StatusCode switch
                 {
@@ -81,6 +87,7 @@ public sealed class OpenAiMcpClient : IAiClient
                 return Result.Failure<AiResponse, Error>(error);
             }
 
+            // Parse structured response
             var parsed = ParseResponse(body);
             if (parsed.IsFailure)
             {
@@ -116,6 +123,11 @@ public sealed class OpenAiMcpClient : IAiClient
             _logger.LogError(ex, "Connection was disposed during Responses API call.");
             return Result.Failure<AiResponse, Error>(AiErrors.ServiceUnavailable);
         }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON serialization/deserialization error during Responses API call.");
+            return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error during Responses API call.");
@@ -123,134 +135,79 @@ public sealed class OpenAiMcpClient : IAiClient
         }
     }
 
-    private void ConfigureHttpClient()
+    private OpenAiResponsesRequest BuildRequestPayload(AiRequest request)
     {
-        _http.DefaultRequestHeaders.Clear();
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
-        _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("Axon-Chat/1.0");
-        _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds > 0 ? _options.TimeoutSeconds : 60);
-    }
+        // Use tool builder to create provider-specific tool definitions
+        var tools = _toolBuilder.BuildTools(request.McpConfigs);
 
-    private object BuildRequestPayload(AiRequest request)
-    {
-        // Build the smallest object that matches the Responses API
-        var tools = BuildMcpTools(request.McpConfigs);
-
-        // anonymous object to keep it small and serializer-friendly
-        var payload = new
+        // Create strongly-typed request
+        return new OpenAiResponsesRequest
         {
-            model = _options.Model,
-            input = request.Message, // Vogen VO → STJ converter serializes underlying string
-            tools = tools, // null omitted by serializer
-            previous_response_id = string.IsNullOrWhiteSpace(request.PreviousResponseId) ? null : request.PreviousResponseId,
+            Model = _options.Model,
+            Input = request.Message.Value, // Vogen VO - extract underlying string
+            Tools = tools,
+            PreviousResponseId = string.IsNullOrWhiteSpace(request.PreviousResponseId) ? null : request.PreviousResponseId,
+            MaxTokens = _options.MaxTokens
         };
-
-        return payload;
     }
 
-    private static object[]? BuildMcpTools(IReadOnlyCollection<McpServerConfig>? mcpConfigs)
-    {
-        if (mcpConfigs is null || mcpConfigs.Count == 0)
-            return null;
-
-        var tools = new List<object>(mcpConfigs.Count);
-
-        foreach (var cfg in mcpConfigs)
-        {
-            var tool = new Dictionary<string, object?>
-            {
-                ["type"] = "mcp",
-                ["server_url"] = cfg.ServerUrl,
-                ["server_label"] = string.IsNullOrWhiteSpace(cfg.ServerLabel) ? "MCP Server" : cfg.ServerLabel,
-                ["require_approval"] = cfg.RequireApproval ? "always" : "never"
-            };
-
-            if (cfg.Headers is { Count: > 0 })
-                tool["headers"] = cfg.Headers;
-
-            if (cfg.AllowedTools is { Length: > 0 })
-                tool["allowed_tools"] = cfg.AllowedTools;
-
-            tools.Add(tool);
-        }
-
-        return tools.ToArray();
-    }
-    
     private static Result<AiResponse, Error> ParseResponse(string body)
     {
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
+            // Deserialize using strongly-typed DTO with consistent options
+            var response = JsonSerializer.Deserialize<OpenAiResponsesResponse>(body, JsonOptions);
 
-            // id (must exist for current response)
-            var responseId = root.TryGetProperty("id", out var idEl)
-                ? idEl.GetString()
-                : null;
-
-            if (string.IsNullOrWhiteSpace(responseId))
+            if (response == null || string.IsNullOrWhiteSpace(response.Id))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            // Prefer top-level "output_text"; else fallback to output[].content[].text
-            string? contentStr = null;
-            if (root.TryGetProperty("output_text", out var ot) && ot.ValueKind == JsonValueKind.String)
-            {
-                contentStr = ot.GetString();
-            }
-            else
-            {
-                contentStr = ExtractTextFromOutputArray(root);
-            }
+            // Extract content: prefer output_text, fallback to structured output
+            var contentStr = response.OutputText ?? ExtractTextFromOutput(response.Output);
 
             if (string.IsNullOrWhiteSpace(contentStr))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            // Validate/construct VOs
+            // Validate and construct value objects
             if (!MessageContent.TryParse(contentStr, provider: null, out var contentVo))
                 return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
 
-            // NOTE: AiResponseId has no Create(); use ctor
-            var responseIdVo = new AiResponseId(responseId);
+            var responseIdVo = new AiResponseId(response.Id);
 
-            var ai = new AiResponse(
+            var aiResponse = new AiResponse(
                 Content: contentVo,
                 ResponseId: responseIdVo,
                 ToolExecutions: null);
 
-            return Result.Success<AiResponse, Error>(ai);
+            return Result.Success<AiResponse, Error>(aiResponse);
         }
-        catch
+        catch (JsonException)
+        {
+            return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
+        }
+        catch (Exception)
         {
             return Result.Failure<AiResponse, Error>(AiErrors.ResponseInvalid);
         }
     }
-    private static string? ExtractTextFromOutputArray(JsonElement root)
+
+    private static string? ExtractTextFromOutput(OutputMessage[]? output)
     {
-        if (!root.TryGetProperty("output", out var output) || output.ValueKind != JsonValueKind.Array)
+        if (output == null || output.Length == 0)
             return null;
 
         var sb = new StringBuilder();
 
-        foreach (var item in output.EnumerateArray())
+        foreach (var message in output)
         {
-            if (!item.TryGetProperty("type", out var type) || type.GetString() != "message")
+            if (message.Type != "message" || message.Content == null)
                 continue;
 
-            if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
-                continue;
-
-            foreach (var part in content.EnumerateArray())
+            foreach (var block in message.Content)
             {
-                if (part.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String)
+                if (block.Type == "text" && !string.IsNullOrEmpty(block.Text))
                 {
-                    var t = textEl.GetString();
-                    if (!string.IsNullOrEmpty(t))
-                    {
-                        if (sb.Length > 0) sb.AppendLine();
-                        sb.Append(t);
-                    }
+                    if (sb.Length > 0) sb.AppendLine();
+                    sb.Append(block.Text);
                 }
             }
         }
@@ -258,32 +215,16 @@ public sealed class OpenAiMcpClient : IAiClient
         return sb.Length == 0 ? null : sb.ToString();
     }
 
-    private static (string? Code, string? Message) TryParseOpenAiError(string body)
+    private static ErrorDetail TryParseOpenAiError(string body)
     {
         try
         {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.Object)
-            {
-                string? code = null;
-                string? message = null;
-
-                if (err.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String)
-                    code = c.GetString();
-
-                if (err.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
-                    message = m.GetString();
-
-                return (code, message);
-            }
-
-            return (null, null);
+            var errorResponse = JsonSerializer.Deserialize<OpenAiErrorResponse>(body, JsonOptions);
+            return errorResponse?.Error ?? ErrorDetail.Unknown();
         }
         catch
         {
-            return (null, null);
+            return ErrorDetail.ParseFailure();
         }
     }
 }

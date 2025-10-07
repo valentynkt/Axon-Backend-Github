@@ -100,9 +100,7 @@ public sealed class ChallengeEndpoint : BaseResultEndpoint<ChallengeRequestDto, 
             IssuedAt: domainResult.Value.IssuedAt,
             ExpiresAt: domainResult.Value.ExpiresAt,
             Nonce: domainResult.Value.Nonce,
-            Audience: domainResult.Value.Audience,
-            Mac: domainResult.Value.Mac,
-            Mkv: domainResult.Value.Mkv
+            Audience: domainResult.Value.Audience
         );
 
         return Result.Success<ChallengeResponseDto, Error>(response);

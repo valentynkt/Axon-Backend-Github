@@ -89,7 +89,7 @@ Commands/
     RefreshTokenHandler.cs
 
 Queries/
-  GetMyPrincipal/                    // Current user snapshot with ETag
+  GetMyPrincipal/                    // Current user snapshot
     GetMyPrincipalQuery.cs
     GetMyPrincipalHandler.cs
 
@@ -149,7 +149,7 @@ Queries/
 - `RefreshTokenCommand` - Token refresh
 
 ### Queries (CQRS)
-- `GetMyPrincipalQuery` - Current principal with wallets and defaults (ETag support)
+- `GetMyPrincipalQuery` - Current principal with wallets and defaults
 
 ### Domain Events
 - `PrincipalChangedEvent` - Principal state mutation
@@ -242,7 +242,7 @@ Infrastructure/
 
 ### Wallet Verification
 - **Solana Ed25519**: NSec.Cryptography for signature verification
-- **Challenge-Response**: MAC-protected challenges with replay prevention
+- **Challenge-Response**: MAC-protected challenges
 - **Multi-Chain Support**: Extensible to EVM chains (future)
 
 ---

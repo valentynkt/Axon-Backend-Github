@@ -504,53 +504,6 @@ app.UseRateLimiter();
 
 ---
 
-## Token Replay Protection
-
-### Replay Cache (In-Memory)
-
-```csharp
-public sealed class TokenReplayCache
-{
-    private readonly IMemoryCache _cache;
-    private readonly TimeSpan _cacheWindow = TimeSpan.FromMinutes(15);
-
-    public bool IsTokenReplayed(string jti)
-    {
-        var cacheKey = $"token_replay:{jti}";
-
-        if (_cache.TryGetValue(cacheKey, out _))
-            return true; // Token was already used
-
-        _cache.Set(cacheKey, true, _cacheWindow);
-        return false;
-    }
-}
-```
-
-### Usage in JWT Event Handlers
-
-```csharp
-public sealed class JwtEventHandlers
-{
-    private readonly TokenReplayCache _replayCache;
-
-    public Task OnTokenValidated(TokenValidatedContext context)
-    {
-        var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
-
-        if (jti != null && _replayCache.IsTokenReplayed(jti))
-        {
-            context.Fail("Token replay detected");
-            return Task.CompletedTask;
-        }
-
-        return Task.CompletedTask;
-    }
-}
-```
-
----
-
 ## Best Practices
 
 ### ✅ DO
@@ -561,7 +514,7 @@ public sealed class JwtEventHandlers
 - Add security headers (X-Content-Type-Options, X-Frame-Options, etc.)
 - Use policy-based authorization over role strings
 - Validate JWT lifetime with clock skew tolerance
-- Implement token replay protection for sensitive operations
+- Use token rotation for refresh tokens to prevent replay attacks
 
 ### ❌ DON'T
 - Hard-code secrets in appsettings.json

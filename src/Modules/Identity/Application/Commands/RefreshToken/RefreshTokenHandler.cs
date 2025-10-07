@@ -43,8 +43,10 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, Result<R
 
         if (refreshResult.IsFailure)
         {
-            _logger.LogWarning("Failed to refresh access token: {Error}", refreshResult.Error.Message);
-            return Result.Failure<RefreshTokenResult, Error>(refreshResult.Error);
+            // Log detailed error internally but return generic message to client for security
+            _logger.LogWarning("Failed to refresh access token, reason={Reason}", refreshResult.Error.Code);
+            return Result.Failure<RefreshTokenResult, Error>(
+                Error.Unauthorized("Invalid or expired refresh token", "AUTH.INVALID_REFRESH_TOKEN"));
         }
 
         var response = refreshResult.Value;

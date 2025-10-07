@@ -84,9 +84,10 @@ public sealed class ExchangeCredentialHandler : BaseIdentityCommandHandler<Excha
         var response = exchangeResult.Value;
 
         // Convert AuthenticationResponse to ExchangeOutcome
-        // The orchestrator should return all the necessary data
+        // The orchestrator should return all the necessary data including refresh token
         var outcome = new ExchangeOutcome(
             AccessToken: response.AccessToken,
+            RefreshToken: response.RefreshToken,
             TokenType: "Bearer",
             ExpiresIn: (int)(response.ExpiresAt - DateTime.UtcNow).TotalSeconds,
             AxonUserId: new AxonUserId(response.UserId),

@@ -6,7 +6,7 @@ namespace Axon.Modules.Identity.Application.Tests.Validation.Commands;
 
 /// <summary>
 /// Test suite for VerifyWalletSignatureCommand validator.
-/// Tests comprehensive validation of all 6 required fields for wallet signature verification.
+/// Tests comprehensive validation of all 4 required fields for wallet signature verification.
 /// Sprint 7 - Following ExchangeCredentialValidator test patterns.
 /// </summary>
 [TestFixture]
@@ -251,110 +251,6 @@ public class VerifyWalletSignatureValidatorTests
 
     #endregion
 
-    #region MAC Validation Tests (3 tests)
-
-    [Test]
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("   ")]
-    public void Validate_WithEmptyMac_Should_HaveValidationError(string? mac)
-    {
-        // Arrange
-        var command = CreateValidCommand() with { Mac = mac! };
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldHaveValidationErrorFor(x => x.Mac)
-            .WithErrorMessage("MAC (Message Authentication Code) is required");
-    }
-
-    [Test]
-    [TestCase("short")]
-    [TestCase("123")]
-    public void Validate_WithTooShortMac_Should_HaveValidationError(string mac)
-    {
-        // Arrange
-        var command = CreateValidCommand() with { Mac = mac };
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldHaveValidationErrorFor(x => x.Mac)
-            .WithErrorMessage("MAC must be at least 10 characters");
-    }
-
-    [Test]
-    [TestCase("mac-value-12345")]
-    [TestCase("abcdef1234567890")]
-    public void Validate_WithValidMac_Should_NotHaveMacError(string mac)
-    {
-        // Arrange
-        var command = CreateValidCommand() with { Mac = mac };
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldNotHaveValidationErrorFor(x => x.Mac);
-    }
-
-    #endregion
-
-    #region MKV Validation Tests (3 tests)
-
-    [Test]
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("   ")]
-    public void Validate_WithEmptyMkv_Should_HaveValidationError(string? mkv)
-    {
-        // Arrange
-        var command = CreateValidCommand() with { Mkv = mkv! };
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldHaveValidationErrorFor(x => x.Mkv)
-            .WithErrorMessage("MKV (MAC Key Version) is required");
-    }
-
-    [Test]
-    [TestCase("short")]
-    [TestCase("123")]
-    public void Validate_WithTooShortMkv_Should_HaveValidationError(string mkv)
-    {
-        // Arrange
-        var command = CreateValidCommand() with { Mkv = mkv };
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldHaveValidationErrorFor(x => x.Mkv)
-            .WithErrorMessage("MKV must be at least 10 characters");
-    }
-
-    [Test]
-    [TestCase("mkv-value-12345")]
-    [TestCase("version-key-1234567890")]
-    public void Validate_WithValidMkv_Should_NotHaveMkvError(string mkv)
-    {
-        // Arrange
-        var command = CreateValidCommand() with { Mkv = mkv };
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldNotHaveValidationErrorFor(x => x.Mkv);
-    }
-
-    #endregion
-
     #region Complete Command Validation Tests (2 tests)
 
     [Test]
@@ -378,9 +274,7 @@ public class VerifyWalletSignatureValidatorTests
             ChainId: "",
             Address: "short",
             SignedMessage: "not-json",
-            Signature: "tiny",
-            Mac: "bad",
-            Mkv: "bad"
+            Signature: "tiny"
         );
 
         // Act
@@ -391,8 +285,6 @@ public class VerifyWalletSignatureValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.Address);
         result.ShouldHaveValidationErrorFor(x => x.SignedMessage);
         result.ShouldHaveValidationErrorFor(x => x.Signature);
-        result.ShouldHaveValidationErrorFor(x => x.Mac);
-        result.ShouldHaveValidationErrorFor(x => x.Mkv);
     }
 
     #endregion
@@ -404,9 +296,7 @@ public class VerifyWalletSignatureValidatorTests
             ChainId: "eip155:1",
             Address: "0xabcdef1234567890abcdef1234567890abcdef12",
             SignedMessage: "{\"aud\":\"https://example.com\",\"nonce\":\"test-nonce-123\"}",
-            Signature: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12",
-            Mac: "mac-value-12345",
-            Mkv: "mkv-value-12345"
+            Signature: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12"
         );
 
     #endregion

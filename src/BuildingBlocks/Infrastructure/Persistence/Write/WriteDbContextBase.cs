@@ -1,8 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
-using BuildingBlocks.Core.Domain.Events;
 using BuildingBlocks.Infrastructure.Persistence.Common.Interfaces;
-using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -47,12 +45,6 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
         ArgumentNullException.ThrowIfNull(modelBuilder);
 
         modelBuilder.HasDefaultSchema(ModuleName.ToLowerInvariant());
-
-        // Configure MassTransit outbox entities for the module schema
-        var schema = ModuleName.ToLowerInvariant();
-        modelBuilder.AddInboxStateEntity(x => x.Metadata.SetSchema(schema));
-        modelBuilder.AddOutboxMessageEntity(x => x.Metadata.SetSchema(schema));
-        modelBuilder.AddOutboxStateEntity(x => x.Metadata.SetSchema(schema));
 
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
         ApplySoftDeleteQueryFilter(modelBuilder);
@@ -227,13 +219,8 @@ public abstract class WriteDbContextBase<TModule> : DbContext, IWriteDbContext<T
     }
 
 
-    // --------- Domain events (no dispatch here; App layer coordinates) ---------
-    public IReadOnlyList<IDomainEvent> GetDomainEvents() => Array.Empty<IDomainEvent>();
-    public void ClearDomainEvents() { }
-
-    [Obsolete("Use Application TransactionBehavior + IDomainEventCollector. Do not dispatch from DbContext.")]
-    public Task<int> SaveChangesAndDispatchDomainEventsAsync(CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("Dispatch must be coordinated by Application layer behaviors.");
+    // Domain events are raised by aggregates and used for testing purposes only
+    // No event dispatching/publishing infrastructure in MVP
 
     // --------- Hooks & Conventions (kept minimal) ---------
     protected virtual void ApplyAuditInformation() { }

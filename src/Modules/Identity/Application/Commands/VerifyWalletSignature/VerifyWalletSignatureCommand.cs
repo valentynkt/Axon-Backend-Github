@@ -8,7 +8,5 @@ public sealed record VerifyWalletSignatureCommand(
     string ChainId,      // Compound format e.g. "solana-mainnet"
     string Address,
     string SignedMessage,
-    string Signature,
-    string Mac,
-    string Mkv
+    string Signature
 ) : IRequest<Result<VerifyWalletSignatureResult, Error>>;

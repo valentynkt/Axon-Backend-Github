@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using BuildingBlocks.Core.Domain.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -45,10 +44,4 @@ public interface IDbContext : IDisposable, IAsyncDisposable
     Task<T> ExecuteTransactionalAsync<T>(
         Func<Task<T>> operation,
         CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Collect domain events from tracked aggregates (for Application post-commit publishing).
-    /// Implementations should not dispatch here; only collect.
-    /// </summary>
-    IReadOnlyList<IDomainEvent> GetDomainEvents();
 }

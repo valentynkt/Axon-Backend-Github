@@ -39,18 +39,6 @@ public sealed class VerifyWalletSignatureCommandValidator : AbstractValidator<Ve
             .WithMessage("Signature is required")
             .MinimumLength(20)
             .WithMessage("Signature must be at least 20 characters");
-
-        RuleFor(x => x.Mac)
-            .NotEmpty()
-            .WithMessage("MAC (Message Authentication Code) is required")
-            .MinimumLength(10)
-            .WithMessage("MAC must be at least 10 characters");
-
-        RuleFor(x => x.Mkv)
-            .NotEmpty()
-            .WithMessage("MKV (MAC Key Version) is required")
-            .MinimumLength(10)
-            .WithMessage("MKV must be at least 10 characters");
     }
 
     private static bool BeValidChainIdFormat(string chainId)

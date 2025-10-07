@@ -27,7 +27,6 @@ public sealed class JwtTokenService : IJwtTokenService
     private readonly UserManager<AxonUserAuth> _userManager;
     private readonly AxonUserStore _userStore;
     private readonly IConfiguration _configuration;
-    private readonly TokenReplayCache _replayCache;
     private readonly ILogger<JwtTokenService> _logger;
     private readonly JwtSecurityTokenHandler _tokenHandler;
     private readonly IDataProtector _keyProtector;
@@ -37,7 +36,6 @@ public sealed class JwtTokenService : IJwtTokenService
         UserManager<AxonUserAuth> userManager,
         AxonUserStore userStore,
         IConfiguration configuration,
-        TokenReplayCache replayCache,
         ILogger<JwtTokenService> logger,
         IDataProtectionProvider dataProtectionProvider,
         IOptionsMonitor<JwtBearerOptions> jwtOptions)
@@ -45,7 +43,6 @@ public sealed class JwtTokenService : IJwtTokenService
         _userManager = userManager;
         _userStore = userStore;
         _configuration = configuration;
-        _replayCache = replayCache;
         _logger = logger;
         _tokenHandler = new JwtSecurityTokenHandler();
         _keyProtector = dataProtectionProvider.CreateProtector("Axon.JWT.SigningKey");
@@ -139,9 +136,7 @@ public sealed class JwtTokenService : IJwtTokenService
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = GetSigningKey(),
-                    ClockSkew = TimeSpan.FromMinutes(5),
-                    ValidateTokenReplay = true, // Enable built-in token replay validation
-                    TokenReplayCache = _replayCache // Use unified replay cache
+                    ClockSkew = TimeSpan.FromMinutes(5)
                 };
 
             var principal = _tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
@@ -166,8 +161,6 @@ public sealed class JwtTokenService : IJwtTokenService
                 return Result.Failure<AuthenticatedContext, Error>(
                     Error.Validation("Invalid provider type in token", "AUTH.INVALID_PROVIDER"));
             }
-
-            // Replay protection is now handled by TokenValidationParameters.ValidateTokenReplay and TokenReplayCache
 
             var context = new AuthenticatedContext(
                 TokenType: TokenType.AxonAccessToken,

@@ -107,25 +107,9 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
                     config.AddJsonFile($"appsettings.{context.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: false);
                     config.AddEnvironmentVariables();
 
-                    // Test-specific overrides (highest priority)
-                    var testConfig = new Dictionary<string, string?>
-                    {
-                        // PostgreSQL connection string override
-                        ["ConnectionStrings:DefaultConnection"] = _connectionString,
-
-                        // Dynamic JWT configuration
-                        ["Dynamic:Authority"] = "",
-                        ["Dynamic:JwksUri"] = $"http://localhost:{JwksServer.Port}/.well-known/jwks.json",
-                        ["Dynamic:Issuer"] = TestDataFixtures.DynamicIssuer,
-                        ["Dynamic:Audience"] = "axon-api",
-                        ["DynamicValidation:EnvironmentMapping:dyn_test_env_12345"] = "test",
-
-                        // Axon JWT configuration
-                        ["Axon:Issuer"] = "https://api.axon.test",
-                        ["Axon:Audience"] = "axon-api",
-                        ["Axon:SigningKey"] = "dGVzdC1zaWduaW5nLWtleS1mb3ItZTJlLXRlc3RzLW1pbmltdW0tMjU2LWJpdHMtcmVxdWlyZWQtaGVyZS1wYWRkaW5n"
-                    };
-
+                    // Test-specific overrides using centralized configuration helper
+                    // This ensures consistency with Identity E2E tests
+                    var testConfig = TestJwtConfiguration.CreateTestConfiguration(_connectionString, JwksServer.Port);
                     config.AddInMemoryCollection(testConfig);
                 });
 
@@ -161,63 +145,28 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
                     }
                     services.AddSingleton<Axon.Modules.Chat.Application.Contracts.AI.IAiProcessingService>(MockAiService);
 
-                    // Post-configure JWT authentication for tests
+                    // Configure JWT authentication using centralized TestJwtConfiguration helper
+                    // This ensures consistency with Identity E2E tests
+
+                    // Configure DynamicJwt authentication scheme (for Dynamic.xyz JWT tokens)
                     services.PostConfigure<JwtBearerOptions>("DynamicJwt", options =>
                     {
-                        options.TokenValidationParameters.ValidIssuer = TestDataFixtures.DynamicIssuer;
-                        options.TokenValidationParameters.IssuerSigningKeys = JwtTestTokenFactory.GetTestSigningKeys();
-
-                        // CRITICAL FIX: Disable lifetime validation for E2E tests
-                        // JWT middleware uses system clock (not FakeTimeProvider), so test tokens from 2024 appear expired in 2025
-                        options.TokenValidationParameters.ValidateLifetime = false;
-                        options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
-
-                        options.RefreshOnIssuerKeyNotFound = false;
-                        options.RequireHttpsMetadata = false;
+                        // Let JWT middleware fetch JWKS from WireMock endpoint (truly E2E)
+                        // Path must match DynamicXyzOptions computation: /sdk/{EnvironmentId}/.well-known/jwks.json
+                        var jwksUri = $"http://localhost:{JwksServer.Port}/sdk/test-env-id/.well-known/jwks.json";
+                        TestJwtConfiguration.ConfigureDynamicJwtSchemeWithoutKeyInjection(options, jwksUri);
                     });
 
-                    // Post-configure AxonJwt authentication scheme (for internal tokens)
+                    // Configure AxonJwt authentication scheme (for internal Axon tokens)
                     services.PostConfigure<JwtBearerOptions>("AxonJwt", options =>
                     {
-                        // Disable lifetime validation for AxonJwt as well
-                        options.TokenValidationParameters.ValidateLifetime = false;
-                        options.TokenValidationParameters.ClockSkew = TimeSpan.Zero;
-
-                        // CRITICAL: Ensure AxonJwt validates Axon tokens correctly in tests
-                        options.TokenValidationParameters.ValidIssuer = "https://api.axon.test";
-                        options.TokenValidationParameters.ValidateIssuer = true;
-
-                        // CRITICAL FIX: Disable token replay protection for E2E tests
-                        // Token replay cache prevents the same token from being used multiple times
-                        // In E2E tests, we reuse the same token across multiple requests
-                        options.TokenValidationParameters.TokenReplayCache = null;
+                        TestJwtConfiguration.ConfigureAxonJwtScheme(options);
                     });
 
-                    // Configure DynamicAuthService validation
+                    // Configure DynamicValidationOptions using centralized helper
                     services.PostConfigure<Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration.DynamicValidationOptions>(options =>
                     {
-                        options.EnvironmentMapping["dyn_test_env_12345"] = "test";
-                        options.EnableBackgroundRefresh = false;
-                        options.ValidateAudience = true;
-                        options.DefaultAllowedAudiences = new List<string> { "axon-api", "axon-web" };
-
-                        // CRITICAL FIX: Disable lifetime validation in DynamicAuthService
-                        // This prevents SecurityTokenExpiredException when using test tokens from 2024 in 2025
-                        options.ValidateLifetime = false;
-                        options.ClockSkewSeconds = 0;
-                    });
-
-                    // Replace IJwksService with test implementation
-                    services.AddSingleton<Axon.Modules.Identity.Application.Contracts.ExternalServices.IJwksService, TestJwksService>();
-
-                    // CRITICAL FIX: Override authentication scheme for E2E tests
-                    // Force all requests to use AxonJwt scheme instead of DynamicOrAxon policy scheme
-                    // This prevents the policy scheme from trying to validate Axon tokens with DynamicJwt scheme
-                    services.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(options =>
-                    {
-                        options.DefaultScheme = "AxonJwt";
-                        options.DefaultAuthenticateScheme = "AxonJwt";
-                        options.DefaultChallengeScheme = "AxonJwt";
+                        TestJwtConfiguration.ConfigureDynamicValidationOptions(options);
                     });
 
                     // Allow derived classes to configure additional services
@@ -319,7 +268,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
 
         // Get all required DbContexts
         var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>();
         var chatDbContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
 
         // Delete entire database to ensure clean state
@@ -384,7 +333,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
         {
             // If truncate fails, recreate entire database using same hybrid approach as setup
             var identityWriteDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-            var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+            var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>();
 
             await identityWriteDbContext.Database.EnsureDeletedAsync();
             await identityContext.Database.EnsureCreatedAsync();
@@ -401,8 +350,12 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
     {
         var jwks = JwtTestTokenFactory.CreateTestJwks();
 
+        // CRITICAL: Path must match DynamicXyzOptions.JwksUri computation
+        // DynamicXyzOptions.JwksUri: {BaseUrl}/sdk/{EnvironmentId}/.well-known/jwks.json
+        // We configure: BaseUrl=http://localhost:PORT, EnvironmentId=test-env-id
+        // Result: /sdk/test-env-id/.well-known/jwks.json
         JwksServer
-            .Given(Request.Create().WithPath("/.well-known/jwks.json").UsingGet())
+            .Given(Request.Create().WithPath("/sdk/test-env-id/.well-known/jwks.json").UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json")
@@ -496,7 +449,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             services.Remove(identityWriteDbContextDescriptor);
         }
 
-        var identityContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext));
+        var identityContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext));
         if (identityContextDescriptor != null)
         {
             services.Remove(identityContextDescriptor);
@@ -554,7 +507,7 @@ public abstract class ChatE2ETestBase : IAsyncDisposable
             options.EnableDetailedErrors();
         });
 
-        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>(options =>
+        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {

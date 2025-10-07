@@ -42,9 +42,7 @@ public sealed record WalletAuthenticationRequest(
     string ChainId,
     string Address,
     string SignedMessage,
-    string Signature,
-    string Mac,
-    string Mkv) : AuthenticationRequest
+    string Signature) : AuthenticationRequest
 {
     public override string RequestType => "wallet";
 }
@@ -80,11 +78,13 @@ public sealed record AuthenticationData(
     DateTime? TokenExpiresAt = null);
 
 /// <summary>
-/// Final authentication response with generated token
+/// Final authentication response with generated tokens
 /// </summary>
 public sealed record AuthenticationResponse(
     string AccessToken,
+    string? RefreshToken,
     Guid UserId,
     string ProviderType,
     DateTime ExpiresAt,
+    DateTime? RefreshExpiresAt = null,
     Dictionary<string, object>? AdditionalData = null);

@@ -8,7 +8,7 @@
 
 ### Authentication Endpoints
 - `POST /api/v1/auth/exchange` - Exchange bearer token for Axon identity
-- `GET /api/v1/auth/me` - Get current principal information (ETag support)
+- `GET /api/v1/auth/me` - Get current principal information
 - `POST /api/v1/auth/challenge` - Generate wallet signature challenge
 - `POST /api/v1/auth/verify` - Verify wallet signature and obtain access token
 - `POST /api/v1/auth/refresh` - Refresh access token (JWT)
@@ -36,14 +36,25 @@ Content-Type: application/json
 ```json
 {
   "accessToken": "eyJ...",
+  "refreshToken": "protected-token-string",
   "tokenType": "Bearer",
-  "expiresIn": 1800,
+  "expiresIn": 900,
   "axonUserId": "uuid",
   "created": true,
   "walletsLinked": 2,
   "conflicts": 0
 }
 ```
+
+**Response Fields:**
+- `accessToken`: Axon JWT with 15-minute expiration
+- `refreshToken`: Encrypted refresh token with 30-day expiration (for token renewal)
+- `tokenType`: Always "Bearer"
+- `expiresIn`: Seconds until access token expires (900 = 15 minutes)
+- `axonUserId`: User's principal ID
+- `created`: Whether this was a new user registration
+- `walletsLinked`: Number of wallets successfully linked
+- `conflicts`: Number of wallet ownership conflicts detected
 
 ### Behavior
 - **Idempotent**: Safe to retry, upserts principal + credentials
@@ -64,7 +75,7 @@ Content-Type: application/json
 
 ## GET /api/v1/auth/me
 
-**Purpose**: Get current principal information with ETag caching
+**Purpose**: Get current principal information
 
 **Authentication**: `[Authorize(Policy = "DynamicOrAxon")]` (accepts both Dynamic JWT and Axon JWT)
 
@@ -74,7 +85,6 @@ Content-Type: application/json
 ```http
 GET /api/v1/auth/me
 Authorization: Bearer <Dynamic JWT | Axon JWT>
-If-None-Match: "etag-value" (optional)
 ```
 
 ### Response (200 OK)
@@ -110,17 +120,8 @@ If-None-Match: "etag-value" (optional)
 }
 ```
 
-### Response (304 Not Modified)
-Empty body when `If-None-Match` matches current ETag.
-
-### ETag Support
-- **Server**: Returns `ETag` header with content fingerprint
-- **Client**: Sends `If-None-Match: "<etag>"` for conditional GET
-- **Cache**: 304 response when data unchanged, enables client-side caching
-
 ### Status Codes
-- `200` - Success, returns principal data with `ETag` header
-- `304` - Not Modified (data unchanged since provided ETag)
+- `200` - Success, returns principal data
 - `401` - Unauthorized (invalid/expired token)
 - `500` - Internal server error
 
@@ -203,8 +204,9 @@ Content-Type: application/json
 ```json
 {
   "accessToken": "eyJ...",
+  "refreshToken": "protected-token-string",
   "tokenType": "Bearer",
-  "expiresIn": 1800,
+  "expiresIn": 900,
   "axonUserId": "uuid",
   "created": true,
   "walletsLinked": 1,
@@ -212,12 +214,21 @@ Content-Type: application/json
 }
 ```
 
+**Response Fields:**
+- `accessToken`: Axon JWT with 15-minute expiration
+- `refreshToken`: Encrypted refresh token with 30-day expiration (for token renewal)
+- `tokenType`: Always "Bearer"
+- `expiresIn`: Seconds until access token expires (900 = 15 minutes)
+- `axonUserId`: User's principal ID
+- `created`: true if new user was created, false if existing
+- `walletsLinked`: Number of wallets linked (typically 1)
+- `conflicts`: Number of ownership conflicts (typically 0)
+
 ### Behavior
 1. **MAC Validation**: Verifies challenge integrity
-2. **Replay Protection**: Checks nonce cache (prevents replay attacks)
-3. **Signature Verification**: Ed25519 verification (Solana only in V1)
-4. **Principal Resolution**: Resolves or creates Axon principal
-5. **Token Issuance**: Issues JWT access token (15-30 min TTL)
+2. **Signature Verification**: Ed25519 verification (Solana only in V1)
+3. **Principal Resolution**: Resolves or creates Axon principal
+4. **Token Issuance**: Issues JWT access token (15-30 min TTL)
 
 ### Supported Chains
 - **Solana**: mainnet, devnet, testnet (Ed25519 signatures)
@@ -227,7 +238,7 @@ Content-Type: application/json
 - `200` - Signature verified, access token issued
 - `400` - Invalid request or expired challenge
 - `401` - Invalid signature or MAC verification failed
-- `409` - Replay attempt detected or ownership conflict
+- `409` - Ownership conflict
 - `422` - Business rule violation
 - `429` - Rate limit exceeded
 - `500` - Internal server error
@@ -236,33 +247,54 @@ Content-Type: application/json
 
 ## POST /api/v1/auth/refresh
 
-**Purpose**: Refresh expired or expiring access token
+**Purpose**: Refresh expired or expiring access token using refresh token
 
-**Authentication**: `[Authorize]` (requires valid JWT)
+**Authentication**: `AllowAnonymous`
 
 **Rate Limiting**: `AuthExchange` policy
 
 ### Request
 ```http
 POST /api/v1/auth/refresh
-Authorization: Bearer <current-token>
 Content-Type: application/json
 
-{}
+{
+  "refreshToken": "protected-token-string"
+}
 ```
 
 ### Response (200 OK)
 ```json
 {
+  "success": true,
   "accessToken": "eyJ...",
+  "refreshToken": "new-protected-token-string",
   "tokenType": "Bearer",
-  "expiresIn": 1800
+  "expiresIn": 900,
+  "issuedAt": "2025-10-07T12:00:00Z",
+  "accessTokenExpiresAt": "2025-10-07T12:15:00Z",
+  "refreshTokenExpiresAt": "2025-11-06T12:00:00Z"
 }
 ```
 
+**Response Fields:**
+- `success`: Always true on success
+- `accessToken`: New JWT access token (15-minute expiration)
+- `refreshToken`: **New** refresh token (30-day expiration) - old token is invalidated
+- `tokenType`: Always "Bearer"
+- `expiresIn`: Seconds until new access token expires (900)
+- `issuedAt`: When tokens were issued (ISO 8601)
+- `accessTokenExpiresAt`: Absolute expiry time for access token
+- `refreshTokenExpiresAt`: Absolute expiry time for new refresh token
+
+**Token Rotation:**
+- Old refresh token is immediately invalidated (replay protection)
+- Must use NEW refresh token for subsequent refresh requests
+- Attempting to reuse old refresh token will fail with 401
+
 ### Status Codes
-- `200` - Token refreshed successfully
-- `401` - Token invalid or expired beyond refresh window
+- `200` - Token refreshed successfully, new tokens issued
+- `401` - Refresh token invalid, expired, or already used
 - `429` - Rate limit exceeded
 - `500` - Internal server error
 

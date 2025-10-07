@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Centralized JWT Bearer event handlers for token validation and claims transformation.
-/// Replay protection is handled by JWT Bearer middleware with ITokenReplayCache.
 /// </summary>
 public sealed class JwtEventHandlers
 {
@@ -24,7 +23,7 @@ public sealed class JwtEventHandlers
     }
 
     /// <summary>
-    /// Validates Axon JWT tokens with security stamp validation. Replay protection handled by middleware.
+    /// Validates Axon JWT tokens with security stamp validation.
     /// </summary>
     public async Task ValidateAxonTokenAsync(TokenValidatedContext context)
     {
@@ -36,8 +35,6 @@ public sealed class JwtEventHandlers
                 context.Fail("No principal found in token");
                 return;
             }
-
-            // Replay protection is now handled by JWT Bearer middleware with ValidateTokenReplay and ITokenReplayCache
 
             // Validate security stamp if UserManager is available
             if (_userManager != null)

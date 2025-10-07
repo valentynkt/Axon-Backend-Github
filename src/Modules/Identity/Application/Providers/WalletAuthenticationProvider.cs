@@ -68,10 +68,9 @@ public sealed class WalletAuthenticationProvider : IAuthenticationProvider
             _logger.LogInformation("Starting wallet authentication for chain {ChainId}, address {Address}",
                 walletRequest.ChainId, MaskAddress(walletRequest.Address));
 
-            // Validate challenge message structure, MAC, TTL, and replay protection
+            // Validate challenge message structure, TTL, and replay protection
             var challengeValidation = await _challengeValidationService.ValidateWalletChallengeAsync(
                 walletRequest.SignedMessage,
-                walletRequest.Mkv,
                 cancellationToken);
 
             if (challengeValidation.IsFailure)

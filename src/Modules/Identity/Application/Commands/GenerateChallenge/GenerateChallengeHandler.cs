@@ -65,9 +65,7 @@ public sealed class GenerateChallengeHandler : IRequestHandler<GenerateChallenge
             IssuedAt: challenge.IssuedAt,
             ExpiresAt: challenge.Exp,
             Nonce: challenge.Nonce,
-            Audience: challenge.Aud,
-            Mac: challenge.Mac,
-            Mkv: challenge.Mkv
+            Audience: challenge.Aud
         );
 
         _logger.LogInformation("Generated challenge for {Address} on {ChainId}",

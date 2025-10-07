@@ -156,7 +156,7 @@
 
 23. **ME\_snapshot\_contains\_defaults\_and\_wallets**
 
-* After linking, `/auth/me` returns principal, wallets, and per-chain defaults; ETag works (304 on match).
+* After linking, `/auth/me` returns principal, wallets, and per-chain defaults.
 
 ---
 

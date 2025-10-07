@@ -83,11 +83,11 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 typeof(ChatDbContext),
                 typeof(IdentityDbContext),
                 typeof(IdentityDbContext),
-                typeof(IdentityContext),
+                typeof(AspNetIdentityContext),
                 typeof(DbContextOptions<ChatDbContext>),
                 typeof(DbContextOptions<IdentityDbContext>),
                 typeof(DbContextOptions<IdentityDbContext>),
-                typeof(DbContextOptions<IdentityContext>)
+                typeof(DbContextOptions<AspNetIdentityContext>)
             };
 
             foreach (var contextType in contextsToRemove)
@@ -128,8 +128,8 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 options.EnableSensitiveDataLogging();
             }, ServiceLifetime.Scoped);
 
-            // Add IdentityContext for ASP.NET Identity Framework
-            services.AddDbContext<IdentityContext>(options =>
+            // Add AspNetIdentityContext for ASP.NET Identity Framework
+            services.AddDbContext<AspNetIdentityContext>(options =>
             {
                 options.UseNpgsql(_testBase.GetConnectionString());
                 options.EnableSensitiveDataLogging();
@@ -162,9 +162,9 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 var identityContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
                 identityContext.Database.Migrate();
 
-                // Create IdentityContext database using migrations
-                var mainIdentityContext = scope.ServiceProvider.GetRequiredService<IdentityContext>();
-                mainIdentityContext.Database.Migrate();
+                // Create AspNetIdentityContext database using migrations
+                var mainAspNetIdentityContext = scope.ServiceProvider.GetRequiredService<AspNetIdentityContext>();
+                mainAspNetIdentityContext.Database.Migrate();
             }
             catch (Exception ex)
             {

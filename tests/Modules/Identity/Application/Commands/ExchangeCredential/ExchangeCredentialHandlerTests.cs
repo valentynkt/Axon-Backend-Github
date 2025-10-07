@@ -58,6 +58,7 @@ public class ExchangeCredentialHandlerTests
 
         var authResponse = new AuthenticationResponse(
             AccessToken: "axon-access-token-xyz789",
+            RefreshToken: null,
             UserId: userId,
             ProviderType: "Dynamic",
             ExpiresAt: expiresAt,
@@ -100,6 +101,7 @@ public class ExchangeCredentialHandlerTests
         var bearerToken = "valid-dynamic-jwt-token";
         var authResponse = new AuthenticationResponse(
             AccessToken: "axon-token",
+            RefreshToken: null,
             UserId: Guid.NewGuid(),
             ProviderType: "Dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -130,6 +132,7 @@ public class ExchangeCredentialHandlerTests
 
         var authResponse = new AuthenticationResponse(
             AccessToken: "mapped-access-token",
+            RefreshToken: null,
             UserId: userId,
             ProviderType: "Dynamic",
             ExpiresAt: expiresAt,
@@ -271,6 +274,7 @@ public class ExchangeCredentialHandlerTests
         var bearerToken = "valid-token";
         var authResponse = new AuthenticationResponse(
             AccessToken: "token",
+            RefreshToken: null,
             UserId: Guid.NewGuid(),
             ProviderType: "Dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -304,6 +308,7 @@ public class ExchangeCredentialHandlerTests
         var bearerToken = "valid-token";
         var authResponse = new AuthenticationResponse(
             AccessToken: "token",
+            RefreshToken: null,
             UserId: Guid.NewGuid(),
             ProviderType: "Dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -345,6 +350,7 @@ public class ExchangeCredentialHandlerTests
         var bearerToken = "valid-token";
         var authResponse = new AuthenticationResponse(
             AccessToken: "token",
+            RefreshToken: null,
             UserId: Guid.NewGuid(),
             ProviderType: "Dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),

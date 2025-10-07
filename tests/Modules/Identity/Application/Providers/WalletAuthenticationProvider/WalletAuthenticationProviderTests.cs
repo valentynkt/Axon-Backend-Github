@@ -40,8 +40,6 @@ public class WalletAuthenticationProviderTests
     private static readonly string TestAddress = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1";
     private static readonly string TestSignedMessage = "{\"chain_id\":\"ethereum\",\"wallet_address\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1\",\"aud\":\"axon-challenge\"}";
     private static readonly string TestSignature = "0xabcdef1234567890";
-    private static readonly string TestMac = "test-mac-value";
-    private static readonly string TestMkv = "v1";
 
     [SetUp]
     public void SetUp()
@@ -116,7 +114,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
         // Setup signature verification
@@ -171,7 +169,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
         // Setup signature verification
@@ -233,7 +231,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
         // Setup signature verification
@@ -283,7 +281,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
         // Setup signature verification
@@ -346,7 +344,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
         // Setup signature verification to return false (invalid signature)
@@ -369,7 +367,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation to fail
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Failure<bool, Error>(Error.Validation("Invalid challenge")));
 
         // Act
@@ -387,7 +385,7 @@ public class WalletAuthenticationProviderTests
         var request = CreateWalletAuthenticationRequest();
 
         // Setup challenge validation
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
 
         // Setup signature verification
@@ -429,9 +427,7 @@ public class WalletAuthenticationProviderTests
             ChainId: TestChainId,
             Address: TestAddress,
             SignedMessage: TestSignedMessage,
-            Signature: TestSignature,
-            Mac: TestMac,
-            Mkv: TestMkv);
+            Signature: TestSignature);
     }
 
     private static ChainId AnyChainId() => ChainId.From(TestChainId);
@@ -439,7 +435,7 @@ public class WalletAuthenticationProviderTests
 
     private void SetupSuccessfulChallengeValidation()
     {
-        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!, default)
+        _challengeValidationService.ValidateWalletChallengeAsync(default!, default!)
             .ReturnsForAnyArgs(Result.Success<bool, Error>(true));
     }
 

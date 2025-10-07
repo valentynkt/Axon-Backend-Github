@@ -10,7 +10,6 @@ using BuildingBlocks.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
-using MassTransit;
 using NUnit.Framework;
 using Npgsql;
 using Shouldly;
@@ -42,16 +41,6 @@ public abstract class ChatDbInvariantsTestBase : PostgreSqlTestBase
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddEntityFrameworkNpgsql();
-
-        // Add MassTransit for event bus support
-        services.AddMassTransit(x =>
-        {
-            x.SetKebabCaseEndpointNameFormatter();
-            x.UsingInMemory((context, cfg) =>
-            {
-                cfg.ConfigureEndpoints(context);
-            });
-        });
 
         var serviceProvider = services.BuildServiceProvider();
 

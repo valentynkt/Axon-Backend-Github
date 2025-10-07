@@ -1,9 +1,7 @@
 using Axon.Modules.Chat.Infrastructure.Persistence.DbContexts;
-using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Axon.Modules.Chat.Infrastructure.Persistence.TestInfrastructure;
 
@@ -56,9 +54,6 @@ public static class ChatTestServiceProvider
 
         services.AddEntityFrameworkNpgsql();
 
-        // MassTransit for domain events
-        ConfigureMassTransit(services);
-
         // Allow custom configuration
         configure?.Invoke(services);
 
@@ -91,34 +86,6 @@ public static class ChatTestServiceProvider
         optionsBuilder.EnableDetailedErrors();
 
         return optionsBuilder.Options;
-    }
-
-    /// <summary>
-    /// Configures MassTransit for domain event handling in tests.
-    /// </summary>
-    private static void ConfigureMassTransit(IServiceCollection services)
-    {
-        services.AddMassTransit(x =>
-        {
-            x.SetKebabCaseEndpointNameFormatter();
-
-            // Use in-memory transport for tests
-            x.UsingInMemory((context, cfg) =>
-            {
-                cfg.ConfigureEndpoints(context);
-            });
-
-            // Test harness support can be added when needed
-            // x.AddTestHarness(); // Requires MassTransit.Testing package
-        });
-
-        // Configure MassTransit hosted service options
-        services.Configure<MassTransitHostOptions>(options =>
-        {
-            options.WaitUntilStarted = true;
-            options.StartTimeout = TimeSpan.FromSeconds(10);
-            options.StopTimeout = TimeSpan.FromSeconds(10);
-        });
     }
 
     /// <summary>

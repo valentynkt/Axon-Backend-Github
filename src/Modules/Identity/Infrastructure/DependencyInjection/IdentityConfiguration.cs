@@ -59,7 +59,7 @@ public static class IdentityConfiguration
                 "AxonChallenge",
                 new TokenProviderDescriptor(typeof(ChallengeTokenProvider)));
         })
-        .AddEntityFrameworkStores<IdentityContext>()
+        .AddEntityFrameworkStores<AspNetIdentityContext>()
         .AddUserManager<UserManager<AxonUserAuth>>()
         .AddSignInManager<SignInManager<AxonUserAuth>>()
         .AddDefaultTokenProviders() // Includes TOTP and other standard providers

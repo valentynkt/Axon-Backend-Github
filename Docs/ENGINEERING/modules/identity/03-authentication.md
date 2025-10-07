@@ -20,10 +20,9 @@ Covers token flow, endpoints, call order, responsibilities, error semantics, and
 * **One header to rule them all:** `Authorization: Bearer <token>` (Dynamic JWT **or** Axon Access Token)
 * **Two endpoints only:**
     * `POST /api/v1/auth/exchange` — idempotent upsert/sync
-    * `GET  /api/v1/auth/me` — current user snapshot (ETag)
+    * `GET  /api/v1/auth/me` — current user snapshot
 * **No server sessions/cookies.** The bearer drives auth; clients handle refresh/challenge.
 * **Idempotency:** Safe to retry `exchange`.
-* **Caching:** `me` supports ETag for conditional GET.
 
 ---
 
@@ -31,12 +30,18 @@ Covers token flow, endpoints, call order, responsibilities, error semantics, and
 
 ### Actors
 * **Client App** — UI and local state
-* **Axon SDK (thin)** — adds bearer, orchestrates `exchange`/`me`, handles ETag
+* **Axon SDK (thin)** — adds bearer, orchestrates `exchange`/`me`, manages token refresh
 * **API** — validates bearer, runs exchange upsert, returns normalized identity
 
 ### Tokens
-* **Dynamic JWT** — validated against JWKS
-* **Axon Access Token** — short-lived token issued after wallet signature; validated by Axon
+* **Dynamic JWT** — validated against JWKS (7-day expiry, managed by Dynamic SDK)
+* **Axon Access Token** — short-lived JWT (15-minute expiry) issued after wallet signature or exchange; validated by Axon
+* **Axon Refresh Token** — long-lived encrypted token (30-day expiry) used to obtain new access tokens without re-authentication
+
+### Token Lifecycle
+* **Access Token**: 15 minutes (900 seconds) - for API authentication
+* **Refresh Token**: 30 days (2,592,000 seconds) - for token renewal
+* **Token Rotation**: Each refresh issues new access + refresh tokens, invalidating old refresh token
 
 ### Source of Truth
 **Authoritative user state** lives in Axon (principal, credentials, wallet ownerships, per-chain defaults)
@@ -91,7 +96,6 @@ Authorization: Bearer <Dynamic JWT | Axon Access Token>
 **Headers:**
 ```
 Authorization: Bearer <token>
-If-None-Match: "<etag>" (optional)
 ```
 
 **Response (200):**
@@ -109,12 +113,9 @@ If-None-Match: "<etag>" (optional)
       "access": "signing",
       "isDefault": true
     }
-  ],
-  "etag": "\"W/abc123\""
+  ]
 }
 ```
-
-**Response (304):** Not Modified when ETag matches
 
 ---
 
@@ -124,12 +125,12 @@ If-None-Match: "<etag>" (optional)
 
 1. Client signs in with Dynamic → gets **Dynamic JWT**
 2. SDK → `POST /auth/exchange` (Bearer = Dynamic JWT)
-3. SDK → `GET /auth/me` → cache `etag`
+3. SDK → `GET /auth/me`
 
 ### Flow B — Returning User (Dynamic)
 
-1. SDK → `GET /auth/me` with `If-None-Match`
-2. If stale/changed: `POST /auth/exchange` → `GET /auth/me`
+1. SDK → `GET /auth/me`
+2. If data needed or token refreshed: `POST /auth/exchange` → `GET /auth/me`
 
 ### Flow C — Manual Wallet Sign-In (No Dynamic)
 
@@ -149,6 +150,28 @@ If-None-Match: "<etag>" (optional)
 
 If token exists: `POST /auth/exchange` → `GET /auth/me`
 If no token: show logged-out UI.
+
+### Flow F — Token Refresh (Automatic)
+
+**When**: Access token expires (every 15 minutes) or is about to expire (<5 minutes remaining)
+
+**SDK Behavior:**
+1. SDK detects expiring/expired access token
+2. SDK → `POST /auth/refresh` with refresh token
+3. Backend validates refresh token, issues new access + refresh tokens
+4. SDK stores new tokens, invalidates old refresh token
+5. SDK retries original API call with new access token
+
+**Token Rotation Security:**
+- Each refresh invalidates old refresh token (replay protection)
+- Attempting to reuse old refresh token fails with 401
+- Refresh token has 30-day expiry (configurable)
+- Access token has 15-minute expiry (configurable)
+
+**User Experience:**
+- Seamless: user stays authenticated for up to 30 days without re-login
+- No interruption: SDK handles refresh transparently
+- Security: short-lived access tokens minimize exposure
 
 ---
 
@@ -185,10 +208,9 @@ Same wallet proven via any method maps to the same principal
 
 ---
 
-## Idempotency, Caching & Sync
+## Idempotency & Sync
 
 * **Exchange** is idempotent (safe to retry); dedupes work; upserts only changes
-* **Me** supports **ETag**; clients send `If-None-Match` to get fast 304s
 * SDK should **exchange once** on boot when a token is present, then **me**
 
 ---
@@ -245,7 +267,6 @@ Same wallet proven via any method maps to the same principal
 
 * Attach bearer to all calls
 * Orchestrate **exchange → me** on boot and on wallet changes
-* Maintain `etag` and use conditional `me`
 * Backoff/retry using rate-limit headers
 * Surface conflicts and re-auth prompts
 
@@ -262,13 +283,19 @@ Same wallet proven via any method maps to the same principal
 
 ## Flow Cheatsheet
 
-| Scenario | Calls (in order) | Bearer |
-|----------|------------------|--------|
-| **First login (Dynamic)** | `exchange` → `me` | Dynamic JWT |
-| **Returning (Dynamic)** | `me` (If-None-Match) → (if stale) `exchange` → `me` | Dynamic JWT |
-| **Manual wallet sign-in** | Sign challenge → Axon token → `exchange` → `me` | Axon token |
-| **Wallets changed (Dynamic)** | `exchange` → `me` | Dynamic JWT |
-| **Cold boot** | `exchange` → `me` | Any valid token |
+| Scenario | Calls (in order) | Bearer | Tokens Issued |
+|----------|------------------|--------|---------------|
+| **First login (Dynamic)** | `exchange` → `me` | Dynamic JWT | Access + Refresh |
+| **Returning (Dynamic)** | `me` → (if needed) `exchange` → `me` | Dynamic JWT | Access + Refresh |
+| **Manual wallet sign-in** | `challenge` → sign → `verify` → `me` | None → Axon token | Access + Refresh |
+| **Token refresh** | `refresh` | None (refresh token in body) | New Access + New Refresh |
+| **Wallets changed (Dynamic)** | `exchange` → `me` | Dynamic JWT | Access + Refresh |
+| **Cold boot** | `exchange` → `me` | Any valid token | Access + Refresh |
+
+**Token Lifetimes:**
+- Access Token: 15 minutes (for API calls)
+- Refresh Token: 30 days (for getting new access tokens)
+- Dynamic JWT: 7 days (managed by Dynamic SDK)
 
 ---
 
@@ -276,4 +303,3 @@ Same wallet proven via any method maps to the same principal
 - [Identity Domain Model](./01-domain-model.md) - Principal, WalletOwnership aggregates
 - [API Contracts](./05-api-contracts.md) - Detailed request/response schemas
 - [External Integrations](./07-external-integrations.md) - Dynamic.xyz integration details
-- [Caching Strategy](./08-caching-strategy.md) - ETag implementation

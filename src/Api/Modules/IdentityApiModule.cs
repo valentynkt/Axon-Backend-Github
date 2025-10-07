@@ -186,10 +186,6 @@ public sealed class IdentityApiModule : IApiModule
                 KeyId = "axon_key_001" // Set KeyId to match token generation
             };
 
-            // Get the TokenReplayCache from DI for replay protection
-            var serviceProvider = services.BuildServiceProvider();
-            var tokenReplayCache = serviceProvider.GetRequiredService<Microsoft.IdentityModel.Tokens.ITokenReplayCache>();
-
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidIssuer = axonIssuer,
@@ -202,13 +198,11 @@ public sealed class IdentityApiModule : IApiModule
                 RequireExpirationTime = true,
                 ClockSkew = TimeSpan.FromSeconds(clockSkewSeconds),
                 ValidTypes = new[] { "JWT", "at+jwt" },
-                ValidateTokenReplay = true, // Enable built-in token replay validation
-                TokenReplayCache = tokenReplayCache, // Use unified replay cache
                 NameClaimType = "sub",
                 RoleClaimType = "role"
             };
 
-            // Enhanced events for Axon JWT with replay protection and security stamp validation
+            // Enhanced events for Axon JWT with security stamp validation
             options.Events = new JwtBearerEvents
             {
                 OnAuthenticationFailed = context =>

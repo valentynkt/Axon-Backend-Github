@@ -60,9 +60,7 @@ public class GenerateChallengeHandlerTests
             Exp: DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
             Nonce: "test-nonce-123",
             Aud: audience,
-            Message: "Sign this message",
-            Mac: "mac-value",
-            Mkv: "mkv-value");
+            Message: "Sign this message");
 
         _orchestrator.GenerateChallengeAsync(chainId, normalizedAddress, audience, Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationChallenge, Error>(challenge));
@@ -80,8 +78,6 @@ public class GenerateChallengeHandlerTests
         challengeResult.Message.ShouldBe("Sign this message");
         challengeResult.Nonce.ShouldBe("test-nonce-123");
         challengeResult.Audience.ShouldBe(audience);
-        challengeResult.Mac.ShouldBe("mac-value");
-        challengeResult.Mkv.ShouldBe("mkv-value");
     }
 
     [Test]
@@ -102,9 +98,7 @@ public class GenerateChallengeHandlerTests
             Exp: DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
             Nonce: "nonce",
             Aud: string.Empty,
-            Message: "message",
-            Mac: "mac",
-            Mkv: "mkv");
+            Message: "message");
 
         _orchestrator.GenerateChallengeAsync(chainId, normalizedAddress, string.Empty, Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationChallenge, Error>(challenge));
@@ -139,9 +133,7 @@ public class GenerateChallengeHandlerTests
             Exp: expiresAt,
             Nonce: "unique-nonce",
             Aud: "test-audience",
-            Message: "Please sign this message",
-            Mac: "mac-hash",
-            Mkv: "mkv-version");
+            Message: "Please sign this message");
 
         _orchestrator.GenerateChallengeAsync(chainId, normalizedAddress, "test-audience", Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationChallenge, Error>(challenge));
@@ -157,8 +149,6 @@ public class GenerateChallengeHandlerTests
         challengeResult.IssuedAt.ShouldBe(issuedAt);
         challengeResult.ExpiresAt.ShouldBe(expiresAt);
         challengeResult.Nonce.ShouldBe("unique-nonce");
-        challengeResult.Mac.ShouldBe("mac-hash");
-        challengeResult.Mkv.ShouldBe("mkv-version");
     }
 
     #endregion
@@ -234,9 +224,7 @@ public class GenerateChallengeHandlerTests
             Exp: DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
             Nonce: "nonce",
             Aud: string.Empty,
-            Message: "message",
-            Mac: "mac",
-            Mkv: "mkv");
+            Message: "message");
 
         _orchestrator.GenerateChallengeAsync(chainId, normalizedAddress, string.Empty, Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationChallenge, Error>(challenge));
@@ -268,9 +256,7 @@ public class GenerateChallengeHandlerTests
             Exp: DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
             Nonce: "nonce",
             Aud: string.Empty,
-            Message: "message",
-            Mac: "mac",
-            Mkv: "mkv");
+            Message: "message");
 
         _orchestrator.GenerateChallengeAsync(chainId, normalizedAddress, string.Empty, Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationChallenge, Error>(challenge));

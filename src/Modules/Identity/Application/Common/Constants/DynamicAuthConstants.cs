@@ -59,7 +59,6 @@ public static class DynamicAuthConstants
         public const string PrincipalConflict = "AUTH.PRINCIPAL_CONFLICT";
         public const string ExchangeError = "AUTH.EXCHANGE_ERROR";
         public const string InvalidTokenFormat = "AUTH.INVALID_TOKEN_FORMAT";
-        public const string TokenReplayed = "AUTH.TOKEN_REPLAYED";
         public const string InvalidChain = "WALLET.INVALID_CHAIN";
         public const string InvalidAddress = "WALLET.INVALID_ADDRESS";
     }

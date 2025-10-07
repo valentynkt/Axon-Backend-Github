@@ -193,6 +193,7 @@ public static class AuthenticationTestFixtures
     {
         return new AuthenticationResponse(
             AccessToken: "mock-access-token-" + Guid.NewGuid(),
+            RefreshToken: "mock-refresh-token-" + Guid.NewGuid(),
             UserId: userId ?? Guid.NewGuid(),
             ProviderType: providerType ?? "dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -211,6 +212,7 @@ public static class AuthenticationTestFixtures
     {
         return new AuthenticationResponse(
             AccessToken: "mock-access-token-" + Guid.NewGuid(),
+            RefreshToken: "mock-refresh-token-" + Guid.NewGuid(),
             UserId: userId ?? Guid.NewGuid(),
             ProviderType: "dynamic",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),

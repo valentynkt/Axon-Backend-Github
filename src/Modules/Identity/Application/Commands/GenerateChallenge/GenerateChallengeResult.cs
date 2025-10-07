@@ -7,7 +7,5 @@ public sealed record GenerateChallengeResult(
     long IssuedAt,
     long ExpiresAt,
     string Nonce,
-    string? Audience,
-    string Mac,
-    string Mkv
+    string? Audience
 );

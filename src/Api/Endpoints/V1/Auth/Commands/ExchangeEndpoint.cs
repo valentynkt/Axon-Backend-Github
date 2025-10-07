@@ -100,6 +100,7 @@ public sealed class ExchangeEndpoint : BaseResultEndpoint<ExchangeTokenRequestDt
         // Simply map the outcome to response DTO - the outcome already contains everything we need
         var response = new AuthTokenResponseDto(
             AccessToken:        domainResult.Value.AccessToken,
+            RefreshToken:       domainResult.Value.RefreshToken,
             TokenType:          domainResult.Value.TokenType,
             ExpiresIn:          domainResult.Value.ExpiresIn,
             AxonUserId:         domainResult.Value.AxonUserId.ToString(),

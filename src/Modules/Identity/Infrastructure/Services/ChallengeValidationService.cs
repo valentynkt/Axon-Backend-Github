@@ -25,17 +25,11 @@ public sealed class ChallengeValidationService : IChallengeValidationService
 
     public async Task<Result<bool, Error>> ValidateWalletChallengeAsync(
         string signedMessage,
-        string mkv,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(signedMessage))
         {
             return Result.Failure<bool, Error>(Error.Validation("Signed message cannot be empty"));
-        }
-
-        if (string.IsNullOrEmpty(mkv))
-        {
-            return Result.Failure<bool, Error>(Error.Validation("MAC key version cannot be empty"));
         }
 
         try
@@ -70,7 +64,7 @@ public sealed class ChallengeValidationService : IChallengeValidationService
                     Error.Validation("Challenge message must contain wallet_address", "CHALLENGE.MISSING_ADDRESS"));
             }
 
-            // Step 2: Validate challenge structure, MAC, and TTL
+            // Step 2: Validate challenge structure and TTL
             var challengeValidation = _challengeService.ValidateChallenge(
                 signedMessage,
                 chainId,
@@ -88,18 +82,6 @@ public sealed class ChallengeValidationService : IChallengeValidationService
                 _logger.LogWarning("Challenge validation returned false");
                 return Result.Failure<bool, Error>(
                     Error.Validation("Challenge validation failed", "CHALLENGE.INVALID"));
-            }
-
-            // Step 3: Check and mark nonce as used for replay protection
-            var nonceResult = await _challengeService.CheckAndMarkNonceUsedAsync(
-                signedMessage,
-                mkv,
-                cancellationToken);
-
-            if (nonceResult.IsFailure)
-            {
-                _logger.LogWarning("Nonce validation failed: {Error}", nonceResult.Error);
-                return Result.Failure<bool, Error>(nonceResult.Error);
             }
 
             _logger.LogDebug("Challenge validation successful for chain {ChainId}, address {Address}",

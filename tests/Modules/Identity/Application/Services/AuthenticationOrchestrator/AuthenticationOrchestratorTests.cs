@@ -140,9 +140,7 @@ public class AuthenticationOrchestratorTests : AuthenticationOrchestratorTestBas
             ChainId: "solana",
             Address: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
             SignedMessage: "test-signed-message",
-            Signature: "test-signature",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Signature: "test-signature");
 
         var principalId = new AxonUserId(Guid.NewGuid());
         var user = CreateAxonUserAuth(principalId: principalId, providerType: "manual");
@@ -180,9 +178,7 @@ public class AuthenticationOrchestratorTests : AuthenticationOrchestratorTestBas
             ChainId: "solana",
             Address: "invalid-address",
             SignedMessage: "test-signed-message",
-            Signature: "invalid-signature",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Signature: "invalid-signature");
 
         var expectedError = Error.Unauthorized("Invalid signature");
 
@@ -344,9 +340,7 @@ public class AuthenticationOrchestratorTests : AuthenticationOrchestratorTestBas
             Exp: DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds(),
             Nonce: "nonce-123",
             Aud: audience,
-            Message: "Sign this message",
-            Mac: "test-mac",
-            Mkv: "test-mkv");
+            Message: "Sign this message");
 
         ChallengeService.GenerateChallengeAsync(chainId, walletAddress, audience, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(Result.Success<AuthenticationChallenge, Error>(expectedChallenge)));

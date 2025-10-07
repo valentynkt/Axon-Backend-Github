@@ -29,7 +29,7 @@ public sealed class AxonUserStore :
     IUserLockoutStore<AxonUserAuth>
 {
     private readonly IAxonPrincipalWriteRepository _principalRepo;
-    private readonly IdentityContext _dbContext;
+    private readonly AspNetIdentityContext _dbContext;
     private readonly IIdentityDbContext _readDbContext;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AxonUserStore> _logger;
@@ -37,7 +37,7 @@ public sealed class AxonUserStore :
 
     public AxonUserStore(
         IAxonPrincipalWriteRepository principalRepo,
-        IdentityContext dbContext,
+        AspNetIdentityContext dbContext,
         IIdentityDbContext readDbContext,
         TimeProvider timeProvider,
         ILogger<AxonUserStore> logger,

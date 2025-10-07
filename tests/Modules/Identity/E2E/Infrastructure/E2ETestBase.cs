@@ -77,31 +77,11 @@ public abstract class E2ETestBase : IAsyncDisposable
         });
 
         SetupDefaultJwksEndpoint();
-    }
 
-    [OneTimeTearDown]
-    public async Task OneTimeTearDownAsync()
-    {
-        JwksServer?.Stop();
-        JwksServer?.Dispose();
-
-        if (_postgreSqlContainer != null)
-        {
-            await _postgreSqlContainer.DisposeAsync();
-        }
-    }
-
-    [SetUp]
-    public async Task SetUpAsync()
-    {
-        // Reset disposal flag for new test
-        _disposed = false;
-
-        // Initialize deterministic time provider
-        TimeProvider = new FakeTimeProvider(TestTime);
-
-        // Create WebApplicationFactory with test configuration
-        // CA2000 suppressed: Factory is disposed in TearDownAsync
+        // CRITICAL FIX: Create Factory ONCE per fixture instead of per test
+        // FastEndpoints maintains static endpoint cache that gets corrupted when Factory is recreated
+        // Reusing single Factory prevents YamlDotNet ReflectionTypeLoadException on subsequent tests
+        // Database is still cleaned between tests via EnsureDatabaseSetupAsync()
         #pragma warning disable CA2000 // Dispose objects before losing scope
         Factory = new WebApplicationFactory<Program>()
         #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -120,110 +100,21 @@ public abstract class E2ETestBase : IAsyncDisposable
                     config.AddEnvironmentVariables();
 
                     // Test-specific overrides (highest priority)
-                    var testConfig = new Dictionary<string, string?>
-                    {
-                        // PostgreSQL connection string override
-                        ["ConnectionStrings:DefaultConnection"] = _connectionString,
-
-                        // Dynamic JWT configuration
-                        ["Dynamic:Authority"] = "", // Clear Authority to force JwksUri usage
-                        ["Dynamic:JwksUri"] = $"http://localhost:{JwksServer.Port}/.well-known/jwks.json",
-                        ["Dynamic:Issuer"] = TestDataFixtures.DynamicIssuer,
-                        ["Dynamic:Audience"] = "axon-api",
-                        ["DynamicValidation:EnvironmentMapping:dyn_test_env_12345"] = "test",
-
-                        // Axon JWT configuration
-                        ["Axon:Issuer"] = "https://api.axon.test",
-                        ["Axon:Audience"] = "axon-api",
-                        ["Axon:SigningKey"] = "dGVzdC1zaWduaW5nLWtleS1mb3ItZTJlLXRlc3RzLW1pbmltdW0tMjU2LWJpdHMtcmVxdWlyZWQtaGVyZS1wYWRkaW5n"
-                    };
-
+                    var testConfig = TestJwtConfiguration.CreateTestConfiguration(_connectionString, JwksServer.Port);
                     config.AddInMemoryCollection(testConfig);
                 });
 
                 builder.ConfigureServices(services =>
                 {
                     // CRITICAL: Remove existing DbContext registrations and re-register with test connection string
-                    // This must be done BEFORE replacing any services
                     RemoveDbContextRegistrations(services);
                     RegisterDbContextsWithTestConnectionString(services, _connectionString);
 
-                    // Replace time provider with deterministic one
-                    services.AddSingleton<TimeProvider>(TimeProvider);
+                    // Override TimeProvider with FakeTimeProvider for deterministic testing
+                    // This will be updated per-test in SetUpAsync
+                    services.AddSingleton<TimeProvider>(new FakeTimeProvider(TestTime));
 
-                    // CRITICAL FIX: Post-configure DynamicJwt options to use test issuer and signing keys
-                    // This runs AFTER IdentityApiModule registers JWT authentication
-                    services.PostConfigure<JwtBearerOptions>("DynamicJwt", options =>
-                    {
-                        // Enable all JWT validations for proper security testing
-                        options.TokenValidationParameters.ValidateIssuer = true;
-                        options.TokenValidationParameters.ValidIssuer = TestDataFixtures.DynamicIssuer;
-
-                        options.TokenValidationParameters.ValidateAudience = true;
-                        options.TokenValidationParameters.ValidAudience = "axon-api";
-
-                        options.TokenValidationParameters.ValidateIssuerSigningKey = true;
-                        options.TokenValidationParameters.ValidateLifetime = true; // Re-enabled for real validation
-
-                        // Directly provide test RSA keys instead of relying on JWKS discovery
-                        // This ensures signature validation works in tests
-                        var testKeys = JwtTestTokenFactory.GetTestSigningKeys();
-                        options.TokenValidationParameters.IssuerSigningKeys = testKeys;
-
-                        // HYBRID TIME APPROACH:
-                        // - JWT tokens use real system time (DateTime.UtcNow) for proper middleware validation
-                        // - Application logic uses FakeTimeProvider for deterministic testing
-                        // - This allows real JWT validation while keeping deterministic testing for business logic
-                        // - Default ClockSkew (5 minutes) allows for reasonable clock drift tolerance
-
-                        // CRITICAL FIX: Disable token replay cache for E2E tests
-                        // TokenReplayCache prevents the same JWT from being used multiple times
-                        // In E2E tests, we reuse the same token across multiple requests within a single test
-                        // This is safe in tests since we control the token generation and don't need replay protection
-                        options.TokenValidationParameters.TokenReplayCache = null;
-
-                        // Disable JWKS refresh since we're providing keys directly
-                        options.RefreshOnIssuerKeyNotFound = false;
-                        options.RequireHttpsMetadata = false; // Allow HTTP for testing
-                    });
-
-                    // Post-configure AxonJwt authentication scheme (for internal tokens)
-                    services.PostConfigure<JwtBearerOptions>("AxonJwt", options =>
-                    {
-                        // HYBRID TIME APPROACH: Re-enable lifetime validation (tokens use real system time)
-                        options.TokenValidationParameters.ValidateLifetime = true;
-
-                        // CRITICAL FIX: Disable token replay cache for E2E tests
-                        // TokenReplayCache prevents the same JWT from being used multiple times
-                        // In E2E tests, we reuse the same token across multiple requests within a single test
-                        // This is safe in tests since we control the token generation and don't need replay protection
-                        options.TokenValidationParameters.TokenReplayCache = null;
-                    });
-
-                    // CRITICAL FIX: Configure DynamicAuthService validation for E2E tests
-                    // This is the SECOND validation layer that runs within DynamicAuthenticationProvider
-                    services.PostConfigure<Axon.Modules.Identity.Infrastructure.ExternalServices.Configuration.DynamicValidationOptions>(options =>
-                    {
-                        // Ensure test environment mapping is present
-                        options.EnvironmentMapping["dyn_test_env_12345"] = "test";
-
-                        // Disable background JWKS refresh during tests
-                        options.EnableBackgroundRefresh = false;
-
-                        // Use test-friendly validation settings
-                        options.ValidateAudience = true;
-                        options.DefaultAllowedAudiences = new List<string> { "axon-api", "axon-web" };
-
-                        // HYBRID TIME APPROACH: Re-enable lifetime validation (tokens use real system time)
-                        options.ValidateLifetime = true;
-                        options.ClockSkewSeconds = 300; // 5 minutes clock skew tolerance (default)
-                    });
-
-                    // Replace IJwksService with test implementation that returns test RSA keys
-                    // This prevents DynamicAuthService from fetching production keys on startup
-                    services.AddSingleton<Axon.Modules.Identity.Application.Contracts.ExternalServices.IJwksService, TestJwksService>();
-
-                    // Disable authentication for some E2E tests when needed
+                    // Allow derived classes to configure additional test services
                     ConfigureTestServices(services);
                 });
 
@@ -235,13 +126,49 @@ public abstract class E2ETestBase : IAsyncDisposable
                 });
             });
 
-        // CRITICAL FIX: Clear memory cache AFTER Factory is created
+        // Create HttpClient for the fixture
+        HttpClient = Factory.CreateClient();
+    }
+
+    [OneTimeTearDown]
+    public async Task OneTimeTearDownAsync()
+    {
+        // Dispose HttpClient
+        HttpClient?.Dispose();
+
+        // Dispose Factory
+        if (Factory != null)
+        {
+            await Factory.DisposeAsync();
+        }
+
+        // Stop and dispose WireMock server
+        JwksServer?.Stop();
+        JwksServer?.Dispose();
+
+        // Dispose PostgreSQL container
+        if (_postgreSqlContainer != null)
+        {
+            await _postgreSqlContainer.DisposeAsync();
+        }
+    }
+
+    [SetUp]
+    public async Task SetUpAsync()
+    {
+        // Reset disposal flag for new test
+        _disposed = false;
+
+        // Update TimeProvider for this test
+        // Note: Factory's TimeProvider is set in OneTimeSetUp and shared across tests
+        TimeProvider = new FakeTimeProvider(TestTime);
+
+        // CRITICAL FIX: Clear memory cache before each test
         // This prevents authentication state leakage between tests
+        // Factory and HttpClient are reused across tests in the fixture
         ClearMemoryCacheIfExists();
 
-        HttpClient = Factory.CreateClient();
-
-        // Ensure database is migrated and clean
+        // Ensure database is migrated and clean for this test
         await EnsureDatabaseSetupAsync();
 
         // Allow derived classes to perform additional setup
@@ -259,22 +186,19 @@ public abstract class E2ETestBase : IAsyncDisposable
         }
         finally
         {
-            // CRITICAL FIX: Clear memory cache before disposing to prevent token validation cache pollution
+            // CRITICAL FIX: Clear memory cache after each test
             // DynamicAuthService caches validated tokens which can leak between tests
             ClearMemoryCacheIfExists();
 
-            // CRITICAL FIX: Clear DbContext change trackers before disposing
+            // CRITICAL FIX: Clear DbContext change trackers after each test
             // This ensures EF Core tracked entities don't leak between tests
             ClearDbContextChangeTrackers();
 
-            await CleanupDatabaseAsync();
+            // Database cleanup between tests is handled in SetUp via EnsureDatabaseSetupAsync()
+            // No need for cleanup here since Factory is reused across tests
 
-            HttpClient?.Dispose();
-
-            if (Factory != null)
-            {
-                await Factory.DisposeAsync();
-            }
+            // Factory and HttpClient are NOT disposed here - they are fixture-scoped
+            // They will be disposed in OneTimeTearDown after all tests complete
 
             _disposed = true;
         }
@@ -308,18 +232,27 @@ public abstract class E2ETestBase : IAsyncDisposable
         using var scope = Factory.Services.CreateScope();
 
         var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>();
 
         // Delete entire database to ensure clean state
         await writeDbContext.Database.EnsureDeletedAsync();
 
-        // CRITICAL FIX: IdentityContext (ASP.NET Identity) has NO migrations - use EnsureCreatedAsync()
-        // IdentityDbContext (Axon tables) HAS migrations - use MigrateAsync()
+        // DATABASE CONTEXT ARCHITECTURE:
+        // 1. AspNetIdentityContext: Manages ASP.NET Identity tables (AspNetUsers, AspNetRoles, etc.)
+        //    - Uses EnsureCreatedAsync() - no EF Core migrations by design (standard Identity approach)
+        //    - Tables: AspNetUsers, AspNetRoles, AspNetUserRoles, AspNetUserClaims, etc.
+        //
+        // 2. IdentityDbContext: Manages Axon domain tables (Principal, Wallet, etc.)
+        //    - Uses MigrateAsync() - has EF Core migrations for domain model evolution
+        //    - Tables: Principal, Wallet, Credential, WalletOwnership, PrincipalChainDefault
+        //
+        // Both contexts share the "identity" schema but manage different table sets.
+        // Migrations history table: __EFMigrationsHistory (shared, but only IdentityDbContext uses it)
 
-        // Create ASP.NET Identity tables first (no migrations available)
+        // Create ASP.NET Identity tables first (EnsureCreated - no migrations)
         await identityContext.Database.EnsureCreatedAsync();
 
-        // Apply Axon Identity migrations (Principal, Wallet, Credential, etc.)
+        // Apply Axon Identity domain migrations
         await writeDbContext.Database.MigrateAsync();
     }
 
@@ -330,7 +263,7 @@ public abstract class E2ETestBase : IAsyncDisposable
     {
         using var scope = Factory.Services.CreateScope();
         var writeDbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+        var identityContext = scope.ServiceProvider.GetRequiredService<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>();
 
         try
         {
@@ -365,8 +298,11 @@ public abstract class E2ETestBase : IAsyncDisposable
     {
         var jwks = JwtTestTokenFactory.CreateTestJwks();
 
+        // DynamicXyzOptions.JwksUri computes: {BaseUrl}/sdk/{EnvironmentId}/.well-known/jwks.json
+        // We configure: BaseUrl=http://localhost:PORT, EnvironmentId=test-env-id
+        // Result: http://localhost:PORT/sdk/test-env-id/.well-known/jwks.json
         JwksServer
-            .Given(Request.Create().WithPath("/.well-known/jwks.json").UsingGet())
+            .Given(Request.Create().WithPath("/sdk/test-env-id/.well-known/jwks.json").UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json")
@@ -491,7 +427,7 @@ public abstract class E2ETestBase : IAsyncDisposable
             services.Remove(identityWriteDbContextDescriptor);
         }
 
-        var identityContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext));
+        var identityContextDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext));
         if (identityContextDescriptor != null)
         {
             services.Remove(identityContextDescriptor);
@@ -530,7 +466,7 @@ public abstract class E2ETestBase : IAsyncDisposable
             options.EnableDetailedErrors();
         });
 
-        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>(options =>
+        services.AddDbContext<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -602,7 +538,7 @@ public abstract class E2ETestBase : IAsyncDisposable
             identityReadDb?.ChangeTracker.Clear();
 
             // Clear Identity Context
-            var identityContext = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.Context.IdentityContext>();
+            var identityContext = scope.ServiceProvider.GetService<Axon.Modules.Identity.Infrastructure.Persistence.Context.AspNetIdentityContext>();
             identityContext?.ChangeTracker.Clear();
         }
         catch

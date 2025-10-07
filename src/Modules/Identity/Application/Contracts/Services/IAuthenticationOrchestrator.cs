@@ -34,14 +34,6 @@ public interface IAuthenticationOrchestrator
         string expectedAddress,
         string expectedAudience);
 
-    /// <summary>
-    /// Checks and marks a nonce as used for replay protection
-    /// </summary>
-    Task<UnitResult<Error>> CheckAndMarkNonceUsedAsync(
-        string signedMessage,
-        string mkv,
-        CancellationToken cancellationToken = default);
-
     // ========== Authentication Methods ==========
 
     /// <summary>

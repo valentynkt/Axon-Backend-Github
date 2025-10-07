@@ -60,8 +60,6 @@ public class VerifyWalletSignatureHandlerTests
         var audience = "https://app.example.com";
         var signedMessage = $"{{\"aud\":\"{audience}\",\"nonce\":\"test-nonce-123\"}}";
         var signature = "base64-signature-value";
-        var mac = "mac-value";
-        var mkv = "mkv-value";
         var userId = Guid.NewGuid();
         var accessToken = "jwt-access-token-abc123";
 
@@ -70,8 +68,6 @@ public class VerifyWalletSignatureHandlerTests
             .Returns(Result.Success<bool, Error>(true));
 
         // Step 3: Replay protection succeeds
-        _orchestrator.CheckAndMarkNonceUsedAsync(signedMessage, mkv, Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
 
         // Step 4: Signature verification succeeds
         _signatureVerifier.VerifySignature(chainId, address, signedMessage, signature)
@@ -84,6 +80,7 @@ public class VerifyWalletSignatureHandlerTests
         // Step 6: Authentication succeeds
         var authResponse = new AuthenticationResponse(
             AccessToken: accessToken,
+            RefreshToken: "refresh-token",
             UserId: userId,
             ProviderType: "wallet",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -94,13 +91,11 @@ public class VerifyWalletSignatureHandlerTests
                 r.ChainId == chainId &&
                 r.Address == address &&
                 r.SignedMessage == signedMessage &&
-                r.Signature == signature &&
-                r.Mac == mac &&
-                r.Mkv == mkv),
+                r.Signature == signature),
             Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, mac, mkv);
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -125,16 +120,12 @@ public class VerifyWalletSignatureHandlerTests
         var audience = "https://test.com";
         var signedMessage = $"{{\"aud\":\"{audience}\"}}";
         var signature = "sig";
-        var mac = "mac";
-        var mkv = "mkv";
         var userId = Guid.NewGuid();
         var expiresAt = DateTime.UtcNow.AddMinutes(30);
 
         // Mock all validation steps to succeed
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
         _signatureVerifier.VerifySignature(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
         _addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
@@ -142,6 +133,7 @@ public class VerifyWalletSignatureHandlerTests
 
         var authResponse = new AuthenticationResponse(
             AccessToken: "token-xyz",
+            RefreshToken: "refresh-token",
             UserId: userId,
             ProviderType: "wallet",
             ExpiresAt: expiresAt,
@@ -150,7 +142,7 @@ public class VerifyWalletSignatureHandlerTests
         _orchestrator.AuthenticateWithWalletAsync(Arg.Any<WalletAuthenticationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, mac, mkv);
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -182,7 +174,7 @@ public class VerifyWalletSignatureHandlerTests
         _orchestrator.ValidateChallenge(signedMessage, chainId, address, audience)
             .Returns(Result.Failure<bool, Error>(error));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -193,36 +185,7 @@ public class VerifyWalletSignatureHandlerTests
         result.Error.Code.ShouldBe("CHALLENGE.EXPIRED");
     }
 
-    [Test]
-    public async Task VerifySignature_WithReplayedNonce_ShouldReturnReplayError()
-    {
-        // Arrange
-        var chainId = "eip155:1";
-        var address = "0xabcdef1234567890abcdef1234567890abcdef12";
-        var audience = "https://app.example.com";
-        var signedMessage = $"{{\"aud\":\"{audience}\"}}";
-        var signature = "sig";
-        var mkv = "mkv";
-        var error = Error.Validation("Nonce already used", "NONCE.REPLAY_DETECTED");
-
-        // Step 2: Challenge validation succeeds
-        _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
-            .Returns(Result.Success<bool, Error>(true));
-
-        // Step 3: Replay protection fails
-        _orchestrator.CheckAndMarkNonceUsedAsync(signedMessage, mkv, Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Failure(error));
-
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", mkv);
-
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        result.IsFailure.ShouldBeTrue();
-        result.Error.Type.ShouldBe(ErrorType.Validation);
-        result.Error.Code.ShouldBe("NONCE.REPLAY_DETECTED");
-    }
+    // Test removed: Replay protection has been removed from MVP as token rotation provides sufficient protection
 
     [Test]
     public async Task VerifySignature_WithInvalidSignature_ShouldReturnUnauthorizedError()
@@ -238,14 +201,12 @@ public class VerifyWalletSignatureHandlerTests
         // Steps 2-3: Pass
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
 
         // Step 4: Signature verification fails
         _signatureVerifier.VerifySignature(chainId, address, signedMessage, signature)
             .Returns(Result.Failure<bool, Error>(error));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -270,8 +231,6 @@ public class VerifyWalletSignatureHandlerTests
         // Steps 2-4: Pass
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
         _signatureVerifier.VerifySignature(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
 
@@ -279,7 +238,7 @@ public class VerifyWalletSignatureHandlerTests
         _addressNormalizer.NormalizeAddress(chainId, address)
             .Returns(Result.Failure<Address, Error>(error));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -304,8 +263,6 @@ public class VerifyWalletSignatureHandlerTests
         // Steps 2-5: Pass
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
         _signatureVerifier.VerifySignature(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
         _addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
@@ -315,7 +272,7 @@ public class VerifyWalletSignatureHandlerTests
         _orchestrator.AuthenticateWithWalletAsync(Arg.Any<WalletAuthenticationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Result.Failure<AuthenticationResponse, Error>(error));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -344,8 +301,6 @@ public class VerifyWalletSignatureHandlerTests
         // Mock all steps to pass
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
         _signatureVerifier.VerifySignature(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
         _addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
@@ -353,6 +308,7 @@ public class VerifyWalletSignatureHandlerTests
 
         var authResponse = new AuthenticationResponse(
             AccessToken: "token",
+            RefreshToken: "refresh-token",
             UserId: userId,
             ProviderType: "wallet",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -361,7 +317,7 @@ public class VerifyWalletSignatureHandlerTests
         _orchestrator.AuthenticateWithWalletAsync(Arg.Any<WalletAuthenticationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         await _handler.Handle(command, CancellationToken.None);
@@ -388,8 +344,6 @@ public class VerifyWalletSignatureHandlerTests
         // Mock all steps to pass
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
         _signatureVerifier.VerifySignature(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
         _addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
@@ -398,6 +352,7 @@ public class VerifyWalletSignatureHandlerTests
         // Return response with created = true
         var authResponse = new AuthenticationResponse(
             AccessToken: "token",
+            RefreshToken: "refresh-token",
             UserId: userId,
             ProviderType: "wallet",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -406,7 +361,7 @@ public class VerifyWalletSignatureHandlerTests
         _orchestrator.AuthenticateWithWalletAsync(Arg.Any<WalletAuthenticationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -430,8 +385,6 @@ public class VerifyWalletSignatureHandlerTests
         // Mock all steps to pass
         _orchestrator.ValidateChallenge(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
-        _orchestrator.CheckAndMarkNonceUsedAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(UnitResult.Success<Error>());
         _signatureVerifier.VerifySignature(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(Result.Success<bool, Error>(true));
         _addressNormalizer.NormalizeAddress(Arg.Any<string>(), Arg.Any<string>())
@@ -440,6 +393,7 @@ public class VerifyWalletSignatureHandlerTests
         // Return response with null AdditionalData
         var authResponse = new AuthenticationResponse(
             AccessToken: "token",
+            RefreshToken: "refresh-token",
             UserId: userId,
             ProviderType: "wallet",
             ExpiresAt: DateTime.UtcNow.AddMinutes(30),
@@ -448,7 +402,7 @@ public class VerifyWalletSignatureHandlerTests
         _orchestrator.AuthenticateWithWalletAsync(Arg.Any<WalletAuthenticationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success<AuthenticationResponse, Error>(authResponse));
 
-        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature, "mac", "mkv");
+        var command = new VerifyWalletSignatureCommand(chainId, address, signedMessage, signature);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);

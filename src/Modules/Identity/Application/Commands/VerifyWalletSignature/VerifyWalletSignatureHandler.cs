@@ -40,10 +40,35 @@ public sealed class VerifyWalletSignatureHandler
         ArgumentNullException.ThrowIfNull(command);
 
         // Step 1: Extract audience from signed message for validation
-        using var doc = JsonDocument.Parse(command.SignedMessage);
-        var audience = doc.RootElement.GetProperty("aud").GetString() ?? string.Empty;
+        string audience;
+        try
+        {
+            using var doc = JsonDocument.Parse(command.SignedMessage);
 
-        // Step 3: Validate TTL and canonical message shape
+            if (!doc.RootElement.TryGetProperty("aud", out var audElement))
+            {
+                _logger.LogWarning("Invalid challenge format: missing 'aud' field");
+                return Result.Failure<VerifyWalletSignatureResult, Error>(
+                    Error.Validation("Invalid challenge format: missing 'aud' field", "AUTH.INVALID_CHALLENGE"));
+            }
+
+            audience = audElement.GetString() ?? string.Empty;
+
+            if (string.IsNullOrEmpty(audience))
+            {
+                _logger.LogWarning("Invalid challenge format: empty 'aud' field");
+                return Result.Failure<VerifyWalletSignatureResult, Error>(
+                    Error.Validation("Invalid challenge format: empty 'aud' field", "AUTH.INVALID_CHALLENGE"));
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid JSON in signed message");
+            return Result.Failure<VerifyWalletSignatureResult, Error>(
+                Error.Validation("Invalid challenge format: malformed JSON", "AUTH.INVALID_CHALLENGE"));
+        }
+
+        // Step 2: Validate TTL and canonical message shape
         var validationResult = _orchestrator.ValidateChallenge(
             command.SignedMessage,
             command.ChainId,
@@ -52,19 +77,13 @@ public sealed class VerifyWalletSignatureHandler
 
         if (validationResult.IsFailure)
         {
-            return Result.Failure<VerifyWalletSignatureResult, Error>(validationResult.Error);
+            // Log detailed error internally but return generic message to client
+            _logger.LogWarning("Challenge validation failed, reason={Reason}", validationResult.Error.Code);
+            return Result.Failure<VerifyWalletSignatureResult, Error>(
+                Error.Unauthorized("Authentication failed", "AUTH.AUTHENTICATION_FAILED"));
         }
 
-        // Step 4: Check replay protection
-        var replayResult = await _orchestrator.CheckAndMarkNonceUsedAsync(
-            command.SignedMessage, command.Mkv, ct);
-
-        if (replayResult.IsFailure)
-        {
-            return Result.Failure<VerifyWalletSignatureResult, Error>(replayResult.Error);
-        }
-
-        // Step 5: Verify Ed25519 signature
+        // Step 3: Verify Ed25519 signature
         var baseChain = ChainIdConverter.ExtractBaseChain(command.ChainId);
         var signatureResult = _signatureVerifier.VerifySignature(
             baseChain,
@@ -74,11 +93,14 @@ public sealed class VerifyWalletSignatureHandler
 
         if (signatureResult.IsFailure)
         {
-            _logger.LogWarning("Signature verification failed for chain={Chain}", command.ChainId);
-            return Result.Failure<VerifyWalletSignatureResult, Error>(signatureResult.Error);
+            // Log detailed error internally but return generic message to client for security
+            _logger.LogWarning("Signature verification failed for chain={Chain}, reason={Reason}",
+                command.ChainId, signatureResult.Error.Code);
+            return Result.Failure<VerifyWalletSignatureResult, Error>(
+                Error.Unauthorized("Authentication failed", "AUTH.AUTHENTICATION_FAILED"));
         }
 
-        // Step 6: Normalize address
+        // Step 4: Normalize address
         var normalizedAddressResult = _addressNormalizer.NormalizeAddress(
             baseChain, command.Address);
 
@@ -89,14 +111,12 @@ public sealed class VerifyWalletSignatureHandler
 
         var normalizedAddress = normalizedAddressResult.Value.Value;
 
-        // Step 7: Use orchestrator to complete authentication
+        // Step 5: Use orchestrator to complete authentication
         var authRequest = new WalletAuthenticationRequest(
             ChainId: command.ChainId,
             Address: normalizedAddress,
             SignedMessage: command.SignedMessage,
-            Signature: command.Signature,
-            Mac: command.Mac,
-            Mkv: command.Mkv);
+            Signature: command.Signature);
 
         var authResult = await _orchestrator.AuthenticateWithWalletAsync(authRequest, ct);
 
@@ -110,6 +130,7 @@ public sealed class VerifyWalletSignatureHandler
         return Result.Success<VerifyWalletSignatureResult, Error>(
             new VerifyWalletSignatureResult(
                 AccessToken: response.AccessToken,
+                RefreshToken: response.RefreshToken,
                 TokenType: "Bearer",
                 ExpiresIn: (int)(response.ExpiresAt - DateTime.UtcNow).TotalSeconds,
                 AxonUserId: response.UserId.ToString(),

@@ -496,7 +496,7 @@ public sealed class DynamicAuthService : IDynamicAuthService, IHostedService, ID
                 {
                     _logger.LogWarning("JWT replay attempt detected for jti: {Jti}", jti);
                     return Result.Failure<Unit, Error>(
-                        Error.Unauthorized("JWT token has already been used", AuthErrors.TokenReplayed));
+                        Error.Unauthorized("JWT token has already been used", AuthErrors.TokenAlreadyUsed));
                 }
 
                 var cacheExpiration = expiresAt.Subtract(DateTimeOffset.UtcNow);

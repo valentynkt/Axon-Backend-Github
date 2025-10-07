@@ -45,7 +45,7 @@ public static class ServiceRegistration
     {
         ArgumentNullException.ThrowIfNull(configuration);
         
-        // Get connection string - falls back to shared database (axon_chat) only in development
+        // Get connection string - falls back to shared database (axon_db) only in development
         var connectionString = configuration.GetConnectionString("IdentityDb")
             ?? configuration.GetConnectionString("DefaultConnection");
 
@@ -54,7 +54,7 @@ public static class ServiceRegistration
         {
             if (environment?.IsDevelopment() == true)
             {
-                connectionString = "Host=localhost;Database=axon_chat;Username=postgres;Password=postgres;Include Error Detail=true";
+                connectionString = "Host=localhost;Database=axon_db;Username=postgres;Password=postgres;Include Error Detail=true";
             }
             else
             {
@@ -63,8 +63,8 @@ public static class ServiceRegistration
             }
         }
         
-        // Identity DbContext for Microsoft Identity Framework
-        services.AddDbContext<IdentityContext>(options =>
+        // ASP.NET Identity DbContext for Microsoft Identity Framework
+        services.AddDbContext<AspNetIdentityContext>(options =>
         {
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
@@ -193,10 +193,6 @@ public static class ServiceRegistration
         // Register user profile service (SOLID refactoring - separates profile concerns from auth)
         services.AddScoped<IUserProfileService, UserProfileService>();
 
-        // Register unified token replay protection service
-        services.AddSingleton<Microsoft.IdentityModel.Tokens.ITokenReplayCache, TokenReplayCache>();
-        services.AddScoped<TokenReplayCache>();
-
         // Register Authentication Orchestrator - Single entry point for all auth flows
         services.AddScoped<IAuthenticationOrchestrator, AuthenticationOrchestrator>();
 
@@ -245,8 +241,8 @@ public static class ServiceRegistration
         services.AddHttpContextAccessor(); // Required for HttpContextUserService
         services.AddScoped<ICurrentUserService, HttpContextUserService>();
 
-        // Register BuildingBlocks Infrastructure services (including concurrency handling)
-        services.AddInfrastructure<IdentityDbContext>(configuration);
+        // Register BuildingBlocks Infrastructure services
+        services.AddInfrastructure(configuration);
 
         return services;
     }

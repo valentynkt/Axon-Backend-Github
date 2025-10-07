@@ -10,7 +10,5 @@ public sealed record ChallengeResponseDto(
     long IssuedAt,          // unix seconds
     long ExpiresAt,         // unix seconds
     string Nonce,           // random nonce for replay protection
-    string? Audience,       // optional audience echo
-    string Mac,             // HMAC-SHA256 in Base64Url
-    string Mkv              // MAC key version like "v1"
+    string? Audience        // optional audience echo
 );
